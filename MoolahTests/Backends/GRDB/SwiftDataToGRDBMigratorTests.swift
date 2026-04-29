@@ -8,8 +8,11 @@ import Testing
 @testable import Moolah
 
 /// Tests for the one-shot SwiftData → GRDB migrator that copies CSV
-/// import profiles and import rules into `data.sqlite` on first launch
-/// after slice 0 of `plans/grdb-migration.md`.
+/// import profiles and import rules into `data.sqlite` on first launch.
+///
+/// Sibling test file `SwiftDataToGRDBMigratorCoreGraphTests.swift`
+/// covers the per-record-type migrations for the core financial graph
+/// and the cross-FK end-to-end test.
 ///
 /// Each test runs against an isolated `UserDefaults` suite so the
 /// per-record-type migration flags don't bleed across tests.
@@ -265,4 +268,5 @@ struct SwiftDataToGRDBMigratorTests {
       !defaults.bool(forKey: SwiftDataToGRDBMigrator.importRulesFlag),
       "Rules flag must remain false so the next launch retries")
   }
+
 }

@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import SwiftData
 import Testing
 
@@ -28,12 +29,12 @@ struct TransactionStoreScheduledViewTests {
         ]
       )
     ]
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(id: usdAccountId, name: "US Checking", type: .bank, instrument: .USD)
-      ], in: container)
-    TestBackend.seed(transactions: transactions, in: container)
+      ], in: database)
+    TestBackend.seed(transactions: transactions, in: database)
 
     let store = TransactionStore(
       repository: backend.transactions,
@@ -66,12 +67,12 @@ struct TransactionStoreScheduledViewTests {
           quantity: usdQuantity, type: .transfer),
       ]
     )
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(id: revolutId, name: "Revolut", type: .bank, instrument: .AUD)
-      ], in: container)
-    TestBackend.seed(transactions: [transaction], in: container)
+      ], in: database)
+    TestBackend.seed(transactions: [transaction], in: database)
 
     let store = TransactionStore(
       repository: backend.transactions,
@@ -97,7 +98,7 @@ struct TransactionStoreScheduledViewTests {
   private struct ScheduledTestStoreFixture {
     let store: TransactionStore
     let backend: CloudKitBackend
-    let container: ModelContainer
+    let database: DatabaseQueue
   }
 
   /// Seeds one past-dated scheduled transaction and one future-dated scheduled
@@ -106,7 +107,7 @@ struct TransactionStoreScheduledViewTests {
   /// pre-fix Analysis card was rendering as "overdue" when the shared
   /// transactionStore had been loaded with a non-scheduled filter first.
   private func makeScheduledTestStore() async throws -> ScheduledTestStoreFixture {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     let accountId = UUID()
     TestBackend.seed(
       accounts: [
@@ -116,15 +117,15 @@ struct TransactionStoreScheduledViewTests {
           openingBalance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
         )
       ],
-      in: container)
+      in: database)
     TestBackend.seed(
       transactions: try makeScheduledFixtureTransactions(accountId: accountId),
-      in: container)
+      in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    return ScheduledTestStoreFixture(store: store, backend: backend, container: container)
+    return ScheduledTestStoreFixture(store: store, backend: backend, database: database)
   }
 
   private func makeScheduledFixtureTransactions(accountId: UUID) throws -> [Transaction] {

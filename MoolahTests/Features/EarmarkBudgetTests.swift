@@ -11,11 +11,11 @@ struct EarmarkBudgetTests {
     earmarks: [Earmark] = [],
     budgetItems: [UUID: [EarmarkBudgetItem]] = [:]
   ) async throws -> (EarmarkStore, CloudKitBackend) {
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(earmarks: earmarks, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(earmarks: earmarks, in: database)
     for (earmarkId, items) in budgetItems {
       TestBackend.seedBudget(
-        earmarkId: earmarkId, items: items, in: container)
+        earmarkId: earmarkId, items: items, in: database)
     }
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),

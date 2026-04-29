@@ -21,12 +21,12 @@ struct StockPositionDisplayTests {
   @Test
   func loadPositionsComputesFromLegs() async throws {
     let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: accountId, name: "Invest", type: .investment, instrument: .defaultTestInstrument)
-      ], in: container)
+      ], in: database)
 
     // Seed a buy trade: -6345 AUD, +150 BHP
     let buyDate = Calendar.current.date(from: DateComponents(year: 2024, month: 6, day: 15))!
@@ -43,7 +43,7 @@ struct StockPositionDisplayTests {
               accountId: accountId, instrument: bhp, quantity: Decimal(150), type: .transfer),
           ]
         )
-      ], in: container)
+      ], in: database)
 
     let store = InvestmentStore(
       repository: backend.investments,
@@ -72,21 +72,21 @@ struct StockPositionDisplayTests {
     let stockClient = FixedStockPriceClient(responses: [
       "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: dec("45.00")])
     ])
-    let database = try ProfileDatabase.openInMemory()
-    let stockService = StockPriceService(client: stockClient, database: database)
+    let cacheDatabase = try ProfileDatabase.openInMemory()
+    let stockService = StockPriceService(client: stockClient, database: cacheDatabase)
     let rateClient = FixedRateClient(rates: [:])
-    let rateService = ExchangeRateService(client: rateClient, database: database)
+    let rateService = ExchangeRateService(client: rateClient, database: cacheDatabase)
     let conversionService = FullConversionService(
       exchangeRates: rateService,
       stockPrices: stockService
     )
 
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: accountId, name: "Invest", type: .investment, instrument: .defaultTestInstrument)
-      ], in: container)
+      ], in: database)
     TestBackend.seed(
       transactions: [
         Transaction(
@@ -100,7 +100,7 @@ struct StockPositionDisplayTests {
               accountId: accountId, instrument: bhp, quantity: Decimal(150), type: .transfer),
           ]
         )
-      ], in: container)
+      ], in: database)
 
     let store = InvestmentStore(
       repository: backend.investments,
@@ -122,14 +122,14 @@ struct StockPositionDisplayTests {
     let today = Date()
 
     let conversionService = try makeTotalPortfolioConversionService(today: today)
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: accountId, name: "Invest", type: .investment, instrument: .defaultTestInstrument)
-      ], in: container)
+      ], in: database)
     TestBackend.seed(
-      transactions: buyBhpAndCbaTransactions(accountId: accountId, date: today), in: container)
+      transactions: buyBhpAndCbaTransactions(accountId: accountId, date: today), in: database)
 
     let store = InvestmentStore(
       repository: backend.investments,
@@ -202,12 +202,12 @@ struct StockPositionDisplayTests {
       failingInstrumentIds: [cba.id]
     )
 
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: accountId, name: "Invest", type: .investment, instrument: .defaultTestInstrument)
-      ], in: container)
+      ], in: database)
     TestBackend.seed(
       transactions: [
         Transaction(
@@ -228,7 +228,7 @@ struct StockPositionDisplayTests {
             TransactionLeg(
               accountId: accountId, instrument: cba, quantity: Decimal(20), type: .transfer),
           ]),
-      ], in: container)
+      ], in: database)
 
     let store = InvestmentStore(
       repository: backend.investments,

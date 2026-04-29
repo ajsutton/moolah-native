@@ -97,7 +97,6 @@ final class ProfileSession: Identifiable {
 
     let backend = Self.makeBackend(
       profile: profile,
-      containerManager: containerManager,
       syncCoordinator: syncCoordinator,
       services: services,
       database: resolvedDatabase
@@ -356,16 +355,23 @@ final class ProfileSession: Identifiable {
 
   /// Resolves which `DatabaseQueue` the session should own. Order:
   ///   1. Caller-provided `override` (tests, previews).
-  ///   2. In-memory queue when the parent `containerManager` is in-memory
-  ///      (UI testing, `ProfileContainerManager.forTesting()`).
-  ///   3. On-disk `data.sqlite` under `profiles/<id>/` for production.
+  ///   2. The container manager's cached per-profile queue. Required so
+  ///      the import path and the session see the same in-memory queue
+  ///      (each `ProfileDatabase.openInMemory()` call returns a fresh
+  ///      queue otherwise) and so on-disk profiles don't run the
+  ///      migrator twice on the same file.
+  ///   3. Fallback: open the on-disk `data.sqlite` directly. Used by
+  ///      callers that pass `containerManager: nil` (a few legacy test
+  ///      paths).
   private static func resolveDatabase(
     override: DatabaseQueue?,
     profile: Profile,
     containerManager: ProfileContainerManager?
   ) throws -> DatabaseQueue {
     if let override { return override }
-    if containerManager?.inMemory == true { return try ProfileDatabase.openInMemory() }
+    if let containerManager {
+      return try containerManager.database(for: profile.id)
+    }
     return try openProfileDatabase(profileId: profile.id)
   }
 

@@ -26,9 +26,9 @@ struct InvestmentStoreTests {
   @Test("Load values populates values array")
   func testLoadValues() async throws {
     let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
-      investmentValues: makeValues(accountId: accountId, count: 3), in: container
+      investmentValues: makeValues(accountId: accountId, count: 3), in: database
     )
     let store = InvestmentStore(
       repository: backend.investments, conversionService: FixedConversionService())
@@ -43,9 +43,9 @@ struct InvestmentStoreTests {
   @Test("Load values with reset clears existing values")
   func testLoadValuesReset() async throws {
     let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
-      investmentValues: makeValues(accountId: accountId, count: 5), in: container
+      investmentValues: makeValues(accountId: accountId, count: 5), in: database
     )
     let store = InvestmentStore(
       repository: backend.investments, conversionService: FixedConversionService())
@@ -88,8 +88,8 @@ struct InvestmentStoreTests {
             quantity: dec("1000.00"), instrument: .defaultTestInstrument))
       ]
     ]
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(investmentValues: initialValues, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(investmentValues: initialValues, in: database)
     let store = InvestmentStore(
       repository: backend.investments, conversionService: FixedConversionService())
 
@@ -117,8 +117,8 @@ struct InvestmentStoreTests {
             quantity: dec("1000.00"), instrument: .defaultTestInstrument))
       ]
     ]
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(investmentValues: initialValues, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(investmentValues: initialValues, in: database)
     let store = InvestmentStore(
       repository: backend.investments, conversionService: FixedConversionService())
 
@@ -147,8 +147,8 @@ struct InvestmentStoreTests {
             quantity: dec("1000.00"), instrument: .defaultTestInstrument))
       ]
     ]
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(investmentValues: initialValues, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(investmentValues: initialValues, in: database)
     let store = InvestmentStore(
       repository: backend.investments, conversionService: FixedConversionService())
 
@@ -209,8 +209,8 @@ struct InvestmentStoreTests {
             quantity: dec("2000.00"), instrument: .defaultTestInstrument))
       ]
     ]
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(investmentValues: initialValues, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(investmentValues: initialValues, in: database)
     let store = InvestmentStore(
       repository: backend.investments, conversionService: FixedConversionService())
     await store.loadValues(accountId: accountId)
@@ -247,8 +247,8 @@ struct InvestmentStoreTests {
             quantity: dec("2000.00"), instrument: .defaultTestInstrument)),
       ]
     ]
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(investmentValues: initialValues, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(investmentValues: initialValues, in: database)
     let store = InvestmentStore(
       repository: backend.investments, conversionService: FixedConversionService())
     await store.loadValues(accountId: accountId)
@@ -278,8 +278,8 @@ struct InvestmentStoreTests {
             quantity: dec("1000.00"), instrument: .defaultTestInstrument))
       ]
     ]
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(investmentValues: initialValues, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(investmentValues: initialValues, in: database)
     let store = InvestmentStore(
       repository: backend.investments, conversionService: FixedConversionService())
     await store.loadValues(accountId: accountId)

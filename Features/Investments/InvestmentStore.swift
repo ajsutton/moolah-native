@@ -65,6 +65,8 @@ final class InvestmentStore {
         page += 1
       }
       values = all
+    } catch is CancellationError {
+      return  // Cancelling a `.task` mid-pagination is not a failure.
     } catch {
       logger.error("Failed to load investment values: \(error.localizedDescription)")
       self.error = error
@@ -184,6 +186,8 @@ final class InvestmentStore {
         guard quantity != 0 else { return nil }
         return Position(instrument: instrument, quantity: quantity)
       }.sorted { $0.instrument.name < $1.instrument.name }
+    } catch is CancellationError {
+      return  // Cancelling a `.task` mid-pagination is not a failure.
     } catch {
       logger.error("Failed to load positions: \(error.localizedDescription)")
       self.error = error

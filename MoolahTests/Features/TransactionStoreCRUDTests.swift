@@ -94,8 +94,8 @@ struct TransactionStoreCRUDTests {
         )
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [transaction], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [transaction], in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -137,8 +137,8 @@ struct TransactionStoreCRUDTests {
         )
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [transaction], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [transaction], in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -214,8 +214,8 @@ struct TransactionStoreCRUDTests {
         )
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [existing], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [existing], in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -274,8 +274,8 @@ struct TransactionStoreCRUDTests {
         )
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [salary, coffee], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [salary, coffee], in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),

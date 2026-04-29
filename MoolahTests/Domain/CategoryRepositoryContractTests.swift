@@ -209,66 +209,37 @@ struct CategoryRepositoryContractTests {
   }
 }
 
-private struct CloudKitCategoryTestBackend: BackendProvider, @unchecked Sendable {
-  let auth: any AuthProvider
-  let accounts: any AccountRepository
-  let transactions: any TransactionRepository
-  let categories: any CategoryRepository
-  let earmarks: any EarmarkRepository
-  let analysis: any AnalysisRepository
-  let investments: any InvestmentRepository
-  let conversionService: any InstrumentConversionService
-  let csvImportProfiles: any CSVImportProfileRepository
-  let importRules: any ImportRuleRepository
+/// Wraps a `TestBackend.create(...)` pair so contract tests that need a
+/// `CategoryRepository` running inside a real `BackendProvider` (so they
+/// can also exercise the cross-repo cascade behaviour) can grab the
+/// concrete repo while keeping the rest of the backend wired up.
+private struct CloudKitCategoryTestBackend: @unchecked Sendable {
+  let backend: CloudKitBackend
+  let database: DatabaseQueue
+
+  var categories: any CategoryRepository { backend.categories }
+  var transactions: any TransactionRepository { backend.transactions }
+  var accounts: any AccountRepository { backend.accounts }
+  var earmarks: any EarmarkRepository { backend.earmarks }
 
   init() throws {
-    let container = try TestModelContainer.create()
-    let instrument = Instrument.defaultTestInstrument
-    let rateClient = FixedRateClient()
-    let exchangeRates = ExchangeRateService(
-      client: rateClient, database: try ProfileDatabase.openInMemory())
-    let conversion = FiatConversionService(exchangeRates: exchangeRates)
-    self.auth = InMemoryAuthProvider()
-    self.accounts = CloudKitAccountRepository(
-      modelContainer: container)
-    self.transactions = CloudKitTransactionRepository(
-      modelContainer: container,
-      instrument: instrument,
-      conversionService: conversion)
-    self.categories = CloudKitCategoryRepository(
-      modelContainer: container)
-    self.earmarks = CloudKitEarmarkRepository(
-      modelContainer: container, instrument: instrument)
-    self.investments = CloudKitInvestmentRepository(
-      modelContainer: container, instrument: instrument)
-    self.conversionService = conversion
-    self.analysis = CloudKitAnalysisRepository(
-      modelContainer: container, instrument: instrument,
-      conversionService: conversion)
-    let database = try ProfileDatabase.openInMemory()
-    self.csvImportProfiles = GRDBCSVImportProfileRepository(database: database)
-    self.importRules = GRDBImportRuleRepository(database: database)
+    let pair = try TestBackend.create()
+    self.backend = pair.backend
+    self.database = pair.database
   }
 }
 
 private func makeCloudKitCategoryRepository(
   initialCategories: [Moolah.Category] = []
-) throws -> CloudKitCategoryRepository {
-  let container = try TestModelContainer.create()
-  let repo = CloudKitCategoryRepository(modelContainer: container)
-
+) throws -> any CategoryRepository {
+  let pair = try TestBackend.create()
   if !initialCategories.isEmpty {
-    let context = ModelContext(container)
-    for category in initialCategories {
-      context.insert(CategoryRecord.from(category))
-    }
-    try context.save()
+    TestBackend.seed(categories: initialCategories, in: pair.database)
   }
-
-  return repo
+  return pair.backend.categories
 }
 
-private func makeCloudKitRepositoryWithHierarchy() throws -> CloudKitCategoryRepository {
+private func makeCloudKitRepositoryWithHierarchy() throws -> any CategoryRepository {
   let groceriesId = UUID()
   return try makeCloudKitCategoryRepository(initialCategories: [
     Moolah.Category(id: groceriesId, name: "Groceries"),

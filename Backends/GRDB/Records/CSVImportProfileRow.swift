@@ -7,13 +7,12 @@ import GRDB
 /// counterpart to the SwiftData `@Model` `CSVImportProfileRecord`.
 ///
 /// **Naming.** The "Row" suffix is the GRDB convention; the SwiftData
-/// `CSVImportProfileRecord` retains its name until Slice 1 of
-/// `plans/grdb-migration.md` removes the `@Model` class entirely. Two
-/// types with the same fully-qualified name in one module is a hard
-/// compile error, so this slice ships with both names visible — the
-/// `*Row` form is the new (canonical) shape, and the `*Record` form is
-/// kept only so the one-shot SwiftData → GRDB migrator can read existing
-/// rows on first launch.
+/// `CSVImportProfileRecord` retains its name until the `@Model` class
+/// is removed entirely. Two types with the same fully-qualified name
+/// in one module is a hard compile error, so both names ship visible
+/// during the migration — the `*Row` form is the new (canonical)
+/// shape, and the `*Record` form is kept only so the one-shot
+/// SwiftData → GRDB migrator can read existing rows on first launch.
 ///
 /// **Sync metadata.** `recordName` is the canonical CloudKit recordName
 /// (`"CSVImportProfileRecord|<uuid>"`, see
@@ -80,3 +79,4 @@ extension CSVImportProfileRow: Sendable {}
 extension CSVImportProfileRow: Identifiable {}
 extension CSVImportProfileRow: FetchableRecord {}
 extension CSVImportProfileRow: PersistableRecord {}
+extension CSVImportProfileRow: GRDBSystemFieldsStampable {}

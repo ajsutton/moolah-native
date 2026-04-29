@@ -1,56 +1,48 @@
 import Foundation
-import SwiftData
 import Testing
 
 @testable import Moolah
 
-/// Pins the contract that `CloudKitAccountRepository.fetchAll` excludes legs
+/// Pins the contract that `AccountRepository.fetchAll` excludes legs
 /// belonging to scheduled (recurring) transactions from each account's
-/// positions. Phase 3 of #519 changes how that exclusion is implemented (push
-/// the predicate into SwiftData so the driver doesn't materialise all of a
-/// large profile's legs into Swift just to filter ~16 of them out), and this
-/// test must keep passing across the change.
+/// positions. The exclusion is implemented at the SQL layer; this test
+/// must keep passing across any rewrite.
 @Suite("AccountRepository — Scheduled Leg Exclusion")
 struct AccountRepositoryNoSchedLegsTests {
   @Test("fetchAll excludes scheduled-transaction legs from account positions")
   func testFetchAllExcludesScheduledLegs() async throws {
     let accountId = UUID()
-    let container = try TestModelContainer.create()
-    let context = ModelContext(container)
-
-    context.insert(
-      AccountRecord.from(
+    let pair = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
         Account(
           id: accountId, name: "Test", type: .bank,
-          instrument: .defaultTestInstrument)))
+          instrument: .defaultTestInstrument)
+      ], in: pair.database)
 
     // A scheduled (recurring) transaction. Its leg must NOT contribute.
-    let scheduledTxnId = UUID()
-    context.insert(
-      TransactionRecord(
-        id: scheduledTxnId, date: Date(), payee: "Scheduled",
-        recurPeriod: RecurPeriod.month.rawValue, recurEvery: 1))
-    context.insert(
-      TransactionLegRecord.from(
+    let scheduled = Transaction(
+      date: Date(),
+      payee: "Scheduled",
+      recurPeriod: .month,
+      recurEvery: 1,
+      legs: [
         TransactionLeg(
           accountId: accountId, instrument: .defaultTestInstrument,
-          quantity: -100, type: .expense),
-        transactionId: scheduledTxnId, sortOrder: 0))
-
+          quantity: -100, type: .expense)
+      ])
     // A non-scheduled transaction. Its leg contributes -25.
-    let realTxnId = UUID()
-    context.insert(TransactionRecord(id: realTxnId, date: Date(), payee: "Real"))
-    context.insert(
-      TransactionLegRecord.from(
+    let real = Transaction(
+      date: Date(),
+      payee: "Real",
+      legs: [
         TransactionLeg(
           accountId: accountId, instrument: .defaultTestInstrument,
-          quantity: -25, type: .expense),
-        transactionId: realTxnId, sortOrder: 0))
+          quantity: -25, type: .expense)
+      ])
+    TestBackend.seed(transactions: [scheduled, real], in: pair.database)
 
-    try context.save()
-
-    let repository = CloudKitAccountRepository(modelContainer: container)
-    let accounts = try await repository.fetchAll()
+    let accounts = try await pair.backend.accounts.fetchAll()
     let fetched = try #require(accounts.first { $0.id == accountId })
     let position = try #require(
       fetched.positions.first { $0.instrument == .defaultTestInstrument })
@@ -60,28 +52,24 @@ struct AccountRepositoryNoSchedLegsTests {
   @Test("fetchAll returns all legs when no transactions are scheduled")
   func testFetchAllReturnsAllLegsWhenNoneScheduled() async throws {
     let accountId = UUID()
-    let container = try TestModelContainer.create()
-    let context = ModelContext(container)
-
-    context.insert(
-      AccountRecord.from(
+    let pair = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
         Account(
           id: accountId, name: "Test", type: .bank,
-          instrument: .defaultTestInstrument)))
-
-    let txnId = UUID()
-    context.insert(TransactionRecord(id: txnId, date: Date(), payee: "Real"))
-    context.insert(
-      TransactionLegRecord.from(
+          instrument: .defaultTestInstrument)
+      ], in: pair.database)
+    let txn = Transaction(
+      date: Date(),
+      payee: "Real",
+      legs: [
         TransactionLeg(
           accountId: accountId, instrument: .defaultTestInstrument,
-          quantity: 500, type: .income),
-        transactionId: txnId, sortOrder: 0))
+          quantity: 500, type: .income)
+      ])
+    TestBackend.seed(transactions: [txn], in: pair.database)
 
-    try context.save()
-
-    let repository = CloudKitAccountRepository(modelContainer: container)
-    let accounts = try await repository.fetchAll()
+    let accounts = try await pair.backend.accounts.fetchAll()
     let fetched = try #require(accounts.first { $0.id == accountId })
     let position = try #require(
       fetched.positions.first { $0.instrument == .defaultTestInstrument })

@@ -130,8 +130,8 @@ struct ScheduledTransactionTests {
       quantity: dec("-500.00")
     )
 
-    let (backend, container) = try TestBackend.create()
-    _ = TestBackend.seed(transactions: [scheduled, oneTime], in: container)
+    let (backend, database) = try TestBackend.create()
+    _ = TestBackend.seed(transactions: [scheduled, oneTime], in: database)
 
     let page = try await backend.transactions.fetch(
       filter: TransactionFilter(scheduled: .scheduledOnly),

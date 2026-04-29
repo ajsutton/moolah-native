@@ -1,65 +1,72 @@
 @preconcurrency import CloudKit
 import Foundation
-import SwiftData
 
 extension ProfileDataSyncHandler {
   // MARK: - Batch Record Lookup
 
-  /// Looks up records grouped by their CKRecord recordType. Each group does
-  /// one IN-predicate fetch over its own SwiftData type, so two different
-  /// record types that happen to share a UUID don't collide in the result —
-  /// the previous UUID-only lookup returned the same `CKRecord` for both,
-  /// which CloudKit then rejected with `.invalidArguments` (issue #416 +
-  /// follow-up). Returns `[recordType: [UUID: CKRecord]]`.
+  /// Looks up records grouped by their CKRecord recordType. Each group
+  /// runs one batch fetch over its own GRDB repo so two different record
+  /// types that happen to share a UUID don't collide in the result.
+  /// Returns `[recordType: [UUID: CKRecord]]`.
   func buildBatchRecordLookup(
     byRecordType groups: [String: Set<UUID>]
   ) -> [String: [UUID: CKRecord]] {
-    let context = ModelContext(modelContainer)
     var result: [String: [UUID: CKRecord]] = [:]
     for (recordType, uuids) in groups {
       guard !uuids.isEmpty else { continue }
-      result[recordType] = batchFetchByType(
-        recordType: recordType, uuids: uuids, context: context)
+      result[recordType] = batchFetchByType(recordType: recordType, uuids: uuids)
     }
     return result
   }
 
   // MARK: - Record Lookup for Upload
 
-  /// Looks up a single record by `CKRecord.ID` and builds the `CKRecord` for
-  /// upload. Dispatches by the recordType prefix encoded in the recordName
-  /// (`<recordType>|<UUID>`); unprefixed recordNames are treated as string
-  /// IDs and routed to the InstrumentRecord lookup.
+  /// Looks up a single record by `CKRecord.ID` and builds the `CKRecord`
+  /// for upload. Dispatches by the recordType prefix encoded in the
+  /// recordName (`<recordType>|<UUID>`); unprefixed recordNames are
+  /// treated as string IDs and routed to the Instrument lookup.
   func recordToSave(for recordID: CKRecord.ID) -> CKRecord? {
-    let context = ModelContext(modelContainer)
     if let recordType = recordID.prefixedRecordType, let uuid = recordID.uuid {
-      return fetchAndBuild(recordType: recordType, uuid: uuid, context: context)
+      return fetchAndBuild(recordType: recordType, uuid: uuid)
     }
-    return fetchInstrument(id: recordID.recordName, context: context)
-      .map(buildCKRecord)
+    return fetchInstrumentRow(id: recordID.recordName).map { row in
+      buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
+    }
   }
 
   // MARK: - Per-Type Dispatch
 
   /// Single-record dispatcher. Returns nil for unknown recordType strings.
-  private func fetchAndBuild(
-    recordType: String, uuid: UUID, context: ModelContext
-  ) -> CKRecord? {
+  private func fetchAndBuild(recordType: String, uuid: UUID) -> CKRecord? {
     switch recordType {
-    case AccountRecord.recordType:
-      return fetchAccount(id: uuid, context: context).map(buildCKRecord)
-    case TransactionRecord.recordType:
-      return fetchTransaction(id: uuid, context: context).map(buildCKRecord)
-    case TransactionLegRecord.recordType:
-      return fetchTransactionLeg(id: uuid, context: context).map(buildCKRecord)
-    case CategoryRecord.recordType:
-      return fetchCategory(id: uuid, context: context).map(buildCKRecord)
-    case EarmarkRecord.recordType:
-      return fetchEarmark(id: uuid, context: context).map(buildCKRecord)
-    case EarmarkBudgetItemRecord.recordType:
-      return fetchEarmarkBudgetItem(id: uuid, context: context).map(buildCKRecord)
-    case InvestmentValueRecord.recordType:
-      return fetchInvestmentValue(id: uuid, context: context).map(buildCKRecord)
+    case AccountRow.recordType:
+      return fetchAccountRow(id: uuid).map { row in
+        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
+      }
+    case TransactionRow.recordType:
+      return fetchTransactionRow(id: uuid).map { row in
+        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
+      }
+    case TransactionLegRow.recordType:
+      return fetchTransactionLegRow(id: uuid).map { row in
+        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
+      }
+    case CategoryRow.recordType:
+      return fetchCategoryRow(id: uuid).map { row in
+        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
+      }
+    case EarmarkRow.recordType:
+      return fetchEarmarkRow(id: uuid).map { row in
+        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
+      }
+    case EarmarkBudgetItemRow.recordType:
+      return fetchEarmarkBudgetItemRow(id: uuid).map { row in
+        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
+      }
+    case InvestmentValueRow.recordType:
+      return fetchInvestmentValueRow(id: uuid).map { row in
+        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
+      }
     case CSVImportProfileRow.recordType:
       return fetchCSVImportProfileRow(id: uuid).map { row in
         buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
@@ -76,32 +83,39 @@ extension ProfileDataSyncHandler {
     }
   }
 
-  /// Batch-fetch dispatcher. One IN-predicate fetch per type, mapped into
-  /// `[UUID: CKRecord]` via `buildCKRecord`. Per-type because `#Predicate`
-  /// cannot be generic.
+  /// Batch-fetch dispatcher. One batch fetch per type, mapped into
+  /// `[UUID: CKRecord]` via `buildCKRecord`.
   private func batchFetchByType(
-    recordType: String, uuids: Set<UUID>, context: ModelContext
+    recordType: String, uuids: Set<UUID>
   ) -> [UUID: CKRecord] {
     let ids = Array(uuids)
     switch recordType {
-    case AccountRecord.recordType:
-      return mapBuilt(fetchAccountsBatch(ids: ids, context: context))
-    case TransactionRecord.recordType:
-      return mapBuilt(fetchTransactionsBatch(ids: ids, context: context))
-    case TransactionLegRecord.recordType:
-      return mapBuilt(fetchTransactionLegsBatch(ids: ids, context: context))
-    case CategoryRecord.recordType:
-      return mapBuilt(fetchCategoriesBatch(ids: ids, context: context))
-    case EarmarkRecord.recordType:
-      return mapBuilt(fetchEarmarksBatch(ids: ids, context: context))
-    case EarmarkBudgetItemRecord.recordType:
-      return mapBuilt(fetchEarmarkBudgetItemsBatch(ids: ids, context: context))
-    case InvestmentValueRecord.recordType:
-      return mapBuilt(fetchInvestmentValuesBatch(ids: ids, context: context))
+    case AccountRow.recordType:
+      return mapBuiltRows(fetchRowsBatch { try grdbRepositories.accounts.fetchRowsSync(ids: ids) })
+    case TransactionRow.recordType:
+      return mapBuiltRows(
+        fetchRowsBatch { try grdbRepositories.transactions.fetchRowsSync(ids: ids) })
+    case TransactionLegRow.recordType:
+      return mapBuiltRows(
+        fetchRowsBatch { try grdbRepositories.transactionLegs.fetchRowsSync(ids: ids) })
+    case CategoryRow.recordType:
+      return mapBuiltRows(
+        fetchRowsBatch { try grdbRepositories.categories.fetchRowsSync(ids: ids) })
+    case EarmarkRow.recordType:
+      return mapBuiltRows(
+        fetchRowsBatch { try grdbRepositories.earmarks.fetchRowsSync(ids: ids) })
+    case EarmarkBudgetItemRow.recordType:
+      return mapBuiltRows(
+        fetchRowsBatch { try grdbRepositories.earmarkBudgetItems.fetchRowsSync(ids: ids) })
+    case InvestmentValueRow.recordType:
+      return mapBuiltRows(
+        fetchRowsBatch { try grdbRepositories.investmentValues.fetchRowsSync(ids: ids) })
     case CSVImportProfileRow.recordType:
-      return mapBuiltRows(fetchCSVImportProfileRowsBatch(ids: ids))
+      return mapBuiltRows(
+        fetchRowsBatch { try grdbRepositories.csvImportProfiles.fetchRowsSync(ids: ids) })
     case ImportRuleRow.recordType:
-      return mapBuiltRows(fetchImportRuleRowsBatch(ids: ids))
+      return mapBuiltRows(
+        fetchRowsBatch { try grdbRepositories.importRules.fetchRowsSync(ids: ids) })
     default:
       logger.warning(
         "Unknown recordType '\(recordType, privacy: .public)' in batch lookup — skipping"
@@ -110,26 +124,9 @@ extension ProfileDataSyncHandler {
     }
   }
 
-  /// Reduces a fetched batch into a `[UUID: CKRecord]` keyed by the model's
-  /// own `id`, with each value built via `buildCKRecord`.
-  private func mapBuilt<T>(_ records: [T]) -> [UUID: CKRecord]
-  where
-    T: IdentifiableRecord & CloudKitRecordConvertible & SystemFieldsCacheable
-  {
-    var built: [UUID: CKRecord] = [:]
-    built.reserveCapacity(records.count)
-    for record in records {
-      built[record.id] = buildCKRecord(for: record)
-    }
-    return built
-  }
-
-  /// Value-type counterpart of `mapBuilt(_:)` for GRDB row structs.
-  /// Mirrors the SwiftData path but reads `encodedSystemFields` from
-  /// the row directly via the `ValueTypeSystemFieldsReadable`
-  /// protocol — GRDB rows can't conform to the `AnyObject`-constrained
-  /// `SystemFieldsCacheable`, so a value-type sibling pins the
-  /// requirement statically and removes the dynamic cast chain.
+  /// Reduces a fetched batch of GRDB rows into `[UUID: CKRecord]` keyed
+  /// by the row's own `id`, with each value built via
+  /// `buildCKRecord(from:encodedSystemFields:)`.
   private func mapBuiltRows<T>(_ rows: [T]) -> [UUID: CKRecord]
   where T: IdentifiableRecord & CloudKitRecordConvertible & ValueTypeSystemFieldsReadable {
     var built: [UUID: CKRecord] = [:]
@@ -141,156 +138,73 @@ extension ProfileDataSyncHandler {
     return built
   }
 
-  // MARK: - Per-Type Batch Fetches
-  //
-  // `#Predicate` requires a concrete model type, so each type gets its own
-  // tiny batch fetcher. They're all the same shape: IN-predicate over
-  // `ids` against `id`. SwiftData's `#Predicate` macro requires
-  // `[UUID].contains(_:)` (Array, not Set) — the equivalent
-  // `Set<UUID>.contains` silently returns no matches at runtime, so the
-  // batch fetcher would treat every record as "deleted locally" and the
-  // upload would never happen.
-
-  private func fetchAccountsBatch(ids: [UUID], context: ModelContext) -> [AccountRecord] {
-    Self.fetchOrLog(
-      FetchDescriptor<AccountRecord>(predicate: #Predicate { ids.contains($0.id) }),
-      context: context)
-  }
-
-  private func fetchTransactionsBatch(
-    ids: [UUID], context: ModelContext
-  ) -> [TransactionRecord] {
-    Self.fetchOrLog(
-      FetchDescriptor<TransactionRecord>(predicate: #Predicate { ids.contains($0.id) }),
-      context: context)
-  }
-
-  private func fetchTransactionLegsBatch(
-    ids: [UUID], context: ModelContext
-  ) -> [TransactionLegRecord] {
-    Self.fetchOrLog(
-      FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { ids.contains($0.id) }),
-      context: context)
-  }
-
-  private func fetchCategoriesBatch(ids: [UUID], context: ModelContext) -> [CategoryRecord] {
-    Self.fetchOrLog(
-      FetchDescriptor<CategoryRecord>(predicate: #Predicate { ids.contains($0.id) }),
-      context: context)
-  }
-
-  private func fetchEarmarksBatch(ids: [UUID], context: ModelContext) -> [EarmarkRecord] {
-    Self.fetchOrLog(
-      FetchDescriptor<EarmarkRecord>(predicate: #Predicate { ids.contains($0.id) }),
-      context: context)
-  }
-
-  private func fetchEarmarkBudgetItemsBatch(
-    ids: [UUID], context: ModelContext
-  ) -> [EarmarkBudgetItemRecord] {
-    Self.fetchOrLog(
-      FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { ids.contains($0.id) }),
-      context: context)
-  }
-
-  private func fetchInvestmentValuesBatch(
-    ids: [UUID], context: ModelContext
-  ) -> [InvestmentValueRecord] {
-    Self.fetchOrLog(
-      FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { ids.contains($0.id) }),
-      context: context)
-  }
-
-  private func fetchCSVImportProfileRowsBatch(ids: [UUID]) -> [CSVImportProfileRow] {
+  /// Common error-handling wrapper for the batch-fetch closures used in
+  /// `batchFetchByType`. Logs at error level on throw and returns an
+  /// empty array (mirroring the SwiftData path's `fetchOrLog`
+  /// best-effort semantics).
+  private func fetchRowsBatch<T>(_ work: () throws -> [T]) -> [T] {
     do {
-      return try grdbRepositories.csvImportProfiles.fetchRowsSync(ids: ids)
+      return try work()
     } catch {
       logger.error(
         """
-        GRDB batch fetch failed for CSVImportProfileRow: \
-        \(error.localizedDescription, privacy: .public)
+        GRDB batch fetch failed: \(error.localizedDescription, privacy: .public)
         """)
       return []
     }
   }
 
-  private func fetchImportRuleRowsBatch(ids: [UUID]) -> [ImportRuleRow] {
-    do {
-      return try grdbRepositories.importRules.fetchRowsSync(ids: ids)
-    } catch {
-      logger.error(
-        """
-        GRDB batch fetch failed for ImportRuleRow: \
-        \(error.localizedDescription, privacy: .public)
-        """)
-      return []
-    }
+  // MARK: - Per-Row Lookups
+
+  private func fetchAccountRow(id: UUID) -> AccountRow? {
+    fetchRowOrLog { try grdbRepositories.accounts.fetchRowSync(id: id) }
   }
 
-  // MARK: - Per-Type Fetch Methods
-
-  func fetchAccount(id: UUID, context: ModelContext) -> AccountRecord? {
-    let descriptor = FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == id })
-    return Self.fetchOrLog(descriptor, context: context).first
+  private func fetchTransactionRow(id: UUID) -> TransactionRow? {
+    fetchRowOrLog { try grdbRepositories.transactions.fetchRowSync(id: id) }
   }
 
-  func fetchTransaction(id: UUID, context: ModelContext) -> TransactionRecord? {
-    let descriptor = FetchDescriptor<TransactionRecord>(predicate: #Predicate { $0.id == id })
-    return Self.fetchOrLog(descriptor, context: context).first
+  private func fetchTransactionLegRow(id: UUID) -> TransactionLegRow? {
+    fetchRowOrLog { try grdbRepositories.transactionLegs.fetchRowSync(id: id) }
   }
 
-  func fetchCategory(id: UUID, context: ModelContext) -> CategoryRecord? {
-    let descriptor = FetchDescriptor<CategoryRecord>(predicate: #Predicate { $0.id == id })
-    return Self.fetchOrLog(descriptor, context: context).first
+  private func fetchCategoryRow(id: UUID) -> CategoryRow? {
+    fetchRowOrLog { try grdbRepositories.categories.fetchRowSync(id: id) }
   }
 
-  func fetchEarmark(id: UUID, context: ModelContext) -> EarmarkRecord? {
-    let descriptor = FetchDescriptor<EarmarkRecord>(predicate: #Predicate { $0.id == id })
-    return Self.fetchOrLog(descriptor, context: context).first
+  private func fetchEarmarkRow(id: UUID) -> EarmarkRow? {
+    fetchRowOrLog { try grdbRepositories.earmarks.fetchRowSync(id: id) }
   }
 
-  func fetchEarmarkBudgetItem(id: UUID, context: ModelContext) -> EarmarkBudgetItemRecord? {
-    let descriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
-      predicate: #Predicate { $0.id == id })
-    return Self.fetchOrLog(descriptor, context: context).first
+  private func fetchEarmarkBudgetItemRow(id: UUID) -> EarmarkBudgetItemRow? {
+    fetchRowOrLog { try grdbRepositories.earmarkBudgetItems.fetchRowSync(id: id) }
   }
 
-  func fetchInvestmentValue(id: UUID, context: ModelContext) -> InvestmentValueRecord? {
-    let descriptor = FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { $0.id == id })
-    return Self.fetchOrLog(descriptor, context: context).first
+  private func fetchInvestmentValueRow(id: UUID) -> InvestmentValueRow? {
+    fetchRowOrLog { try grdbRepositories.investmentValues.fetchRowSync(id: id) }
   }
 
-  func fetchInstrument(id: String, context: ModelContext) -> InstrumentRecord? {
-    let descriptor = FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == id })
-    return Self.fetchOrLog(descriptor, context: context).first
-  }
-
-  func fetchTransactionLeg(id: UUID, context: ModelContext) -> TransactionLegRecord? {
-    let descriptor = FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { $0.id == id })
-    return Self.fetchOrLog(descriptor, context: context).first
+  private func fetchInstrumentRow(id: String) -> InstrumentRow? {
+    fetchRowOrLog { try grdbRepositories.instruments.fetchRowSync(id: id) }
   }
 
   private func fetchCSVImportProfileRow(id: UUID) -> CSVImportProfileRow? {
-    do {
-      return try grdbRepositories.csvImportProfiles.fetchRowSync(id: id)
-    } catch {
-      logger.error(
-        """
-        GRDB fetch failed for CSVImportProfileRow \(id, privacy: .public): \
-        \(error.localizedDescription, privacy: .public)
-        """)
-      return nil
-    }
+    fetchRowOrLog { try grdbRepositories.csvImportProfiles.fetchRowSync(id: id) }
   }
 
   private func fetchImportRuleRow(id: UUID) -> ImportRuleRow? {
+    fetchRowOrLog { try grdbRepositories.importRules.fetchRowSync(id: id) }
+  }
+
+  /// Common error-handling wrapper for the per-row fetch closures used
+  /// above. Logs at error level on throw and returns `nil`.
+  private func fetchRowOrLog<T>(_ work: () throws -> T?) -> T? {
     do {
-      return try grdbRepositories.importRules.fetchRowSync(id: id)
+      return try work()
     } catch {
       logger.error(
         """
-        GRDB fetch failed for ImportRuleRow \(id, privacy: .public): \
-        \(error.localizedDescription, privacy: .public)
+        GRDB fetch failed: \(error.localizedDescription, privacy: .public)
         """)
       return nil
     }

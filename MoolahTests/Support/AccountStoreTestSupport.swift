@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 
 @testable import Moolah
 
@@ -17,7 +17,7 @@ enum AccountStoreTestSupport {
     balance: Decimal = 0,
     position: Int = 0,
     isHidden: Bool = false,
-    in container: ModelContainer
+    in database: any DatabaseWriter
   ) -> Account {
     let account = Account(
       id: id, name: name, type: type, instrument: instrument, position: position,
@@ -25,7 +25,7 @@ enum AccountStoreTestSupport {
     let balanceAmount = InstrumentAmount(quantity: balance, instrument: instrument)
     TestBackend.seed(
       accounts: [(account: account, openingBalance: balanceAmount)],
-      in: container,
+      in: database,
       instrument: instrument)
     return account
   }

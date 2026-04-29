@@ -11,8 +11,8 @@ struct EarmarkStoreReorderTests {
     let first = Earmark(name: "First", instrument: .defaultTestInstrument, position: 0)
     let second = Earmark(name: "Second", instrument: .defaultTestInstrument, position: 1)
     let third = Earmark(name: "Third", instrument: .defaultTestInstrument, position: 2)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(earmarks: [first, second, third], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(earmarks: [first, second, third], in: database)
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -34,8 +34,8 @@ struct EarmarkStoreReorderTests {
     let hidden = Earmark(
       name: "Hidden", instrument: .defaultTestInstrument, isHidden: true, position: 1)
     let secondVisible = Earmark(name: "Visible2", instrument: .defaultTestInstrument, position: 2)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(earmarks: [firstVisible, hidden, secondVisible], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(earmarks: [firstVisible, hidden, secondVisible], in: database)
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -52,8 +52,8 @@ struct EarmarkStoreReorderTests {
   @Test
   func testReorderSingleEarmarkIsNoOp() async throws {
     let only = Earmark(name: "Only", instrument: .defaultTestInstrument, position: 0)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(earmarks: [only], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(earmarks: [only], in: database)
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -67,8 +67,8 @@ struct EarmarkStoreReorderTests {
 
   @Test
   func testReorderEmptyListIsNoOp() async throws {
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(earmarks: [], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(earmarks: [], in: database)
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -84,8 +84,8 @@ struct EarmarkStoreReorderTests {
     let first = Earmark(name: "First", instrument: .defaultTestInstrument, position: 0)
     let second = Earmark(name: "Second", instrument: .defaultTestInstrument, position: 1)
     let third = Earmark(name: "Third", instrument: .defaultTestInstrument, position: 2)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(earmarks: [first, second, third], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(earmarks: [first, second, third], in: database)
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -107,8 +107,8 @@ struct EarmarkStoreReorderTests {
     let first = Earmark(name: "First", instrument: .defaultTestInstrument, position: 0)
     let second = Earmark(name: "Second", instrument: .defaultTestInstrument, position: 1)
     let third = Earmark(name: "Third", instrument: .defaultTestInstrument, position: 2)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(earmarks: [first, second, third], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(earmarks: [first, second, third], in: database)
     let failing = UpdateFailingEarmarkRepository(wrapping: backend.earmarks)
     let store = EarmarkStore(
       repository: failing, conversionService: FixedConversionService(),
@@ -126,8 +126,8 @@ struct EarmarkStoreReorderTests {
     let first = Earmark(name: "First", instrument: .defaultTestInstrument, position: 0)
     let second = Earmark(name: "Second", instrument: .defaultTestInstrument, position: 1)
     let third = Earmark(name: "Third", instrument: .defaultTestInstrument, position: 2)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(earmarks: [first, second, third], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(earmarks: [first, second, third], in: database)
     let failing = UpdateFailingEarmarkRepository(wrapping: backend.earmarks)
     let store = EarmarkStore(
       repository: failing, conversionService: FixedConversionService(),

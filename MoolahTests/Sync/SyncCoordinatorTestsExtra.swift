@@ -49,7 +49,7 @@ struct SyncCoordinatorTestsExtra {
       ownerName: CKCurrentUserDefaultName)
 
     // Should not crash — just adds to pending (no sync engine to actually process)
-    coordinator.queueSave(recordType: AccountRecord.recordType, id: id, zoneID: zoneID)
+    coordinator.queueSave(recordType: AccountRow.recordType, id: id, zoneID: zoneID)
     // No assertion needed beyond "doesn't crash" since CKSyncEngine is not started
   }
 
@@ -74,7 +74,7 @@ struct SyncCoordinatorTestsExtra {
       zoneName: "profile-\(UUID().uuidString)",
       ownerName: CKCurrentUserDefaultName)
 
-    coordinator.queueDeletion(recordType: AccountRecord.recordType, id: id, zoneID: zoneID)
+    coordinator.queueDeletion(recordType: AccountRow.recordType, id: id, zoneID: zoneID)
   }
 
   // MARK: - Post-Migration / Import Record Queueing
@@ -84,7 +84,8 @@ struct SyncCoordinatorTestsExtra {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(
       containerManager: manager,
-      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
+      fallbackGRDBRepositoriesFactory:
+        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
     let profileId = UUID()
 
     // Seed the new profile's data container (as a migration import would).
@@ -106,8 +107,8 @@ struct SyncCoordinatorTestsExtra {
     #expect(
       names
         == Set([
-          "\(AccountRecord.recordType)|\(accountId.uuidString)",
-          "\(TransactionRecord.recordType)|\(txnId.uuidString)",
+          "\(AccountRow.recordType)|\(accountId.uuidString)",
+          "\(TransactionRow.recordType)|\(txnId.uuidString)",
           "AUD",
         ]))
     for recordID in queued {
@@ -120,7 +121,8 @@ struct SyncCoordinatorTestsExtra {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(
       containerManager: manager,
-      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
+      fallbackGRDBRepositoriesFactory:
+        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
     let profileId = UUID()
 
     // Initialize the data container so the handler can be resolved,
@@ -143,7 +145,8 @@ struct SyncCoordinatorTestsExtra {
     let coordinator = SyncCoordinator(
       containerManager: manager,
       userDefaults: makeDefaults(),
-      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
+      fallbackGRDBRepositoriesFactory:
+        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
 
     // Register two profiles in the index.
     let profileA = UUID()
@@ -183,18 +186,18 @@ struct SyncCoordinatorTestsExtra {
     #expect(
       names
         == Set([
-          "\(AccountRecord.recordType)|\(unsyncedA.uuidString)",
-          "\(TransactionRecord.recordType)|\(unsyncedB.uuidString)",
+          "\(AccountRow.recordType)|\(unsyncedA.uuidString)",
+          "\(TransactionRow.recordType)|\(unsyncedB.uuidString)",
         ]))
 
     // Each record went to the matching profile's zone.
     let aZone = "profile-\(profileA.uuidString)"
     let bZone = "profile-\(profileB.uuidString)"
     for recordID in queued {
-      if recordID.recordName == "\(AccountRecord.recordType)|\(unsyncedA.uuidString)" {
+      if recordID.recordName == "\(AccountRow.recordType)|\(unsyncedA.uuidString)" {
         #expect(recordID.zoneID.zoneName == aZone)
       }
-      if recordID.recordName == "\(TransactionRecord.recordType)|\(unsyncedB.uuidString)" {
+      if recordID.recordName == "\(TransactionRow.recordType)|\(unsyncedB.uuidString)" {
         #expect(recordID.zoneID.zoneName == bZone)
       }
     }
@@ -219,7 +222,8 @@ struct SyncCoordinatorTestsExtra {
     let coordinator = SyncCoordinator(
       containerManager: manager,
       userDefaults: defaults,
-      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
+      fallbackGRDBRepositoriesFactory:
+        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
 
     let profileId = UUID()
     let indexContext = ModelContext(manager.indexContainer)
@@ -238,7 +242,7 @@ struct SyncCoordinatorTestsExtra {
 
     // First scan should find and queue the unsynced record.
     let first = coordinator.queueUnsyncedRecordsForAllProfiles()
-    #expect(first.map(\.recordName) == ["\(AccountRecord.recordType)|\(accountId.uuidString)"])
+    #expect(first.map(\.recordName) == ["\(AccountRow.recordType)|\(accountId.uuidString)"])
 
     // Second scan must NOT re-queue the same record — the profile has been marked
     // as scanned and is skipped. Avoids doing a SwiftData pass on every app launch.

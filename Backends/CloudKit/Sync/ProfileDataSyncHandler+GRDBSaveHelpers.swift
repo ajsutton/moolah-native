@@ -1,0 +1,249 @@
+@preconcurrency import CloudKit
+import Foundation
+
+extension ProfileDataSyncHandler {
+  // MARK: - Per-Record-Type Save Helpers
+
+  /// Inputs to the per-record-type save helpers. Bundling them keeps
+  /// each helper signature compact and below SwiftLint's
+  /// `function_parameter_count` threshold; the underlying `mapRows`
+  /// dispatch uses the typed `Row` argument to recover the CKRecord
+  /// decoder and the per-row id key.
+  struct GRDBBatchSaveContext {
+    let ckRecords: [CKRecord]
+    let systemFields: [String: Data]
+    let site: String
+  }
+
+  nonisolated func applyBatchSaveCSVImportProfile(
+    ckRecords: [CKRecord], systemFields: [String: Data]
+  ) throws {
+    let context = GRDBBatchSaveContext(
+      ckRecords: ckRecords,
+      systemFields: systemFields,
+      site: "applyGRDBBatchSave[CSVImportProfile]")
+    let rows = mapRows(
+      context: context,
+      fieldValues: CSVImportProfileRow.fieldValues(from:),
+      idKey: { $0.id.uuidString },
+      stamp: stampSystemFields)
+    try writeRemote(site: context.site) {
+      try grdbRepositories.csvImportProfiles.applyRemoteChangesSync(saved: rows, deleted: [])
+    }
+  }
+
+  nonisolated func applyBatchSaveImportRule(
+    ckRecords: [CKRecord], systemFields: [String: Data]
+  ) throws {
+    let context = GRDBBatchSaveContext(
+      ckRecords: ckRecords,
+      systemFields: systemFields,
+      site: "applyGRDBBatchSave[ImportRule]")
+    let rows = mapRows(
+      context: context,
+      fieldValues: ImportRuleRow.fieldValues(from:),
+      idKey: { $0.id.uuidString },
+      stamp: stampSystemFields)
+    try writeRemote(site: context.site) {
+      try grdbRepositories.importRules.applyRemoteChangesSync(saved: rows, deleted: [])
+    }
+  }
+
+  nonisolated func applyBatchSaveInstrument(
+    ckRecords: [CKRecord], systemFields: [String: Data]
+  ) throws {
+    let context = GRDBBatchSaveContext(
+      ckRecords: ckRecords,
+      systemFields: systemFields,
+      site: "applyGRDBBatchSave[Instrument]")
+    let rows = mapRows(
+      context: context,
+      fieldValues: InstrumentRow.fieldValues(from:),
+      idKey: { $0.id },
+      stamp: stampSystemFields)
+    try writeRemote(site: context.site) {
+      try grdbRepositories.instruments.applyRemoteChangesSync(saved: rows, deleted: [])
+    }
+  }
+
+  nonisolated func applyBatchSaveAccount(
+    ckRecords: [CKRecord], systemFields: [String: Data]
+  ) throws {
+    let context = GRDBBatchSaveContext(
+      ckRecords: ckRecords,
+      systemFields: systemFields,
+      site: "applyGRDBBatchSave[Account]")
+    let rows = mapRows(
+      context: context,
+      fieldValues: AccountRow.fieldValues(from:),
+      idKey: { $0.id.uuidString },
+      stamp: stampSystemFields)
+    try writeRemote(site: context.site) {
+      try grdbRepositories.accounts.applyRemoteChangesSync(saved: rows, deleted: [])
+    }
+  }
+
+  nonisolated func applyBatchSaveCategory(
+    ckRecords: [CKRecord], systemFields: [String: Data]
+  ) throws {
+    let context = GRDBBatchSaveContext(
+      ckRecords: ckRecords,
+      systemFields: systemFields,
+      site: "applyGRDBBatchSave[Category]")
+    let rows = mapRows(
+      context: context,
+      fieldValues: CategoryRow.fieldValues(from:),
+      idKey: { $0.id.uuidString },
+      stamp: stampSystemFields)
+    try writeRemote(site: context.site) {
+      try grdbRepositories.categories.applyRemoteChangesSync(saved: rows, deleted: [])
+    }
+  }
+
+  nonisolated func applyBatchSaveEarmark(
+    ckRecords: [CKRecord], systemFields: [String: Data]
+  ) throws {
+    let context = GRDBBatchSaveContext(
+      ckRecords: ckRecords,
+      systemFields: systemFields,
+      site: "applyGRDBBatchSave[Earmark]")
+    let rows = mapRows(
+      context: context,
+      fieldValues: EarmarkRow.fieldValues(from:),
+      idKey: { $0.id.uuidString },
+      stamp: stampSystemFields)
+    try writeRemote(site: context.site) {
+      try grdbRepositories.earmarks.applyRemoteChangesSync(saved: rows, deleted: [])
+    }
+  }
+
+  nonisolated func applyBatchSaveEarmarkBudgetItem(
+    ckRecords: [CKRecord], systemFields: [String: Data]
+  ) throws {
+    let context = GRDBBatchSaveContext(
+      ckRecords: ckRecords,
+      systemFields: systemFields,
+      site: "applyGRDBBatchSave[EarmarkBudgetItem]")
+    let rows = mapRows(
+      context: context,
+      fieldValues: EarmarkBudgetItemRow.fieldValues(from:),
+      idKey: { $0.id.uuidString },
+      stamp: stampSystemFields)
+    try writeRemote(site: context.site) {
+      try grdbRepositories.earmarkBudgetItems.applyRemoteChangesSync(saved: rows, deleted: [])
+    }
+  }
+
+  nonisolated func applyBatchSaveInvestmentValue(
+    ckRecords: [CKRecord], systemFields: [String: Data]
+  ) throws {
+    let context = GRDBBatchSaveContext(
+      ckRecords: ckRecords,
+      systemFields: systemFields,
+      site: "applyGRDBBatchSave[InvestmentValue]")
+    let rows = mapRows(
+      context: context,
+      fieldValues: InvestmentValueRow.fieldValues(from:),
+      idKey: { $0.id.uuidString },
+      stamp: stampSystemFields)
+    try writeRemote(site: context.site) {
+      try grdbRepositories.investmentValues.applyRemoteChangesSync(saved: rows, deleted: [])
+    }
+  }
+
+  nonisolated func applyBatchSaveTransaction(
+    ckRecords: [CKRecord], systemFields: [String: Data]
+  ) throws {
+    let context = GRDBBatchSaveContext(
+      ckRecords: ckRecords,
+      systemFields: systemFields,
+      site: "applyGRDBBatchSave[Transaction]")
+    let rows = mapRows(
+      context: context,
+      fieldValues: TransactionRow.fieldValues(from:),
+      idKey: { $0.id.uuidString },
+      stamp: stampSystemFields)
+    try writeRemote(site: context.site) {
+      try grdbRepositories.transactions.applyRemoteChangesSync(saved: rows, deleted: [])
+    }
+  }
+
+  nonisolated func applyBatchSaveTransactionLeg(
+    ckRecords: [CKRecord], systemFields: [String: Data]
+  ) throws {
+    let context = GRDBBatchSaveContext(
+      ckRecords: ckRecords,
+      systemFields: systemFields,
+      site: "applyGRDBBatchSave[TransactionLeg]")
+    let rows = mapRows(
+      context: context,
+      fieldValues: TransactionLegRow.fieldValues(from:),
+      idKey: { $0.id.uuidString },
+      stamp: stampSystemFields)
+    try writeRemote(site: context.site) {
+      try grdbRepositories.transactionLegs.applyRemoteChangesSync(saved: rows, deleted: [])
+    }
+  }
+
+  // MARK: - Mapping & Logging Helpers
+
+  /// Generic `stamp` closure shared by every save helper: copies the
+  /// per-row encoded system fields blob onto the row before it lands
+  /// in GRDB.
+  nonisolated func stampSystemFields<Row: GRDBSystemFieldsStampable>(
+    _ row: Row, _ data: Data?
+  ) -> Row {
+    var copy = row
+    copy.encodedSystemFields = data
+    return copy
+  }
+
+  /// Decodes a batch of `CKRecord` values into typed GRDB rows, stamping
+  /// each row's `encodedSystemFields` from the per-batch lookup. Skips
+  /// (and logs) any record whose `fieldValues` returns `nil`.
+  ///
+  /// `idKey` extracts the per-row lookup key for the system-fields
+  /// dictionary — `.id.uuidString` for UUID-keyed rows, `.id` for the
+  /// string-keyed `InstrumentRow`.
+  nonisolated func mapRows<Row>(
+    context: GRDBBatchSaveContext,
+    fieldValues: (CKRecord) -> Row?,
+    idKey: (Row) -> String,
+    stamp: (Row, Data?) -> Row
+  ) -> [Row] {
+    context.ckRecords.compactMap { ckRecord -> Row? in
+      guard let row = fieldValues(ckRecord) else {
+        Self.logMalformed(context.site, ckRecord)
+        return nil
+      }
+      return stamp(row, context.systemFields[idKey(row)])
+    }
+  }
+
+  /// Common error-handling shell for GRDB-side remote batch writes.
+  /// Logs at error level on throw and rethrows so `applyRemoteChanges`
+  /// returns `.saveFailed(...)` and CKSyncEngine refetches.
+  nonisolated func writeRemote(
+    site: String, _ work: () throws -> Void
+  ) throws {
+    do {
+      try work()
+    } catch {
+      Self.batchLogger.error(
+        """
+        \(site, privacy: .public) profile \
+        \(self.profileId, privacy: .public) failed: \
+        \(error.localizedDescription, privacy: .public)
+        """)
+      throw error
+    }
+  }
+
+  /// Logs a malformed incoming CKRecord at error level so the skip is
+  /// visible in diagnostics rather than silently dropped.
+  nonisolated static func logMalformed(_ site: String, _ ckRecord: CKRecord) {
+    batchLogger.error(
+      "\(site): malformed recordID '\(ckRecord.recordID.recordName)' (recordType \(ckRecord.recordType)) — skipping"
+    )
+  }
+}

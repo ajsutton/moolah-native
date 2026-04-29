@@ -1,5 +1,6 @@
 import CloudKit
 import Foundation
+import GRDB
 import SwiftData
 import Testing
 
@@ -26,24 +27,24 @@ struct RecordNameCollisionTests {
     context.insert(
       TransactionRecord(
         id: sharedId, date: Date(), payee: "Opening balance"))
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     // The lookup is keyed by recordType and then by UUID, so two record
     // types sharing a UUID produce two independent entries — preventing
     // the same `CKRecord` from being appended to a batch twice.
     let lookup = handler.buildBatchRecordLookup(byRecordType: [
-      AccountRecord.recordType: [sharedId],
-      TransactionRecord.recordType: [sharedId],
+      AccountRow.recordType: [sharedId],
+      TransactionRow.recordType: [sharedId],
     ])
 
-    let accountRecord = try #require(lookup[AccountRecord.recordType]?[sharedId])
-    let transactionRecord = try #require(lookup[TransactionRecord.recordType]?[sharedId])
+    let accountRecord = try #require(lookup[AccountRow.recordType]?[sharedId])
+    let transactionRecord = try #require(lookup[TransactionRow.recordType]?[sharedId])
     #expect(
       accountRecord.recordID.recordName
-        == "\(AccountRecord.recordType)|\(sharedId.uuidString)")
+        == "\(AccountRow.recordType)|\(sharedId.uuidString)")
     #expect(
       transactionRecord.recordID.recordName
-        == "\(TransactionRecord.recordType)|\(sharedId.uuidString)")
+        == "\(TransactionRow.recordType)|\(sharedId.uuidString)")
   }
 
   @Test("queueUnsyncedRecords produces prefixed recordNames per type")
@@ -61,44 +62,47 @@ struct RecordNameCollisionTests {
     context.insert(
       TransactionRecord(
         id: sharedId, date: Date(), payee: "Opening balance"))
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     let recordIDs = handler.queueUnsyncedRecords()
     let names = Set(recordIDs.map(\.recordName))
     #expect(
-      names.contains("\(AccountRecord.recordType)|\(sharedId.uuidString)"))
+      names.contains("\(AccountRow.recordType)|\(sharedId.uuidString)"))
     #expect(
       names.contains(
-        "\(TransactionRecord.recordType)|\(sharedId.uuidString)"))
+        "\(TransactionRow.recordType)|\(sharedId.uuidString)"))
   }
 
   // MARK: - 2. Uplink uses prefixed name for new records
 
-  @Test("buildCKRecord for a brand-new AccountRecord emits a prefixed recordName")
+  @Test("buildCKRecord for a brand-new AccountRow emits a prefixed recordName")
   func buildCKRecordEmitsPrefixedRecordNameForNewRecords() throws {
-    let (handler, container) =
+    let (handler, _) =
       try ProfileDataSyncHandlerTestSupport
       .makeHandler()
 
     let accountId = UUID()
-    let account = AccountRecord(
-      id: accountId, name: "New", type: "bank", position: 0,
-      isHidden: false)
-    let context = ModelContext(container)
-    context.insert(account)
-    try context.save()
+    let row = AccountRow(
+      id: accountId,
+      recordName: AccountRow.recordName(for: accountId),
+      name: "New",
+      type: "bank",
+      instrumentId: "AUD",
+      position: 0,
+      isHidden: false,
+      encodedSystemFields: nil)
 
-    let built = handler.buildCKRecord(for: account)
+    let built = handler.buildCKRecord(from: row, encodedSystemFields: nil)
     #expect(
       built.recordID.recordName
-        == "\(AccountRecord.recordType)|\(accountId.uuidString)")
+        == "\(AccountRow.recordType)|\(accountId.uuidString)")
   }
 
   // MARK: - 3. Uplink ignores stale bare-UUID cached system fields
 
   @Test("buildCKRecord ignores legacy bare-UUID recordName in cached system fields")
   func buildCKRecordIgnoresLegacyBareUUIDCachedSystemFields() throws {
-    let (handler, container) =
+    let (handler, _) =
       try ProfileDataSyncHandlerTestSupport
       .makeHandler()
 
@@ -114,19 +118,20 @@ struct RecordNameCollisionTests {
         recordName: accountId.uuidString, zoneID: handler.zoneID))
     let legacySystemFields = legacyRecord.encodedSystemFields
 
-    let context = ModelContext(container)
-    let account = AccountRecord(
-      id: accountId, name: "Legacy", type: "bank", position: 0,
-      isHidden: false)
-    account.encodedSystemFields = legacySystemFields
-    context.insert(account)
-    try context.save()
+    let row = AccountRow(
+      id: accountId,
+      recordName: AccountRow.recordName(for: accountId),
+      name: "Updated",
+      type: "bank",
+      instrumentId: "AUD",
+      position: 0,
+      isHidden: false,
+      encodedSystemFields: legacySystemFields)
 
-    account.name = "Updated"
-    let built = handler.buildCKRecord(for: account)
+    let built = handler.buildCKRecord(from: row, encodedSystemFields: legacySystemFields)
     #expect(
       built.recordID.recordName
-        == "\(AccountRecord.recordType)|\(accountId.uuidString)")
+        == "\(AccountRow.recordType)|\(accountId.uuidString)")
     #expect(built["name"] as? String == "Updated")
   }
 
@@ -134,9 +139,10 @@ struct RecordNameCollisionTests {
 
   @Test("applyRemoteChanges drops bare-UUID CKRecords and ingests prefixed ones")
   func applyRemoteChangesRejectsBareUUIDAcceptsPrefixed() throws {
-    let (handler, container) =
+    let harness =
       try ProfileDataSyncHandlerTestSupport
-      .makeHandler()
+      .makeHandlerAndDatabase()
+    let handler = harness.handler
 
     let legacyId = UUID()
     let legacyCK = CKRecord(
@@ -162,9 +168,10 @@ struct RecordNameCollisionTests {
 
     _ = handler.applyRemoteChanges(saved: [legacyCK, newCK], deleted: [])
 
-    let context = ModelContext(container)
-    let all = try context.fetch(FetchDescriptor<AccountRecord>())
-    let byId = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
+    let rows = try harness.database.read { database in
+      try AccountRow.fetchAll(database)
+    }
+    let byId = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
     #expect(byId[legacyId] == nil, "bare-UUID record should not be ingested")
     #expect(byId[newId]?.name == "Prefixed")
     #expect(byId[newId]?.encodedSystemFields != nil)
@@ -174,18 +181,18 @@ struct RecordNameCollisionTests {
 
   @Test("handleSentRecordZoneChanges writes system fields back using recordType")
   func handleSentRecordZoneChangesAppliesSystemFieldsForPrefixedRecords() throws {
-    let (handler, container) =
+    let harness =
       try ProfileDataSyncHandlerTestSupport
-      .makeHandler()
+      .makeHandlerAndDatabase()
+    let handler = harness.handler
 
     let accountId = UUID()
-    let context = ModelContext(container)
-    let account = AccountRecord(
-      id: accountId, name: "Test", type: "bank", position: 0,
-      isHidden: false)
-    context.insert(account)
-    try context.save()
-    #expect(account.encodedSystemFields == nil)
+    let stub = Account(
+      id: accountId, name: "Test", type: .bank,
+      instrument: .defaultTestInstrument, position: 0, isHidden: false)
+    try harness.database.write { database in
+      try AccountRow(domain: stub).insert(database)
+    }
 
     // Simulate a CK round-trip where the server returns a prefixed
     // CKRecord as "saved".
@@ -200,11 +207,9 @@ struct RecordNameCollisionTests {
     _ = handler.handleSentRecordZoneChanges(
       savedRecords: [savedCK], failedSaves: [], failedDeletes: [])
 
-    let fresh = ModelContext(container)
-    let reloaded = try fresh.fetch(
-      FetchDescriptor<AccountRecord>(
-        predicate: #Predicate { $0.id == accountId })
-    ).first
+    let reloaded = try harness.database.read { database in
+      try AccountRow.filter(AccountRow.Columns.id == accountId).fetchOne(database)
+    }
     #expect(reloaded?.encodedSystemFields != nil)
   }
 
@@ -228,7 +233,7 @@ struct RecordNameCollisionTests {
       financialYearStartMonth: 7, createdAt: Date())
     let context = ModelContext(container)
     context.insert(profile)
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     let prefixedID = CKRecord.ID(
       recordType: ProfileRecord.recordType,
@@ -282,7 +287,7 @@ struct RecordNameCollisionTests {
       id: profileId, label: "Test", currencyCode: "AUD",
       financialYearStartMonth: 7, createdAt: Date())
     context.insert(profile)
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
     #expect(profile.encodedSystemFields == nil)
 
     let savedCK = CKRecord(

@@ -29,23 +29,21 @@ struct MultiProfileIsolationTests {
   func testDeleteIsolation() async throws {
     let manager = try ProfileContainerManager.forTesting()
     let profileA = UUID()
-    let profileB = UUID()
 
-    let containerA = try manager.container(for: profileA)
-    let containerB = try manager.container(for: profileB)
-
+    // Two independent in-memory GRDB-backed backends. Profile B's data
+    // must survive the deletion of Profile A's store on the manager.
     let databaseA = try ProfileDatabase.openInMemory()
     let databaseB = try ProfileDatabase.openInMemory()
     let backendA = CloudKitBackend(
-      modelContainer: containerA, database: databaseA,
+      database: databaseA,
       instrument: .defaultTestInstrument, profileLabel: "A",
       conversionService: FixedConversionService(),
-      instrumentRegistry: CloudKitInstrumentRegistryRepository(modelContainer: containerA))
+      instrumentRegistry: GRDBInstrumentRegistryRepository(database: databaseA))
     let backendB = CloudKitBackend(
-      modelContainer: containerB, database: databaseB,
+      database: databaseB,
       instrument: .defaultTestInstrument, profileLabel: "B",
       conversionService: FixedConversionService(),
-      instrumentRegistry: CloudKitInstrumentRegistryRepository(modelContainer: containerB))
+      instrumentRegistry: GRDBInstrumentRegistryRepository(database: databaseB))
 
     _ = try await backendA.categories.create(Moolah.Category(name: "A-Cat"))
     _ = try await backendB.categories.create(Moolah.Category(name: "B-Cat"))

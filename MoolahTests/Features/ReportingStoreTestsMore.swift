@@ -42,11 +42,11 @@ struct ReportingStoreTestsMore {
   // MARK: - Multi-instrument profit/loss
 
   @Test @MainActor func loadProfitLoss_aggregatesMultipleStockInstruments() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     let account = Account(
       id: UUID(), name: "Brokerage", type: .bank, instrument: .defaultTestInstrument
     )
-    TestBackend.seed(accounts: [account], in: container)
+    TestBackend.seed(accounts: [account], in: database)
 
     let bhp = Instrument(
       id: "ASX:BHP.AX", kind: .stock, name: "BHP", decimals: 0,
@@ -75,7 +75,7 @@ struct ReportingStoreTestsMore {
           accountId: account.id, instrument: cba, quantity: 50, type: .trade),
       ]
     )
-    TestBackend.seed(transactions: [buyBHP, buyCBA], in: container)
+    TestBackend.seed(transactions: [buyBHP, buyCBA], in: database)
 
     // BHP worth $50/share → 5000, CBA worth $120/share → 6000
     let service = FixedConversionService(rates: ["ASX:BHP.AX": 50, "ASX:CBA.AX": 120])
@@ -97,11 +97,11 @@ struct ReportingStoreTestsMore {
   }
 
   @Test @MainActor func loadProfitLoss_tracksStockAndCryptoInSamePortfolio() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     let account = Account(
       id: UUID(), name: "Hybrid", type: .bank, instrument: .defaultTestInstrument
     )
-    TestBackend.seed(accounts: [account], in: container)
+    TestBackend.seed(accounts: [account], in: database)
 
     let bhp = Instrument(
       id: "ASX:BHP.AX", kind: .stock, name: "BHP", decimals: 0,
@@ -131,7 +131,7 @@ struct ReportingStoreTestsMore {
             quantity: dec("1.0"), type: .trade),
         ]),
     ]
-    TestBackend.seed(transactions: txns, in: container)
+    TestBackend.seed(transactions: txns, in: database)
 
     let service = FixedConversionService(rates: ["ASX:BHP.AX": 50, eth.id: 2500])
     let store = ReportingStore(
@@ -148,14 +148,14 @@ struct ReportingStoreTestsMore {
   }
 
   @Test @MainActor func loadCategoryBalances_populatesIncomeAndExpense() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     let account = Account(
       id: UUID(), name: "Checking", type: .bank, instrument: .defaultTestInstrument
     )
     let incomeCategory = Moolah.Category(id: UUID(), name: "Salary")
     let expenseCategory = Moolah.Category(id: UUID(), name: "Groceries")
-    TestBackend.seed(accounts: [account], in: container)
-    TestBackend.seed(categories: [incomeCategory, expenseCategory], in: container)
+    TestBackend.seed(accounts: [account], in: database)
+    TestBackend.seed(categories: [incomeCategory, expenseCategory], in: database)
 
     let today = Date()
     TestBackend.seed(
@@ -179,7 +179,7 @@ struct ReportingStoreTestsMore {
           ]
         ),
       ],
-      in: container
+      in: database
     )
 
     let store = ReportingStore(

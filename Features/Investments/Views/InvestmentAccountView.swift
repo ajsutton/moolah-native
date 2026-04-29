@@ -226,7 +226,7 @@ struct InvestmentAccountView: View {
     } else {
       List {
         ForEach(investmentStore.values) { value in
-          InvestmentValueRow(value: value) {
+          InvestmentValueListRow(value: value) {
             Task {
               await investmentStore.removeValue(accountId: account.id, date: value.date)
             }

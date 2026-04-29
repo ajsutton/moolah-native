@@ -1,5 +1,6 @@
 import CloudKit
 import Foundation
+import GRDB
 import SwiftData
 import Testing
 
@@ -11,9 +12,10 @@ struct ProfileDataSyncHandlerQueueTests {
 
   @Test
   func deleteLocalDataRemovesAllRecordTypes() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerAndDatabase()
+    let handler = harness.handler
 
-    let context = ModelContext(container)
+    let context = ModelContext(harness.container)
     context.insert(
       AccountRecord(id: UUID(), name: "Acc", type: "bank", position: 0, isHidden: false))
     context.insert(
@@ -23,20 +25,17 @@ struct ProfileDataSyncHandlerQueueTests {
     context.insert(
       InstrumentRecord(
         id: "AUD", kind: "fiatCurrency", name: "Australian Dollar", decimals: 2))
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     let changedTypes = handler.deleteLocalData()
 
-    let freshContext = ModelContext(container)
-    let accounts = try freshContext.fetch(FetchDescriptor<AccountRecord>())
-    let transactions = try freshContext.fetch(FetchDescriptor<TransactionRecord>())
-    let categories = try freshContext.fetch(FetchDescriptor<CategoryRecord>())
-    let instruments = try freshContext.fetch(FetchDescriptor<InstrumentRecord>())
-
-    #expect(accounts.isEmpty)
-    #expect(transactions.isEmpty)
-    #expect(categories.isEmpty)
-    #expect(instruments.isEmpty)
+    let counts = try harness.database.read { database -> DeleteLocalDataCounts in
+      try DeleteLocalDataCounts.fetch(from: database)
+    }
+    #expect(counts.accounts == 0)
+    #expect(counts.transactions == 0)
+    #expect(counts.categories == 0)
+    #expect(counts.instruments == 0)
     #expect(changedTypes == Set(RecordTypeRegistry.allTypes.keys))
   }
 
@@ -56,15 +55,15 @@ struct ProfileDataSyncHandlerQueueTests {
     context.insert(
       InstrumentRecord(
         id: instrumentId, kind: "fiatCurrency", name: "Australian Dollar", decimals: 2))
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     let recordIDs = handler.queueAllExistingRecords()
 
     #expect(recordIDs.count == 3)
 
     let recordNames = Set(recordIDs.map(\.recordName))
-    #expect(recordNames.contains("\(AccountRecord.recordType)|\(accountId.uuidString)"))
-    #expect(recordNames.contains("\(TransactionRecord.recordType)|\(txnId.uuidString)"))
+    #expect(recordNames.contains("\(AccountRow.recordType)|\(accountId.uuidString)"))
+    #expect(recordNames.contains("\(TransactionRow.recordType)|\(txnId.uuidString)"))
     #expect(recordNames.contains(instrumentId))
 
     for recordID in recordIDs {
@@ -104,16 +103,16 @@ struct ProfileDataSyncHandlerQueueTests {
     syncedInstrument.encodedSystemFields = Data([0x04, 0x05])
     context.insert(syncedInstrument)
 
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     let recordIDs = handler.queueUnsyncedRecords()
     let recordNames = Set(recordIDs.map(\.recordName))
 
     #expect(
-      recordNames.contains("\(AccountRecord.recordType)|\(unsyncedAccountId.uuidString)"))
+      recordNames.contains("\(AccountRow.recordType)|\(unsyncedAccountId.uuidString)"))
     #expect(recordNames.contains(unsyncedInstrumentId))
     #expect(
-      !recordNames.contains("\(AccountRecord.recordType)|\(syncedAccountId.uuidString)"))
+      !recordNames.contains("\(AccountRow.recordType)|\(syncedAccountId.uuidString)"))
     #expect(!recordNames.contains(syncedInstrumentId))
   }
 
@@ -126,7 +125,7 @@ struct ProfileDataSyncHandlerQueueTests {
       id: UUID(), name: "Acc", type: "bank", position: 0, isHidden: false)
     account.encodedSystemFields = Data([0x01])
     context.insert(account)
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     let recordIDs = handler.queueUnsyncedRecords()
     #expect(recordIDs.isEmpty)
@@ -142,6 +141,7 @@ struct ProfileDataSyncHandlerQueueTests {
     let investmentValueId = UUID()
     let instrumentId = "AUD"
 
+    @MainActor
     func insert(into context: ModelContext) throws {
       context.insert(
         InstrumentRecord(id: instrumentId, kind: "fiatCurrency", name: "AUD Dollar", decimals: 2))
@@ -162,7 +162,7 @@ struct ProfileDataSyncHandlerQueueTests {
         TransactionLegRecord(
           id: legId, transactionId: txnId, accountId: accountId,
           instrumentId: instrumentId, quantity: 0, type: "income", sortOrder: 0))
-      try context.save()
+      try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
     }
   }
 
@@ -177,17 +177,17 @@ struct ProfileDataSyncHandlerQueueTests {
 
     #expect(recordNames.count == 8)
     #expect(recordNames.contains(seed.instrumentId))
-    #expect(recordNames.contains("\(AccountRecord.recordType)|\(seed.accountId.uuidString)"))
-    #expect(recordNames.contains("\(CategoryRecord.recordType)|\(seed.categoryId.uuidString)"))
-    #expect(recordNames.contains("\(EarmarkRecord.recordType)|\(seed.earmarkId.uuidString)"))
+    #expect(recordNames.contains("\(AccountRow.recordType)|\(seed.accountId.uuidString)"))
+    #expect(recordNames.contains("\(CategoryRow.recordType)|\(seed.categoryId.uuidString)"))
+    #expect(recordNames.contains("\(EarmarkRow.recordType)|\(seed.earmarkId.uuidString)"))
     #expect(
       recordNames.contains(
-        "\(EarmarkBudgetItemRecord.recordType)|\(seed.budgetItemId.uuidString)"))
+        "\(EarmarkBudgetItemRow.recordType)|\(seed.budgetItemId.uuidString)"))
     #expect(
       recordNames.contains(
-        "\(InvestmentValueRecord.recordType)|\(seed.investmentValueId.uuidString)"))
-    #expect(recordNames.contains("\(TransactionRecord.recordType)|\(seed.txnId.uuidString)"))
-    #expect(recordNames.contains("\(TransactionLegRecord.recordType)|\(seed.legId.uuidString)"))
+        "\(InvestmentValueRow.recordType)|\(seed.investmentValueId.uuidString)"))
+    #expect(recordNames.contains("\(TransactionRow.recordType)|\(seed.txnId.uuidString)"))
+    #expect(recordNames.contains("\(TransactionLegRow.recordType)|\(seed.legId.uuidString)"))
     for recordID in recordIDs {
       #expect(recordID.zoneID == handler.zoneID)
     }
@@ -195,13 +195,15 @@ struct ProfileDataSyncHandlerQueueTests {
 
   @Test
   func clearAllSystemFieldsClearsAllRecordTypes() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerAndDatabase()
+    let handler = harness.handler
+    let database = harness.database
 
     let accountId = UUID()
     let ckRecord = CKRecord(
       recordType: "AccountRecord",
       recordID: CKRecord.ID(
-        recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
+        recordType: AccountRow.recordType, uuid: accountId, zoneID: handler.zoneID)
     )
     ckRecord["name"] = "Test" as CKRecordValue
     ckRecord["type"] = "bank" as CKRecordValue
@@ -210,18 +212,33 @@ struct ProfileDataSyncHandlerQueueTests {
 
     _ = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
-    let preContext = ModelContext(container)
-    let preRecords = try preContext.fetch(
-      FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == accountId })
-    )
-    #expect(preRecords.first?.encodedSystemFields != nil)
+    let preRow = try database.read { database in
+      try AccountRow.filter(AccountRow.Columns.id == accountId).fetchOne(database)
+    }
+    #expect(preRow?.encodedSystemFields != nil)
 
     handler.clearAllSystemFields()
 
-    let postContext = ModelContext(container)
-    let postRecords = try postContext.fetch(
-      FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == accountId })
-    )
-    #expect(postRecords.first?.encodedSystemFields == nil)
+    let postRow = try database.read { database in
+      try AccountRow.filter(AccountRow.Columns.id == accountId).fetchOne(database)
+    }
+    #expect(postRow?.encodedSystemFields == nil)
+  }
+}
+
+/// Per-table row counts for `deleteLocalDataRemovesAllRecordTypes`.
+/// Replaces a four-tuple to satisfy SwiftLint's `large_tuple` policy.
+private struct DeleteLocalDataCounts {
+  let accounts: Int
+  let transactions: Int
+  let categories: Int
+  let instruments: Int
+
+  static func fetch(from database: Database) throws -> DeleteLocalDataCounts {
+    DeleteLocalDataCounts(
+      accounts: try AccountRow.fetchCount(database),
+      transactions: try TransactionRow.fetchCount(database),
+      categories: try CategoryRow.fetchCount(database),
+      instruments: try InstrumentRow.fetchCount(database))
   }
 }

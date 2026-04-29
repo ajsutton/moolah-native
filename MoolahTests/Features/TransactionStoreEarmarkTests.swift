@@ -18,9 +18,9 @@ struct TransactionStoreEarmarkTests {
     let earmark = Earmark(
       id: earmarkId, name: "Holiday",
       instrument: .defaultTestInstrument)
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     let stores = await TransactionStoreTestSupport.makeStores(
-      backend: backend, container: container, accounts: [account], earmarks: [earmark])
+      backend: backend, database: database, accounts: [account], earmarks: [earmark])
     let store = stores.transactions
     let earmarkStore = stores.earmarks
 
@@ -72,10 +72,10 @@ struct TransactionStoreEarmarkTests {
         )
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [transaction], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [transaction], in: database)
     let stores = await TransactionStoreTestSupport.makeStores(
-      backend: backend, container: container, accounts: [account],
+      backend: backend, database: database, accounts: [account],
       earmarks: [earmark1, earmark2])
     let store = stores.transactions
     let earmarkStore = stores.earmarks
@@ -118,10 +118,10 @@ struct TransactionStoreEarmarkTests {
         )
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [transaction], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [transaction], in: database)
     let stores = await TransactionStoreTestSupport.makeStores(
-      backend: backend, container: container, accounts: [account])
+      backend: backend, database: database, accounts: [account])
     let store = stores.transactions
     let accountStore = stores.accounts
 
@@ -161,10 +161,10 @@ struct TransactionStoreEarmarkTests {
         )
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: database)
     let stores = await TransactionStoreTestSupport.makeStores(
-      backend: backend, container: container, accounts: [account])
+      backend: backend, database: database, accounts: [account])
     let store = stores.transactions
     let accountStore = stores.accounts
 
@@ -193,10 +193,10 @@ struct TransactionStoreEarmarkTests {
         )
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: database)
     let stores = await TransactionStoreTestSupport.makeStores(
-      backend: backend, container: container, accounts: [account])
+      backend: backend, database: database, accounts: [account])
     let store = stores.transactions
     let accountStore = stores.accounts
 
@@ -234,8 +234,8 @@ struct TransactionStoreEarmarkTests {
         )
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [salary, coffee], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [salary, coffee], in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),

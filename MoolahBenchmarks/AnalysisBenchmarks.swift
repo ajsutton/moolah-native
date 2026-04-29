@@ -1,4 +1,4 @@
-import SwiftData
+import GRDB
 import XCTest
 
 @testable import Moolah
@@ -8,7 +8,7 @@ import XCTest
 final class AnalysisBenchmarks: XCTestCase {
 
   nonisolated(unsafe) private static var _backend: CloudKitBackend?
-  nonisolated(unsafe) private static var _container: ModelContainer?
+  nonisolated(unsafe) private static var _database: DatabaseQueue?
 
   override static func setUp() {
     super.setUp()
@@ -16,15 +16,13 @@ final class AnalysisBenchmarks: XCTestCase {
       try TestBackend.create()
     }
     _backend = result.backend
-    _container = result.container
-    awaitSyncExpecting { @MainActor in
-      BenchmarkFixtures.seed(scale: .twoX, in: result.container)
-    }
+    _database = result.database
+    BenchmarkFixtures.seed(scale: .twoX, in: result.database)
   }
 
   override static func tearDown() {
     _backend = nil
-    _container = nil
+    _database = nil
     super.tearDown()
   }
 
@@ -35,10 +33,10 @@ final class AnalysisBenchmarks: XCTestCase {
     return backend
   }
 
-  private var repo: CloudKitAnalysisRepository {
-    guard let repo = backend.analysis as? CloudKitAnalysisRepository else {
+  private var repo: GRDBAnalysisRepository {
+    guard let repo = backend.analysis as? GRDBAnalysisRepository else {
       fatalError(
-        "AnalysisBenchmarks requires CloudKitAnalysisRepository; "
+        "AnalysisBenchmarks requires GRDBAnalysisRepository; "
           + "got \(type(of: backend.analysis))")
     }
     return repo

@@ -69,19 +69,28 @@ struct ExportImportIntegrationTests {
 
   /// Builds a `CloudKitBackend` over an existing `ModelContainer` for the
   /// post-import verification step. Centralised so each test isn't repeating
-  /// the constructor boilerplate.
+  /// the constructor boilerplate. Imports go through SwiftData first; this
+  /// helper migrates the SwiftData rows into a fresh in-memory GRDB queue
+  /// and returns a backend that reads through the production code path.
   private func makeCloudBackend(
     container: ModelContainer, label: String = "Test Profile"
-  ) -> CloudKitBackend {
-    // swiftlint:disable:next force_try
-    let database = try! ProfileDatabase.openInMemory()
+  ) throws -> CloudKitBackend {
+    let database = try ProfileDatabase.openInMemory()
+    let suiteName = "export-import-test-\(UUID().uuidString)"
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+      throw NSError(
+        domain: "ExportImportIntegrationTests",
+        code: -1,
+        userInfo: [NSLocalizedDescriptionKey: "could not allocate UserDefaults suite"])
+    }
+    try SwiftDataToGRDBMigrator().migrateIfNeeded(
+      modelContainer: container, database: database, defaults: defaults)
     return CloudKitBackend(
-      modelContainer: container,
       database: database,
       instrument: instrument,
       profileLabel: label,
       conversionService: FixedConversionService(),
-      instrumentRegistry: CloudKitInstrumentRegistryRepository(modelContainer: container)
+      instrumentRegistry: GRDBInstrumentRegistryRepository(database: database)
     )
   }
 
@@ -161,7 +170,7 @@ struct ExportImportIntegrationTests {
     #expect(result.budgetItemCount == 1)
 
     // Verify data is readable through CloudKit repositories
-    let cloudBackend = makeCloudBackend(container: freshContainer)
+    let cloudBackend = try makeCloudBackend(container: freshContainer)
 
     let accounts = try await cloudBackend.accounts.fetchAll()
     #expect(accounts.count == 1)

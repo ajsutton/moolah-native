@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -64,16 +64,16 @@ enum TransactionStoreTestSupport {
 
   static func makeStores(
     backend: CloudKitBackend,
-    container: ModelContainer,
+    database: any DatabaseWriter,
     accounts: [SeededAccount] = [],
     earmarks: [Earmark] = []
   ) async -> Stores {
     if !accounts.isEmpty {
       let tuples = accounts.map { ($0.account, $0.openingBalance) }
-      TestBackend.seed(accounts: tuples, in: container)
+      TestBackend.seed(accounts: tuples, in: database)
     }
     if !earmarks.isEmpty {
-      TestBackend.seed(earmarks: earmarks, in: container)
+      TestBackend.seed(earmarks: earmarks, in: database)
     }
     let accountStore = AccountStore(
       repository: backend.accounts,

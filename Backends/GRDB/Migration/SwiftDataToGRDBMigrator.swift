@@ -5,10 +5,8 @@ import GRDB
 import OSLog
 import SwiftData
 
-/// One-shot migrator that copies CSV import profiles and import rules
-/// from a profile's SwiftData store into its GRDB `data.sqlite` (the
-/// `csv_import_profile` and `import_rule` tables added by
-/// `v2_csv_import_and_rules`). Each record type is gated by an
+/// One-shot migrator that copies the synced SwiftData record types into
+/// a profile's GRDB `data.sqlite`. Each record type is gated by an
 /// independent `UserDefaults` flag so a partial migration never
 /// re-runs against an already-populated table.
 ///
@@ -46,11 +44,53 @@ struct SwiftDataToGRDBMigrator {
   static let csvImportProfilesFlag = "v2.csvImportProfiles.grdbMigrated"
   /// `UserDefaults` key gating the import-rule copy.
   static let importRulesFlag = "v2.importRules.grdbMigrated"
+  // Core financial graph flags (v3 schema). Each table gets its own
+  // flag so a partial migration of the eight types never re-runs
+  // against an already-populated table.
+  static let instrumentsFlag = "v3.instruments.grdbMigrated"
+  static let categoriesFlag = "v3.categories.grdbMigrated"
+  static let accountsFlag = "v3.accounts.grdbMigrated"
+  static let earmarksFlag = "v3.earmarks.grdbMigrated"
+  static let earmarkBudgetItemsFlag = "v3.earmarkBudgetItems.grdbMigrated"
+  static let investmentValuesFlag = "v3.investmentValues.grdbMigrated"
+  static let transactionsFlag = "v3.transactions.grdbMigrated"
+  static let transactionLegsFlag = "v3.transactionLegs.grdbMigrated"
 
-  private let logger = Logger(
+  /// All `UserDefaults` keys that gate this migrator. Used by
+  /// `resetMigrationFlags(in:)` to reset state between UI test launches —
+  /// each test launches a fresh in-memory `ProfileContainerManager` with
+  /// new seed data, but `UserDefaults.standard` persists across xctest
+  /// launches in the same runner. Without resetting, the second test's
+  /// migrator would skip and the seeded SwiftData rows would never reach
+  /// GRDB. Production launches never call this reset.
+  static let allMigrationFlags: [String] = [
+    csvImportProfilesFlag,
+    importRulesFlag,
+    instrumentsFlag,
+    categoriesFlag,
+    accountsFlag,
+    earmarksFlag,
+    earmarkBudgetItemsFlag,
+    investmentValuesFlag,
+    transactionsFlag,
+    transactionLegsFlag,
+  ]
+
+  /// Clears every gating flag set by `migrateIfNeeded` so the next call
+  /// re-runs the full SwiftData → GRDB copy. Intended for `--ui-testing`
+  /// launches only: each UI test starts from a fresh in-memory profile
+  /// container and must observe its own seeded rows in GRDB. No
+  /// production code path should invoke this.
+  static func resetMigrationFlags(in defaults: UserDefaults = .standard) {
+    for key in allMigrationFlags {
+      defaults.removeObject(forKey: key)
+    }
+  }
+
+  let logger = Logger(
     subsystem: "com.moolah.app", category: "SwiftDataToGRDBMigrator")
 
-  /// Runs the one-shot migration for both record types. Each is gated
+  /// Runs the one-shot migration for every record type. Each is gated
   /// independently; a previously-migrated record type is a no-op.
   ///
   /// `defaults` is injected with a `.standard` default so production
@@ -60,8 +100,9 @@ struct SwiftDataToGRDBMigrator {
   /// Synchronous because the only places it runs (per-profile session
   /// init and seed tests) need to block the calling thread until both
   /// SwiftData reads and GRDB writes complete. Total work is bounded
-  /// by the row counts in the source SwiftData store — typically tens
-  /// of rows for CSV import profiles + import rules combined.
+  /// by the row counts in the source SwiftData store. The eight v3
+  /// migrators run in parents-before-children order so foreign-key
+  /// references resolve as each transaction commits.
   func migrateIfNeeded(
     modelContainer: ModelContainer,
     database: any DatabaseWriter,
@@ -78,6 +119,9 @@ struct SwiftDataToGRDBMigrator {
       // `com.moolah.app`, category `SwiftDataToGRDBMigrator`).
       // Intentional signal-only check, not a hard precondition; the
       // migration's correctness is independent of how long it takes.
+      // The v3 core-financial-graph migrators may push past 16ms on
+      // heavy stores (eight transactions × N rows each); the warning
+      // is signal-only and intentionally not bumped.
       if elapsedMs > 16 {
         logger.warning(
           """
@@ -87,6 +131,29 @@ struct SwiftDataToGRDBMigrator {
           """)
       }
     }
+    // Core financial graph — parents before children so each
+    // transaction's FK references resolve at commit. PRAGMA
+    // foreign_keys = ON is in effect; an unresolved parent fails the
+    // upsert loudly, which is the correct behaviour.
+    try migrateInstrumentsIfNeeded(
+      modelContainer: modelContainer, database: database, defaults: defaults)
+    try migrateCategoriesIfNeeded(
+      modelContainer: modelContainer, database: database, defaults: defaults)
+    try migrateAccountsIfNeeded(
+      modelContainer: modelContainer, database: database, defaults: defaults)
+    try migrateEarmarksIfNeeded(
+      modelContainer: modelContainer, database: database, defaults: defaults)
+    try migrateEarmarkBudgetItemsIfNeeded(
+      modelContainer: modelContainer, database: database, defaults: defaults)
+    try migrateInvestmentValuesIfNeeded(
+      modelContainer: modelContainer, database: database, defaults: defaults)
+    try migrateTransactionsIfNeeded(
+      modelContainer: modelContainer, database: database, defaults: defaults)
+    try migrateTransactionLegsIfNeeded(
+      modelContainer: modelContainer, database: database, defaults: defaults)
+    // CSV imports reference accounts; run them after the core graph
+    // so any FK validation at the application layer sees a populated
+    // `account` table.
     try migrateCSVImportProfilesIfNeeded(
       modelContainer: modelContainer, database: database, defaults: defaults)
     try migrateImportRulesIfNeeded(

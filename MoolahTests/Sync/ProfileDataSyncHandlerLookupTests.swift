@@ -21,15 +21,15 @@ struct ProfileDataSyncHandlerLookupTests {
       AccountRecord(id: accountId, name: "Acc", type: "bank", position: 0, isHidden: false))
     context.insert(
       TransactionRecord(id: txnId, date: Date(), payee: "Test"))
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     let lookup = handler.buildBatchRecordLookup(byRecordType: [
-      AccountRecord.recordType: [accountId],
-      TransactionRecord.recordType: [txnId],
+      AccountRow.recordType: [accountId],
+      TransactionRow.recordType: [txnId],
     ])
 
-    #expect(lookup[AccountRecord.recordType]?[accountId]?.recordType == "AccountRecord")
-    #expect(lookup[TransactionRecord.recordType]?[txnId]?.recordType == "TransactionRecord")
+    #expect(lookup[AccountRow.recordType]?[accountId]?.recordType == "AccountRecord")
+    #expect(lookup[TransactionRow.recordType]?[txnId]?.recordType == "TransactionRecord")
   }
 
   @Test
@@ -40,10 +40,10 @@ struct ProfileDataSyncHandlerLookupTests {
     let context = ModelContext(container)
     context.insert(
       AccountRecord(id: accountId, name: "Found", type: "bank", position: 0, isHidden: false))
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     let recordID = CKRecord.ID(
-      recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
+      recordType: AccountRow.recordType, uuid: accountId, zoneID: handler.zoneID)
     let result = handler.recordToSave(for: recordID)
     #expect(result != nil)
     #expect(result?.recordType == "AccountRecord")
@@ -59,7 +59,7 @@ struct ProfileDataSyncHandlerLookupTests {
       InstrumentRecord(
         id: "ASX:BHP.AX", kind: "stock", name: "BHP Group", decimals: 2,
         ticker: "BHP.AX", exchange: "ASX"))
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     let recordID = CKRecord.ID(recordName: "ASX:BHP.AX", zoneID: handler.zoneID)
     let result = handler.recordToSave(for: recordID)
@@ -73,7 +73,7 @@ struct ProfileDataSyncHandlerLookupTests {
     let (handler, _) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let recordID = CKRecord.ID(
-      recordType: AccountRecord.recordType, uuid: UUID(), zoneID: handler.zoneID)
+      recordType: AccountRow.recordType, uuid: UUID(), zoneID: handler.zoneID)
     let result = handler.recordToSave(for: recordID)
     #expect(result == nil)
   }
