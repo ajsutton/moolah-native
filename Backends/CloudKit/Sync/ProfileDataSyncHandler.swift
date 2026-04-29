@@ -67,34 +67,15 @@ final class ProfileDataSyncHandler {
 
   // MARK: - Building CKRecords
 
-  /// Builds a CKRecord from a local SwiftData record for upload.
-  /// If cached system fields exist for this record, applies fields directly onto the
-  /// cached record to preserve the change tag and avoid `.serverRecordChanged` conflicts.
+  /// Builds a `CKRecord` from a GRDB row for upload.
   ///
-  /// If the cached system fields reference a *different* zone than this handler's
-  /// own zone, they are discarded and the record is uploaded as a fresh create in
-  /// the handler's zone. This is a defence-in-depth guard against legacy corruption
-  /// from the pre-April-15 build, where per-profile `CKSyncEngine`s received
-  /// `fetchedRecordZoneChanges` for every zone in the database and upserted records
-  /// by UUID into the wrong container — so a local record in profile A's store could
-  /// end up with cached system fields pointing at profile B's zone. Zone filtering
-  /// at ingestion (commit `7318941`) and the unified `SyncCoordinator` (commit
-  /// `a0c502b`) prevent new corruption, but rows already on disk keep their stale
-  /// system fields; without this guard they produce an unbreakable
-  /// `serverRecordChanged` loop on every send.
-  func buildCKRecord<T: CloudKitRecordConvertible & SystemFieldsCacheable>(
-    for record: T
-  ) -> CKRecord {
-    buildCKRecord(from: record, encodedSystemFields: record.encodedSystemFields)
-  }
-
-  /// Value-type-friendly overload of `buildCKRecord(for:)`. GRDB row
-  /// structs (`CSVImportProfileRow`, `ImportRuleRow`) deliberately
-  /// don't conform to `SystemFieldsCacheable` (which is `AnyObject`-
-  /// constrained because the SwiftData write path mutates a fetched
-  /// `@Model` row in place). This overload takes the cached blob as
-  /// an explicit parameter so the GRDB lookup path can pass
-  /// `row.encodedSystemFields` directly.
+  /// If cached system fields exist for this row, applies fields
+  /// directly onto the cached record to preserve the change tag and
+  /// avoid `.serverRecordChanged` conflicts. If the cached system
+  /// fields reference a *different* zone than this handler's own zone,
+  /// they are discarded and the record is uploaded as a fresh create
+  /// in the handler's zone — defence-in-depth against legacy
+  /// corruption from before per-zone fetches were introduced.
   func buildCKRecord<T: CloudKitRecordConvertible>(
     from record: T, encodedSystemFields: Data?
   ) -> CKRecord {
@@ -125,22 +106,4 @@ final class ProfileDataSyncHandler {
     return UUID(uuidString: recordName) == nil
   }
 
-  // MARK: - Shared Fetch Helper
-
-  /// Fetches records using the given descriptor, logging errors instead of silently discarding them.
-  /// Shared across all `ProfileDataSyncHandler+*.swift` files, so it lives on the type
-  /// rather than on instance state. `nonisolated` + `static` lets batch closures invoke
-  /// it from any isolation domain.
-  nonisolated static func fetchOrLog<T: PersistentModel>(
-    _ descriptor: FetchDescriptor<T>, context: ModelContext
-  ) -> [T] {
-    do {
-      return try context.fetch(descriptor)
-    } catch {
-      batchLogger.error(
-        "SwiftData fetch failed for \(String(describing: T.self), privacy: .public): \(error, privacy: .public)"
-      )
-      return []
-    }
-  }
 }

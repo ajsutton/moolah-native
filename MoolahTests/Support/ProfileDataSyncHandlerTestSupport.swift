@@ -29,9 +29,7 @@ enum ProfileDataSyncHandlerTestSupport {
   /// bundle for every profile they touch.
   static let inMemoryFallbackFactory: @Sendable (UUID) throws -> ProfileGRDBRepositories = { _ in
     let database = try ProfileDatabase.openInMemory()
-    return ProfileGRDBRepositories(
-      csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
-      importRules: GRDBImportRuleRepository(database: database))
+    return Self.makeBundle(database: database, instrument: .defaultTestInstrument)
   }
 
   /// Three-value variant for tests that need to verify GRDB-side state.
@@ -46,14 +44,39 @@ enum ProfileDataSyncHandlerTestSupport {
       zoneName: "profile-\(profileId.uuidString)",
       ownerName: CKCurrentUserDefaultName
     )
-    let bundle = ProfileGRDBRepositories(
-      csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
-      importRules: GRDBImportRuleRepository(database: database))
+    let bundle = Self.makeBundle(database: database, instrument: .defaultTestInstrument)
     let handler = ProfileDataSyncHandler(
       profileId: profileId,
       zoneID: zoneID,
       modelContainer: container,
       grdbRepositories: bundle)
     return HandlerHarness(handler: handler, container: container, database: database)
+  }
+
+  /// Constructs a fully-populated `ProfileGRDBRepositories` bundle backed
+  /// by the supplied `database`. All hooks are no-ops; tests that need
+  /// to observe sync queueing should build their own bundle via the
+  /// concrete repo constructors.
+  static func makeBundle(
+    database: any DatabaseWriter,
+    instrument: Instrument
+  ) -> ProfileGRDBRepositories {
+    let conversionService = FixedConversionService(rates: [:])
+    return ProfileGRDBRepositories(
+      csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
+      importRules: GRDBImportRuleRepository(database: database),
+      instruments: GRDBInstrumentRegistryRepository(database: database),
+      categories: GRDBCategoryRepository(database: database),
+      accounts: GRDBAccountRepository(database: database),
+      earmarks: GRDBEarmarkRepository(
+        database: database, defaultInstrument: instrument),
+      earmarkBudgetItems: GRDBEarmarkBudgetItemRepository(database: database),
+      investmentValues: GRDBInvestmentRepository(
+        database: database, defaultInstrument: instrument),
+      transactions: GRDBTransactionRepository(
+        database: database,
+        defaultInstrument: instrument,
+        conversionService: conversionService),
+      transactionLegs: GRDBTransactionLegRepository(database: database))
   }
 }

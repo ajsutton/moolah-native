@@ -1,10 +1,13 @@
-// swiftlint:disable multiline_arguments
-
 import Foundation
+import GRDB
 import SwiftData
 
 /// Factory for creating CloudKitBackend instances for SwiftUI previews.
-/// Uses in-memory SwiftData — no CloudKit sync, fast initialization.
+/// Uses an in-memory GRDB queue — no CloudKit sync, fast initialization.
+/// A SwiftData ModelContainer is also created and returned so previews
+/// that still seed via SwiftData can share the same wiring as
+/// `TestBackend`; once every preview seed reaches GRDB directly the
+/// container parameter can drop.
 enum PreviewBackend {
   static func create(instrument: Instrument = .AUD) -> (CloudKitBackend, ModelContainer) {
     let schema = Schema([
@@ -32,12 +35,13 @@ enum PreviewBackend {
       database: database
     )
     let conversionService = FiatConversionService(exchangeRates: exchangeRates)
+    let registry = GRDBInstrumentRegistryRepository(database: database)
     let backend = CloudKitBackend(
-      modelContainer: container,
       database: database,
-      instrument: instrument, profileLabel: "Preview",
+      instrument: instrument,
+      profileLabel: "Preview",
       conversionService: conversionService,
-      instrumentRegistry: CloudKitInstrumentRegistryRepository(modelContainer: container)
+      instrumentRegistry: registry
     )
     return (backend, container)
   }

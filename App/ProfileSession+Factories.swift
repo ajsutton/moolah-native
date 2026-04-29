@@ -80,17 +80,12 @@ extension ProfileSession {
   /// Builds the CloudKit `BackendProvider` for the profile.
   static func makeBackend(
     profile: Profile,
-    containerManager: ProfileContainerManager?,
     syncCoordinator: SyncCoordinator? = nil,
     services: MarketDataServices,
     database: any DatabaseWriter
   ) -> BackendProvider {
-    guard let containerManager else {
-      fatalError("ProfileContainerManager is required for CloudKit profiles")
-    }
-    return makeCloudKitBackend(
+    makeCloudKitBackend(
       profile: profile,
-      containerManager: containerManager,
       syncCoordinator: syncCoordinator,
       marketData: CloudKitMarketDataServices(
         exchangeRates: services.exchangeRate,

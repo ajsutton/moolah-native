@@ -1,7 +1,7 @@
 import CloudKit
 import Foundation
 
-/// Protocol for bidirectional conversion between SwiftData records and CKRecords.
+/// Protocol for bidirectional conversion between record types and CKRecords.
 protocol CloudKitRecordConvertible {
   static var recordType: String { get }
 
@@ -10,14 +10,12 @@ protocol CloudKitRecordConvertible {
 
   /// Extracts field values from a CKRecord. Returns a new instance with the extracted values,
   /// or `nil` if the `CKRecord` does not carry a valid identifier for this record type.
-  /// For UUID-keyed conformers (everything except `InstrumentRecord`) this means
-  /// `recordID.uuid == nil`. `InstrumentRecord` is keyed by `recordID.recordName`, which
+  /// For UUID-keyed conformers (everything except `InstrumentRow`) this means
+  /// `recordID.uuid == nil`. `InstrumentRow` is keyed by `recordID.recordName`, which
   /// is always present on a valid `CKRecord.ID`, so it never returns `nil`.
   ///
   /// Callers are expected to log and skip when this returns `nil` so a malformed incoming
   /// record surfaces as an error rather than a phantom row with a fresh random id.
-  ///
-  /// Note: This does not create a managed @Model instance — it returns field values only.
   static func fieldValues(from ckRecord: CKRecord) -> Self?
 }
 
@@ -38,43 +36,19 @@ extension EarmarkBudgetItemRow: IdentifiableRecord {}
 extension InvestmentValueRow: IdentifiableRecord {}
 extension CSVImportProfileRow: IdentifiableRecord {}
 extension ImportRuleRow: IdentifiableRecord {}
-// SwiftData @Model conformers — kept while their corresponding
-// `CloudKit*Repository.swift` files are still wired. The repos and
-// these conformances are removed together once the GRDB repos cover
-// every reader.
-extension AccountRecord: IdentifiableRecord {}
-extension TransactionRecord: IdentifiableRecord {}
-extension TransactionLegRecord: IdentifiableRecord {}
-extension CategoryRecord: IdentifiableRecord {}
-extension EarmarkRecord: IdentifiableRecord {}
-extension EarmarkBudgetItemRecord: IdentifiableRecord {}
-extension InvestmentValueRecord: IdentifiableRecord {}
 
 /// Protocol for records that can store CKRecord system fields.
 ///
-/// Constrained to `AnyObject` because the SwiftData-side dispatch
-/// tables under `ProfileDataSyncHandler+SystemFields` mutate a fetched
-/// `@Model` row in place via `record.encodedSystemFields = data`.
-/// GRDB row structs (`CSVImportProfileRow`, `ImportRuleRow`)
-/// **deliberately do not conform** — system-fields writes for those
-/// record types route through `applyGRDBSystemFields(...)` and the
-/// repository's `setEncodedSystemFieldsSync(id:data:)` SQL UPDATE
-/// instead. The `buildCKRecord<T: ... & SystemFieldsCacheable>` upload
-/// path constructs `CKRecord` values directly from the GRDB row's
-/// `encodedSystemFields` snapshot inside the repo's `recordToSave`
-/// helper, so it does not need protocol conformance to compile.
+/// Constrained to `AnyObject` because the `ProfileRecord` write path
+/// mutates a fetched `@Model` row in place via
+/// `record.encodedSystemFields = data`. GRDB row structs deliberately
+/// do not conform — system-fields writes for those record types route
+/// through the repository's `setEncodedSystemFieldsSync(id:data:)` SQL
+/// UPDATE instead.
 protocol SystemFieldsCacheable: AnyObject {
   var encodedSystemFields: Data? { get set }
 }
 
-extension AccountRecord: SystemFieldsCacheable {}
-extension TransactionRecord: SystemFieldsCacheable {}
-extension TransactionLegRecord: SystemFieldsCacheable {}
-extension CategoryRecord: SystemFieldsCacheable {}
-extension EarmarkRecord: SystemFieldsCacheable {}
-extension EarmarkBudgetItemRecord: SystemFieldsCacheable {}
-extension InvestmentValueRecord: SystemFieldsCacheable {}
-extension InstrumentRecord: SystemFieldsCacheable {}
 extension ProfileRecord: SystemFieldsCacheable {}
 
 /// Value-type sibling of `SystemFieldsCacheable` for GRDB row structs.

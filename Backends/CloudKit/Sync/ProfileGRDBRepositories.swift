@@ -3,14 +3,12 @@
 import Foundation
 
 /// Bundle of the GRDB-backed repositories for the per-profile data
-/// handler. Slice 0 of `plans/grdb-migration.md` migrates two record
-/// types (`CSVImportProfile`, `ImportRule`) to GRDB; subsequent slices
-/// extend this bundle and shrink the SwiftData footprint accordingly.
+/// handler.
 ///
 /// The dispatch tables in `ProfileDataSyncHandler+ApplyRemoteChanges` /
 /// `+SystemFields` consult this bundle for record types that have moved
 /// to GRDB and fall through to the SwiftData paths for everything else.
-/// Both fields are non-optional because in-memory tests, previews, and
+/// Every field is non-optional because in-memory tests, previews, and
 /// production all build the GRDB repos eagerly during backend
 /// construction.
 ///
@@ -23,4 +21,12 @@ import Foundation
 struct ProfileGRDBRepositories: Sendable {
   let csvImportProfiles: GRDBCSVImportProfileRepository
   let importRules: GRDBImportRuleRepository
+  let instruments: GRDBInstrumentRegistryRepository
+  let categories: GRDBCategoryRepository
+  let accounts: GRDBAccountRepository
+  let earmarks: GRDBEarmarkRepository
+  let earmarkBudgetItems: GRDBEarmarkBudgetItemRepository
+  let investmentValues: GRDBInvestmentRepository
+  let transactions: GRDBTransactionRepository
+  let transactionLegs: GRDBTransactionLegRepository
 }

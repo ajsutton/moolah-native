@@ -45,13 +45,13 @@ enum TestBackend {
     let exchangeRateService = ExchangeRateService(
       client: rateClient, database: database)
     let conversionService = FiatConversionService(exchangeRates: exchangeRateService)
+    let registry = GRDBInstrumentRegistryRepository(database: database)
     let backend = CloudKitBackend(
-      modelContainer: container,
       database: database,
       instrument: instrument,
       profileLabel: "Test",
       conversionService: conversionService,
-      instrumentRegistry: CloudKitInstrumentRegistryRepository(modelContainer: container)
+      instrumentRegistry: registry
     )
     return (backend, container)
   }

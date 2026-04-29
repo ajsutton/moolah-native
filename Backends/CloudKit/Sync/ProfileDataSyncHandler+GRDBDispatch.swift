@@ -6,8 +6,8 @@ extension ProfileDataSyncHandler {
 
   /// Routes a per-record-type batch through the GRDB repos when the type
   /// has been migrated. Returns `true` when the dispatch was handled here
-  /// (caller skips the SwiftData path for this group), `false` for
-  /// SwiftData-managed types.
+  /// (caller skips the SwiftData path for this group), `false` for any
+  /// type not covered by the GRDB layer.
   ///
   /// Throws when the GRDB write fails. The caller (`applyBatchSaves`)
   /// rethrows so `applyRemoteChanges` returns `.saveFailed(...)` and the
@@ -18,53 +18,61 @@ extension ProfileDataSyncHandler {
     ckRecords: [CKRecord],
     systemFields: [String: Data]
   ) throws -> Bool {
+    guard let handler = saveHandler(for: recordType) else { return false }
+    try handler(self)(ckRecords, systemFields)
+    return true
+  }
+
+  /// Returns the per-record-type save helper as a curried function,
+  /// or `nil` for record types not handled by the GRDB layer. Pulling
+  /// the dispatch table out of the body keeps `applyGRDBBatchSave`'s
+  /// cyclomatic complexity at 2 (guard + return). The lookup itself
+  /// is split between `referenceSaveHandler` (immutable reference data)
+  /// and `domainSaveHandler` (the financial-graph rows) so neither
+  /// switch breaches the complexity ceiling.
+  nonisolated private func saveHandler(
+    for recordType: String
+  ) -> ((ProfileDataSyncHandler) -> ([CKRecord], [String: Data]) throws -> Void)? {
+    referenceSaveHandler(for: recordType) ?? domainSaveHandler(for: recordType)
+  }
+
+  /// Reference-data side of the `saveHandler` lookup.
+  nonisolated private func referenceSaveHandler(
+    for recordType: String
+  ) -> ((ProfileDataSyncHandler) -> ([CKRecord], [String: Data]) throws -> Void)? {
     switch recordType {
     case CSVImportProfileRow.recordType:
-      let rows = ckRecords.compactMap { ckRecord -> CSVImportProfileRow? in
-        guard var row = CSVImportProfileRow.fieldValues(from: ckRecord) else {
-          Self.logMalformed("applyGRDBBatchSave[CSVImportProfile]", ckRecord)
-          return nil
-        }
-        row.encodedSystemFields = systemFields[row.id.uuidString]
-        return row
-      }
-      do {
-        try grdbRepositories.csvImportProfiles.applyRemoteChangesSync(
-          saved: rows, deleted: [])
-      } catch {
-        Self.batchLogger.error(
-          """
-          applyGRDBBatchSave[CSVImportProfile] profile \
-          \(self.profileId, privacy: .public) failed: \
-          \(error.localizedDescription, privacy: .public)
-          """)
-        throw error
-      }
-      return true
+      return { handler in handler.applyBatchSaveCSVImportProfile(ckRecords:systemFields:) }
     case ImportRuleRow.recordType:
-      let rows = ckRecords.compactMap { ckRecord -> ImportRuleRow? in
-        guard var row = ImportRuleRow.fieldValues(from: ckRecord) else {
-          Self.logMalformed("applyGRDBBatchSave[ImportRule]", ckRecord)
-          return nil
-        }
-        row.encodedSystemFields = systemFields[row.id.uuidString]
-        return row
-      }
-      do {
-        try grdbRepositories.importRules.applyRemoteChangesSync(
-          saved: rows, deleted: [])
-      } catch {
-        Self.batchLogger.error(
-          """
-          applyGRDBBatchSave[ImportRule] profile \
-          \(self.profileId, privacy: .public) failed: \
-          \(error.localizedDescription, privacy: .public)
-          """)
-        throw error
-      }
-      return true
+      return { handler in handler.applyBatchSaveImportRule(ckRecords:systemFields:) }
+    case InstrumentRow.recordType:
+      return { handler in handler.applyBatchSaveInstrument(ckRecords:systemFields:) }
+    case CategoryRow.recordType:
+      return { handler in handler.applyBatchSaveCategory(ckRecords:systemFields:) }
     default:
-      return false
+      return nil
+    }
+  }
+
+  /// Financial-graph side of the `saveHandler` lookup.
+  nonisolated private func domainSaveHandler(
+    for recordType: String
+  ) -> ((ProfileDataSyncHandler) -> ([CKRecord], [String: Data]) throws -> Void)? {
+    switch recordType {
+    case AccountRow.recordType:
+      return { handler in handler.applyBatchSaveAccount(ckRecords:systemFields:) }
+    case EarmarkRow.recordType:
+      return { handler in handler.applyBatchSaveEarmark(ckRecords:systemFields:) }
+    case EarmarkBudgetItemRow.recordType:
+      return { handler in handler.applyBatchSaveEarmarkBudgetItem(ckRecords:systemFields:) }
+    case InvestmentValueRow.recordType:
+      return { handler in handler.applyBatchSaveInvestmentValue(ckRecords:systemFields:) }
+    case TransactionRow.recordType:
+      return { handler in handler.applyBatchSaveTransaction(ckRecords:systemFields:) }
+    case TransactionLegRow.recordType:
+      return { handler in handler.applyBatchSaveTransactionLeg(ckRecords:systemFields:) }
+    default:
+      return nil
     }
   }
 
@@ -72,40 +80,57 @@ extension ProfileDataSyncHandler {
 
   /// Routes a per-record-type batch deletion through the GRDB repos when
   /// the type has been migrated. Returns `true` when the dispatch was
-  /// handled here (caller skips the SwiftData path for this group),
-  /// `false` for SwiftData-managed types. Throws on GRDB write failure
-  /// so the caller can surface `.saveFailed(...)` upstream — see
-  /// `applyGRDBBatchSave` for the data-loss rationale.
+  /// handled here, `false` for any type not covered by the GRDB layer.
+  /// Throws on GRDB write failure so the caller can surface
+  /// `.saveFailed(...)` upstream — see `applyGRDBBatchSave` for the
+  /// data-loss rationale.
   nonisolated func applyGRDBBatchDeletion(
     recordType: String, ids: [UUID]
   ) throws -> Bool {
     switch recordType {
     case CSVImportProfileRow.recordType:
-      do {
-        try grdbRepositories.csvImportProfiles.applyRemoteChangesSync(
-          saved: [], deleted: ids)
-      } catch {
-        Self.batchLogger.error(
-          """
-          applyGRDBBatchDeletion[CSVImportProfile] profile \
-          \(self.profileId, privacy: .public) failed: \
-          \(error.localizedDescription, privacy: .public)
-          """)
-        throw error
+      try writeRemote(site: "applyGRDBBatchDeletion[CSVImportProfile]") {
+        try grdbRepositories.csvImportProfiles.applyRemoteChangesSync(saved: [], deleted: ids)
       }
       return true
     case ImportRuleRow.recordType:
-      do {
-        try grdbRepositories.importRules.applyRemoteChangesSync(
-          saved: [], deleted: ids)
-      } catch {
-        Self.batchLogger.error(
-          """
-          applyGRDBBatchDeletion[ImportRule] profile \
-          \(self.profileId, privacy: .public) failed: \
-          \(error.localizedDescription, privacy: .public)
-          """)
-        throw error
+      try writeRemote(site: "applyGRDBBatchDeletion[ImportRule]") {
+        try grdbRepositories.importRules.applyRemoteChangesSync(saved: [], deleted: ids)
+      }
+      return true
+    case AccountRow.recordType:
+      try writeRemote(site: "applyGRDBBatchDeletion[Account]") {
+        try grdbRepositories.accounts.applyRemoteChangesSync(saved: [], deleted: ids)
+      }
+      return true
+    case CategoryRow.recordType:
+      try writeRemote(site: "applyGRDBBatchDeletion[Category]") {
+        try grdbRepositories.categories.applyRemoteChangesSync(saved: [], deleted: ids)
+      }
+      return true
+    case EarmarkRow.recordType:
+      try writeRemote(site: "applyGRDBBatchDeletion[Earmark]") {
+        try grdbRepositories.earmarks.applyRemoteChangesSync(saved: [], deleted: ids)
+      }
+      return true
+    case EarmarkBudgetItemRow.recordType:
+      try writeRemote(site: "applyGRDBBatchDeletion[EarmarkBudgetItem]") {
+        try grdbRepositories.earmarkBudgetItems.applyRemoteChangesSync(saved: [], deleted: ids)
+      }
+      return true
+    case InvestmentValueRow.recordType:
+      try writeRemote(site: "applyGRDBBatchDeletion[InvestmentValue]") {
+        try grdbRepositories.investmentValues.applyRemoteChangesSync(saved: [], deleted: ids)
+      }
+      return true
+    case TransactionRow.recordType:
+      try writeRemote(site: "applyGRDBBatchDeletion[Transaction]") {
+        try grdbRepositories.transactions.applyRemoteChangesSync(saved: [], deleted: ids)
+      }
+      return true
+    case TransactionLegRow.recordType:
+      try writeRemote(site: "applyGRDBBatchDeletion[TransactionLeg]") {
+        try grdbRepositories.transactionLegs.applyRemoteChangesSync(saved: [], deleted: ids)
       }
       return true
     default:
@@ -113,14 +138,20 @@ extension ProfileDataSyncHandler {
     }
   }
 
-  // MARK: - Malformed-Record Logging
-
-  /// Logs a malformed incoming CKRecord at error level so the skip is
-  /// visible in diagnostics rather than silently dropped. Mirror of the
-  /// SwiftData-path helper so GRDB and SwiftData log lines look uniform.
-  nonisolated static func logMalformed(_ site: String, _ ckRecord: CKRecord) {
-    batchLogger.error(
-      "\(site): malformed recordID '\(ckRecord.recordID.recordName)' (recordType \(ckRecord.recordType)) — skipping"
-    )
+  /// Companion to `applyGRDBBatchDeletion(recordType:ids:)` for record
+  /// types keyed by string ID (currently only `Instrument`). Returns
+  /// `true` when handled.
+  nonisolated func applyGRDBBatchDeletion(
+    recordType: String, names: [String]
+  ) throws -> Bool {
+    switch recordType {
+    case InstrumentRow.recordType:
+      try writeRemote(site: "applyGRDBBatchDeletion[Instrument]") {
+        try grdbRepositories.instruments.applyRemoteChangesSync(saved: [], deleted: names)
+      }
+      return true
+    default:
+      return false
+    }
   }
 }

@@ -97,7 +97,6 @@ final class ProfileSession: Identifiable {
 
     let backend = Self.makeBackend(
       profile: profile,
-      containerManager: containerManager,
       syncCoordinator: syncCoordinator,
       services: services,
       database: resolvedDatabase
