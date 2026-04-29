@@ -1,4 +1,6 @@
 // swiftlint:disable multiline_arguments
+// Reason: swift-format wraps long initialisers / SwiftUI builders across
+// multiple lines in a way the multiline_arguments rule disagrees with.
 
 @preconcurrency import CloudKit
 import Foundation

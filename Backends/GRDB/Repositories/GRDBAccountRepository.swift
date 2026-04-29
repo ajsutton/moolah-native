@@ -174,7 +174,13 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
       throw BackendError.validationFailed("Account name cannot be empty")
     }
 
-    let updated = try await database.write { database -> AccountRow in
+    // Combine the row update and the post-update position read into a
+    // single `database.write` so the returned `Account` reflects the
+    // exact same database state as the row mutation. A separate
+    // follow-up `database.read` would race with concurrent writers and
+    // could observe positions from after the update commit, or — worse
+    // — emit `onRecordChanged` before the second read settled.
+    let resolved = try await database.write { database -> Account in
       guard
         var existing =
           try AccountRow
@@ -189,16 +195,14 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
       existing.position = account.position
       existing.isHidden = account.isHidden
       try existing.update(database)
-      return existing
-    }
-    onRecordChanged(AccountRow.recordType, account.id)
 
-    return try await database.read { database -> Account in
       let instruments = try Self.fetchInstrumentMap(database: database)
       let positions = try Self.computePositions(
         database: database, instruments: instruments, accountId: account.id)
-      return updated.toDomain(instruments: instruments, positions: positions)
+      return existing.toDomain(instruments: instruments, positions: positions)
     }
+    onRecordChanged(AccountRow.recordType, account.id)
+    return resolved
   }
 
   func delete(id: UUID) async throws {

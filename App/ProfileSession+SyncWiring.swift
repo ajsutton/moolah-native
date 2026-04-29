@@ -1,4 +1,3 @@
-import CloudKit
 import Foundation
 
 extension ProfileSession {
@@ -9,7 +8,7 @@ extension ProfileSession {
   /// publishes the concrete-class instances to `SyncCoordinator` so
   /// `handlerForProfileZone` can build a `ProfileDataSyncHandler` that
   /// reaches them.
-  func wireRepositorySync(coordinator: SyncCoordinator, zoneID: CKRecordZone.ID) {
+  func wireRepositorySync(coordinator: SyncCoordinator) {
     registerGRDBRepositoriesForSync(coordinator: coordinator)
   }
 

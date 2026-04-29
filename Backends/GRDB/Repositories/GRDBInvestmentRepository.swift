@@ -157,6 +157,15 @@ final class GRDBInvestmentRepository: InvestmentRepository, @unchecked Sendable 
   /// looks up their dates, accumulates a running balance, and
   /// collapses to one entry per calendar day. Mirrors
   /// `CloudKitInvestmentRepository.fetchDailyBalances`.
+  ///
+  /// TODO(#579): the running total is summed across every leg's
+  /// `quantity` regardless of `instrumentId`, then labelled with
+  /// `defaultInstrument`. For an investment account that holds a
+  /// single instrument (the production case today) the result is
+  /// correct; for a multi-instrument account it conflates quantities
+  /// of different instruments under one label. Group by
+  /// `(date, instrument_id)` and emit one balance per (date,
+  /// instrument) — https://github.com/ajsutton/moolah-native/issues/579
   private static func computeDailyBalances(
     database: Database,
     accountId: UUID,

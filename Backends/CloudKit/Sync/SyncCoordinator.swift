@@ -288,11 +288,12 @@ final class SyncCoordinator {
   var instrumentRemoteChangeCallbacks: [UUID: @Sendable () -> Void] = [:]
 
   /// Per-profile GRDB repository bundle. Registered by `ProfileSession`
-  /// during `registerWithSyncCoordinator` (before the handler is lazily
-  /// created in `handlerForProfileZone`) so the dispatch tables in
-  /// `ProfileDataSyncHandler+ApplyRemoteChanges` etc. can route the
-  /// record types covered by `v2_csv_import_and_rules` (and subsequent
-  /// slices) through GRDB instead of SwiftData. See `ProfileGRDBRepositories`.
+  /// during `registerWithSyncCoordinator` so it is available when
+  /// `handlerForProfileZone(profileId:zoneID:)` lazily creates the
+  /// `ProfileDataSyncHandler`. The handler's dispatch tables address
+  /// these repositories directly so the per-record-type save / delete
+  /// helpers can write into SQLite without leaking GRDB types into the
+  /// CKSyncEngine wire layer. See `ProfileGRDBRepositories`.
   var profileGRDBRepositories: [UUID: ProfileGRDBRepositories] = [:]
   // Test-only fallback factory — see `+HandlerAccess.swift`.
   let fallbackGRDBRepositoriesFactory: (@Sendable (UUID) throws -> ProfileGRDBRepositories)?
