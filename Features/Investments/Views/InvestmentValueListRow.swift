@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct InvestmentValueRow: View {
+struct InvestmentValueListRow: View {
   let value: InvestmentValue
   let onDelete: () -> Void
 
@@ -35,14 +35,14 @@ struct InvestmentValueRow: View {
 
 #Preview {
   List {
-    InvestmentValueRow(
+    InvestmentValueListRow(
       value: InvestmentValue(
         date: Date(),
         value: InstrumentAmount(quantity: 5432, instrument: .AUD)
       ),
       onDelete: {}
     )
-    InvestmentValueRow(
+    InvestmentValueListRow(
       value: InvestmentValue(
         date: Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date(),
         value: InstrumentAmount(quantity: 5010, instrument: .AUD)

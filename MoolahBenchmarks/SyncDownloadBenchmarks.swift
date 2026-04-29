@@ -1,4 +1,5 @@
 @preconcurrency import CloudKit
+import GRDB
 import SwiftData
 import XCTest
 
@@ -26,8 +27,15 @@ final class SyncDownloadBenchmarks: XCTestCase {
       let zoneID = CKRecordZone.ID(
         zoneName: "profile-\(profileId.uuidString)",
         ownerName: CKCurrentUserDefaultName)
+      let database = expecting("benchmark in-memory GRDB queue") {
+        try ProfileDatabase.openInMemory()
+      }
+      let bundle = ProfileGRDBRepositories(
+        csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
+        importRules: GRDBImportRuleRepository(database: database))
       let handler = ProfileDataSyncHandler(
-        profileId: profileId, zoneID: zoneID, modelContainer: result.container)
+        profileId: profileId, zoneID: zoneID, modelContainer: result.container,
+        grdbRepositories: bundle)
       _handler = handler
       _zoneID = zoneID
     }

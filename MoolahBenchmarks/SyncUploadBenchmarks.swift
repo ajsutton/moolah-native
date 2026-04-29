@@ -1,4 +1,5 @@
 @preconcurrency import CloudKit
+import GRDB
 import SwiftData
 import XCTest
 
@@ -27,8 +28,15 @@ final class SyncUploadBenchmarks: XCTestCase {
       let zoneID = CKRecordZone.ID(
         zoneName: "profile-\(profileId.uuidString)",
         ownerName: CKCurrentUserDefaultName)
+      let database = expecting("benchmark in-memory GRDB queue") {
+        try ProfileDatabase.openInMemory()
+      }
+      let bundle = ProfileGRDBRepositories(
+        csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
+        importRules: GRDBImportRuleRepository(database: database))
       _handler = ProfileDataSyncHandler(
-        profileId: profileId, zoneID: zoneID, modelContainer: result.container)
+        profileId: profileId, zoneID: zoneID, modelContainer: result.container,
+        grdbRepositories: bundle)
       var descriptor = FetchDescriptor<TransactionRecord>()
       descriptor.fetchLimit = 400
       let records = try result.container.mainContext.fetch(descriptor)
@@ -68,9 +76,10 @@ final class SyncUploadBenchmarks: XCTestCase {
   func testBuildBatchRecordLookup_400transactions() {
     let handler = handler
     let uuids = transactionUUIDs400
+    let groups: [String: Set<UUID>] = [TransactionRecord.recordType: uuids]
     measure(metrics: metrics, options: options) {
       _ = awaitSyncExpecting { @MainActor in
-        handler.buildBatchRecordLookup(for: uuids)
+        handler.buildBatchRecordLookup(byRecordType: groups)
       }
     }
   }

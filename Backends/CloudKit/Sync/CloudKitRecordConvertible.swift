@@ -27,6 +27,21 @@ protocol IdentifiableRecord {
   var id: UUID { get }
 }
 
+extension ProfileRecord: IdentifiableRecord {}
+// `InstrumentRow` is string-keyed; no `IdentifiableRecord` conformance.
+extension AccountRow: IdentifiableRecord {}
+extension TransactionRow: IdentifiableRecord {}
+extension TransactionLegRow: IdentifiableRecord {}
+extension CategoryRow: IdentifiableRecord {}
+extension EarmarkRow: IdentifiableRecord {}
+extension EarmarkBudgetItemRow: IdentifiableRecord {}
+extension InvestmentValueRow: IdentifiableRecord {}
+extension CSVImportProfileRow: IdentifiableRecord {}
+extension ImportRuleRow: IdentifiableRecord {}
+// SwiftData @Model conformers — kept while their corresponding
+// `CloudKit*Repository.swift` files are still wired. The repos and
+// these conformances are removed together once the GRDB repos cover
+// every reader.
 extension AccountRecord: IdentifiableRecord {}
 extension TransactionRecord: IdentifiableRecord {}
 extension TransactionLegRecord: IdentifiableRecord {}
@@ -34,9 +49,6 @@ extension CategoryRecord: IdentifiableRecord {}
 extension EarmarkRecord: IdentifiableRecord {}
 extension EarmarkBudgetItemRecord: IdentifiableRecord {}
 extension InvestmentValueRecord: IdentifiableRecord {}
-extension ProfileRecord: IdentifiableRecord {}
-extension CSVImportProfileRow: IdentifiableRecord {}
-extension ImportRuleRow: IdentifiableRecord {}
 
 /// Protocol for records that can store CKRecord system fields.
 ///
@@ -84,6 +96,14 @@ protocol ValueTypeSystemFieldsReadable {
 
 extension CSVImportProfileRow: ValueTypeSystemFieldsReadable {}
 extension ImportRuleRow: ValueTypeSystemFieldsReadable {}
+extension InstrumentRow: ValueTypeSystemFieldsReadable {}
+extension AccountRow: ValueTypeSystemFieldsReadable {}
+extension CategoryRow: ValueTypeSystemFieldsReadable {}
+extension EarmarkRow: ValueTypeSystemFieldsReadable {}
+extension EarmarkBudgetItemRow: ValueTypeSystemFieldsReadable {}
+extension TransactionRow: ValueTypeSystemFieldsReadable {}
+extension TransactionLegRow: ValueTypeSystemFieldsReadable {}
+extension InvestmentValueRow: ValueTypeSystemFieldsReadable {}
 
 // MARK: - CKRecord System Fields
 
@@ -111,19 +131,20 @@ extension CKRecord {
 /// Maps CKRecord.recordType strings to the corresponding record types for dispatching.
 enum RecordTypeRegistry: Sendable {
   nonisolated(unsafe) static let allTypes: [String: any CloudKitRecordConvertible.Type] = [
+    // ProfileRecord remains on the SwiftData side; everything else
+    // dispatches to the GRDB row types. The CloudKit wire `recordType`
+    // strings are frozen contracts and remain byte-identical to the
+    // SwiftData @Model class names; only the local Swift type bound
+    // to each key changes.
     ProfileRecord.recordType: ProfileRecord.self,
-    InstrumentRecord.recordType: InstrumentRecord.self,
-    AccountRecord.recordType: AccountRecord.self,
-    TransactionRecord.recordType: TransactionRecord.self,
-    TransactionLegRecord.recordType: TransactionLegRecord.self,
-    CategoryRecord.recordType: CategoryRecord.self,
-    EarmarkRecord.recordType: EarmarkRecord.self,
-    EarmarkBudgetItemRecord.recordType: EarmarkBudgetItemRecord.self,
-    InvestmentValueRecord.recordType: InvestmentValueRecord.self,
-    // Slice 0 of `plans/grdb-migration.md` migrates these two record types
-    // to GRDB. The CloudKit wire `recordType` strings are frozen contracts
-    // and stay `"CSVImportProfileRecord"` / `"ImportRuleRecord"`; only the
-    // local Swift type bound to each key changes.
+    InstrumentRow.recordType: InstrumentRow.self,
+    AccountRow.recordType: AccountRow.self,
+    TransactionRow.recordType: TransactionRow.self,
+    TransactionLegRow.recordType: TransactionLegRow.self,
+    CategoryRow.recordType: CategoryRow.self,
+    EarmarkRow.recordType: EarmarkRow.self,
+    EarmarkBudgetItemRow.recordType: EarmarkBudgetItemRow.self,
+    InvestmentValueRow.recordType: InvestmentValueRow.self,
     CSVImportProfileRow.recordType: CSVImportProfileRow.self,
     ImportRuleRow.recordType: ImportRuleRow.self,
   ]

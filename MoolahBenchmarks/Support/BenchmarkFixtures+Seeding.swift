@@ -1,6 +1,8 @@
 import Foundation
 import SwiftData
 
+@testable import Moolah
+
 // Private seeding helpers extracted from `BenchmarkFixtures` so the main
 // enum body stays under SwiftLint's `type_body_length` threshold. All
 // members are `static` on the enum and remain `internal` to the benchmark
