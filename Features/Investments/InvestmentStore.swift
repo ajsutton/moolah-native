@@ -16,6 +16,13 @@ final class InvestmentStore {
   /// `guides/INSTRUMENT_CONVERSION_GUIDE.md` we must not display a
   /// partial sum as the portfolio total.
   private(set) var totalPortfolioValue: Decimal?
+  /// Lifetime account-level performance numbers in profile currency.
+  /// `nil` until `loadAllData(...)` runs, or when conversion failure
+  /// during cash-flow extraction marks it unavailable. A failure here
+  /// does not invalidate other store state — `valuedPositions` and
+  /// `totalPortfolioValue` continue to render normally; only the
+  /// header tile reverts to "Unavailable".
+  private(set) var accountPerformance: AccountPerformance?
 
   var selectedPeriod: TimePeriod = .all
   private(set) var loadedAccountId: UUID?
@@ -112,9 +119,45 @@ final class InvestmentStore {
     await loadValues(accountId: accountId)
     if hasLegacyValuations {
       await loadDailyBalances(accountId: accountId, hostCurrency: profileCurrency)
+      accountPerformance = AccountPerformanceCalculator.computeLegacy(
+        dailyBalances: dailyBalances,
+        values: values,
+        instrument: profileCurrency)
     } else {
       await loadPositions(accountId: accountId)
       await valuatePositions(profileCurrency: profileCurrency, on: Date())
+      await refreshPositionTrackedPerformance(
+        accountId: accountId, profileCurrency: profileCurrency)
+    }
+  }
+
+  /// Recompute the position-tracked `accountPerformance`. Reused from
+  /// `loadAllData` and (in Task 9) `reloadPositionsIfNeeded`. Sets
+  /// `accountPerformance` to `nil` and surfaces the error on conversion
+  /// failure; partial sums are not shown.
+  private func refreshPositionTrackedPerformance(
+    accountId: UUID, profileCurrency: Instrument
+  ) async {
+    guard let transactionRepository else {
+      accountPerformance = nil
+      return
+    }
+    do {
+      let txns = try await fetchAllTransactions(repository: transactionRepository)
+      accountPerformance = try await AccountPerformanceCalculator.compute(
+        accountId: accountId,
+        transactions: txns,
+        valuedPositions: valuedPositions,
+        profileCurrency: profileCurrency,
+        conversionService: conversionService)
+    } catch is CancellationError {
+      return
+    } catch {
+      logger.warning(
+        "AccountPerformance unavailable: \(error.localizedDescription, privacy: .public)"
+      )
+      accountPerformance = nil
+      self.error = error
     }
   }
 
@@ -285,8 +328,14 @@ final class InvestmentStore {
     }
   }
 
-  // MARK: - Computed Properties
+}
 
+// MARK: - Computed Properties
+
+// Hoisted into an extension so the `InvestmentStore` class body stays
+// under the type_body_length budget; the computed properties are pure
+// reads and need no privileged access to `private(set)` setters.
+extension InvestmentStore {
   /// Investment values filtered by the selected time period.
   var filteredValues: [InvestmentValue] {
     guard let startDate = selectedPeriod.startDate else { return values }
@@ -308,7 +357,6 @@ final class InvestmentStore {
       period: selectedPeriod
     )
   }
-
 }
 
 // `InvestmentChartData` (the merge + forward-fill helpers used by
