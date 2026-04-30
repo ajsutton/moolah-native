@@ -35,17 +35,6 @@ struct InvestmentAccountView: View {
     session.profile.instrument
   }
 
-  /// The invested amount (balance from positions in the account's primary instrument).
-  private var investedAmount: InstrumentAmount {
-    let primaryPosition = account.positions.first(where: { $0.instrument == account.instrument })
-    return primaryPosition?.amount ?? .zero(instrument: account.instrument)
-  }
-
-  /// The latest investment value, or nil if no values have been recorded.
-  private var latestInvestmentValue: InstrumentAmount? {
-    investmentStore.values.first?.value
-  }
-
   /// Embedded transaction list for this account. Factored out because three
   /// layout branches reuse it verbatim.
   @ViewBuilder private var accountTransactionList: some View {
@@ -91,14 +80,12 @@ struct InvestmentAccountView: View {
   }
 
   @ViewBuilder private var legacySummary: some View {
-    if !investmentStore.values.isEmpty {
-      InvestmentSummaryView(
-        investedAmount: investedAmount,
-        currentValue: latestInvestmentValue,
-        store: investmentStore
-      )
-      .padding(.horizontal)
-      .padding(.top)
+    if !investmentStore.values.isEmpty,
+      let performance = investmentStore.accountPerformance
+    {
+      AccountPerformanceTiles(title: account.name, performance: performance)
+        .padding(.horizontal)
+        .padding(.top)
     }
   }
 

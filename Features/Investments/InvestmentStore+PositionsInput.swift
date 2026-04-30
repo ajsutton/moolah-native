@@ -23,8 +23,11 @@ extension InvestmentStore {
     guard let transactionRepository else {
       let hostCurrency = loadedHostCurrency ?? .AUD
       return PositionsViewInput(
-        title: title, hostCurrency: hostCurrency,
-        positions: valuedPositions, historicalValue: nil)
+        title: title,
+        hostCurrency: hostCurrency,
+        positions: valuedPositions,
+        historicalValue: nil,
+        performance: accountPerformance)
     }
 
     let txns: [Transaction]
@@ -64,8 +67,8 @@ extension InvestmentStore {
       title: title,
       hostCurrency: hostCurrency,
       positions: rowsWithCost,
-      historicalValue: series
-    )
+      historicalValue: series,
+      performance: accountPerformance)
   }
 
   func fetchAllTransactions(
