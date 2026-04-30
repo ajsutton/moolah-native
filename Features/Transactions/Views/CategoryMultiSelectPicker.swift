@@ -45,6 +45,7 @@ struct CategoryMultiSelectPicker: View {
   private func row(for entry: Categories.FlatEntry) -> some View {
     let label = searchText.isEmpty ? entry.category.name : entry.path
     let indent = searchText.isEmpty ? entry.depth : 0
+    let isParent = !categories.children(of: entry.category.id).isEmpty
     return Toggle(
       isOn: Binding(
         get: { selectedIds.contains(entry.category.id) },
@@ -66,6 +67,26 @@ struct CategoryMultiSelectPicker: View {
     .contentShape(.rect)
     .accessibilityLabel(entry.path)
     .accessibilityHint(entry.depth > 0 ? "Subcategory" : "Top-level category")
+    .contextMenu {
+      if isParent {
+        Button("Select all in \(entry.category.name)") {
+          selectSubtree(of: entry.category)
+        }
+        Button("Deselect all in \(entry.category.name)") {
+          deselectSubtree(of: entry.category)
+        }
+      }
+    }
+  }
+
+  private func selectSubtree(of category: Category) {
+    selectedIds.insert(category.id)
+    selectedIds.formUnion(categories.descendants(of: category.id).map(\.id))
+  }
+
+  private func deselectSubtree(of category: Category) {
+    selectedIds.remove(category.id)
+    selectedIds.subtract(categories.descendants(of: category.id).map(\.id))
   }
 }
 
