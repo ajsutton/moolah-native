@@ -57,7 +57,7 @@ struct PositionsTable: View {
         amountCell(row.value)
       }
       TableColumn("Gain", value: \.gainQuantity) { row in
-        gainCell(row.gainLoss)
+        gainCell(row)
       }
     }
   }
@@ -87,14 +87,54 @@ struct PositionsTable: View {
   }
 
   @ViewBuilder
-  private func gainCell(_ gain: InstrumentAmount?) -> some View {
-    if let gain {
-      Text(gain.signedFormatted)
-        .monospacedDigit()
-        .foregroundStyle(gainColor(gain))
+  private func gainCell(_ row: ValuedPosition) -> some View {
+    if let gain = row.gainLoss {
+      HStack(spacing: 4) {
+        Text(gain.signedFormatted)
+          .monospacedDigit()
+          .foregroundStyle(gainColor(gain))
+        if let pct = row.gainLossPercent {
+          Text(formattedPercent(pct))
+            .font(.caption)
+            .monospacedDigit()
+            .foregroundStyle(gainColor(gain))
+        }
+      }
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel(gainAccessibilityLabel(gain: gain, percent: row.gainLossPercent))
     } else {
       Text("—").foregroundStyle(.tertiary)
     }
+  }
+
+  /// `+12.3%` / `−4.0%` / `0.0%`. Standard one-decimal-place P/L convention,
+  /// matching `PositionsHeader.plPill`.
+  private func formattedPercent(_ pct: Decimal) -> String {
+    let sign = pct > 0 ? "+" : ""
+    let asDouble = Double(truncating: pct as NSDecimalNumber)
+    return "\(sign)\(String(format: "%.1f", asDouble))%"
+  }
+
+  /// Accessibility label combining the dollar gain and percent: e.g.
+  /// "gain of $1,200, up 12.3 percent" / "loss of $50, down 5.0 percent".
+  /// Per `guides/UI_GUIDE.md` every gain renders an explicit
+  /// accessibility label so VoiceOver doesn't read "+12%" as ambiguous.
+  private func gainAccessibilityLabel(
+    gain: InstrumentAmount, percent: Decimal?
+  ) -> String {
+    let pctText =
+      percent.map { value -> String in
+        let abs = value < 0 ? -value : value
+        let formatted = String(format: "%.1f", Double(truncating: abs as NSDecimalNumber))
+        return value < 0 ? ", down \(formatted) percent" : ", up \(formatted) percent"
+      } ?? ""
+    if gain.isNegative {
+      return "loss of \((-gain).formatted)\(pctText)"
+    }
+    if gain.isZero {
+      return "no change"
+    }
+    return "gain of \(gain.formatted)\(pctText)"
   }
 
   /// `Table` selects on `id` (which is `instrument.id`); we adapt that to
