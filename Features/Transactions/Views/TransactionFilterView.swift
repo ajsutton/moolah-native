@@ -156,15 +156,16 @@ struct TransactionFilterView: View {
     let summary = categories.selectionSummary(for: selectedCategoryIds)
     #if os(macOS)
       // `LabeledContent` is the form-row primitive (label left, value right,
-      // standard hover); the trigger Button lives in the value column with
-      // accent colouring so it reads as activatable, matching System Settings
-      // rows that open sub-panels.
+      // standard hover); the trigger Button lives in the value column. The
+      // value text inherits the system foreground style so it stays visually
+      // consistent with the surrounding Picker / DatePicker / TextField rows
+      // — the row's hover highlight and the popover that opens on click are
+      // the activation cues, not a tinted label.
       LabeledContent("Categories") {
         Button(summary) {
           showCategoryPicker = true
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.tint)
         .popover(isPresented: $showCategoryPicker, arrowEdge: .trailing) {
           CategoryMultiSelectPicker(
             categories: categories,

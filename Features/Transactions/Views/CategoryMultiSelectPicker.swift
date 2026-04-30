@@ -8,19 +8,29 @@ struct CategoryMultiSelectPicker: View {
   @State private var searchText: String = ""
 
   var body: some View {
-    list
-      .searchable(text: $searchText, prompt: "Search categories")
-      .toolbar {
-        ToolbarItem(placement: .automatic) {
-          Button("Clear") { selectedIds.removeAll() }
-            .disabled(selectedIds.isEmpty)
-            .help("Clear all selected categories")
-        }
-      }
-      #if os(iOS)
-        .navigationTitle("Categories")
-        .navigationBarTitleDisplayMode(.inline)
-      #endif
+    VStack(spacing: 0) {
+      header
+      list
+    }
+    .searchable(text: $searchText, prompt: "Search categories")
+    #if os(iOS)
+      .navigationTitle("Categories")
+      .navigationBarTitleDisplayMode(.inline)
+    #endif
+  }
+
+  // Inline header rather than `.toolbar`: SwiftUI toolbar items don't
+  // render inside a macOS popover, so a toolbar Clear would be invisible
+  // on the macOS host. The inline header works on both platforms.
+  private var header: some View {
+    HStack {
+      Spacer()
+      Button("Clear") { selectedIds.removeAll() }
+        .disabled(selectedIds.isEmpty)
+        .help("Clear all selected categories")
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 8)
   }
 
   private var list: some View {
@@ -67,18 +77,45 @@ struct CategoryMultiSelectPicker: View {
     .contentShape(.rect)
     .accessibilityLabel(entry.path)
     .accessibilityHint(entry.depth > 0 ? "Subcategory" : "Top-level category")
-    .contextMenu {
-      if isParent {
-        Button("Select all in \(entry.category.name)") {
-          selectedIds.formUnion(categories.subtreeIds(of: entry.category.id))
+    .modifier(
+      SubtreeContextMenu(
+        category: entry.category,
+        isParent: isParent,
+        categories: categories,
+        selectedIds: $selectedIds
+      )
+    )
+  }
+}
+
+/// Conditional context menu attached only to parent rows. Avoids the
+/// "always-attached, empty-on-leaves" pattern, which can intercept
+/// right-click on some SwiftUI versions even when the menu body is empty.
+///
+/// "Select all in <Parent>" intentionally selects the parent itself plus
+/// every descendant — the unit `Categories.subtreeIds(of:)` returns. The
+/// per-row `Toggle` still toggles only the parent for users who want
+/// finer-grained control.
+private struct SubtreeContextMenu: ViewModifier {
+  let category: Category
+  let isParent: Bool
+  let categories: Categories
+  @Binding var selectedIds: Set<UUID>
+
+  func body(content: Content) -> some View {
+    if isParent {
+      content.contextMenu {
+        Button("Select all in \(category.name)") {
+          selectedIds.formUnion(categories.subtreeIds(of: category.id))
         }
-        Button("Deselect all in \(entry.category.name)") {
-          selectedIds.subtract(categories.subtreeIds(of: entry.category.id))
+        Button("Deselect all in \(category.name)") {
+          selectedIds.subtract(categories.subtreeIds(of: category.id))
         }
       }
+    } else {
+      content
     }
   }
-
 }
 
 #Preview {
