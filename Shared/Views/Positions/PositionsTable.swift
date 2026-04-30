@@ -94,7 +94,7 @@ struct PositionsTable: View {
           .monospacedDigit()
           .foregroundStyle(gainColor(gain))
         if let pct = row.gainLossPercent {
-          Text(formattedPercent(pct))
+          Text(GainLossPercentDisplay.formatted(pct))
             .font(.caption)
             .monospacedDigit()
             .foregroundStyle(gainColor(gain))
@@ -107,23 +107,6 @@ struct PositionsTable: View {
     }
   }
 
-  /// `+12.3%` / `−4.0%` / `0.0%`. Standard one-decimal-place P/L convention,
-  /// matching `PositionsHeader.plPill`. Negative values use a Unicode minus
-  /// (U+2212), not the hyphen-minus that `String(format:)` emits, for
-  /// typographic consistency with the gain column's monospacedDigit text.
-  ///
-  /// The decimal separator is the C-locale `.` rather than the user's
-  /// locale separator. This matches `PositionsHeader.plPill` and is a
-  /// known limitation — fixing it requires switching to NumberFormatter
-  /// across both call sites and is out of scope for this task.
-  private func formattedPercent(_ pct: Decimal) -> String {
-    let absDouble = abs(Double(truncating: pct as NSDecimalNumber))
-    let body = String(format: "%.1f", absDouble)
-    if pct > 0 { return "+\(body)%" }
-    if pct < 0 { return "−\(body)%" }
-    return "\(body)%"
-  }
-
   /// Accessibility label combining the dollar gain and percent: e.g.
   /// "gain of $1,200, up 12.3 percent" / "loss of $50, down 5.0 percent".
   /// Per `guides/UI_GUIDE.md` every gain renders an explicit
@@ -131,13 +114,7 @@ struct PositionsTable: View {
   private func gainAccessibilityLabel(
     gain: InstrumentAmount, percent: Decimal?
   ) -> String {
-    let pctText =
-      percent.map { value -> String in
-        let absValue = value < 0 ? -value : value
-        let formatted = String(format: "%.1f", Double(truncating: absValue as NSDecimalNumber))
-        if value == 0 { return ", 0.0 percent" }
-        return value < 0 ? ", down \(formatted) percent" : ", up \(formatted) percent"
-      } ?? ""
+    let pctText = GainLossPercentDisplay.accessibilitySuffix(percent)
     if gain.isNegative {
       return "loss of \((-gain).formatted)\(pctText)"
     }

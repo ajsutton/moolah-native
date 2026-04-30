@@ -52,12 +52,21 @@ struct PositionRow: View {
           .foregroundStyle(.tertiary)
       }
       if let gain = row.gainLoss {
-        Text(gainCaption(gain: gain, percent: row.gainLossPercent))
+        Text(captionText(for: gain))
           .font(.caption)
           .monospacedDigit()
           .foregroundStyle(gainColor(gain))
       }
     }
+  }
+
+  /// `"+$1,200  +12.3%"` / `"−$50  −5.0%"`. When `costBasis` is missing,
+  /// falls back to `gain.signedFormatted` only (no trailing space). The
+  /// percent segment is delegated to `GainLossPercentDisplay.formatted`
+  /// so this row stays byte-identical with `PositionsTable.gainCell`.
+  private func captionText(for gain: InstrumentAmount) -> String {
+    guard let pct = row.gainLossPercent else { return gain.signedFormatted }
+    return "\(gain.signedFormatted)  \(GainLossPercentDisplay.formatted(pct))"
   }
 
   private var secondaryIdentifier: String? {
@@ -78,39 +87,6 @@ struct PositionRow: View {
     return .green
   }
 
-  /// `"+$1,200  +12.3%"` / `"−$50  −5.0%"` / `"$0  0.0%"`. The two
-  /// segments are double-spaced so the eye separates them at caption
-  /// size. When `costBasis` is missing, the percent segment is
-  /// omitted and only the dollar gain is shown.
-  ///
-  /// Negative values use a Unicode minus (U+2212) for typographic
-  /// consistency, matching `PositionsTable.gainCell`.
-  private func gainCaption(gain: InstrumentAmount, percent: Decimal?) -> String {
-    guard let percent else { return gain.signedFormatted }
-    let absDouble = abs(Double(truncating: percent as NSDecimalNumber))
-    let body = String(format: "%.1f", absDouble)
-    let pctText: String
-    if percent > 0 {
-      pctText = "+\(body)%"
-    } else if percent < 0 {
-      pctText = "−\(body)%"
-    } else {
-      pctText = "\(body)%"
-    }
-    return "\(gain.signedFormatted)  \(pctText)"
-  }
-
-  /// Constructs the ", up 12.3 percent" / ", down 5.0 percent" /
-  /// ", 0.0 percent" suffix for the accessibility label, or an empty
-  /// string when the percent is unavailable.
-  private func pctSuffix(for percent: Decimal?) -> String {
-    guard let percent else { return "" }
-    let absValue = percent < 0 ? -percent : percent
-    let formatted = String(format: "%.1f", Double(truncating: absValue as NSDecimalNumber))
-    if percent == 0 { return ", 0.0 percent" }
-    return percent < 0 ? ", down \(formatted) percent" : ", up \(formatted) percent"
-  }
-
   private var accessibilityLabel: String {
     var parts: [String] = [row.instrument.name, row.quantityCaption]
     if let value = row.value {
@@ -119,7 +95,7 @@ struct PositionRow: View {
       parts.append("value unavailable")
     }
     if let gain = row.gainLoss {
-      let pctSuffix = pctSuffix(for: row.gainLossPercent)
+      let pctSuffix = GainLossPercentDisplay.accessibilitySuffix(row.gainLossPercent)
       if gain.isNegative {
         parts.append("loss of \((-gain).formatted)\(pctSuffix)")
       } else if gain.isZero {
@@ -182,6 +158,14 @@ private func previewRows() -> [ValuedPosition] {
       unitPrice: InstrumentAmount(quantity: 30, instrument: aud),
       costBasis: InstrumentAmount(quantity: 2_000, instrument: aud),
       value: InstrumentAmount(quantity: 1_500, instrument: aud)),
+    // Zero cost basis: gainLoss is non-nil (5,000 − 0 = 5,000) but
+    // gainLossPercent is nil (division by zero). Exercises the
+    // nil-percent-but-non-nil-gain branch of captionText.
+    ValuedPosition(
+      instrument: bhp, quantity: 100,
+      unitPrice: InstrumentAmount(quantity: 50, instrument: aud),
+      costBasis: InstrumentAmount(quantity: 0, instrument: aud),
+      value: InstrumentAmount(quantity: 5_000, instrument: aud)),
   ]
 }
 

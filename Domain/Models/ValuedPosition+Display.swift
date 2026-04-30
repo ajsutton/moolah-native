@@ -56,6 +56,43 @@ extension InstrumentAmount {
   }
 }
 
+/// Display helpers for the cost-basis gain/loss percentage on a
+/// `ValuedPosition`. Centralised so `PositionsTable.gainCell` and
+/// `PositionRow.trailingColumn` produce byte-identical strings without
+/// duplicating the formatting logic.
+///
+/// Note: the decimal separator is the C-locale `.` rather than the
+/// user's locale separator. This matches `PositionsHeader.plPill` and
+/// is a known limitation — fixing it requires switching to
+/// `NumberFormatter` across every percent-formatting call site
+/// (including `plPill`).
+enum GainLossPercentDisplay {
+  /// `+12.3%` / `−4.0%` / `0.0%`. Standard one-decimal-place P/L
+  /// convention. Negative values use a Unicode minus (U+2212) for
+  /// typographic consistency with the surrounding monospacedDigit text.
+  static func formatted(_ pct: Decimal) -> String {
+    let absDouble = abs(Double(truncating: pct as NSDecimalNumber))
+    let body = String(format: "%.1f", absDouble)
+    if pct > 0 { return "+\(body)%" }
+    if pct < 0 { return "−\(body)%" }
+    return "\(body)%"
+  }
+
+  /// `", up 12.3 percent"` / `", down 5.0 percent"` / `", 0.0 percent"`.
+  /// Empty string when `pct` is nil. Direction-neutral for the zero
+  /// case — VoiceOver should not read "up 0.0 percent". Per
+  /// `guides/UI_GUIDE.md` every gain/loss tile renders an explicit
+  /// accessibility suffix so VoiceOver doesn't read "+12%" as
+  /// ambiguous.
+  static func accessibilitySuffix(_ pct: Decimal?) -> String {
+    guard let pct else { return "" }
+    let absValue = pct < 0 ? -pct : pct
+    let formatted = String(format: "%.1f", Double(truncating: absValue as NSDecimalNumber))
+    if pct == 0 { return ", 0.0 percent" }
+    return pct < 0 ? ", down \(formatted) percent" : ", up \(formatted) percent"
+  }
+}
+
 // MARK: - Sortable accessors
 
 extension ValuedPosition {
