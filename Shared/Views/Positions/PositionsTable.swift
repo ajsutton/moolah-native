@@ -108,11 +108,20 @@ struct PositionsTable: View {
   }
 
   /// `+12.3%` / `−4.0%` / `0.0%`. Standard one-decimal-place P/L convention,
-  /// matching `PositionsHeader.plPill`.
+  /// matching `PositionsHeader.plPill`. Negative values use a Unicode minus
+  /// (U+2212), not the hyphen-minus that `String(format:)` emits, for
+  /// typographic consistency with the gain column's monospacedDigit text.
+  ///
+  /// The decimal separator is the C-locale `.` rather than the user's
+  /// locale separator. This matches `PositionsHeader.plPill` and is a
+  /// known limitation — fixing it requires switching to NumberFormatter
+  /// across both call sites and is out of scope for this task.
   private func formattedPercent(_ pct: Decimal) -> String {
-    let sign = pct > 0 ? "+" : ""
-    let asDouble = Double(truncating: pct as NSDecimalNumber)
-    return "\(sign)\(String(format: "%.1f", asDouble))%"
+    let absDouble = abs(Double(truncating: pct as NSDecimalNumber))
+    let body = String(format: "%.1f", absDouble)
+    if pct > 0 { return "+\(body)%" }
+    if pct < 0 { return "−\(body)%" }
+    return "\(body)%"
   }
 
   /// Accessibility label combining the dollar gain and percent: e.g.
@@ -124,15 +133,16 @@ struct PositionsTable: View {
   ) -> String {
     let pctText =
       percent.map { value -> String in
-        let abs = value < 0 ? -value : value
-        let formatted = String(format: "%.1f", Double(truncating: abs as NSDecimalNumber))
+        let absValue = value < 0 ? -value : value
+        let formatted = String(format: "%.1f", Double(truncating: absValue as NSDecimalNumber))
+        if value == 0 { return ", 0.0 percent" }
         return value < 0 ? ", down \(formatted) percent" : ", up \(formatted) percent"
       } ?? ""
     if gain.isNegative {
       return "loss of \((-gain).formatted)\(pctText)"
     }
     if gain.isZero {
-      return "no change"
+      return pctText.isEmpty ? "no change" : "no change\(pctText)"
     }
     return "gain of \(gain.formatted)\(pctText)"
   }
