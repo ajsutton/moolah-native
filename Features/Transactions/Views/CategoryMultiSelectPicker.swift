@@ -1,7 +1,6 @@
 import SwiftUI
 
 /// Searchable, hierarchical multi-select picker for categories.
-/// Hosted as a popover on macOS and pushed via `NavigationLink` on iOS.
 struct CategoryMultiSelectPicker: View {
   let categories: Categories
   @Binding var selectedIds: Set<UUID>
@@ -9,55 +8,44 @@ struct CategoryMultiSelectPicker: View {
   @State private var searchText: String = ""
 
   var body: some View {
-    VStack(spacing: 0) {
-      header
-      list
-    }
-    .searchable(text: $searchText, prompt: "Search categories")
-    #if os(iOS)
-      .navigationTitle("Categories")
-      .navigationBarTitleDisplayMode(.inline)
-    #endif
-  }
-
-  private var header: some View {
-    HStack {
-      Spacer()
-      Button("Clear") { selectedIds.removeAll() }
-        .disabled(selectedIds.isEmpty)
-    }
-    .padding(.horizontal)
-    .padding(.vertical, 8)
+    list
+      .searchable(text: $searchText, prompt: "Search categories")
+      .toolbar {
+        ToolbarItem(placement: .automatic) {
+          Button("Clear") { selectedIds.removeAll() }
+            .disabled(selectedIds.isEmpty)
+            .help("Clear all selected categories")
+        }
+      }
+      #if os(iOS)
+        .navigationTitle("Categories")
+        .navigationBarTitleDisplayMode(.inline)
+      #endif
   }
 
   private var list: some View {
     List {
       if categories.roots.isEmpty {
-        Text("No categories available").foregroundStyle(.secondary)
+        ContentUnavailableView("No Categories", systemImage: "folder")
       } else if visibleEntries.isEmpty {
-        Text("No matches").foregroundStyle(.secondary)
+        ContentUnavailableView.search(text: searchText)
       } else {
         ForEach(visibleEntries, id: \.category.id) { entry in
           row(for: entry)
         }
       }
     }
+    .listStyle(.plain)
   }
 
   private var visibleEntries: [Categories.FlatEntry] {
-    let all = categories.flattenedByPath()
-    guard !searchText.isEmpty else { return all }
-    return all.filter { $0.path.localizedCaseInsensitiveContains(searchText) }
+    categories.flattenedByPath(matching: searchText)
   }
 
-  private func indentLevel(for entry: Categories.FlatEntry) -> Int {
-    searchText.isEmpty ? entry.path.split(separator: ":").count - 1 : 0
-  }
-
-  @ViewBuilder
   private func row(for entry: Categories.FlatEntry) -> some View {
     let label = searchText.isEmpty ? entry.category.name : entry.path
-    Toggle(
+    let indent = searchText.isEmpty ? entry.depth : 0
+    return Toggle(
       isOn: Binding(
         get: { selectedIds.contains(entry.category.id) },
         set: { isOn in
@@ -70,10 +58,14 @@ struct CategoryMultiSelectPicker: View {
       )
     ) {
       Text(label)
-        .lineLimit(1)
-        .truncationMode(.middle)
-        .padding(.leading, CGFloat(indentLevel(for: entry) * 16))
+        .lineLimit(2)
+        .truncationMode(.tail)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
+    .padding(.leading, CGFloat(indent * 16))
+    .contentShape(.rect)
+    .accessibilityLabel(entry.path)
+    .accessibilityHint(entry.depth > 0 ? "Subcategory" : "Top-level category")
   }
 }
 
