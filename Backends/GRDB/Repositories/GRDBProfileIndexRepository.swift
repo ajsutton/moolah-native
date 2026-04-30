@@ -193,6 +193,24 @@ final class GRDBProfileIndexRepository: Sendable {
     }
   }
 
+  /// Synchronous equivalent of `fetchAll()`. Used at app startup so the
+  /// in-memory `profileStore.profiles` list is populated *before* the
+  /// first scene renders — without it the macOS `ProfileWindowView`
+  /// resolves to `WelcomeView` for the brief window between launch and
+  /// the async load completing, which under `--ui-testing` is long
+  /// enough for the test to interact with the wrong UI. Safe on the
+  /// main actor: the profile-index DB is small (single-digit row
+  /// count in practice) and lives on a serial GRDB queue, so the
+  /// read returns in microseconds.
+  func fetchAllSync() throws -> [Profile] {
+    try database.read { database in
+      try ProfileRow
+        .order(ProfileRow.Columns.createdAt.asc)
+        .fetchAll(database)
+        .map { $0.toDomain() }
+    }
+  }
+
   /// Looks up a single row by id. Used by the per-record upload path.
   func fetchRowSync(id: UUID) throws -> ProfileRow? {
     try database.read { database in

@@ -175,6 +175,27 @@ struct ProfileStoreTests {
 
   // MARK: - Initial-load race
 
+  /// Regression for the missing first-paint population: previously the
+  /// SwiftData profile-index fetch in `init` was synchronous, so
+  /// `profiles` was non-empty before any view rendered. After the GRDB
+  /// migration the load became async, leaving `profiles` empty for the
+  /// first scene tick — `ProfileWindowView.resolvedProfile` then fell
+  /// through to `WelcomeView` even though a profile existed on disk,
+  /// breaking every UI test seed that relies on the seeded profile
+  /// being immediately resolvable.
+  @Test("init populates profiles synchronously from GRDB before any await")
+  func initSynchronousPopulation() async throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let preSeeded = Profile(label: "Pre-seeded")
+    try await manager.profileIndexRepository.upsert(preSeeded)
+
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
+    // No drain — the assertion is that `profiles` is populated before
+    // the first scene tick (i.e. without any await between init and
+    // the read).
+    #expect(store.profiles.map(\.id) == [preSeeded.id])
+  }
+
   /// Regression for the race where an async initial cloud load lands
   /// after an optimistic `addProfile`. Before the fix the load
   /// blindly assigned `profiles = loaded`, dropping the optimistic

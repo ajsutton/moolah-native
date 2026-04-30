@@ -98,7 +98,24 @@ final class ProfileStore {
     self.containerManager = containerManager
     self.syncCoordinator = syncCoordinator
     loadFromDefaults()
-    if containerManager != nil {
+    if let containerManager {
+      // Synchronous initial population so the first scene tick already
+      // sees the on-disk profiles. Required so `ProfileWindowView`
+      // resolves to a profile (not `WelcomeView`) on launch — under
+      // `--ui-testing` the hydrator writes the seed profile to GRDB
+      // before this init runs, and the UI test interacts with the
+      // window immediately. Empty profile-index (e.g. fresh install
+      // before the SwiftData migrator runs) falls through to the async
+      // load + retry, which fills the list once the migrator commits.
+      do {
+        let initial = try containerManager.profileIndexRepository.fetchAllSync()
+        if !initial.isEmpty {
+          profiles = initial
+        }
+      } catch {
+        logger.error(
+          "Initial sync profile-index read failed: \(error, privacy: .public)")
+      }
       loadCloudProfiles(isInitialLoad: true)
       scheduleRetryIfNeeded()
     } else {
