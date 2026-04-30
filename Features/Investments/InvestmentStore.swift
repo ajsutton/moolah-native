@@ -132,10 +132,10 @@ final class InvestmentStore {
     }
   }
 
-  /// Recompute the position-tracked `accountPerformance`. Called from
-  /// `loadAllData` and from `reloadPositionsIfNeeded` after a trade is
-  /// recorded. Sets `accountPerformance` to `nil` and surfaces the error
-  /// on conversion failure; partial sums are not shown.
+  /// Recompute the position-tracked `accountPerformance` from the loaded
+  /// transactions and `valuedPositions`. Called from `loadAllData`. Sets
+  /// `accountPerformance` to `nil` and surfaces the error on conversion
+  /// failure; partial sums are not shown.
   private func refreshPositionTrackedPerformance(
     accountId: UUID, profileCurrency: Instrument
   ) async {
