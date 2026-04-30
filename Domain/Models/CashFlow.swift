@@ -5,12 +5,24 @@ import Foundation
 ///
 /// **Sign convention:** positive = capital flowing *into* the account from
 /// outside (deposits, opening balance), negative = capital flowing *out* to
-/// outside (withdrawals). Per CLAUDE.md the sign is semantically meaningful;
-/// callers must never `abs()` the amount.
+/// outside (withdrawals). The sign must be preserved through all arithmetic;
+/// callers must not `abs()` this value.
 ///
-/// Inclusion rules for which transaction legs become `CashFlow`s live with
-/// the calculator (see §2 of `plans/2026-04-29-investment-pl-design.md`).
-struct CashFlow: Sendable, Hashable {
+/// - Parameter date: The date of the cash flow.
+/// - Parameter amount: Signed monetary amount in the account's reporting
+///   currency, stored as `Decimal` rather than `InstrumentAmount` because every
+///   flow within a given calculation shares the account's reporting currency;
+///   carrying a per-flow `Instrument` would be redundant. Stored as `Decimal`
+///   (not `Int` cents) because IRR / Modified Dietz arithmetic involves
+///   fractional weighting.
+///
+/// Inclusion rules for which transaction legs contribute a `CashFlow` are
+/// determined by `AccountPerformanceCalculator`.
+struct CashFlow {
   let date: Date
   let amount: Decimal
 }
+
+extension CashFlow: Sendable {}
+
+extension CashFlow: Hashable {}
