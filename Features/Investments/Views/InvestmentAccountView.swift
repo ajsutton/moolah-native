@@ -84,7 +84,6 @@ struct InvestmentAccountView: View {
       let performance = investmentStore.accountPerformance
     {
       AccountPerformanceTiles(title: account.name, performance: performance)
-        .padding(.horizontal)
         .padding(.top)
     }
   }

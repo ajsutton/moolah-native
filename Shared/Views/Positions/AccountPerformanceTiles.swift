@@ -7,7 +7,7 @@ import SwiftUI
 ///
 /// Replaces both the position-tracked single-row `PositionsHeader` (when
 /// a performance is supplied via `PositionsViewInput.performance`) and
-/// the legacy `InvestmentSummaryView` (in Slice 5 Task 15). Each tile
+/// the legacy `InvestmentSummaryView`. Each tile
 /// shows "—" / "Unavailable" rather than a partial sum when its source
 /// field is `nil` — see Rule 11 in
 /// `guides/INSTRUMENT_CONVERSION_GUIDE.md`.
