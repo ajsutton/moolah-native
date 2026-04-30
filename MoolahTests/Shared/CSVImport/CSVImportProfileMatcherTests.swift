@@ -217,7 +217,7 @@ struct CSVImportProfileMatcherTests {
   @Test("profiles with different parser identifier are ignored")
   func differentParserIgnored() {
     let accountA = UUID()
-    let swProfile = profile(accountId: accountA, parser: "selfwealth")
+    let swProfile = profile(accountId: accountA, parser: "selfwealth-movements")
     let input = MatcherInput(
       filename: nil,
       parserIdentifier: "generic-bank",

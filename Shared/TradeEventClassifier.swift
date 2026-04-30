@@ -26,8 +26,8 @@ struct TradeEventClassification: Sendable, Equatable {
 /// every other leg. For each `.trade` leg, the per-unit value is derived
 /// from the *other* `.trade` leg's value converted to `hostCurrency` on
 /// the transaction date. Fee legs (`.expense`) are not part of cost basis
-/// in this iteration; that decision moves with the SelfWealthParser
-/// brokerage-attach work tracked in
+/// in this iteration; that decision moves with the
+/// `SelfWealthMovementsParser` brokerage-attach work tracked in
 /// https://github.com/ajsutton/moolah-native/issues/558.
 ///
 /// Only non-fiat legs emit capital events. In a fiat+non-fiat pair the

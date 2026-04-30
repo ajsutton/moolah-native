@@ -6,11 +6,24 @@ import Testing
 @Suite("CSVParserRegistry")
 struct CSVParserRegistryTests {
 
-  @Test("SelfWealth headers pick the SelfWealth parser")
-  func selectsSelfWealth() {
+  @Test("Movements headers pick the SelfWealthMovementsParser")
+  func selectsMovementsParser() {
     let registry = CSVParserRegistry.default
-    let headers = ["Date", "Type", "Description", "Debit", "Credit", "Balance"]
-    #expect(registry.select(for: headers).identifier == "selfwealth")
+    let headers = [
+      "Trade Date", "Settlement Date", "Action", "Reference", "Code", "Name",
+      "Units", "Average Price", "Consideration", "Brokerage", "Total",
+    ]
+    #expect(registry.select(for: headers).identifier == "selfwealth-movements")
+  }
+
+  @Test("Cash Report headers pick the SelfWealthCashReportParser")
+  func selectsCashReportParser() {
+    let registry = CSVParserRegistry.default
+    let headers = [
+      "TransactionDate", "Comment", "Credit", "Debit",
+      "Balance * Please note, this is not a bank statement.",
+    ]
+    #expect(registry.select(for: headers).identifier == "selfwealth-cash-report")
   }
 
   @Test("Bank headers pick the generic parser")
@@ -27,21 +40,6 @@ struct CSVParserRegistryTests {
     #expect(registry.select(for: headers).identifier == "generic-bank")
   }
 
-  @Test("Source-specific parsers precede the generic one in selection order")
-  func sourceSpecificFirst() {
-    // Ambiguous headers that both could claim — the SelfWealth-shaped set is
-    // recognised by SelfWealthParser (strict subset) but also by GenericBankCSVParser
-    // (it finds date/description/debit/credit). SelfWealth should win.
-    let headers = ["Date", "Type", "Description", "Debit", "Credit", "Balance"]
-    // Precondition: both parsers must claim the headers, else the test proves
-    // nothing about ordering.
-    #expect(SelfWealthParser().recognizes(headers: headers))
-    #expect(GenericBankCSVParser().recognizes(headers: headers))
-
-    let registry = CSVParserRegistry.default
-    #expect(registry.select(for: headers).identifier == "selfwealth")
-  }
-
   @Test("Macquarie headers are claimed by the generic parser")
   func selectsGenericForMacquarie() {
     let headers = [
@@ -49,5 +47,25 @@ struct CSVParserRegistryTests {
     ]
     let registry = CSVParserRegistry.default
     #expect(registry.select(for: headers).identifier == "generic-bank")
+  }
+
+  @Test("Movements headers don't accidentally claim the Cash Report parser")
+  func movementsHeadersNotClaimedByCashReport() {
+    let cashReport = SelfWealthCashReportParser()
+    let movementsHeaders = [
+      "Trade Date", "Settlement Date", "Action", "Reference", "Code", "Name",
+      "Units", "Average Price", "Consideration", "Brokerage", "Total",
+    ]
+    #expect(cashReport.recognizes(headers: movementsHeaders) == false)
+  }
+
+  @Test("Cash Report headers don't accidentally claim the Movements parser")
+  func cashReportHeadersNotClaimedByMovements() {
+    let movements = SelfWealthMovementsParser()
+    let cashReportHeaders = [
+      "TransactionDate", "Comment", "Credit", "Debit",
+      "Balance * Please note, this is not a bank statement.",
+    ]
+    #expect(movements.recognizes(headers: cashReportHeaders) == false)
   }
 }
