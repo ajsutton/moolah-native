@@ -79,6 +79,57 @@ struct ValuedPositionTests {
     )
     #expect(row.gainLoss == InstrumentAmount(quantity: -1_200, instrument: aud))
   }
+
+  @Test("positive gain renders as positive percent")
+  func positiveGain() throws {
+    let row = ValuedPosition(
+      instrument: bhp, quantity: 100,
+      unitPrice: nil,
+      costBasis: InstrumentAmount(quantity: 1_000, instrument: aud),
+      value: InstrumentAmount(quantity: 1_100, instrument: aud))
+    let pct = try #require(row.gainLossPercent)
+    #expect(pct == 10)
+  }
+
+  @Test("negative gain renders as negative percent")
+  func negativeGain() throws {
+    let row = ValuedPosition(
+      instrument: bhp, quantity: 100,
+      unitPrice: nil,
+      costBasis: InstrumentAmount(quantity: 1_000, instrument: aud),
+      value: InstrumentAmount(quantity: 800, instrument: aud))
+    let pct = try #require(row.gainLossPercent)
+    #expect(pct == -20)
+  }
+
+  @Test("missing cost basis returns nil")
+  func missingCostBasisNil() {
+    let row = ValuedPosition(
+      instrument: bhp, quantity: 100,
+      unitPrice: nil, costBasis: nil,
+      value: InstrumentAmount(quantity: 1_000, instrument: aud))
+    #expect(row.gainLossPercent == nil)
+  }
+
+  @Test("zero cost basis returns nil")
+  func zeroCostBasisNil() {
+    let row = ValuedPosition(
+      instrument: bhp, quantity: 100,
+      unitPrice: nil,
+      costBasis: InstrumentAmount(quantity: 0, instrument: aud),
+      value: InstrumentAmount(quantity: 100, instrument: aud))
+    #expect(row.gainLossPercent == nil)
+  }
+
+  @Test("missing value returns nil")
+  func missingValueNil() {
+    let row = ValuedPosition(
+      instrument: bhp, quantity: 100,
+      unitPrice: nil,
+      costBasis: InstrumentAmount(quantity: 1_000, instrument: aud),
+      value: nil)
+    #expect(row.gainLossPercent == nil)
+  }
 }
 
 @Suite("HistoricalValueSeries")
