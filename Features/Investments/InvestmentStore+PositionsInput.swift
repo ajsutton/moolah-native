@@ -1,4 +1,8 @@
 // swiftlint:disable multiline_arguments
+//
+// positionsViewInput and costBasisSnapshot construct multi-argument
+// types across multiple lines for readability; the rule fires on every
+// such call site in this file.
 
 import Foundation
 
