@@ -1,16 +1,17 @@
 import Foundation
 import OSLog
 
-/// Pure orchestrator that turns transactions + valued positions into an
-/// `AccountPerformance`.
+/// Pure orchestrator that turns transactions and valued positions into an
+/// `AccountPerformance` for a position-tracked investment account.
 ///
-/// Two entry points (`computeLegacy` ships in Task 7):
-/// - `compute(...)` for position-tracked accounts. Uses the §2 boundary-
-///   crossing rule from the design spec to extract `CashFlow`s, throws on
-///   conversion failure (Rule 11 — partial sums are forbidden).
+/// Cash flows are extracted from the transaction history using the
+/// boundary-crossing rule: a leg in the account contributes a flow only
+/// if it is an opening balance or the transaction also touches a
+/// different account. Intra-account activity (trades, dividends, fees)
+/// is reflected via the terminal value, not as flows.
 ///
-/// Both entry points share `IRRSolver` for the annualised rate and the
-/// same Modified Dietz formula for `profitLossPercent`.
+/// Throws when any cash-flow conversion fails so the caller can mark the
+/// performance unavailable; a partial result is never returned.
 enum AccountPerformanceCalculator {
   private static let logger = Logger(
     subsystem: "com.moolah.app", category: "AccountPerformanceCalculator")
@@ -26,13 +27,22 @@ enum AccountPerformanceCalculator {
     transactions: [Transaction],
     valuedPositions: [ValuedPosition],
     profileCurrency: Instrument,
-    conversionService: any InstrumentConversionService
+    conversionService: any InstrumentConversionService,
+    now: Date = Date()
   ) async throws -> AccountPerformance {
-    let flows = try await extractFlows(
-      from: transactions,
-      accountId: accountId,
-      profileCurrency: profileCurrency,
-      conversionService: conversionService)
+    let flows: [CashFlow]
+    do {
+      flows = try await extractFlows(
+        from: transactions,
+        accountId: accountId,
+        profileCurrency: profileCurrency,
+        conversionService: conversionService)
+    } catch {
+      logger.warning(
+        "Cash-flow conversion failed for account \(accountId, privacy: .public): \(error.localizedDescription, privacy: .public)"
+      )
+      throw error
+    }
 
     let currentValue = aggregatedValue(of: valuedPositions, in: profileCurrency)
 
@@ -40,7 +50,7 @@ enum AccountPerformanceCalculator {
       flows: flows,
       currentValue: currentValue,
       profileCurrency: profileCurrency,
-      now: Date())
+      now: now)
   }
 
   /// §2 cash-flow extraction. A leg L in `accountId` produces one
@@ -114,6 +124,8 @@ enum AccountPerformanceCalculator {
     }
 
     let totalContributions = flows.reduce(Decimal(0)) { $0 + $1.amount }
+    // Decimal has no fractional `pow`; convert to Double at the IRR/Modified
+    // Dietz boundary.
     let terminal = Double(truncating: currentValue.quantity as NSDecimalNumber)
     let totalDays = max(now.timeIntervalSince(firstFlow.date) / 86_400, 0)
 
@@ -144,6 +156,8 @@ enum AccountPerformanceCalculator {
     flows: [CashFlow], terminal: Double, totalDays: Double
   ) -> Decimal? {
     guard totalDays >= 1 else { return nil }
+    // Decimal has no fractional `pow`; convert to Double at the Modified
+    // Dietz boundary.
     let firstDate = flows[0].date
     var contributionSum = 0.0
     var weightedSum = 0.0

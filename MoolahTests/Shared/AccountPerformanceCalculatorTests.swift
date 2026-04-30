@@ -7,41 +7,82 @@ import Testing
 struct AccountPerformanceCalculatorTests {
   let aud = Instrument.AUD
 
-  /// Account opened with $10,000 a year ago, current value $11,000 →
-  /// contributions $10,000, P/L $1,000, p.a. ≈ 10%.
-  @Test("opening balance only with growth surfaces P/L and annualised return")
-  func openingBalanceOnly() async throws {
+  /// Fixture: account opened with $10,000 exactly one year before `now`,
+  /// terminal value $11,000.
+  private struct OpeningBalanceFixture {
     let accountId = UUID()
-    let aYearAgo = Date().addingTimeInterval(-365 * 86_400)
-    let openingTxn = Transaction(
-      date: aYearAgo,
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: 10_000, type: .openingBalance)
+    let openingDate = Date(timeIntervalSinceReferenceDate: 0)
+    var now: Date { openingDate.addingTimeInterval(365 * 86_400) }
+    let transactions: [Transaction]
+    let valued: [ValuedPosition]
+
+    init(aud: Instrument) {
+      let accountId = self.accountId
+      transactions = [
+        Transaction(
+          date: openingDate,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: aud, quantity: 10_000, type: .openingBalance)
+          ]
+        )
       ]
-    )
-    let valued = [
-      ValuedPosition(
-        instrument: aud, quantity: 11_000,
-        unitPrice: nil, costBasis: nil,
-        value: InstrumentAmount(quantity: 11_000, instrument: aud))
-    ]
+      valued = [
+        ValuedPosition(
+          instrument: aud, quantity: 11_000,
+          unitPrice: nil, costBasis: nil,
+          value: InstrumentAmount(quantity: 11_000, instrument: aud))
+      ]
+    }
+  }
 
+  @Test("opening balance with growth records contributions, P/L, and first flow date")
+  func openingBalanceContributionsAndProfitLoss() async throws {
+    let fixture = OpeningBalanceFixture(aud: aud)
     let perf = try await AccountPerformanceCalculator.compute(
-      accountId: accountId,
-      transactions: [openingTxn],
-      valuedPositions: valued,
+      accountId: fixture.accountId,
+      transactions: fixture.transactions,
+      valuedPositions: fixture.valued,
       profileCurrency: aud,
-      conversionService: FixedConversionService()
+      conversionService: FixedConversionService(),
+      now: fixture.now
     )
-
     #expect(perf.currentValue == InstrumentAmount(quantity: 11_000, instrument: aud))
     #expect(perf.totalContributions == InstrumentAmount(quantity: 10_000, instrument: aud))
     #expect(perf.profitLoss == InstrumentAmount(quantity: 1_000, instrument: aud))
+    #expect(perf.firstFlowDate == fixture.openingDate)
+  }
+
+  @Test("opening balance with 10 percent growth records 10 percent Modified Dietz return")
+  func openingBalanceModifiedDietzPercent() async throws {
+    let fixture = OpeningBalanceFixture(aud: aud)
+    let perf = try await AccountPerformanceCalculator.compute(
+      accountId: fixture.accountId,
+      transactions: fixture.transactions,
+      valuedPositions: fixture.valued,
+      profileCurrency: aud,
+      conversionService: FixedConversionService(),
+      now: fixture.now
+    )
     let percent = try #require(perf.profitLossPercent)
-    #expect(abs(Double(truncating: percent as NSDecimalNumber) - 0.10) < 0.001)
+    // Modified Dietz with one flow at t=0 and weighted-capital == ΣC = 10_000
+    // is exactly (V − ΣC) / ΣC = 1000 / 10000 = 0.1.
+    #expect(percent == Decimal(string: "0.1"))
+  }
+
+  @Test("opening balance with 10 percent growth converges on 10 percent annualised")
+  func openingBalanceAnnualisedReturn() async throws {
+    let fixture = OpeningBalanceFixture(aud: aud)
+    let perf = try await AccountPerformanceCalculator.compute(
+      accountId: fixture.accountId,
+      transactions: fixture.transactions,
+      valuedPositions: fixture.valued,
+      profileCurrency: aud,
+      conversionService: FixedConversionService(),
+      now: fixture.now
+    )
     let annualised = try #require(perf.annualisedReturn)
-    #expect(abs(Double(truncating: annualised as NSDecimalNumber) - 0.10) < 0.005)
-    #expect(perf.firstFlowDate == aYearAgo)
+    let asDouble = Double(truncating: annualised as NSDecimalNumber)
+    #expect(abs(asDouble - 0.10) < 0.001, "expected ~0.10, got \(asDouble)")
   }
 }
