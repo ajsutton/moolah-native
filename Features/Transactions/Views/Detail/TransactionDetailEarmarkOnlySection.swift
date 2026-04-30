@@ -8,12 +8,21 @@ struct TransactionDetailEarmarkOnlySection: View {
   let earmarks: Earmarks
   let amountBinding: Binding<String>
 
-  /// Instrument code label shown next to the amount field. Derived from
-  /// the earmark on the draft's relevant leg.
-  private var earmarkInstrumentId: String? {
-    draft.relevantLeg.earmarkId
-      .flatMap { earmarks.by(id: $0) }?
-      .instrument.id
+  /// Bridges `LegDraft.instrument` (`Instrument?`) to the picker's
+  /// non-optional binding. Falls back to the earmark's instrument when
+  /// the leg has no explicit override (and finally `.AUD` so the picker
+  /// always has something to display); writes go to the leg.
+  private var earmarkInstrumentBinding: Binding<Instrument> {
+    Binding(
+      get: {
+        draft.legDrafts[draft.relevantLegIndex].instrument
+          ?? draft.relevantLeg.earmarkId
+          .flatMap { earmarks.by(id: $0) }?
+          .instrument
+          ?? .AUD
+      },
+      set: { draft.legDrafts[draft.relevantLegIndex].instrument = $0 }
+    )
   }
 
   var body: some View {
@@ -32,15 +41,19 @@ struct TransactionDetailEarmarkOnlySection: View {
         .pickerStyle(.menu)
       #endif
 
-      HStack {
-        TextField("Amount", text: amountBinding)
-          .multilineTextAlignment(.trailing)
-          .monospacedDigit()
-          #if os(iOS)
-            .keyboardType(.decimalPad)
-          #endif
-        Text(earmarkInstrumentId ?? "").foregroundStyle(.secondary)
-          .monospacedDigit()
+      LabeledContent {
+        HStack(spacing: 8) {
+          TextField("Amount", text: amountBinding)
+            .labelsHidden()
+            .multilineTextAlignment(.trailing)
+            .monospacedDigit()
+            #if os(iOS)
+              .keyboardType(.decimalPad)
+            #endif
+          CompactInstrumentPickerButton(selection: earmarkInstrumentBinding)
+        }
+      } label: {
+        Text("Amount")
       }
 
       DatePicker("Date", selection: $draft.date, displayedComponents: .date)
