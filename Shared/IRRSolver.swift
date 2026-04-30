@@ -20,6 +20,13 @@ import Foundation
 /// boundary so callers can mix it with money-typed math without lossy
 /// further conversions.
 enum IRRSolver {
+  /// One contribution converted to the (daysFromFirst, signedAmount) form
+  /// the solver iterates over.
+  private struct DayFlow {
+    let daysFromFirst: Double
+    let amount: Double
+  }
+
   static func annualisedReturn(
     flows: [CashFlow],
     terminalValue: Decimal,
@@ -29,18 +36,34 @@ enum IRRSolver {
     let totalDays = terminalDate.timeIntervalSince(first.date) / 86_400
     guard totalDays >= 1 else { return nil }
 
-    let v = (terminalValue as NSDecimalNumber).doubleValue
-    let cashflows: [(t: Double, c: Double)] = flows.map { flow in
+    let terminal = (terminalValue as NSDecimalNumber).doubleValue
+    let dayFlows: [DayFlow] = flows.map { flow in
       let days = flow.date.timeIntervalSince(first.date) / 86_400
-      return (t: days, c: (flow.amount as NSDecimalNumber).doubleValue)
+      return DayFlow(
+        daysFromFirst: days,
+        amount: (flow.amount as NSDecimalNumber).doubleValue
+      )
     }
 
-    let seed = modifiedDietzAnnualised(cashflows: cashflows, v: v, totalDays: totalDays)
-    if let r = newtonRaphson(seed: seed, cashflows: cashflows, v: v, totalDays: totalDays) {
-      return Decimal(r)
+    let seed = modifiedDietzAnnualised(
+      dayFlows: dayFlows,
+      terminal: terminal,
+      totalDays: totalDays
+    )
+    if let rate = newtonRaphson(
+      seed: seed,
+      dayFlows: dayFlows,
+      terminal: terminal,
+      totalDays: totalDays
+    ) {
+      return Decimal(rate)
     }
-    if let r = bisection(cashflows: cashflows, v: v, totalDays: totalDays) {
-      return Decimal(r)
+    if let rate = bisection(
+      dayFlows: dayFlows,
+      terminal: terminal,
+      totalDays: totalDays
+    ) {
+      return Decimal(rate)
     }
     return nil
   }
@@ -48,50 +71,50 @@ enum IRRSolver {
   /// `(V − ΣCᵢ) / Σ(wᵢ · Cᵢ)` annualised to `(1 + MD)^(365/T) − 1`.
   /// Returns 0 if the weighted-capital denominator is zero (degenerate input).
   private static func modifiedDietzAnnualised(
-    cashflows: [(t: Double, c: Double)],
-    v: Double,
+    dayFlows: [DayFlow],
+    terminal: Double,
     totalDays: Double
   ) -> Double {
     var sumC = 0.0
     var sumWeightedC = 0.0
-    for f in cashflows {
-      sumC += f.c
-      let weight = (totalDays - f.t) / totalDays
-      sumWeightedC += weight * f.c
+    for flow in dayFlows {
+      sumC += flow.amount
+      let weight = (totalDays - flow.daysFromFirst) / totalDays
+      sumWeightedC += weight * flow.amount
     }
     guard sumWeightedC != 0 else { return 0 }
-    let md = (v - sumC) / sumWeightedC
-    return pow(1 + md, 365 / totalDays) - 1
+    let dietz = (terminal - sumC) / sumWeightedC
+    return pow(1 + dietz, 365 / totalDays) - 1
   }
 
   /// `f(r) = Σ Cᵢ · (1+r)^(−tᵢ/365) − V · (1+r)^(−T/365)`. Stops when
   /// `|f| < 1e-9` or 50 iterations elapsed. Returns `nil` on divergence.
   private static func newtonRaphson(
     seed: Double,
-    cashflows: [(t: Double, c: Double)],
-    v: Double,
+    dayFlows: [DayFlow],
+    terminal: Double,
     totalDays: Double
   ) -> Double? {
-    var r = seed
+    var rate = seed
     for _ in 0..<50 {
-      let one_r = 1 + r
-      guard one_r > 0 else { return nil }
-      var f = 0.0
+      let onePlusR = 1 + rate
+      guard onePlusR > 0 else { return nil }
+      var fValue = 0.0
       var fPrime = 0.0
-      for cf in cashflows {
-        let exp = -cf.t / 365
-        let p = pow(one_r, exp)
-        f += cf.c * p
-        fPrime += cf.c * exp * p / one_r
+      for flow in dayFlows {
+        let exponent = -flow.daysFromFirst / 365
+        let powered = pow(onePlusR, exponent)
+        fValue += flow.amount * powered
+        fPrime += flow.amount * exponent * powered / onePlusR
       }
-      let expV = -totalDays / 365
-      let pV = pow(one_r, expV)
-      f -= v * pV
-      fPrime -= v * expV * pV / one_r
+      let terminalExponent = -totalDays / 365
+      let terminalPower = pow(onePlusR, terminalExponent)
+      fValue -= terminal * terminalPower
+      fPrime -= terminal * terminalExponent * terminalPower / onePlusR
 
-      if abs(f) < 1e-9 { return r }
+      if abs(fValue) < 1e-9 { return rate }
       guard fPrime != 0 else { return nil }
-      r -= f / fPrime
+      rate -= fValue / fPrime
     }
     return nil
   }
@@ -99,38 +122,37 @@ enum IRRSolver {
   /// Sign-change search over `[−0.99, 10.0]`, ~30 iterations. Last-resort
   /// fallback for multi-root patterns that throw NR off.
   private static func bisection(
-    cashflows: [(t: Double, c: Double)],
-    v: Double,
+    dayFlows: [DayFlow],
+    terminal: Double,
     totalDays: Double
   ) -> Double? {
-    func f(_ r: Double) -> Double {
-      let one_r = 1 + r
-      guard one_r > 0 else { return .nan }
+    func evaluate(_ rate: Double) -> Double {
+      let onePlusR = 1 + rate
+      guard onePlusR > 0 else { return .nan }
       var sum = 0.0
-      for cf in cashflows {
-        sum += cf.c * pow(one_r, -cf.t / 365)
+      for flow in dayFlows {
+        sum += flow.amount * pow(onePlusR, -flow.daysFromFirst / 365)
       }
-      return sum - v * pow(one_r, -totalDays / 365)
+      return sum - terminal * pow(onePlusR, -totalDays / 365)
     }
-    var lo = -0.99
-    var hi = 10.0
-    var fLo = f(lo)
-    var fHi = f(hi)
-    if fLo.isNaN || fHi.isNaN { return nil }
-    if fLo * fHi > 0 { return nil }
+    var low = -0.99
+    var high = 10.0
+    var fLow = evaluate(low)
+    let fHigh = evaluate(high)
+    if fLow.isNaN || fHigh.isNaN { return nil }
+    if fLow * fHigh > 0 { return nil }
     for _ in 0..<60 {
-      let mid = (lo + hi) / 2
-      let fMid = f(mid)
+      let mid = (low + high) / 2
+      let fMid = evaluate(mid)
       if fMid.isNaN { return nil }
       if abs(fMid) < 1e-9 { return mid }
-      if fLo * fMid < 0 {
-        hi = mid
-        fHi = fMid
+      if fLow * fMid < 0 {
+        high = mid
       } else {
-        lo = mid
-        fLo = fMid
+        low = mid
+        fLow = fMid
       }
     }
-    return (lo + hi) / 2
+    return (low + high) / 2
   }
 }
