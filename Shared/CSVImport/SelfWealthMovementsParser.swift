@@ -155,11 +155,11 @@ struct SelfWealthMovementsParser: CSVParser, Sendable {
     var legs = [
       ParsedLeg(
         accountId: nil, instrument: .AUD, quantity: cashAmount,
-        type: isBuy ? .expense : .income, isInstrumentPlaceholder: true),
+        type: .trade, isInstrumentPlaceholder: true),
       ParsedLeg(
         accountId: nil, instrument: stockInstrument,
         quantity: isBuy ? context.units : -context.units,
-        type: isBuy ? .income : .expense, isInstrumentPlaceholder: false),
+        type: .trade, isInstrumentPlaceholder: false),
     ]
     if brokerage > 0 {
       legs.append(

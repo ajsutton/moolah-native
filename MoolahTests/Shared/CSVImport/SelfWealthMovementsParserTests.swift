@@ -23,7 +23,7 @@ struct SelfWealthMovementsParserTests {
     #expect(parser.recognizes(headers: rows[0]))
   }
 
-  @Test("Buy → three legs: cash -expense, position +income, brokerage -expense")
+  @Test("Buy → three legs: cash -trade, position +trade, brokerage -expense")
   func buyTradeThreeLegs() throws {
     let parser = SelfWealthMovementsParser()
     let rows = try self.rows("selfwealth-movements")
@@ -34,12 +34,12 @@ struct SelfWealthMovementsParserTests {
       }))
     #expect(buy.legs.count == 3)
     let cashLeg = buy.legs.first(where: {
-      $0.instrument == .AUD && $0.type == .expense && $0.quantity == Decimal(string: "-5000.00")
+      $0.instrument == .AUD && $0.type == .trade && $0.quantity == Decimal(string: "-5000.00")
     })
     #expect(cashLeg != nil)
     let positionLeg = try #require(buy.legs.first(where: { $0.instrument.id == "ASX:WXYZ" }))
     #expect(positionLeg.quantity == 100)
-    #expect(positionLeg.type == .income)
+    #expect(positionLeg.type == .trade)
     #expect(positionLeg.instrument.kind == .stock)
     #expect(positionLeg.isInstrumentPlaceholder == false)
     let brokerageLeg = buy.legs.first(where: {
@@ -50,7 +50,7 @@ struct SelfWealthMovementsParserTests {
     #expect(buy.bankReference == "1000001")
   }
 
-  @Test("Sell → three legs: cash +income, position -expense, brokerage -expense")
+  @Test("Sell → three legs: cash +trade, position -trade, brokerage -expense")
   func sellTradeThreeLegs() throws {
     let parser = SelfWealthMovementsParser()
     let rows = try self.rows("selfwealth-movements")
@@ -62,12 +62,12 @@ struct SelfWealthMovementsParserTests {
     #expect(sell.legs.count == 3)
     let cashLeg = try #require(
       sell.legs.first(where: {
-        $0.instrument == .AUD && $0.type == .income
+        $0.instrument == .AUD && $0.type == .trade
       }))
     #expect(cashLeg.quantity == Decimal(string: "4000.00"))
     let positionLeg = try #require(sell.legs.first(where: { $0.instrument.id == "ASX:ABCD" }))
     #expect(positionLeg.quantity == -50)
-    #expect(positionLeg.type == .expense)
+    #expect(positionLeg.type == .trade)
     let brokerageLeg = try #require(
       sell.legs.first(where: {
         $0.instrument == .AUD && $0.type == .expense
