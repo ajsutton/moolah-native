@@ -6,9 +6,9 @@ import Foundation
 // MARK: - ProfileRow + CloudKitRecordConvertible
 //
 // Replaces `Backends/CloudKit/Sync/ProfileRecord+CloudKit.swift` once
-// Task 6 flips `RecordTypeRegistry.allTypes` over to `ProfileRow.self`.
-// Until then the runtime still dispatches `ProfileRecord.recordType` to
-// the SwiftData `ProfileRecord` class; this conformance compiles and is
+// `RecordTypeRegistry.allTypes` maps `ProfileRecord.recordType` to
+// `ProfileRow.self`. Until then the runtime still dispatches to the
+// SwiftData `ProfileRecord` class; this conformance compiles and is
 // available but unused.
 //
 // The CloudKit wire `recordType` ("ProfileRecord") is a frozen contract
@@ -32,18 +32,23 @@ extension ProfileRow: CloudKitRecordConvertible {
   static func fieldValues(from ckRecord: CKRecord) -> ProfileRow? {
     guard let id = ckRecord.recordID.uuid else { return nil }
     let fields = ProfileRecordCloudKitFields(from: ckRecord)
-    let monthRaw = Int(fields.financialYearStartMonth ?? 7)
-    // Coerce out-of-range remote values (Slice 1 skip-and-log pattern):
-    // financial_year_start_month must be 1…12 or the SQLite CHECK on
-    // the GRDB profile table would reject the upsert and stall the
-    // sync batch.
-    let month = (1...12).contains(monthRaw) ? monthRaw : 7
+    // CloudKit permits any Int64; the GRDB profile table CHECKs
+    // financial_year_start_month is between 1 and 12. Coercing
+    // out-of-range or missing values to 7 (a common fiscal-year
+    // start) keeps the sync batch from stalling on a single row.
+    let rawMonth = fields.financialYearStartMonth.map(Int.init) ?? 7
+    let month = (1...12).contains(rawMonth) ? rawMonth : 7
     return ProfileRow(
       id: id,
       recordName: ckRecord.recordID.recordName,
       label: fields.label ?? "",
       currencyCode: fields.currencyCode ?? "",
       financialYearStartMonth: month,
+      // Wire-parity with the legacy ProfileRecord conformance which also
+      // falls back to `Date()` when the field is absent. A stricter
+      // "discard malformed record" policy is reasonable but must be
+      // applied consistently across every CloudKit row type, not just
+      // here — out of scope for the current change.
       createdAt: fields.createdAt ?? Date(),
       // Stamped post-upsert by ProfileIndexSyncHandler; never read from
       // the CKRecord itself.
