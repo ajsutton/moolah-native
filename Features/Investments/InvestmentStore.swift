@@ -51,6 +51,8 @@ final class InvestmentStore {
     self.conversionService = conversionService
   }
 
+  // MARK: - Loading & Mutations
+
   /// Load all values for the account.
   ///
   /// Per `guides/CONCURRENCY_GUIDE.md`, pagination loops must check
@@ -166,13 +168,20 @@ final class InvestmentStore {
   }
 
   /// Recompute the legacy `accountPerformance` from the in-memory `values`
-  /// and `dailyBalances` arrays, after a `setValue` / `removeValue`
+  /// and `dailyBalances` arrays after a `setValue` / `removeValue`
   /// mutation. Synchronous: the legacy path doesn't need conversion.
-  private func refreshLegacyPerformance(instrument: Instrument) {
+  ///
+  /// Uses `loadedHostCurrency` to match `loadAllData`'s legacy branch —
+  /// `dailyBalances` are always in `loadedHostCurrency` (converted by
+  /// `loadDailyBalances`), so callers must not pass a different
+  /// instrument. The `.AUD` final fallback only fires if a mutation
+  /// happens before `loadAllData` ran, which should not occur in
+  /// practice.
+  private func refreshLegacyPerformance() {
     accountPerformance = AccountPerformanceCalculator.computeLegacy(
       dailyBalances: dailyBalances,
       values: values,
-      instrument: instrument)
+      instrument: loadedHostCurrency ?? .AUD)
   }
 
   /// Refreshes position data after a trade is recorded. Used from
@@ -195,7 +204,7 @@ final class InvestmentStore {
       values.sort()
       // The latest value is the first one (values sorted descending by date)
       onInvestmentValueChanged?(accountId, values.first?.value)
-      refreshLegacyPerformance(instrument: value.instrument)
+      refreshLegacyPerformance()
     } catch {
       logger.error("Failed to set investment value: \(error.localizedDescription)")
       self.error = error
@@ -208,8 +217,7 @@ final class InvestmentStore {
       try await repository.removeValue(accountId: accountId, date: date)
       values.removeAll { $0.date.isSameDay(as: date) }
       onInvestmentValueChanged?(accountId, values.first?.value)
-      let instrument = values.first?.value.instrument ?? loadedHostCurrency ?? .AUD
-      refreshLegacyPerformance(instrument: instrument)
+      refreshLegacyPerformance()
     } catch {
       logger.error("Failed to remove investment value: \(error.localizedDescription)")
       self.error = error

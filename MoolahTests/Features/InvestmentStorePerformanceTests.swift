@@ -31,15 +31,20 @@ struct InvestmentStorePerformanceTests {
   func loadAllDataLegacyPerformance() async throws {
     let accountId = UUID()
     let aud = Instrument.AUD
+    let calendar = Calendar.current
+    let earlierDate = try #require(
+      calendar.date(from: DateComponents(year: 2024, month: 1, day: 1)))
+    let laterDate = try #require(
+      calendar.date(from: DateComponents(year: 2025, month: 1, day: 1)))
     let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       investmentValues: [
         accountId: [
           InvestmentValue(
-            date: Date(timeIntervalSinceReferenceDate: 0),
+            date: earlierDate,
             value: InstrumentAmount(quantity: 10_000, instrument: aud)),
           InvestmentValue(
-            date: Date(timeIntervalSinceReferenceDate: 365 * 86_400),
+            date: laterDate,
             value: InstrumentAmount(quantity: 11_000, instrument: aud)),
         ]
       ],
