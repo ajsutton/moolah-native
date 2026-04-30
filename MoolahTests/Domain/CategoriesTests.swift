@@ -164,4 +164,61 @@ struct CategoriesTests {
 
     #expect(categories.selectionSummary(for: [UUID(), UUID()]) == "All")
   }
+
+  @Test
+  func flattenedByPathMatchingEmptyQueryReturnsAll() {
+    let groceries = Category(name: "Groceries")
+    let costco = Category(name: "Costco", parentId: groceries.id)
+    let categories = Categories(from: [groceries, costco])
+
+    let entries = categories.flattenedByPath(matching: "")
+
+    #expect(entries.map(\.path) == ["Groceries", "Groceries:Costco"])
+  }
+
+  @Test
+  func flattenedByPathMatchingFiltersBySubstringCaseInsensitive() {
+    let groceries = Category(name: "Groceries")
+    let costco = Category(name: "Costco", parentId: groceries.id)
+    let income = Category(name: "Income")
+    let categories = Categories(from: [groceries, costco, income])
+
+    let entries = categories.flattenedByPath(matching: "cost")
+
+    #expect(entries.map(\.path) == ["Groceries:Costco"])
+  }
+
+  @Test
+  func flattenedByPathMatchingTrimsLeadingAndTrailingWhitespace() {
+    let groceries = Category(name: "Groceries")
+    let categories = Categories(from: [groceries])
+
+    let entries = categories.flattenedByPath(matching: "  Groceries  ")
+
+    #expect(entries.map(\.path) == ["Groceries"])
+  }
+
+  @Test
+  func flatEntryDepthForRootIsZero() {
+    let root = Category(name: "Groceries")
+    let categories = Categories(from: [root])
+
+    let entry = categories.flattenedByPath().first!
+
+    #expect(entry.depth == 0)
+  }
+
+  @Test
+  func flatEntryDepthCountsColonSegments() {
+    let income = Category(name: "Income")
+    let salary = Category(name: "Salary", parentId: income.id)
+    let janet = Category(name: "Janet", parentId: salary.id)
+    let categories = Categories(from: [income, salary, janet])
+
+    let depths = categories.flattenedByPath().reduce(into: [String: Int]()) { acc, entry in
+      acc[entry.path] = entry.depth
+    }
+
+    #expect(depths == ["Income": 0, "Income:Salary": 1, "Income:Salary:Janet": 2])
+  }
 }

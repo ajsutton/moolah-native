@@ -88,6 +88,10 @@ struct Categories: Sendable {
   struct FlatEntry: Sendable {
     let category: Category
     let path: String
+
+    /// Hierarchy depth derived from the colon-separated path.
+    /// Roots have depth `0`; each level of nesting adds `1`.
+    var depth: Int { path.split(separator: ":").count - 1 }
   }
 
   /// All categories flattened with full paths, sorted alphabetically by path.
@@ -102,5 +106,15 @@ struct Categories: Sendable {
     }
     collect(nil)
     return result.sorted { $0.path.localizedCaseInsensitiveCompare($1.path) == .orderedAscending }
+  }
+
+  /// Subset of `flattenedByPath()` whose paths contain `query` (case-insensitive,
+  /// substring match). Whitespace at either end of `query` is ignored. An empty
+  /// or whitespace-only query returns the full result of `flattenedByPath()`.
+  func flattenedByPath(matching query: String) -> [FlatEntry] {
+    let trimmed = query.trimmingCharacters(in: .whitespaces)
+    let all = flattenedByPath()
+    guard !trimmed.isEmpty else { return all }
+    return all.filter { $0.path.localizedCaseInsensitiveContains(trimmed) }
   }
 }
