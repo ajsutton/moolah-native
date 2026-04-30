@@ -76,6 +76,7 @@ struct SwiftDataToGRDBMigrator {
     investmentValuesFlag,
     transactionsFlag,
     transactionLegsFlag,
+    profileIndexFlag,
   ]
 
   /// Clears every gating flag set by `migrateIfNeeded` so the next call
