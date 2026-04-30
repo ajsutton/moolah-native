@@ -26,14 +26,6 @@ struct ProfileStoreAutoActivateGuardTests {
     return profile
   }
 
-  /// Drains every fire-and-forget Task tracked by the store.
-  private func drainPendingMutations(_ store: ProfileStore) async {
-    while let task = store.pendingMutationTasks.first {
-      await task.value
-      await Task.yield()
-    }
-  }
-
   @Test("loadCloudProfiles auto-activates when welcomePhase == .landing")
   func autoActivatesWhenLanding() async throws {
     let manager = try ProfileContainerManager.forTesting()

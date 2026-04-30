@@ -17,14 +17,6 @@ struct ProfileStoreTestsMoreSecondHalf {
     Profile(label: label)
   }
 
-  /// See `ProfileStoreTestsMore.drainPendingMutations` for rationale.
-  private func drainPendingMutations(_ store: ProfileStore) async {
-    while let task = store.pendingMutationTasks.first {
-      await task.value
-      await Task.yield()
-    }
-  }
-
   @Test("updateProfile calls onProfileChanged for CloudKit profiles")
   func updateCloudProfileCallsOnProfileChanged() async throws {
     let defaults = makeDefaults()

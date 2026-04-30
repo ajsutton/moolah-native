@@ -84,7 +84,7 @@ final class ProfileDataSyncHandler {
     if let cachedData = encodedSystemFields,
       let cachedRecord = CKRecord.fromEncodedSystemFields(cachedData),
       cachedRecord.recordID.zoneID == zoneID,
-      Self.isUsableCachedRecordName(cachedRecord.recordID.recordName)
+      CKRecordIDRecordName.isUsableCachedRecordName(cachedRecord.recordID.recordName)
     {
       for key in freshRecord.allKeys() {
         cachedRecord[key] = freshRecord[key]
@@ -92,19 +92,6 @@ final class ProfileDataSyncHandler {
       return cachedRecord
     }
     return freshRecord
-  }
-
-  /// Cached system fields produced by a build that pre-dated the
-  /// `<recordType>|<UUID>` prefix (issue #416) carry a bare-UUID recordID.
-  /// Reusing them would re-upload the record under the legacy recordName,
-  /// which the rest of the pipeline now treats as non-UUID and drops on
-  /// downlink — so a remote update would never round-trip back. Bare-UUID
-  /// caches are ignored so the next upload reissues a fresh prefixed
-  /// recordID. Instrument recordNames (e.g. `"AUD"`, `"ASX:BHP"`) are
-  /// not UUID-shaped and pass through unchanged.
-  nonisolated static func isUsableCachedRecordName(_ recordName: String) -> Bool {
-    if recordName.contains("|") { return true }
-    return UUID(uuidString: recordName) == nil
   }
 
 }

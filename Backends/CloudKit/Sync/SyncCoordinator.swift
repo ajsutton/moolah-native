@@ -353,6 +353,9 @@ final class SyncCoordinator {
     if !isCloudKitAvailable {
       applyICloudAvailability(.unavailable(reason: .entitlementsMissing))
     }
+    // SAFETY: wireProfileIndexHooks() must remain the last statement in init.
+    // The closures it installs capture `[weak self]` and depend on every
+    // stored property of SyncCoordinator being assigned.
     wireProfileIndexHooks()
   }
 

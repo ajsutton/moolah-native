@@ -8,9 +8,8 @@ import GRDB
 //
 // Per-profile data (accounts, transactions, categories, instruments) and
 // the profile index itself both live in GRDB. The legacy SwiftData
-// `ProfileRecord` class survives in the build only as the migrator's
-// source for the one-shot Slice 3 Phase A upgrade; nothing in the test
-// hydration path touches it.
+// `ProfileRecord` class survives in the build only as the one-shot
+// migrator's source — nothing in the test hydration path touches it.
 extension UITestSeedHydrator {
   // MARK: - Specs
   //
@@ -64,6 +63,13 @@ extension UITestSeedHydrator {
   /// `profileIndexDatabase` queue with the GRDB sync write API rather
   /// than the repository's `async upsert` so the call site stays
   /// synchronous.
+  ///
+  /// SAFETY: this is a synchronous GRDB write invoked from `@MainActor`
+  /// (via `MoolahApp.init`). It is test-only and the profile-index DB
+  /// is small (a single row per profile, single-digit row count in
+  /// practice), so the main-thread block is sub-millisecond and the
+  /// calling-thread block is acceptable here. Production code must not
+  /// adopt this pattern.
   static func upsertProfile(
     _ profile: Profile,
     into manager: ProfileContainerManager

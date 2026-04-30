@@ -12,7 +12,7 @@ import OSLog
 ///
 /// Backed by `GRDBProfileIndexRepository`. The legacy SwiftData
 /// `ProfileRecord` class is no longer touched by the runtime — it stays
-/// in the build only for the one-shot Phase A migrator that copies
+/// in the build only as the one-shot migrator's source, copying any
 /// existing rows into `profile-index.sqlite` on first launch.
 @MainActor
 final class ProfileIndexSyncHandler {
@@ -75,13 +75,20 @@ final class ProfileIndexSyncHandler {
   // MARK: - Building CKRecords
 
   /// Builds a CKRecord from a local ProfileRow for upload.
-  /// If cached system fields exist on the row, applies fields directly onto the
-  /// cached record to preserve the change tag and avoid `.serverRecordChanged` conflicts.
+  ///
+  /// If cached system fields exist on the row, applies fields directly
+  /// onto the cached record to preserve the change tag and avoid
+  /// `.serverRecordChanged` conflicts. If the cached system fields
+  /// reference a *different* zone than this handler's own zone, they
+  /// are discarded and the record is uploaded as a fresh create in the
+  /// handler's zone — defence-in-depth against legacy corruption from
+  /// before per-zone fetches were introduced.
   func buildCKRecord(for row: ProfileRow) -> CKRecord {
     let freshRecord = row.toCKRecord(in: zoneID)
     if let cachedData = row.encodedSystemFields,
       let cachedRecord = CKRecord.fromEncodedSystemFields(cachedData),
-      ProfileDataSyncHandler.isUsableCachedRecordName(cachedRecord.recordID.recordName)
+      cachedRecord.recordID.zoneID == zoneID,
+      CKRecordIDRecordName.isUsableCachedRecordName(cachedRecord.recordID.recordName)
     {
       for key in freshRecord.allKeys() {
         cachedRecord[key] = freshRecord[key]

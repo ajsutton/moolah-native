@@ -9,8 +9,8 @@ import GRDB
 /// per-profile `data.sqlite`.
 ///
 /// **Naming.** "Row" is the GRDB convention. The SwiftData
-/// `ProfileRecord` retains its name until Slice 3 Phase B deletes the
-/// `@Model` class entirely.
+/// `ProfileRecord` retains its name until a follow-up release deletes
+/// the `@Model` class entirely.
 ///
 /// **Sync metadata.** `recordName` is the canonical CloudKit recordName
 /// (`"ProfileRecord|<uuid>"`, see

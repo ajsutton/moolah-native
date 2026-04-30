@@ -24,10 +24,10 @@ import os
 /// GRDB queue's serial executor already mediates concurrent access).
 /// The repo's *public* mutating surface (`upsert`, `delete`,
 /// `fetchAll`) is `async throws` so callers see no concurrency-model
-/// change. We deliberately avoid `@MainActor` — that would propagate
-/// `await` through every CKSyncEngine sync dispatch site for no
-/// benefit (per Slice 3 plan §8 Q3). All stored properties are
-/// structurally `Sendable` (`DatabaseWriter` per GRDB's protocol;
+/// change. `@MainActor` would propagate `await` through every
+/// CKSyncEngine sync dispatch site for no concurrency benefit, so it
+/// is deliberately avoided. All stored properties are structurally
+/// `Sendable` (`DatabaseWriter` per GRDB's protocol;
 /// `OSAllocatedUnfairLock` unconditionally), so the conformance
 /// holds without `@unchecked`.
 ///

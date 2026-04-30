@@ -21,14 +21,10 @@ extension ProfileStore {
     let task = Task { [weak self] in
       do {
         let loaded = try await repo.fetchAll()
-        await MainActor.run { [weak self] in
-          self?.applyLoadedProfiles(loaded, isInitialLoad: isInitialLoad)
-        }
+        self?.applyLoadedProfiles(loaded, isInitialLoad: isInitialLoad)
       } catch {
-        await MainActor.run { [weak self] in
-          self?.logger.error(
-            "Failed to load cloud profiles: \(error, privacy: .public)")
-        }
+        self?.logger.error(
+          "Failed to load cloud profiles: \(error, privacy: .public)")
       }
     }
     trackMutation(task)
@@ -51,6 +47,12 @@ extension ProfileStore {
   /// false`) honour the empty result so genuine remote deletions
   /// still flow through.
   private func applyLoadedProfiles(_ loaded: [Profile], isInitialLoad: Bool) {
+    // Skip remote-deletion cleanup on initial load when the GRDB read
+    // returns empty but profiles are already in memory: an in-flight
+    // optimistic addProfile may not have committed yet, so an empty
+    // result is most likely a race rather than an authoritative empty
+    // store. Subsequent loads (isInitialLoad == false) honour an empty
+    // result so genuine remote deletions still propagate.
     if isInitialLoad, loaded.isEmpty, !profiles.isEmpty {
       logger.debug(
         "Initial cloud load returned empty while profiles already present — skipping overwrite"
@@ -90,10 +92,11 @@ extension ProfileStore {
       )
     }
 
-    // Handle profiles deleted on another device.
-    // Skip this on initial load — the GRDB store may return empty
-    // before the migrator finishes copying rows from SwiftData, which
-    // would incorrectly reset the active profile.
+    // Handle profiles deleted on another device. Skipped on the
+    // initial load for the same reason as the empty-result guard
+    // above: a stale-empty read could otherwise erase the active
+    // profile and tear down its store before later loads return the
+    // real list.
     if !isInitialLoad {
       let newIDs = Set(profiles.map(\.id))
       for oldProfile in previousCloudProfiles where !newIDs.contains(oldProfile.id) {

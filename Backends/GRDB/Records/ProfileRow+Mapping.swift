@@ -3,9 +3,9 @@
 import Foundation
 
 extension ProfileRow {
-  /// Frozen CloudKit wire name. Slice 3 keeps the same string the
-  /// SwiftData `ProfileRecord` used so the existing `profile-index`
-  /// zone resolves both record types to the same wire contract.
+  /// Frozen CloudKit wire name. Identical to the string the SwiftData
+  /// `ProfileRecord` used so the existing `profile-index` zone resolves
+  /// both record types to the same wire contract.
   static let recordType = "ProfileRecord"
 
   /// Canonical CloudKit `recordName` for a UUID-keyed profile. Mirrors

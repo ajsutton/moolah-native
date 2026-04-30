@@ -110,8 +110,8 @@ enum RecordTypeRegistry: Sendable {
     // remain byte-identical to the original SwiftData @Model class
     // names; only the local Swift type bound to each key changes.
     // The legacy `ProfileRecord` SwiftData class remains in the build
-    // for the one-shot Phase A migrator to read from; once Phase B
-    // runs (a release after this one) the class is deleted entirely.
+    // only as the one-shot migrator's source. A follow-up release
+    // deletes the class entirely.
     ProfileRow.recordType: ProfileRow.self,
     InstrumentRow.recordType: InstrumentRow.self,
     AccountRow.recordType: AccountRow.self,

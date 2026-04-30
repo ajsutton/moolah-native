@@ -13,23 +13,21 @@ extension SyncCoordinator {
   /// CKSyncEngine pending changes. Runs at the end of `init` so every
   /// stored property on `self` exists before the closures capture it.
   ///
-  /// Double-firing during Slice 3 Phase A is benign: `ProfileStore`
-  /// still invokes `onProfileChanged` / `onProfileDeleted` for the same
-  /// transition, and `queueSave` / `queueDeletion` are idempotent on
-  /// `(recordType, id, zoneID)`. Phase B drops the store-side callbacks
-  /// once a release with this code has run on every active device.
+  /// Double-firing with the store-side `onProfileChanged` /
+  /// `onProfileDeleted` callbacks is benign: `queueSave` /
+  /// `queueDeletion` are idempotent on `(recordType, id, zoneID)`. The
+  /// store-side callbacks remain as a belt-and-braces transition until
+  /// a follow-up release deletes them once every active device has run
+  /// a release with the repository hooks installed.
   func wireProfileIndexHooks() {
+    let zoneID = profileIndexHandler.zoneID
     containerManager.profileIndexRepository.attachSyncHooks(
       onRecordChanged: { [weak self] id in
-        let zoneID = CKRecordZone.ID(
-          zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
         Task { @MainActor [weak self] in
           self?.queueSave(recordType: ProfileRow.recordType, id: id, zoneID: zoneID)
         }
       },
       onRecordDeleted: { [weak self] id in
-        let zoneID = CKRecordZone.ID(
-          zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
         Task { @MainActor [weak self] in
           self?.queueDeletion(recordType: ProfileRow.recordType, id: id, zoneID: zoneID)
         }

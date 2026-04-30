@@ -50,7 +50,10 @@ final class ProfileStore {
   /// the array doesn't grow unbounded across long-running sessions.
   /// See `guides/CONCURRENCY_GUIDE.md` — every fire-and-forget Task
   /// in a store must be tracked so the lifecycle is observable.
-  var pendingMutationTasks: [Task<Void, Never>] = []
+  ///
+  /// `private(set)` so test code can read (drain) the array but only
+  /// the store can append to it.
+  private(set) var pendingMutationTasks: [Task<Void, Never>] = []
 
   /// Called when a cloud profile is removed (locally or via remote sync).
   /// Used by SessionManager to tear down the corresponding ProfileSession.
@@ -104,11 +107,29 @@ final class ProfileStore {
     }
   }
 
+  deinit {
+    // Cancel every in-flight fire-and-forget mutation and the retry
+    // task so GRDB writes don't outlive the store. Swift 6 makes
+    // `deinit` `nonisolated`, so reading `@MainActor`-isolated state
+    // requires `MainActor.assumeIsolated` — the deinit is invoked
+    // from a main-actor reference release in practice (the store is
+    // owned by main-actor code), so the assumption holds.
+    MainActor.assumeIsolated {
+      for task in pendingMutationTasks { task.cancel() }
+      retryTask?.cancel()
+    }
+  }
+
   /// Tracks a fire-and-forget mutation Task. The task self-evicts from
   /// `pendingMutationTasks` on completion so the array doesn't grow
   /// unbounded over a long session.
   func trackMutation(_ task: Task<Void, Never>) {
     pendingMutationTasks.append(task)
+    // The bookkeeping Task is intentionally untracked: its only side
+    // effect is cleaning up the array, which becomes a no-op when
+    // `self` has already deallocated (the `[weak self]` capture goes
+    // nil and the array is gone). Tracking it would create infinite
+    // self-recursion through `trackMutation`.
     Task { [weak self] in
       _ = await task.value
       self?.pendingMutationTasks.removeAll { $0 == task }
@@ -125,9 +146,7 @@ final class ProfileStore {
       do {
         try await containerManager.profileIndexRepository.upsert(profile)
       } catch {
-        await MainActor.run { [weak self] in
-          self?.logger.error("Failed to save CloudKit profile: \(error, privacy: .public)")
-        }
+        self?.logger.error("Failed to save CloudKit profile: \(error, privacy: .public)")
       }
     }
     trackMutation(task)
@@ -156,10 +175,8 @@ final class ProfileStore {
           do {
             _ = try await containerManager.profileIndexRepository.delete(id: id)
           } catch {
-            await MainActor.run { [weak self] in
-              self?.logger.error(
-                "Failed to delete CloudKit profile row: \(error, privacy: .public)")
-            }
+            self?.logger.error(
+              "Failed to delete CloudKit profile row: \(error, privacy: .public)")
           }
         }
         trackMutation(task)
@@ -191,10 +208,8 @@ final class ProfileStore {
       do {
         try await containerManager.profileIndexRepository.upsert(profile)
       } catch {
-        await MainActor.run { [weak self] in
-          self?.logger.error(
-            "Failed to save CloudKit profile update: \(error, privacy: .public)")
-        }
+        self?.logger.error(
+          "Failed to save CloudKit profile update: \(error, privacy: .public)")
       }
     }
     trackMutation(task)
