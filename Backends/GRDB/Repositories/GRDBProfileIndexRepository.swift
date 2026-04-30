@@ -16,26 +16,20 @@ import os
 /// boundary that Domain repositories use to keep features
 /// backend-agnostic does not apply here.
 ///
-/// **Concurrency.** `final class` + `@unchecked Sendable` rather than
-/// `actor`. The CKSyncEngine delegate path calls into the repository's
-/// sync entry points synchronously; converting those to `await`
-/// against an `actor` would ripple async propagation through every
+/// **Concurrency.** `final class` + `Sendable` rather than `actor`.
+/// The CKSyncEngine delegate path calls into the repository's sync
+/// entry points synchronously; converting those to `await` against
+/// an `actor` would ripple async propagation through every
 /// per-record-type dispatch table for no concurrency benefit (the
 /// GRDB queue's serial executor already mediates concurrent access).
 /// The repo's *public* mutating surface (`upsert`, `delete`,
 /// `fetchAll`) is `async throws` so callers see no concurrency-model
 /// change. We deliberately avoid `@MainActor` — that would propagate
 /// `await` through every CKSyncEngine sync dispatch site for no
-/// benefit (per Slice 3 plan §8 Q3).
-///
-/// **`@unchecked Sendable` justification.** `database` (`any
-/// DatabaseWriter`) is itself `Sendable` (GRDB protocol guarantee —
-/// the queue's serial executor mediates concurrent access). `hooks`
-/// is an `OSAllocatedUnfairLock<HookState>`, which is `Sendable` and
-/// guards the two `@Sendable` closures with an unfair lock so reads
-/// and writes never race. `@unchecked` only waives Swift's
-/// structural check that `final class` types meet `Sendable`'s
-/// requirements automatically.
+/// benefit (per Slice 3 plan §8 Q3). All stored properties are
+/// structurally `Sendable` (`DatabaseWriter` per GRDB's protocol;
+/// `OSAllocatedUnfairLock` unconditionally), so the conformance
+/// holds without `@unchecked`.
 ///
 /// **Hook installation.** `ProfileContainerManager` builds the repo
 /// before the `SyncCoordinator` exists (chicken-and-egg), so the repo
@@ -48,7 +42,7 @@ import os
 /// `(String, UUID)` form used by per-profile repositories. Only one
 /// record type ever flows through the profile-index DB, so the
 /// recordType prefix would be redundant.
-final class GRDBProfileIndexRepository: @unchecked Sendable {
+final class GRDBProfileIndexRepository: Sendable {
   /// Holds the post-init hook closures so they can be swapped in
   /// atomically by `attachSyncHooks`. A small struct rather than two
   /// independent locks so the install is a single atomic write.
@@ -71,12 +65,6 @@ final class GRDBProfileIndexRepository: @unchecked Sendable {
         onRecordChanged: onRecordChanged,
         onRecordDeleted: onRecordDeleted))
   }
-
-  /// Underlying writer queue, exposed so the one-shot SwiftData →
-  /// GRDB profile-index migrator can write through the same queue
-  /// without re-opening the database (which would run the schema
-  /// migrator twice).
-  var databaseWriter: any DatabaseWriter { database }
 
   // MARK: - Wiring
 

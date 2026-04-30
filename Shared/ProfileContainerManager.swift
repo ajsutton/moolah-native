@@ -27,13 +27,16 @@ final class ProfileContainerManager {
   /// Repository over the app-scoped `profile-index.sqlite`. Owned by the
   /// container manager because every consumer that needs a profile list
   /// (sidebar picker, `ProfileStore`, `SyncCoordinator`'s
-  /// profile-index handler) already reaches for the manager. The
-  /// repo's underlying `DatabaseWriter` is reachable via
-  /// `profileIndexRepository.databaseWriter`, so the one-shot
-  /// SwiftData → GRDB profile-index migrator can write through the
-  /// same queue without re-opening the database (which would run the
-  /// schema migrator twice).
+  /// profile-index handler) already reaches for the manager.
   let profileIndexRepository: GRDBProfileIndexRepository
+
+  /// Underlying GRDB queue for `profile-index.sqlite`. Retained so the
+  /// one-shot SwiftData → GRDB profile-index migrator can write through
+  /// the same queue without re-opening the database (which would run
+  /// the schema migrator twice). Kept off the repository's public
+  /// surface so app-side callers go through the typed
+  /// `profileIndexRepository` instead of the raw queue.
+  let profileIndexDatabase: DatabaseQueue
 
   init(
     indexContainer: ModelContainer,
@@ -44,6 +47,7 @@ final class ProfileContainerManager {
     self.indexContainer = indexContainer
     self.dataSchema = dataSchema
     self.inMemory = inMemory
+    self.profileIndexDatabase = profileIndexDatabase
     self.profileIndexRepository = GRDBProfileIndexRepository(
       database: profileIndexDatabase)
   }

@@ -80,8 +80,8 @@ extension MoolahApp {
       ])
 
       let profileIndexURL = URL.moolahScopedApplicationSupport
-        .appendingPathComponent("Moolah", isDirectory: true)
-        .appendingPathComponent("profile-index.sqlite")
+        .appending(path: "Moolah", directoryHint: .isDirectory)
+        .appending(path: "profile-index.sqlite")
       let profileIndexDatabase = try ProfileIndexDatabase.open(at: profileIndexURL)
 
       let manager = ProfileContainerManager(
@@ -249,9 +249,7 @@ extension MoolahApp {
     }
     defaults.set(true, forKey: key)
   }
-}
 
-extension MoolahApp {
   /// Migrates the SwiftData profile index to GRDB once per install.
   /// Logs and swallows errors — a failure leaves the GRDB database
   /// empty and the next launch retries.
@@ -262,7 +260,7 @@ extension MoolahApp {
     do {
       try await SwiftDataToGRDBMigrator().migrateProfileIndexIfNeeded(
         indexContainer: setup.manager.indexContainer,
-        profileIndexDatabase: setup.manager.profileIndexRepository.databaseWriter,
+        profileIndexDatabase: setup.manager.profileIndexDatabase,
         defaults: defaults)
     } catch {
       Logger(subsystem: "com.moolah.app", category: "Setup")

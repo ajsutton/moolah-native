@@ -17,6 +17,12 @@ struct MoolahApp: App {
   // scene-phase / URL-scheme handlers.
   let containerManager: ProfileContainerManager
   let syncCoordinator: SyncCoordinator
+  /// Handle on the launch-time SwiftData → GRDB profile-index
+  /// migration. Held as a stored property so the task is named and
+  /// reachable from the type instead of an anonymous side effect, and
+  /// so future code paths (e.g. tests) can `await` completion if
+  /// needed.
+  let profileIndexMigrationTask: Task<Void, Never>
   /// The seeded profile ID under `--ui-testing`, or `nil` for production
   /// launches. Stored as `let` because `MoolahApp.init` runs once per
   /// process; the value is decided at launch and never changes.
@@ -72,14 +78,15 @@ struct MoolahApp: App {
       Self.cleanupLegacyRateCachesOnce()
     }
     let setup = Self.makeContainerSetup(uiTestingSeed: uiTestingSeed)
-    // One-shot SwiftData → GRDB profile-index migration. Fire-and-forget
-    // because `init` is non-async and matches the per-profile migrator's
-    // pattern (kicked off as `Task { try? await session.setUp() }` from
-    // `SessionManager`). The migration completes well before the user
-    // can navigate from the welcome screen to a profile that reads the
-    // GRDB profile-index. Errors are logged and swallowed; the next
-    // launch retries.
-    Task { await Self.runProfileIndexMigrationIfNeeded(setup: setup) }
+    // Fire-and-forget: SwiftUI's `App` requires `init` to be non-async,
+    // and the migration completes well before the user can navigate
+    // from the welcome screen to any view that reads the GRDB
+    // profile-index. Errors are logged inside the helper; the next
+    // launch retries automatically. Held in `profileIndexMigrationTask`
+    // so tests can `await` completion if needed.
+    profileIndexMigrationTask = Task {
+      await Self.runProfileIndexMigrationIfNeeded(setup: setup)
+    }
     let coordinator = SyncCoordinator(containerManager: setup.manager)
     containerManager = setup.manager
     syncCoordinator = coordinator
