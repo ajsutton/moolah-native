@@ -53,6 +53,43 @@ enum AccountPerformanceCalculator {
       now: now)
   }
 
+  // MARK: - Manual valuation
+
+  /// Manual-valuation accounts (the legacy path): cash flows are derived
+  /// from consecutive `dailyBalance` deltas; the terminal value is the
+  /// most recent `InvestmentValue`. Synchronous — legacy accounts are
+  /// mono-instrument by construction so no conversion is needed.
+  ///
+  /// `now` is injected so tests can pin the reference date. Production
+  /// callers pass `Date()`.
+  static func computeLegacy(
+    dailyBalances: [AccountDailyBalance],
+    values: [InvestmentValue],
+    instrument: Instrument,
+    now: Date = Date()
+  ) -> AccountPerformance {
+    guard let latest = values.max(by: { $0.date < $1.date }) else {
+      return .unavailable(in: instrument)
+    }
+
+    let sortedBalances = dailyBalances.sorted { $0.date < $1.date }
+    var flows: [CashFlow] = []
+    var prior = Decimal(0)
+    for entry in sortedBalances {
+      let delta = entry.balance.quantity - prior
+      if delta != 0 {
+        flows.append(CashFlow(date: entry.date, amount: delta))
+      }
+      prior = entry.balance.quantity
+    }
+
+    return assemble(
+      flows: flows,
+      currentValue: latest.value,
+      profileCurrency: instrument,
+      now: now)
+  }
+
   /// §2 cash-flow extraction. A leg L in `accountId` produces one
   /// `CashFlow` iff (a) `L.type == .openingBalance`, OR (b) the
   /// transaction crosses an account boundary (some other leg references a
