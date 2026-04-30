@@ -199,11 +199,11 @@ struct CategoriesTests {
   }
 
   @Test
-  func flatEntryDepthForRootIsZero() {
+  func flatEntryDepthForRootIsZero() throws {
     let root = Category(name: "Groceries")
     let categories = Categories(from: [root])
 
-    let entry = categories.flattenedByPath().first!
+    let entry = try #require(categories.flattenedByPath().first)
 
     #expect(entry.depth == 0)
   }
