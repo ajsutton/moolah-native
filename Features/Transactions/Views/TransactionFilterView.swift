@@ -16,6 +16,7 @@ struct TransactionFilterView: View {
   @State private var dateRangeUpperBound: Date?
   @State private var selectedCategoryIds: Set<UUID> = []
   @State private var payeeText: String = ""
+  @State private var showCategoryPicker = false
 
   @Environment(\.dismiss) private var dismiss
 
@@ -39,15 +40,6 @@ struct TransactionFilterView: View {
     _dateRangeUpperBound = State(initialValue: filter.dateRange?.upperBound)
     _selectedCategoryIds = State(initialValue: filter.categoryIds)
     _payeeText = State(initialValue: filter.payee ?? "")
-  }
-
-  private var allCategories: [Category] {
-    var result: [Category] = []
-    for root in categories.roots {
-      result.append(root)
-      result.append(contentsOf: categories.children(of: root.id))
-    }
-    return result
   }
 
   var body: some View {
@@ -153,21 +145,38 @@ struct TransactionFilterView: View {
       if categories.roots.isEmpty {
         Text("No categories available").foregroundStyle(.secondary)
       } else {
-        ForEach(allCategories) { category in
-          Toggle(
-            categories.path(for: category),
-            isOn: Binding(
-              get: { selectedCategoryIds.contains(category.id) },
-              set: { isOn in
-                if isOn {
-                  selectedCategoryIds.insert(category.id)
-                } else {
-                  selectedCategoryIds.remove(category.id)
-                }
-              }))
-        }
+        categoryPickerRow
       }
     }
+  }
+
+  @ViewBuilder
+  private var categoryPickerRow: some View {
+    let summary = categories.selectionSummary(for: selectedCategoryIds)
+    #if os(macOS)
+      Button {
+        showCategoryPicker = true
+      } label: {
+        LabeledContent("Categories", value: summary)
+      }
+      .buttonStyle(.plain)
+      .popover(isPresented: $showCategoryPicker, arrowEdge: .trailing) {
+        CategoryMultiSelectPicker(
+          categories: categories,
+          selectedIds: $selectedCategoryIds
+        )
+        .frame(width: 320, height: 420)
+      }
+    #else
+      NavigationLink {
+        CategoryMultiSelectPicker(
+          categories: categories,
+          selectedIds: $selectedCategoryIds
+        )
+      } label: {
+        LabeledContent("Categories", value: summary)
+      }
+    #endif
   }
 
   private var payeeSection: some View {
