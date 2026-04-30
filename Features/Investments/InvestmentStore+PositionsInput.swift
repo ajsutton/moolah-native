@@ -29,7 +29,9 @@ extension InvestmentStore {
 
     let txns: [Transaction]
     do {
-      txns = try await fetchAllTransactions(repository: transactionRepository)
+      txns = try await fetchAllTransactions(
+        repository: transactionRepository,
+        accountId: loadedAccountId ?? UUID())
     } catch {
       logger.warning(
         "fetchAllTransactions failed, cost basis will be empty: \(error.localizedDescription, privacy: .public)"
@@ -67,9 +69,9 @@ extension InvestmentStore {
   }
 
   func fetchAllTransactions(
-    repository: TransactionRepository
+    repository: TransactionRepository,
+    accountId: UUID
   ) async throws -> [Transaction] {
-    guard let accountId = loadedAccountId else { return [] }
     var all: [Transaction] = []
     var page = 0
     while true {

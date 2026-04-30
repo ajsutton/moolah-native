@@ -119,6 +119,7 @@ final class InvestmentStore {
     await loadValues(accountId: accountId)
     if hasLegacyValuations {
       await loadDailyBalances(accountId: accountId, hostCurrency: profileCurrency)
+      guard !Task.isCancelled else { return }
       accountPerformance = AccountPerformanceCalculator.computeLegacy(
         dailyBalances: dailyBalances,
         values: values,
@@ -131,10 +132,10 @@ final class InvestmentStore {
     }
   }
 
-  /// Recompute the position-tracked `accountPerformance`. Reused from
-  /// `loadAllData` and (in Task 9) `reloadPositionsIfNeeded`. Sets
-  /// `accountPerformance` to `nil` and surfaces the error on conversion
-  /// failure; partial sums are not shown.
+  /// Recompute the position-tracked `accountPerformance`. Called from
+  /// `loadAllData` and from `reloadPositionsIfNeeded` after a trade is
+  /// recorded. Sets `accountPerformance` to `nil` and surfaces the error
+  /// on conversion failure; partial sums are not shown.
   private func refreshPositionTrackedPerformance(
     accountId: UUID, profileCurrency: Instrument
   ) async {
@@ -143,7 +144,9 @@ final class InvestmentStore {
       return
     }
     do {
-      let txns = try await fetchAllTransactions(repository: transactionRepository)
+      let txns = try await fetchAllTransactions(
+        repository: transactionRepository,
+        accountId: accountId)
       accountPerformance = try await AccountPerformanceCalculator.compute(
         accountId: accountId,
         transactions: txns,
