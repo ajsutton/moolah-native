@@ -72,6 +72,14 @@ struct MoolahApp: App {
       Self.cleanupLegacyRateCachesOnce()
     }
     let setup = Self.makeContainerSetup(uiTestingSeed: uiTestingSeed)
+    // One-shot SwiftData → GRDB profile-index migration. Fire-and-forget
+    // because `init` is non-async and matches the per-profile migrator's
+    // pattern (kicked off as `Task { try? await session.setUp() }` from
+    // `SessionManager`). The migration completes well before the user
+    // can navigate from the welcome screen to a profile that reads the
+    // GRDB profile-index. Errors are logged and swallowed; the next
+    // launch retries.
+    Task { await Self.runProfileIndexMigrationIfNeeded(setup: setup) }
     let coordinator = SyncCoordinator(containerManager: setup.manager)
     containerManager = setup.manager
     syncCoordinator = coordinator

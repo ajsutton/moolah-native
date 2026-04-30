@@ -24,14 +24,28 @@ final class ProfileContainerManager {
   /// migrator pass.
   private var databases: [UUID: DatabaseQueue] = [:]
 
+  /// Repository over the app-scoped `profile-index.sqlite`. Owned by the
+  /// container manager because every consumer that needs a profile list
+  /// (sidebar picker, `ProfileStore`, `SyncCoordinator`'s
+  /// profile-index handler) already reaches for the manager. The
+  /// repo's underlying `DatabaseWriter` is reachable via
+  /// `profileIndexRepository.databaseWriter`, so the one-shot
+  /// SwiftData → GRDB profile-index migrator can write through the
+  /// same queue without re-opening the database (which would run the
+  /// schema migrator twice).
+  let profileIndexRepository: GRDBProfileIndexRepository
+
   init(
     indexContainer: ModelContainer,
+    profileIndexDatabase: DatabaseQueue,
     dataSchema: Schema,
     inMemory: Bool = false
   ) {
     self.indexContainer = indexContainer
     self.dataSchema = dataSchema
     self.inMemory = inMemory
+    self.profileIndexRepository = GRDBProfileIndexRepository(
+      database: profileIndexDatabase)
   }
 
   func container(for profileId: UUID) throws -> ModelContainer {
@@ -186,8 +200,11 @@ final class ProfileContainerManager {
       ImportRuleRecord.self,
     ])
 
+    let profileIndexDatabase = try ProfileIndexDatabase.openInMemory()
+
     return ProfileContainerManager(
       indexContainer: indexContainer,
+      profileIndexDatabase: profileIndexDatabase,
       dataSchema: dataSchema,
       inMemory: true
     )

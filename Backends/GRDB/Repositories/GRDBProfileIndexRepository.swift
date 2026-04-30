@@ -72,6 +72,12 @@ final class GRDBProfileIndexRepository: @unchecked Sendable {
         onRecordDeleted: onRecordDeleted))
   }
 
+  /// Underlying writer queue, exposed so the one-shot SwiftData →
+  /// GRDB profile-index migrator can write through the same queue
+  /// without re-opening the database (which would run the schema
+  /// migrator twice).
+  var databaseWriter: any DatabaseWriter { database }
+
   // MARK: - Wiring
 
   /// Replaces both hook closures atomically. Called by the

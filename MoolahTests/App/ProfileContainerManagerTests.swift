@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import SwiftData
 import Testing
 
@@ -91,8 +92,11 @@ struct ProfileContainerManagerTests {
       ImportRuleRecord.self,
     ])
 
+    let profileIndexDatabase = try ProfileIndexDatabase.openInMemory()
+
     let manager = ProfileContainerManager(
       indexContainer: indexContainer,
+      profileIndexDatabase: profileIndexDatabase,
       dataSchema: dataSchema,
       inMemory: false
     )
@@ -111,5 +115,22 @@ struct ProfileContainerManagerTests {
     // Env subdir must have been created on demand by the scoped helper.
     let envDir = root.appending(path: envSubdir)
     #expect(FileManager.default.fileExists(atPath: envDir.path()))
+  }
+
+  @Test("exposes a working GRDB profile-index repository wired to its database")
+  @MainActor
+  func testProfileIndexRepositoryRoundTrip() async throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let profile = Profile(
+      id: UUID(),
+      label: "Personal",
+      currencyCode: "AUD",
+      financialYearStartMonth: 7,
+      createdAt: Date(timeIntervalSince1970: 1_700_000_000))
+    try await manager.profileIndexRepository.upsert(profile)
+    let loaded = try await manager.profileIndexRepository.fetchAll()
+    #expect(loaded.count == 1)
+    #expect(loaded.first?.id == profile.id)
+    #expect(loaded.first?.label == "Personal")
   }
 }
