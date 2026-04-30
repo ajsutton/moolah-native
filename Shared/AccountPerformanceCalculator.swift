@@ -113,11 +113,16 @@ enum AccountPerformanceCalculator {
       return .unavailable(in: profileCurrency)
     }
     guard let firstFlow = flows.first else {
+      // No flows: P/L = currentValue − 0. The "free value" case from the
+      // design's known-limitation §3 — an account with only intra-account
+      // trades or standalone .income legs has no contribution baseline,
+      // so the entire current value reads as gain. Same formula gives
+      // P/L = 0 when currentValue is also zero (empty account).
       return AccountPerformance(
         instrument: profileCurrency,
         currentValue: currentValue,
         totalContributions: .zero(instrument: profileCurrency),
-        profitLoss: .zero(instrument: profileCurrency),
+        profitLoss: currentValue,
         profitLossPercent: nil,
         annualisedReturn: nil,
         firstFlowDate: nil)

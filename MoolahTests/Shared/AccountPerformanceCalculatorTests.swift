@@ -87,11 +87,11 @@ struct AccountPerformanceCalculatorTests {
     #expect(abs(asDouble - 0.10) < 0.001, "expected ~0.10, got \(asDouble)")
   }
 
-  /// A two-leg trade in the same account → no boundary crossed → no flow,
-  /// even though the legs change quantity. With zero flows the calculator
-  /// short-circuits totalContributions and profitLoss to zero (there is no
-  /// baseline to measure a gain against), so the only behaviour under test
-  /// here is the §2 "no boundary → no flow" rule.
+  /// A two-leg trade in the same account → no boundary crossed → no flow.
+  /// With zero contributions the calculator reports the entire V_now as
+  /// P/L — this is the "free value" case from the design's known-
+  /// limitation §3 (an account with only intra-account activity has no
+  /// contribution baseline against which to subtract).
   @Test("intra-account trade does not produce a cash flow")
   func intraAccountTradeNoFlow() async throws {
     let accountId = UUID()
@@ -119,10 +119,9 @@ struct AccountPerformanceCalculatorTests {
     )
     #expect(perf.totalContributions == InstrumentAmount(quantity: 0, instrument: aud))
     #expect(perf.firstFlowDate == nil)
-    // V_now of $5,000 is preserved on currentValue, but with no flows the
-    // calculator returns P/L = 0 by design (no contribution baseline).
-    #expect(perf.currentValue == InstrumentAmount(quantity: 5_000, instrument: aud))
-    #expect(perf.profitLoss == InstrumentAmount(quantity: 0, instrument: aud))
+    // V_now = 5,000, contributions = 0 → P/L = 5,000 (the "free value"
+    // case documented in the design's known-limitation §3).
+    #expect(perf.profitLoss == InstrumentAmount(quantity: 5_000, instrument: aud))
   }
 
   /// A `.transfer` leg pair across two accounts → boundary crossed → flow
