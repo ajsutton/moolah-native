@@ -150,8 +150,7 @@ struct TransactionFilterView: View {
     }
   }
 
-  @ViewBuilder
-  private var categoryPickerRow: some View {
+  @ViewBuilder private var categoryPickerRow: some View {
     // Local `let` is fine before `#if` inside @ViewBuilder — it's a binding,
     // not a result-builder statement.
     let summary = categories.selectionSummary(for: selectedCategoryIds)
