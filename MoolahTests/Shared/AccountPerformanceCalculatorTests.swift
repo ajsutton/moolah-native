@@ -125,7 +125,9 @@ struct AccountPerformanceCalculatorTests {
   }
 
   /// A `.transfer` leg pair across two accounts → boundary crossed → flow
-  /// emitted on each side.
+  /// recorded on the investment account's side. (The cash account's side
+  /// would mirror this — confirmed by symmetry of the §2 rule, not by a
+  /// separate test fixture.)
   @Test("cross-account transfer produces a cash flow")
   func crossAccountTransferFlow() async throws {
     let investmentAccount = UUID()
@@ -188,6 +190,9 @@ struct AccountPerformanceCalculatorTests {
     )
     #expect(perf.totalContributions == InstrumentAmount(quantity: 0, instrument: aud))
     #expect(perf.firstFlowDate == nil)
+    // Standalone .income with no flows is the same "free value" case as
+    // intra-account trade — P/L = currentValue − 0 = 50.
+    #expect(perf.profitLoss == InstrumentAmount(quantity: 50, instrument: aud))
   }
 
   /// Conversion-failure path: the calculator throws so the caller can mark
@@ -250,8 +255,6 @@ struct AccountPerformanceCalculatorTests {
       conversionService: FixedConversionService(),
       now: now
     )
-    #expect(perf.currentValue == nil)
-    #expect(perf.profitLoss == nil)
-    #expect(perf.annualisedReturn == nil)
+    #expect(perf == AccountPerformance.unavailable(in: aud))
   }
 }
