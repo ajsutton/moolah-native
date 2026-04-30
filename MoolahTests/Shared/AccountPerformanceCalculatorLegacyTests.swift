@@ -1,4 +1,3 @@
-// MoolahTests/Shared/AccountPerformanceCalculatorLegacyTests.swift
 import Foundation
 import Testing
 
@@ -29,13 +28,13 @@ struct AccountPerformanceCalculatorLegacyTests {
 
     let annualised = try #require(perf.annualisedReturn)
     let asDouble = Double(truncating: annualised as NSDecimalNumber)
-    #expect(abs(asDouble - 0.10) < 0.005, "expected ~0.10, got \(asDouble)")
+    #expect(abs(asDouble - 0.10) < 0.001, "expected ~0.10, got \(asDouble)")
   }
 
-  /// Same fixture, but checks the dollar-level fields rather than the
-  /// annualised rate — separated per TEST_GUIDE §2 "one behaviour per test".
-  @Test("single contribution legacy account records contributions and P/L")
-  func singleContributionDollars() {
+  /// `currentValue` is a direct pass-through of the latest
+  /// `InvestmentValue`; verified separately from the flow-derived fields.
+  @Test("legacy account terminal value is the latest InvestmentValue")
+  func legacyTerminalValueIsLatestInvestmentValue() {
     let openingDate = Date(timeIntervalSinceReferenceDate: 0)
     let now = openingDate.addingTimeInterval(365 * 86_400)
     let dailyBalances = [
@@ -52,6 +51,27 @@ struct AccountPerformanceCalculatorLegacyTests {
       dailyBalances: dailyBalances, values: values, instrument: aud, now: now)
 
     #expect(perf.currentValue == InstrumentAmount(quantity: 11_000, instrument: aud))
+  }
+
+  /// `totalContributions` and `profitLoss` derive from the same flow
+  /// arithmetic and break together; tested in one body.
+  @Test("legacy single contribution records contributions and P/L")
+  func legacySingleContributionContributionsAndProfitLoss() {
+    let openingDate = Date(timeIntervalSinceReferenceDate: 0)
+    let now = openingDate.addingTimeInterval(365 * 86_400)
+    let dailyBalances = [
+      AccountDailyBalance(
+        date: openingDate,
+        balance: InstrumentAmount(quantity: 10_000, instrument: aud))
+    ]
+    let values = [
+      InvestmentValue(
+        date: now,
+        value: InstrumentAmount(quantity: 11_000, instrument: aud))
+    ]
+    let perf = AccountPerformanceCalculator.computeLegacy(
+      dailyBalances: dailyBalances, values: values, instrument: aud, now: now)
+
     #expect(perf.totalContributions == InstrumentAmount(quantity: 10_000, instrument: aud))
     #expect(perf.profitLoss == InstrumentAmount(quantity: 1_000, instrument: aud))
   }

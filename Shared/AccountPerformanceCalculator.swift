@@ -57,8 +57,12 @@ enum AccountPerformanceCalculator {
 
   /// Manual-valuation accounts (the legacy path): cash flows are derived
   /// from consecutive `dailyBalance` deltas; the terminal value is the
-  /// most recent `InvestmentValue`. Synchronous — legacy accounts are
-  /// mono-instrument by construction so no conversion is needed.
+  /// most recent `InvestmentValue`. Synchronous — no instrument conversion
+  /// is performed. This method assumes every `AccountDailyBalance.balance`
+  /// is denominated in `instrument`; callers must ensure this invariant
+  /// holds (legacy accounts are mono-instrument by construction). Passing
+  /// mixed-instrument balances produces arithmetically meaningless flows
+  /// without trapping.
   ///
   /// `now` is injected so tests can pin the reference date. Production
   /// callers pass `Date()`.
@@ -138,8 +142,7 @@ enum AccountPerformanceCalculator {
   }
 
   /// Assembles the final `AccountPerformance` from extracted flows and
-  /// the aggregated terminal value. Centralised so Task 7's
-  /// `computeLegacy` reuses the same formulae.
+  /// the aggregated terminal value.
   private static func assemble(
     flows: [CashFlow],
     currentValue: InstrumentAmount?,
