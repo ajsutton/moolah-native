@@ -35,32 +35,28 @@ extension ProfileStore {
   /// auto-activate guard, the remote-deletion cleanup, and the
   /// pending-retry cancel.
   ///
-  /// Race-condition guard: the GRDB write triggered by `addProfile`
-  /// is fire-and-forget. If `loadCloudProfiles` lands the read of an
-  /// empty GRDB table after `addProfile` optimistically appended a
-  /// row, blindly assigning `profiles = loaded` would clobber the
-  /// optimistic addition and the UI would briefly show no profiles.
-  /// On the **initial** load, an empty result is treated as "the
-  /// migrator / remote-import hasn't landed yet" and is ignored —
-  /// the retry scheduled by `scheduleRetryIfNeeded` will pick the
-  /// rows up once they're on disk. Subsequent loads (`isInitialLoad ==
-  /// false`) honour the empty result so genuine remote deletions
-  /// still flow through.
+  /// Race-condition guard: the GRDB writes triggered by `addProfile`
+  /// are fire-and-forget. If `loadCloudProfiles` reads the table
+  /// after one optimistic add has committed but before another, a
+  /// blind `profiles = loaded` assignment would drop the still
+  /// in-flight addition and the UI would briefly show fewer
+  /// profiles. On the **initial** load we therefore *merge* `loaded`
+  /// onto the in-memory list rather than replacing it: ids that
+  /// appear in `loaded` win (so a fresher remote-imported version
+  /// supersedes the optimistic one), and ids that exist only
+  /// in-memory are preserved. Subsequent loads (`isInitialLoad ==
+  /// false`, e.g. driven by a remote-change notification) keep the
+  /// authoritative replace semantics so genuine remote deletions
+  /// still propagate.
   private func applyLoadedProfiles(_ loaded: [Profile], isInitialLoad: Bool) {
-    // Skip remote-deletion cleanup on initial load when the GRDB read
-    // returns empty but profiles are already in memory: an in-flight
-    // optimistic addProfile may not have committed yet, so an empty
-    // result is most likely a race rather than an authoritative empty
-    // store. Subsequent loads (isInitialLoad == false) honour an empty
-    // result so genuine remote deletions still propagate.
-    if isInitialLoad, loaded.isEmpty, !profiles.isEmpty {
-      logger.debug(
-        "Initial cloud load returned empty while profiles already present — skipping overwrite"
-      )
-      return
-    }
     let previousCloudProfiles = profiles
-    profiles = loaded
+    if isInitialLoad {
+      let loadedIDs = Set(loaded.map(\.id))
+      let localOnly = profiles.filter { !loadedIDs.contains($0.id) }
+      profiles = loaded + localOnly
+    } else {
+      profiles = loaded
+    }
     logger.debug("Loaded \(self.profiles.count) cloud profiles")
 
     // If this load produced cloud profiles, any pending retry is now

@@ -173,6 +173,35 @@ struct ProfileStoreTests {
     #expect(store2.activeProfileID == second.id)
   }
 
+  // MARK: - Initial-load race
+
+  /// Regression for the race where an async initial cloud load lands
+  /// after an optimistic `addProfile`. Before the fix the load
+  /// blindly assigned `profiles = loaded`, dropping the optimistic
+  /// addition (and any GRDB row that hadn't yet committed when the
+  /// fetch ran). The pre-seeded GRDB row plus the in-memory addition
+  /// are both expected after `drainPendingMutations`.
+  @Test("initial cloud load merges with in-flight optimistic addProfile")
+  func initialLoadMergesOptimisticAdd() async throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let preSeeded = Profile(label: "Pre-seeded")
+    try await manager.profileIndexRepository.upsert(preSeeded)
+
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
+    // Optimistic addProfile lands synchronously, before the init's
+    // async load can read GRDB. The race the fix targets: the load
+    // sees only the pre-seeded row, not the just-added one.
+    let optimistic = Profile(label: "Optimistic")
+    store.addProfile(optimistic)
+
+    await drainPendingMutations(store)
+
+    let ids = Set(store.profiles.map(\.id))
+    #expect(ids == [preSeeded.id, optimistic.id])
+    let onDisk = try await manager.profileIndexRepository.fetchAll()
+    #expect(Set(onDisk.map(\.id)) == [preSeeded.id, optimistic.id])
+  }
+
   // MARK: - Empty state
 
   @Test("fresh store with no data has no profiles")
