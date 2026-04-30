@@ -36,6 +36,13 @@ struct Categories: Sendable {
     (childrenOf[parentId] ?? []).sorted { $0.name < $1.name }
   }
 
+  /// Whether `id` has at least one direct child. Single dictionary lookup —
+  /// preferred over `!children(of: id).isEmpty` for hot per-row checks
+  /// because it skips the array allocation and sort.
+  func hasChildren(_ id: UUID) -> Bool {
+    !(childrenOf[id]?.isEmpty ?? true)
+  }
+
   /// Full path for a category, e.g. "Income:Salary:Janet".
   func path(for category: Category) -> String {
     var parts: [String] = [category.name]
@@ -61,6 +68,18 @@ struct Categories: Sendable {
       result.append(contentsOf: descendants(of: child.id))
     }
     return result
+  }
+
+  /// All ids in the subtree rooted at `id` — the id itself plus every
+  /// descendant. The returned set is the unit operated on by callers
+  /// who select or deselect a whole branch (e.g. the picker's subtree
+  /// shortcut). For an id with no descendants — including ids that
+  /// aren't in this `Categories` value — the result is the singleton
+  /// containing only that id.
+  func subtreeIds(of id: UUID) -> Set<UUID> {
+    var ids: Set<UUID> = [id]
+    ids.formUnion(descendants(of: id).lazy.map(\.id))
+    return ids
   }
 
   /// Filter-trigger label for a multi-category selection.

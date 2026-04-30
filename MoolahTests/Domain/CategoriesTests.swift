@@ -221,4 +221,56 @@ struct CategoriesTests {
 
     #expect(depths == ["Income": 0, "Income:Salary": 1, "Income:Salary:Janet": 2])
   }
+
+  @Test
+  func subtreeIdsOfLeafReturnsOnlyTheLeaf() {
+    let leaf = Category(name: "Groceries")
+    let categories = Categories(from: [leaf])
+
+    #expect(categories.subtreeIds(of: leaf.id) == [leaf.id])
+  }
+
+  @Test
+  func subtreeIdsOfParentIncludesParentAndAllDescendants() {
+    let income = Category(name: "Income")
+    let salary = Category(name: "Salary", parentId: income.id)
+    let janet = Category(name: "Janet", parentId: salary.id)
+    let categories = Categories(from: [income, salary, janet])
+
+    #expect(categories.subtreeIds(of: income.id) == [income.id, salary.id, janet.id])
+  }
+
+  @Test
+  func subtreeIdsOfMissingIdReturnsOnlyTheMissingId() {
+    // Out-of-tree behaviour: returns the id alone (no descendants found).
+    // Callers using it for selection still get a correct, no-op-ish result.
+    let categories = Categories(from: [])
+    let phantom = UUID()
+
+    #expect(categories.subtreeIds(of: phantom) == [phantom])
+  }
+
+  @Test
+  func hasChildrenReturnsFalseForLeaf() {
+    let leaf = Category(name: "Groceries")
+    let categories = Categories(from: [leaf])
+
+    #expect(categories.hasChildren(leaf.id) == false)
+  }
+
+  @Test
+  func hasChildrenReturnsTrueForParent() {
+    let income = Category(name: "Income")
+    let salary = Category(name: "Salary", parentId: income.id)
+    let categories = Categories(from: [income, salary])
+
+    #expect(categories.hasChildren(income.id) == true)
+  }
+
+  @Test
+  func hasChildrenReturnsFalseForMissingId() {
+    let categories = Categories(from: [])
+
+    #expect(categories.hasChildren(UUID()) == false)
+  }
 }
