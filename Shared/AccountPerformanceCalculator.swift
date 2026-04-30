@@ -94,7 +94,7 @@ enum AccountPerformanceCalculator {
       now: now)
   }
 
-  /// §2 cash-flow extraction. A leg L in `accountId` produces one
+  /// Cash-flow extraction. A leg L in `accountId` produces one
   /// `CashFlow` iff (a) `L.type == .openingBalance`, OR (b) the
   /// transaction crosses an account boundary (some other leg references a
   /// different non-nil account). Rationale: any boundary-crossing
@@ -153,11 +153,11 @@ enum AccountPerformanceCalculator {
       return .unavailable(in: profileCurrency)
     }
     guard let firstFlow = flows.first else {
-      // No flows: P/L = currentValue − 0. The "free value" case from the
-      // design's known-limitation §3 — an account with only intra-account
-      // trades or standalone .income legs has no contribution baseline,
-      // so the entire current value reads as gain. Same formula gives
-      // P/L = 0 when currentValue is also zero (empty account).
+      // No external flows: the entire current value is treated as gain.
+      // Accounts funded only via intra-account trades or standalone income
+      // have no external contribution baseline.
+      // Same formula gives P/L = 0 when currentValue is also zero (empty
+      // account).
       return AccountPerformance(
         instrument: profileCurrency,
         currentValue: currentValue,

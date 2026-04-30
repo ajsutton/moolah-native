@@ -89,9 +89,9 @@ struct AccountPerformanceCalculatorTests {
 
   /// A two-leg trade in the same account → no boundary crossed → no flow.
   /// With zero contributions the calculator reports the entire V_now as
-  /// P/L — this is the "free value" case from the design's known-
-  /// limitation §3 (an account with only intra-account activity has no
-  /// contribution baseline against which to subtract).
+  /// P/L — this is the "free value" case for an account with only
+  /// intra-account activity, which has no contribution baseline against
+  /// which to subtract.
   @Test("intra-account trade does not produce a cash flow")
   func intraAccountTradeNoFlow() async throws {
     let accountId = UUID()
@@ -119,15 +119,16 @@ struct AccountPerformanceCalculatorTests {
     )
     #expect(perf.totalContributions == InstrumentAmount(quantity: 0, instrument: aud))
     #expect(perf.firstFlowDate == nil)
-    // V_now = 5,000, contributions = 0 → P/L = 5,000 (the "free value"
-    // case documented in the design's known-limitation §3).
+    // V_now = 5,000, contributions = 0 → P/L = 5,000.
+    // No external flows means the entire current value is reported as gain
+    // — the "free value" case for accounts with only intra-account activity.
     #expect(perf.profitLoss == InstrumentAmount(quantity: 5_000, instrument: aud))
   }
 
   /// A `.transfer` leg pair across two accounts → boundary crossed → flow
   /// recorded on the investment account's side. (The cash account's side
-  /// would mirror this — confirmed by symmetry of the §2 rule, not by a
-  /// separate test fixture.)
+  /// would mirror this — confirmed by symmetry of the boundary-crossing
+  /// rule, not by a separate test fixture.)
   @Test("cross-account transfer produces a cash flow")
   func crossAccountTransferFlow() async throws {
     let investmentAccount = UUID()

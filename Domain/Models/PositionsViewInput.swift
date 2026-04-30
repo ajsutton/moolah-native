@@ -93,7 +93,7 @@ extension PositionsViewInput {
   /// transaction list, all previews) keep their existing
   /// `PositionsViewInput(title:hostCurrency:positions:historicalValue:)`
   /// invocation unchanged. The investment-account path opts in via
-  /// the synthesised memberwise init (Task 15).
+  /// the synthesised memberwise init.
   init(
     title: String,
     hostCurrency: Instrument,
