@@ -16,6 +16,7 @@ struct TransactionFilterView: View {
   @State private var dateRangeUpperBound: Date?
   @State private var selectedCategoryIds: Set<UUID> = []
   @State private var payeeText: String = ""
+  @State private var showCategoryPicker = false
 
   @Environment(\.dismiss) private var dismiss
 
@@ -39,15 +40,6 @@ struct TransactionFilterView: View {
     _dateRangeUpperBound = State(initialValue: filter.dateRange?.upperBound)
     _selectedCategoryIds = State(initialValue: filter.categoryIds)
     _payeeText = State(initialValue: filter.payee ?? "")
-  }
-
-  private var allCategories: [Category] {
-    var result: [Category] = []
-    for root in categories.roots {
-      result.append(root)
-      result.append(contentsOf: categories.children(of: root.id))
-    }
-    return result
   }
 
   var body: some View {
@@ -153,21 +145,45 @@ struct TransactionFilterView: View {
       if categories.roots.isEmpty {
         Text("No categories available").foregroundStyle(.secondary)
       } else {
-        ForEach(allCategories) { category in
-          Toggle(
-            categories.path(for: category),
-            isOn: Binding(
-              get: { selectedCategoryIds.contains(category.id) },
-              set: { isOn in
-                if isOn {
-                  selectedCategoryIds.insert(category.id)
-                } else {
-                  selectedCategoryIds.remove(category.id)
-                }
-              }))
-        }
+        categoryPickerRow
       }
     }
+  }
+
+  @ViewBuilder private var categoryPickerRow: some View {
+    // Local `let` is fine before `#if` inside @ViewBuilder — it's a binding,
+    // not a result-builder statement.
+    let summary = categories.selectionSummary(for: selectedCategoryIds)
+    #if os(macOS)
+      // `LabeledContent` is the form-row primitive (label left, value right,
+      // standard hover); the trigger Button lives in the value column. The
+      // value text inherits the system foreground style so it stays visually
+      // consistent with the surrounding Picker / DatePicker / TextField rows
+      // — the row's hover highlight and the popover that opens on click are
+      // the activation cues, not a tinted label.
+      LabeledContent("Categories") {
+        Button(summary) {
+          showCategoryPicker = true
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showCategoryPicker, arrowEdge: .trailing) {
+          CategoryMultiSelectPicker(
+            categories: categories,
+            selectedIds: $selectedCategoryIds
+          )
+          .frame(width: 320, height: 420)
+        }
+      }
+    #else
+      NavigationLink {
+        CategoryMultiSelectPicker(
+          categories: categories,
+          selectedIds: $selectedCategoryIds
+        )
+      } label: {
+        LabeledContent("Categories", value: summary)
+      }
+    #endif
   }
 
   private var payeeSection: some View {
