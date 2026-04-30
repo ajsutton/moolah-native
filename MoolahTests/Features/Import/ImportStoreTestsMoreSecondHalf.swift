@@ -162,10 +162,10 @@ struct ImportStoreTestsMoreSecondHalf {
     let cashLeg = buy.legs.first(where: {
       $0.instrument == .AUD && $0.quantity == Decimal(string: "-5000.00")
     })
-    #expect(cashLeg?.type == .expense)
+    #expect(cashLeg?.type == .trade)
     let positionLeg = buy.legs.first(where: { $0.instrument.id == "ASX:WXYZ" })
     #expect(positionLeg?.quantity == 100)
-    #expect(positionLeg?.type == .income)
+    #expect(positionLeg?.type == .trade)
     let brokerageLeg = buy.legs.first(where: {
       $0.instrument == .AUD && $0.quantity == Decimal(string: "-9.50")
     })
