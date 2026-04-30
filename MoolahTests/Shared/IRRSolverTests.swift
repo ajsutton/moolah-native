@@ -50,7 +50,6 @@ struct IRRSolverTests {
     )
     let value = try #require(result)
     let asDouble = Double(truncating: value as NSDecimalNumber)
-    #expect(asDouble < 0, "expected negative rate, got \(asDouble)")
     #expect(abs(asDouble - (-0.10)) < 0.001, "expected ~-0.10, got \(asDouble)")
   }
 
@@ -71,14 +70,14 @@ struct IRRSolverTests {
     )
     let value = try #require(result)
     let asDouble = Double(truncating: value as NSDecimalNumber)
-    #expect(
-      asDouble > 0.10, "expected IRR > 10% for half-year-old half of capital, got \(asDouble)")
-    #expect(asDouble < 0.20, "expected IRR < 20%, got \(asDouble)")
+    #expect(asDouble > 0.12, "expected IRR ~13.5%, got \(asDouble)")
+    #expect(asDouble < 0.16, "expected IRR ~13.5%, got \(asDouble)")
   }
 
   @Test("empty flows returns nil")
   func emptyFlows() {
-    #expect(IRRSolver.annualisedReturn(flows: [], terminalValue: 100, terminalDate: Date()) == nil)
+    let anyDate = Date(timeIntervalSinceReferenceDate: 0)
+    #expect(IRRSolver.annualisedReturn(flows: [], terminalValue: 100, terminalDate: anyDate) == nil)
   }
 
   @Test("span under one day returns nil")
