@@ -25,12 +25,10 @@ struct SyncCoordinatorTestsMore {
         ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
 
     let profileId = UUID()
-    let indexContext = ModelContext(manager.indexContainer)
-    indexContext.insert(
-      ProfileRecord(
+    try await manager.profileIndexRepository.upsert(
+      Profile(
         id: profileId, label: "Migrated", currencyCode: "AUD",
-        financialYearStartMonth: 7, createdAt: Date()))
-    try indexContext.save()
+        financialYearStartMonth: 7))
 
     // Simulate what CloudKitDataImporter produces: records with nil system fields.
     let accountId = UUID()
@@ -53,21 +51,15 @@ struct SyncCoordinatorTestsMore {
   // MARK: - ProfileContainerManager Extensions
 
   @Test
-  func allProfileIdsReturnsKnownProfiles() throws {
+  func allProfileIdsReturnsKnownProfiles() async throws {
     let manager = try ProfileContainerManager.forTesting()
-    let context = ModelContext(manager.indexContainer)
 
     let id1 = UUID()
     let id2 = UUID()
-    let profile1 = ProfileRecord(
-      id: id1, label: "A", currencyCode: "AUD",
-      financialYearStartMonth: 7, createdAt: Date())
-    let profile2 = ProfileRecord(
-      id: id2, label: "B", currencyCode: "USD",
-      financialYearStartMonth: 1, createdAt: Date())
-    context.insert(profile1)
-    context.insert(profile2)
-    try context.save()
+    try await manager.profileIndexRepository.upsert(
+      Profile(id: id1, label: "A", currencyCode: "AUD", financialYearStartMonth: 7))
+    try await manager.profileIndexRepository.upsert(
+      Profile(id: id2, label: "B", currencyCode: "USD", financialYearStartMonth: 1))
 
     let ids = manager.allProfileIds()
     #expect(ids.count == 2)

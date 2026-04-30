@@ -140,7 +140,7 @@ struct SyncCoordinatorTestsExtra {
   }
 
   @Test
-  func queueUnsyncedRecordsForAllProfilesSkipsSyncedRecords() throws {
+  func queueUnsyncedRecordsForAllProfilesSkipsSyncedRecords() async throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(
       containerManager: manager,
@@ -148,19 +148,17 @@ struct SyncCoordinatorTestsExtra {
       fallbackGRDBRepositoriesFactory:
         ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
 
-    // Register two profiles in the index.
+    // Register two profiles in the GRDB index.
     let profileA = UUID()
     let profileB = UUID()
-    let indexContext = ModelContext(manager.indexContainer)
-    indexContext.insert(
-      ProfileRecord(
+    try await manager.profileIndexRepository.upsert(
+      Profile(
         id: profileA, label: "A", currencyCode: "AUD",
-        financialYearStartMonth: 7, createdAt: Date()))
-    indexContext.insert(
-      ProfileRecord(
+        financialYearStartMonth: 7))
+    try await manager.profileIndexRepository.upsert(
+      Profile(
         id: profileB, label: "B", currencyCode: "USD",
-        financialYearStartMonth: 1, createdAt: Date()))
-    try indexContext.save()
+        financialYearStartMonth: 1))
 
     // Profile A: one unsynced account and one synced account.
     let unsyncedA = UUID()
@@ -216,7 +214,7 @@ struct SyncCoordinatorTestsExtra {
   @Test(
     "queueUnsyncedRecordsForAllProfiles skips profiles whose backfill scan has already run"
   )
-  func queueUnsyncedRecordsForAllProfilesSkipsProfilesAlreadyScanned() throws {
+  func queueUnsyncedRecordsForAllProfilesSkipsProfilesAlreadyScanned() async throws {
     let manager = try ProfileContainerManager.forTesting()
     let defaults = makeDefaults()
     let coordinator = SyncCoordinator(
@@ -226,12 +224,10 @@ struct SyncCoordinatorTestsExtra {
         ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
 
     let profileId = UUID()
-    let indexContext = ModelContext(manager.indexContainer)
-    indexContext.insert(
-      ProfileRecord(
+    try await manager.profileIndexRepository.upsert(
+      Profile(
         id: profileId, label: "A", currencyCode: "AUD",
-        financialYearStartMonth: 7, createdAt: Date()))
-    try indexContext.save()
+        financialYearStartMonth: 7))
 
     // Seed an unsynced record (nil encodedSystemFields) for this profile.
     let accountId = UUID()

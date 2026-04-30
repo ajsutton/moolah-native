@@ -1,6 +1,6 @@
 import CloudKit
 import Foundation
-import SwiftData
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -9,25 +9,24 @@ import Testing
 @MainActor
 struct ProfileIndexSyncHandlerTests {
 
-  private func makeHandler() throws -> (ProfileIndexSyncHandler, ModelContainer) {
-    let schema = Schema([ProfileRecord.self])
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try ModelContainer(for: schema, configurations: [config])
-    let handler = ProfileIndexSyncHandler(modelContainer: container)
-    return (handler, container)
+  private func makeHandler() throws -> (ProfileIndexSyncHandler, GRDBProfileIndexRepository) {
+    let database = try ProfileIndexDatabase.openInMemory()
+    let repository = GRDBProfileIndexRepository(database: database)
+    let handler = ProfileIndexSyncHandler(repository: repository)
+    return (handler, repository)
   }
 
   // MARK: - Remote Insert
 
   @Test
-  func applyRemoteInsertCreatesProfileRecord() throws {
-    let (handler, container) = try makeHandler()
+  func applyRemoteInsertCreatesProfileRow() throws {
+    let (handler, repository) = try makeHandler()
 
     let profileId = UUID()
     let ckRecord = CKRecord(
-      recordType: ProfileRecord.recordType,
+      recordType: ProfileRow.recordType,
       recordID: CKRecord.ID(
-        recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
+        recordType: ProfileRow.recordType, uuid: profileId, zoneID: handler.zoneID)
     )
     ckRecord["label"] = "My Profile" as CKRecordValue
     ckRecord["currencyCode"] = "AUD" as CKRecordValue
@@ -36,35 +35,33 @@ struct ProfileIndexSyncHandlerTests {
 
     _ = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
-    let context = ModelContext(container)
-    let records = try context.fetch(
-      FetchDescriptor<ProfileRecord>(predicate: #Predicate { $0.id == profileId })
-    )
-    #expect(records.count == 1)
-    #expect(records.first?.label == "My Profile")
-    #expect(records.first?.currencyCode == "AUD")
-    #expect(records.first?.financialYearStartMonth == 7)
-    #expect(records.first?.encodedSystemFields != nil)
+    let row = try #require(try repository.fetchRowSync(id: profileId))
+    #expect(row.label == "My Profile")
+    #expect(row.currencyCode == "AUD")
+    #expect(row.financialYearStartMonth == 7)
+    #expect(row.encodedSystemFields != nil)
   }
 
   // MARK: - Remote Update
 
   @Test
-  func applyRemoteUpdateModifiesExistingRecord() throws {
-    let (handler, container) = try makeHandler()
+  func applyRemoteUpdateModifiesExistingRow() throws {
+    let (handler, repository) = try makeHandler()
 
     let profileId = UUID()
-    let context = ModelContext(container)
-    let existing = ProfileRecord(
-      id: profileId, label: "Old Label", currencyCode: "USD"
+    let initial = Profile(
+      id: profileId,
+      label: "Old Label",
+      currencyCode: "USD",
+      financialYearStartMonth: 7
     )
-    context.insert(existing)
-    try context.save()
+    try repository.applyRemoteChangesSync(
+      saved: [ProfileRow(domain: initial)], deleted: [])
 
     let ckRecord = CKRecord(
-      recordType: ProfileRecord.recordType,
+      recordType: ProfileRow.recordType,
       recordID: CKRecord.ID(
-        recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
+        recordType: ProfileRow.recordType, uuid: profileId, zoneID: handler.zoneID)
     )
     ckRecord["label"] = "New Label" as CKRecordValue
     ckRecord["currencyCode"] = "EUR" as CKRecordValue
@@ -73,44 +70,39 @@ struct ProfileIndexSyncHandlerTests {
 
     _ = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
-    let freshContext = ModelContext(container)
-    let records = try freshContext.fetch(
-      FetchDescriptor<ProfileRecord>(predicate: #Predicate { $0.id == profileId })
-    )
-    #expect(records.count == 1)
-    #expect(records.first?.label == "New Label")
-    #expect(records.first?.currencyCode == "EUR")
-    #expect(records.first?.financialYearStartMonth == 1)
+    let row = try #require(try repository.fetchRowSync(id: profileId))
+    #expect(row.label == "New Label")
+    #expect(row.currencyCode == "EUR")
+    #expect(row.financialYearStartMonth == 1)
   }
 
   // MARK: - Remote Deletion
 
   @Test
-  func applyRemoteDeletionRemovesProfileRecord() throws {
-    let (handler, container) = try makeHandler()
+  func applyRemoteDeletionRemovesProfileRow() throws {
+    let (handler, repository) = try makeHandler()
 
     let profileId = UUID()
-    let context = ModelContext(container)
-    let existing = ProfileRecord(
-      id: profileId, label: "To Delete", currencyCode: "AUD"
+    let initial = Profile(
+      id: profileId,
+      label: "To Delete",
+      currencyCode: "AUD",
+      financialYearStartMonth: 7
     )
-    context.insert(existing)
-    try context.save()
+    try repository.applyRemoteChangesSync(
+      saved: [ProfileRow(domain: initial)], deleted: [])
 
     let recordID = CKRecord.ID(
-      recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
+      recordType: ProfileRow.recordType, uuid: profileId, zoneID: handler.zoneID)
     _ = handler.applyRemoteChanges(saved: [], deleted: [recordID])
 
-    let freshContext = ModelContext(container)
-    let records = try freshContext.fetch(
-      FetchDescriptor<ProfileRecord>(predicate: #Predicate { $0.id == profileId })
-    )
-    #expect(records.isEmpty)
+    let row = try repository.fetchRowSync(id: profileId)
+    #expect(row == nil)
   }
 
   @Test
   func applyRemoteChangesSkipsNonProfileRecordTypes() throws {
-    let (handler, container) = try makeHandler()
+    let (handler, repository) = try makeHandler()
 
     let ckRecord = CKRecord(
       recordType: "CD_SomeOtherType",
@@ -120,42 +112,40 @@ struct ProfileIndexSyncHandlerTests {
 
     _ = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
-    let context = ModelContext(container)
-    let records = try context.fetch(FetchDescriptor<ProfileRecord>())
-    #expect(records.isEmpty)
+    #expect(try repository.allRowIdsSync().isEmpty)
   }
 
   // MARK: - deleteLocalData
 
   @Test
   func deleteLocalDataRemovesAllProfiles() throws {
-    let (handler, container) = try makeHandler()
+    let (handler, repository) = try makeHandler()
 
-    let context = ModelContext(container)
-    context.insert(ProfileRecord(label: "Profile 1", currencyCode: "AUD"))
-    context.insert(ProfileRecord(label: "Profile 2", currencyCode: "USD"))
-    context.insert(ProfileRecord(label: "Profile 3", currencyCode: "EUR"))
-    try context.save()
+    let profiles = [
+      Profile(label: "Profile 1", currencyCode: "AUD"),
+      Profile(label: "Profile 2", currencyCode: "USD"),
+      Profile(label: "Profile 3", currencyCode: "EUR"),
+    ]
+    try repository.applyRemoteChangesSync(
+      saved: profiles.map { ProfileRow(domain: $0) }, deleted: [])
 
     handler.deleteLocalData()
 
-    let freshContext = ModelContext(container)
-    let records = try freshContext.fetch(FetchDescriptor<ProfileRecord>())
-    #expect(records.isEmpty)
+    #expect(try repository.allRowIdsSync().isEmpty)
   }
 
   // MARK: - queueAllExistingRecords
 
   @Test
   func queueAllExistingRecordsReturnsCorrectIDs() throws {
-    let (handler, container) = try makeHandler()
+    let (handler, repository) = try makeHandler()
 
     let id1 = UUID()
     let id2 = UUID()
-    let context = ModelContext(container)
-    context.insert(ProfileRecord(id: id1, label: "P1", currencyCode: "AUD"))
-    context.insert(ProfileRecord(id: id2, label: "P2", currencyCode: "USD"))
-    try context.save()
+    let profile1 = Profile(id: id1, label: "P1", currencyCode: "AUD")
+    let profile2 = Profile(id: id2, label: "P2", currencyCode: "USD")
+    try repository.applyRemoteChangesSync(
+      saved: [ProfileRow(domain: profile1), ProfileRow(domain: profile2)], deleted: [])
 
     let recordIDs = handler.queueAllExistingRecords()
 
@@ -163,10 +153,10 @@ struct ProfileIndexSyncHandlerTests {
     let recordNames = Set(recordIDs.map(\.recordName))
     #expect(
       recordNames.contains(
-        "\(ProfileRecord.recordType)|\(id1.uuidString)"))
+        "\(ProfileRow.recordType)|\(id1.uuidString)"))
     #expect(
       recordNames.contains(
-        "\(ProfileRecord.recordType)|\(id2.uuidString)"))
+        "\(ProfileRow.recordType)|\(id2.uuidString)"))
     for recordID in recordIDs {
       #expect(recordID.zoneID == handler.zoneID)
     }
@@ -183,23 +173,25 @@ struct ProfileIndexSyncHandlerTests {
 
   @Test
   func buildCKRecordProducesCorrectRecord() throws {
-    let (handler, container) = try makeHandler()
+    let (handler, _) = try makeHandler()
 
     let profileId = UUID()
-    let profile = ProfileRecord(
-      id: profileId, label: "Test Profile", currencyCode: "AUD",
-      financialYearStartMonth: 7
+    let row = ProfileRow(
+      id: profileId,
+      recordName: ProfileRow.recordName(for: profileId),
+      label: "Test Profile",
+      currencyCode: "AUD",
+      financialYearStartMonth: 7,
+      createdAt: Date(),
+      encodedSystemFields: nil
     )
-    let context = ModelContext(container)
-    context.insert(profile)
-    try context.save()
 
-    let ckRecord = handler.buildCKRecord(for: profile)
+    let ckRecord = handler.buildCKRecord(for: row)
 
-    #expect(ckRecord.recordType == ProfileRecord.recordType)
+    #expect(ckRecord.recordType == ProfileRow.recordType)
     #expect(
       ckRecord.recordID.recordName
-        == "\(ProfileRecord.recordType)|\(profileId.uuidString)")
+        == "\(ProfileRow.recordType)|\(profileId.uuidString)")
     #expect(ckRecord.recordID.zoneID == handler.zoneID)
     #expect(ckRecord["label"] as? String == "Test Profile")
     #expect(ckRecord["currencyCode"] as? String == "AUD")

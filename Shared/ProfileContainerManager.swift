@@ -171,15 +171,15 @@ final class ProfileContainerManager {
     }
   }
 
-  /// Returns all known profile IDs from the index container.
+  /// Returns all known profile IDs from the GRDB profile-index DB.
+  /// Reads through the repository's synchronous helper so callers stay
+  /// non-async; the underlying GRDB queue serialises the read.
   func allProfileIds() -> [UUID] {
-    let context = ModelContext(indexContainer)
     do {
-      let records = try context.fetch(FetchDescriptor<ProfileRecord>())
-      return records.map(\.id)
+      return try profileIndexRepository.allRowIdsSync()
     } catch {
       logger.error(
-        "Failed to fetch profile records from index container: \(error.localizedDescription, privacy: .public)"
+        "Failed to fetch profile ids from GRDB index DB: \(error.localizedDescription, privacy: .public)"
       )
       return []
     }

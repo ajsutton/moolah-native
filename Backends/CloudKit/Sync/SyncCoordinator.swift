@@ -347,12 +347,13 @@ final class SyncCoordinator {
     self.userDefaults = userDefaults
     self.progress = SyncProgress(userDefaults: userDefaults)
     self.profileIndexHandler = ProfileIndexSyncHandler(
-      modelContainer: containerManager.indexContainer)
+      repository: containerManager.profileIndexRepository)
     self.isCloudKitAvailable = isCloudKitAvailable
     self.fallbackGRDBRepositoriesFactory = fallbackGRDBRepositoriesFactory
     if !isCloudKitAvailable {
       applyICloudAvailability(.unavailable(reason: .entitlementsMissing))
     }
+    wireProfileIndexHooks()
   }
 
   // MARK: - Fetch-Session Book-keeping

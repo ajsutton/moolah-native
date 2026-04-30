@@ -130,17 +130,23 @@ extension MoolahApp {
     _ = coordinator.addIndexObserver { [weak store] in
       store?.loadCloudProfiles()
     }
+    // Slice 3 Phase A: `GRDBProfileIndexRepository.attachSyncHooks` (wired
+    // from `SyncCoordinator.init`) already queues these saves/deletions on
+    // every repo mutation. The store-side callbacks below stay one more
+    // release as a belt-and-braces transition; Phase B removes them.
+    // Double-firing is benign — `queueSave` / `queueDeletion` are
+    // idempotent on `(recordType, id, zoneID)`.
     store.onProfileChanged = { [weak coordinator] id in
       let zoneID = CKRecordZone.ID(
         zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
       coordinator?.queueSave(
-        recordType: ProfileRecord.recordType, id: id, zoneID: zoneID)
+        recordType: ProfileRow.recordType, id: id, zoneID: zoneID)
     }
     store.onProfileDeleted = { [weak coordinator] id in
       let zoneID = CKRecordZone.ID(
         zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
       coordinator?.queueDeletion(
-        recordType: ProfileRecord.recordType, id: id, zoneID: zoneID)
+        recordType: ProfileRow.recordType, id: id, zoneID: zoneID)
     }
     coordinator.start()
     // Clean up the legacy CloudKit zone from SwiftData's automatic sync.

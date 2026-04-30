@@ -1,6 +1,5 @@
 import Foundation
 import GRDB
-import SwiftData
 
 /// Populates an in-memory `ProfileContainerManager` from a named `UITestSeed`.
 ///

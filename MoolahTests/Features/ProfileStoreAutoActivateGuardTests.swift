@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 import Testing
 
 @testable import Moolah
@@ -16,61 +15,73 @@ struct ProfileStoreAutoActivateGuardTests {
 
   private func seedCloudProfile(
     _ container: ProfileContainerManager
-  ) throws -> Profile {
+  ) async throws -> Profile {
     let profile = Profile(
       id: UUID(),
       label: "Household",
       currencyCode: "AUD",
       financialYearStartMonth: 7
     )
-    let context = ModelContext(container.indexContainer)
-    context.insert(ProfileRecord.from(profile: profile))
-    try context.save()
+    try await container.profileIndexRepository.upsert(profile)
     return profile
   }
 
+  /// Drains every fire-and-forget Task tracked by the store.
+  private func drainPendingMutations(_ store: ProfileStore) async {
+    while let task = store.pendingMutationTasks.first {
+      await task.value
+      await Task.yield()
+    }
+  }
+
   @Test("loadCloudProfiles auto-activates when welcomePhase == .landing")
-  func autoActivatesWhenLanding() throws {
+  func autoActivatesWhenLanding() async throws {
     let manager = try ProfileContainerManager.forTesting()
     let store = ProfileStore(
       defaults: try makeDefaults(),
       containerManager: manager
     )
-    let profile = try seedCloudProfile(manager)
+    await drainPendingMutations(store)
+    let profile = try await seedCloudProfile(manager)
     store.welcomePhase = .landing
 
     store.loadCloudProfiles()
+    await drainPendingMutations(store)
 
     #expect(store.activeProfileID == profile.id)
   }
 
   @Test("loadCloudProfiles does NOT auto-activate when welcomePhase == .creating")
-  func doesNotAutoActivateWhenCreating() throws {
+  func doesNotAutoActivateWhenCreating() async throws {
     let manager = try ProfileContainerManager.forTesting()
     let store = ProfileStore(
       defaults: try makeDefaults(),
       containerManager: manager
     )
-    _ = try seedCloudProfile(manager)
+    await drainPendingMutations(store)
+    _ = try await seedCloudProfile(manager)
     store.welcomePhase = .creating
 
     store.loadCloudProfiles()
+    await drainPendingMutations(store)
 
     #expect(store.activeProfileID == nil)
     #expect(store.profiles.count == 1)
   }
 
   @Test("loadCloudProfiles auto-activates when welcomePhase is nil")
-  func autoActivatesWhenPhaseNil() throws {
+  func autoActivatesWhenPhaseNil() async throws {
     let manager = try ProfileContainerManager.forTesting()
     let store = ProfileStore(
       defaults: try makeDefaults(),
       containerManager: manager
     )
-    let profile = try seedCloudProfile(manager)
+    await drainPendingMutations(store)
+    let profile = try await seedCloudProfile(manager)
     store.welcomePhase = nil
 
     store.loadCloudProfiles()
+    await drainPendingMutations(store)
 
     #expect(store.activeProfileID == profile.id)
   }

@@ -2,11 +2,11 @@ import CloudKit
 import Foundation
 import OSLog
 import Observation
-import SwiftData
 
 /// Manages the list of profiles and which one is active.
-/// Profiles persist as CloudKit `ProfileRecord` rows in SwiftData; the active
-/// profile ID is per-device via UserDefaults.
+/// Profiles persist as CloudKit `ProfileRecord` rows in the GRDB
+/// profile-index database; the active profile ID is per-device via
+/// UserDefaults.
 @Observable
 @MainActor
 final class ProfileStore {
@@ -35,7 +35,8 @@ final class ProfileStore {
   var welcomePhase: WelcomePhase?
 
   /// True while the initial cloud profile load may still be retrying.
-  /// SwiftData with CloudKit may not have its store ready on the first fetch.
+  /// CloudKit-driven remote inserts may not have landed yet on the
+  /// first fetch.
   var isCloudLoadPending = false
 
   /// The currently-scheduled retry task, tracked so it can be cancelled when a
@@ -43,6 +44,13 @@ final class ProfileStore {
   /// retry is queued. See `guides/CONCURRENCY_GUIDE.md` — fire-and-forget
   /// `Task {}` in stores must be tracked.
   var retryTask: Task<Void, Never>?
+
+  /// In-flight tracked tasks for fire-and-forget GRDB writes (add /
+  /// update / remove / cloud load). Tasks self-evict on completion so
+  /// the array doesn't grow unbounded across long-running sessions.
+  /// See `guides/CONCURRENCY_GUIDE.md` — every fire-and-forget Task
+  /// in a store must be tracked so the lifecycle is observable.
+  var pendingMutationTasks: [Task<Void, Never>] = []
 
   /// Called when a cloud profile is removed (locally or via remote sync).
   /// Used by SessionManager to tear down the corresponding ProfileSession.
@@ -96,21 +104,40 @@ final class ProfileStore {
     }
   }
 
+  /// Tracks a fire-and-forget mutation Task. The task self-evicts from
+  /// `pendingMutationTasks` on completion so the array doesn't grow
+  /// unbounded over a long session.
+  func trackMutation(_ task: Task<Void, Never>) {
+    pendingMutationTasks.append(task)
+    Task { [weak self] in
+      _ = await task.value
+      self?.pendingMutationTasks.removeAll { $0 == task }
+    }
+  }
+
   func addProfile(_ profile: Profile) {
     guard let containerManager else {
       logger.error("Cannot add CloudKit profile without ProfileContainerManager")
       return
     }
-    let context = ModelContext(containerManager.indexContainer)
-    let record = ProfileRecord.from(profile: profile)
-    context.insert(record)
-    do {
-      try context.save()
-      onProfileChanged?(profile.id)
-    } catch {
-      logger.error("Failed to save CloudKit profile: \(error)")
-    }
     profiles.append(profile)
+    let task = Task { [weak self] in
+      do {
+        try await containerManager.profileIndexRepository.upsert(profile)
+      } catch {
+        await MainActor.run { [weak self] in
+          self?.logger.error("Failed to save CloudKit profile: \(error, privacy: .public)")
+        }
+      }
+    }
+    trackMutation(task)
+    // Fire the legacy store-side change callback synchronously to
+    // preserve the pre-Phase-A behaviour for callers that observe it
+    // (e.g. `ExportCoordinator.importNewProfileFromFile`'s rollback
+    // path captures the id mid-flight). The GRDB-side
+    // `onRecordChanged` hook from `attachSyncHooks` fires when the
+    // async write commits; both queue idempotent CKSyncEngine state.
+    onProfileChanged?(profile.id)
 
     if profiles.count == 1 {
       activeProfileID = profile.id
@@ -125,9 +152,17 @@ final class ProfileStore {
 
       if let containerManager {
         containerManager.deleteStore(for: id)
-        let context = ModelContext(containerManager.indexContainer)
-        let deleter = ProfileDataDeleter(modelContext: context)
-        deleter.deleteProfileRecord(for: id)
+        let task = Task { [weak self] in
+          do {
+            _ = try await containerManager.profileIndexRepository.delete(id: id)
+          } catch {
+            await MainActor.run { [weak self] in
+              self?.logger.error(
+                "Failed to delete CloudKit profile row: \(error, privacy: .public)")
+            }
+          }
+        }
+        trackMutation(task)
       }
       onProfileDeleted?(id)
       onProfileRemoved?(id)
@@ -152,22 +187,21 @@ final class ProfileStore {
     guard let index = profiles.firstIndex(where: { $0.id == profile.id }) else { return }
     profiles[index] = profile
 
-    let context = ModelContext(containerManager.indexContainer)
-    let profileId = profile.id
-    let descriptor = FetchDescriptor<ProfileRecord>(
-      predicate: #Predicate { $0.id == profileId }
-    )
-    if let record = try? context.fetch(descriptor).first {
-      record.label = profile.label
-      record.currencyCode = profile.currencyCode
-      record.financialYearStartMonth = profile.financialYearStartMonth
+    let task = Task { [weak self] in
       do {
-        try context.save()
-        onProfileChanged?(profile.id)
+        try await containerManager.profileIndexRepository.upsert(profile)
       } catch {
-        logger.error("Failed to save CloudKit profile update: \(error)")
+        await MainActor.run { [weak self] in
+          self?.logger.error(
+            "Failed to save CloudKit profile update: \(error, privacy: .public)")
+        }
       }
     }
+    trackMutation(task)
+    // See `addProfile` for the rationale: fire the legacy callback
+    // synchronously so observers see the change at the same point as
+    // the in-place state mutation.
+    onProfileChanged?(profile.id)
     logger.debug("Updated profile: \(profile.label)")
   }
 
