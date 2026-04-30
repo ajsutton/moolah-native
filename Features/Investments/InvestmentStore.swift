@@ -16,6 +16,13 @@ final class InvestmentStore {
   /// `guides/INSTRUMENT_CONVERSION_GUIDE.md` we must not display a
   /// partial sum as the portfolio total.
   private(set) var totalPortfolioValue: Decimal?
+  /// Lifetime account-level performance numbers in profile currency.
+  /// `nil` until `loadAllData(...)` runs, or when conversion failure
+  /// during cash-flow extraction marks it unavailable. A failure here
+  /// does not invalidate other store state — `valuedPositions` and
+  /// `totalPortfolioValue` continue to render normally; only the
+  /// header tile reverts to "Unavailable".
+  private(set) var accountPerformance: AccountPerformance?
 
   var selectedPeriod: TimePeriod = .all
   private(set) var loadedAccountId: UUID?
@@ -43,6 +50,8 @@ final class InvestmentStore {
     self.transactionRepository = transactionRepository
     self.conversionService = conversionService
   }
+
+  // MARK: - Loading & Mutations
 
   /// Load all values for the account.
   ///
@@ -109,13 +118,72 @@ final class InvestmentStore {
   /// blocks stay one-liners.
   func loadAllData(accountId: UUID, profileCurrency: Instrument) async {
     loadedHostCurrency = profileCurrency
+    accountPerformance = nil  // clear stale data immediately
     await loadValues(accountId: accountId)
     if hasLegacyValuations {
       await loadDailyBalances(accountId: accountId, hostCurrency: profileCurrency)
+      guard !Task.isCancelled else { return }
+      accountPerformance = AccountPerformanceCalculator.computeLegacy(
+        dailyBalances: dailyBalances,
+        values: values,
+        instrument: profileCurrency)
     } else {
       await loadPositions(accountId: accountId)
       await valuatePositions(profileCurrency: profileCurrency, on: Date())
+      await refreshPositionTrackedPerformance(
+        accountId: accountId, profileCurrency: profileCurrency)
     }
+  }
+
+  /// Recompute the position-tracked `accountPerformance` from the loaded
+  /// transactions and `valuedPositions`. Called from `loadAllData` and
+  /// `reloadPositionsIfNeeded` after a trade is recorded. Sets
+  /// `accountPerformance` to `nil` and surfaces the error on conversion
+  /// failure; partial sums are not shown.
+  private func refreshPositionTrackedPerformance(
+    accountId: UUID, profileCurrency: Instrument
+  ) async {
+    guard let transactionRepository else {
+      accountPerformance = nil
+      return
+    }
+    do {
+      let txns = try await fetchAllTransactions(
+        repository: transactionRepository,
+        accountId: accountId)
+      accountPerformance = try await AccountPerformanceCalculator.compute(
+        accountId: accountId,
+        transactions: txns,
+        valuedPositions: valuedPositions,
+        profileCurrency: profileCurrency,
+        conversionService: conversionService)
+    } catch is CancellationError {
+      return
+    } catch {
+      logger.warning(
+        "AccountPerformance unavailable: \(error.localizedDescription, privacy: .public)"
+      )
+      accountPerformance = nil
+      // self.error intentionally not set — performance tile degrades to
+      // "Unavailable" while the rest of the account view stays functional.
+    }
+  }
+
+  /// Recompute the legacy `accountPerformance` from the in-memory `values`
+  /// and `dailyBalances` arrays after a `setValue` / `removeValue`
+  /// mutation. Synchronous: the legacy path doesn't need conversion.
+  ///
+  /// Uses `loadedHostCurrency` to match `loadAllData`'s legacy branch —
+  /// `dailyBalances` are always in `loadedHostCurrency` (converted by
+  /// `loadDailyBalances`), so callers must not pass a different
+  /// instrument. The `.AUD` final fallback only fires if a mutation
+  /// happens before `loadAllData` ran, which should not occur in
+  /// practice.
+  private func refreshLegacyPerformance() {
+    accountPerformance = AccountPerformanceCalculator.computeLegacy(
+      dailyBalances: dailyBalances,
+      values: values,
+      instrument: loadedHostCurrency ?? .AUD)
   }
 
   /// Refreshes position data after a trade is recorded. Used from
@@ -124,6 +192,8 @@ final class InvestmentStore {
     guard !hasLegacyValuations else { return }
     await loadPositions(accountId: accountId)
     await valuatePositions(profileCurrency: profileCurrency, on: Date())
+    await refreshPositionTrackedPerformance(
+      accountId: accountId, profileCurrency: profileCurrency)
   }
 
   func setValue(accountId: UUID, date: Date, value: InstrumentAmount) async {
@@ -136,6 +206,7 @@ final class InvestmentStore {
       values.sort()
       // The latest value is the first one (values sorted descending by date)
       onInvestmentValueChanged?(accountId, values.first?.value)
+      refreshLegacyPerformance()
     } catch {
       logger.error("Failed to set investment value: \(error.localizedDescription)")
       self.error = error
@@ -148,6 +219,7 @@ final class InvestmentStore {
       try await repository.removeValue(accountId: accountId, date: date)
       values.removeAll { $0.date.isSameDay(as: date) }
       onInvestmentValueChanged?(accountId, values.first?.value)
+      refreshLegacyPerformance()
     } catch {
       logger.error("Failed to remove investment value: \(error.localizedDescription)")
       self.error = error
@@ -285,8 +357,14 @@ final class InvestmentStore {
     }
   }
 
-  // MARK: - Computed Properties
+}
 
+// MARK: - Computed Properties
+
+// Hoisted into an extension so the `InvestmentStore` class body stays
+// under the type_body_length budget; the computed properties are pure
+// reads and need no privileged access to `private(set)` setters.
+extension InvestmentStore {
   /// Investment values filtered by the selected time period.
   var filteredValues: [InvestmentValue] {
     guard let startDate = selectedPeriod.startDate else { return values }
@@ -308,7 +386,6 @@ final class InvestmentStore {
       period: selectedPeriod
     )
   }
-
 }
 
 // `InvestmentChartData` (the merge + forward-fill helpers used by

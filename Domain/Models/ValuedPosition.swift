@@ -35,4 +35,13 @@ struct ValuedPosition: Sendable, Hashable, Identifiable {
     guard let value, let costBasis else { return nil }
     return value - costBasis
   }
+
+  /// Gain as a percentage of cost basis (e.g. `12.5` for +12.5%). `nil`
+  /// when `value` is missing, `costBasis` is missing, or `costBasis` is
+  /// zero. The sign is preserved through all arithmetic; callers must
+  /// not `abs()` the result when colouring or sorting.
+  var gainLossPercent: Decimal? {
+    guard let value, let costBasis, costBasis.quantity != 0 else { return nil }
+    return (value.quantity - costBasis.quantity) / costBasis.quantity * 100
+  }
 }

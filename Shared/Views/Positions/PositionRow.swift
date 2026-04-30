@@ -52,12 +52,21 @@ struct PositionRow: View {
           .foregroundStyle(.tertiary)
       }
       if let gain = row.gainLoss {
-        Text(gain.signedFormatted)
+        Text(captionText(for: gain))
           .font(.caption)
           .monospacedDigit()
           .foregroundStyle(gainColor(gain))
       }
     }
+  }
+
+  /// `"+$1,200  +12.3%"` / `"−$50  −5.0%"`. When `costBasis` is missing,
+  /// falls back to `gain.signedFormatted` only (no trailing space). The
+  /// percent segment is delegated to `GainLossPercentDisplay.formatted`
+  /// so this row stays byte-identical with `PositionsTable.gainCell`.
+  private func captionText(for gain: InstrumentAmount) -> String {
+    guard let pct = row.gainLossPercent else { return gain.signedFormatted }
+    return "\(gain.signedFormatted)  \(GainLossPercentDisplay.formatted(pct))"
   }
 
   private var secondaryIdentifier: String? {
@@ -86,10 +95,13 @@ struct PositionRow: View {
       parts.append("value unavailable")
     }
     if let gain = row.gainLoss {
+      let pctSuffix = GainLossPercentDisplay.accessibilitySuffix(row.gainLossPercent)
       if gain.isNegative {
-        parts.append("loss of \((-gain).formatted)")
+        parts.append("loss of \((-gain).formatted)\(pctSuffix)")
+      } else if gain.isZero {
+        parts.append(pctSuffix.isEmpty ? "no change" : "no change\(pctSuffix)")
       } else {
-        parts.append("gain of \(gain.formatted)")
+        parts.append("gain of \(gain.formatted)\(pctSuffix)")
       }
     }
     return parts.joined(separator: ", ")
@@ -146,6 +158,14 @@ private func previewRows() -> [ValuedPosition] {
       unitPrice: InstrumentAmount(quantity: 30, instrument: aud),
       costBasis: InstrumentAmount(quantity: 2_000, instrument: aud),
       value: InstrumentAmount(quantity: 1_500, instrument: aud)),
+    // Zero cost basis: gainLoss is non-nil (5,000 − 0 = 5,000) but
+    // gainLossPercent is nil (division by zero). Exercises the
+    // nil-percent-but-non-nil-gain branch of captionText.
+    ValuedPosition(
+      instrument: bhp, quantity: 100,
+      unitPrice: InstrumentAmount(quantity: 50, instrument: aud),
+      costBasis: InstrumentAmount(quantity: 0, instrument: aud),
+      value: InstrumentAmount(quantity: 5_000, instrument: aud)),
   ]
 }
 

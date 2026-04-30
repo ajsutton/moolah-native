@@ -57,7 +57,7 @@ struct PositionsTable: View {
         amountCell(row.value)
       }
       TableColumn("Gain", value: \.gainQuantity) { row in
-        gainCell(row.gainLoss)
+        gainCell(row)
       }
     }
   }
@@ -87,14 +87,41 @@ struct PositionsTable: View {
   }
 
   @ViewBuilder
-  private func gainCell(_ gain: InstrumentAmount?) -> some View {
-    if let gain {
-      Text(gain.signedFormatted)
-        .monospacedDigit()
-        .foregroundStyle(gainColor(gain))
+  private func gainCell(_ row: ValuedPosition) -> some View {
+    if let gain = row.gainLoss {
+      HStack(spacing: 4) {
+        Text(gain.signedFormatted)
+          .monospacedDigit()
+          .foregroundStyle(gainColor(gain))
+        if let pct = row.gainLossPercent {
+          Text(GainLossPercentDisplay.formatted(pct))
+            .font(.caption)
+            .monospacedDigit()
+            .foregroundStyle(gainColor(gain))
+        }
+      }
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel(gainAccessibilityLabel(gain: gain, percent: row.gainLossPercent))
     } else {
       Text("—").foregroundStyle(.tertiary)
     }
+  }
+
+  /// Accessibility label combining the dollar gain and percent: e.g.
+  /// "gain of $1,200, up 12.3 percent" / "loss of $50, down 5.0 percent".
+  /// Per `guides/UI_GUIDE.md` every gain renders an explicit
+  /// accessibility label so VoiceOver doesn't read "+12%" as ambiguous.
+  private func gainAccessibilityLabel(
+    gain: InstrumentAmount, percent: Decimal?
+  ) -> String {
+    let pctText = GainLossPercentDisplay.accessibilitySuffix(percent)
+    if gain.isNegative {
+      return "loss of \((-gain).formatted)\(pctText)"
+    }
+    if gain.isZero {
+      return pctText.isEmpty ? "no change" : "no change\(pctText)"
+    }
+    return "gain of \(gain.formatted)\(pctText)"
   }
 
   /// `Table` selects on `id` (which is `instrument.id`); we adapt that to

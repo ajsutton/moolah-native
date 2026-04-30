@@ -35,17 +35,6 @@ struct InvestmentAccountView: View {
     session.profile.instrument
   }
 
-  /// The invested amount (balance from positions in the account's primary instrument).
-  private var investedAmount: InstrumentAmount {
-    let primaryPosition = account.positions.first(where: { $0.instrument == account.instrument })
-    return primaryPosition?.amount ?? .zero(instrument: account.instrument)
-  }
-
-  /// The latest investment value, or nil if no values have been recorded.
-  private var latestInvestmentValue: InstrumentAmount? {
-    investmentStore.values.first?.value
-  }
-
   /// Embedded transaction list for this account. Factored out because three
   /// layout branches reuse it verbatim.
   @ViewBuilder private var accountTransactionList: some View {
@@ -91,14 +80,10 @@ struct InvestmentAccountView: View {
   }
 
   @ViewBuilder private var legacySummary: some View {
-    if !investmentStore.values.isEmpty {
-      InvestmentSummaryView(
-        investedAmount: investedAmount,
-        currentValue: latestInvestmentValue,
-        store: investmentStore
-      )
-      .padding(.horizontal)
-      .padding(.top)
+    if !investmentStore.values.isEmpty,
+      let performance = investmentStore.accountPerformance
+    {
+      AccountPerformanceTiles(title: account.name, performance: performance)
     }
   }
 
@@ -167,8 +152,15 @@ struct InvestmentAccountView: View {
       defer { isLoadingPositions = false }
       await investmentStore.loadAllData(
         accountId: account.id, profileCurrency: profileCurrencyInstrument)
-      positionsInput = await investmentStore.positionsViewInput(
-        title: account.name, range: positionsRange)
+      do {
+        positionsInput = try await investmentStore.positionsViewInput(
+          title: account.name, range: positionsRange)
+      } catch is CancellationError {
+        return
+      } catch {
+        // positionsViewInput is documented to only throw CancellationError;
+        // any other error here is unexpected.
+      }
       initialLoadComplete = true
     }
     .task(id: positionsRange) {
@@ -176,16 +168,30 @@ struct InvestmentAccountView: View {
       // block runs the first build. We only fire re-builds for subsequent
       // range changes.
       guard investmentStore.loadedAccountId != nil else { return }
-      positionsInput = await investmentStore.positionsViewInput(
-        title: account.name, range: positionsRange)
+      do {
+        positionsInput = try await investmentStore.positionsViewInput(
+          title: account.name, range: positionsRange)
+      } catch is CancellationError {
+        return
+      } catch {
+        // positionsViewInput is documented to only throw CancellationError;
+        // any other error here is unexpected.
+      }
     }
     .refreshable {
       isLoadingPositions = true
       defer { isLoadingPositions = false }
       await investmentStore.loadAllData(
         accountId: account.id, profileCurrency: profileCurrencyInstrument)
-      positionsInput = await investmentStore.positionsViewInput(
-        title: account.name, range: positionsRange)
+      do {
+        positionsInput = try await investmentStore.positionsViewInput(
+          title: account.name, range: positionsRange)
+      } catch is CancellationError {
+        return
+      } catch {
+        // positionsViewInput is documented to only throw CancellationError;
+        // any other error here is unexpected.
+      }
     }
   }
 

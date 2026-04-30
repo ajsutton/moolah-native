@@ -31,7 +31,7 @@ struct InvestmentStorePositionsInputTests {
     )
     await store.loadAllData(accountId: account.id, profileCurrency: aud)
 
-    let input = await store.positionsViewInput(
+    let input = try await store.positionsViewInput(
       title: account.name, range: .threeMonths)
 
     #expect(input.title == "Brokerage")
@@ -105,7 +105,7 @@ struct InvestmentStorePositionsInputTests {
     )
 
     await store.loadAllData(accountId: account.id, profileCurrency: aud)
-    let input = await store.positionsViewInput(title: account.name, range: .threeMonths)
+    let input = try await store.positionsViewInput(title: account.name, range: .threeMonths)
 
     let ethRow = try #require(input.positions.first(where: { $0.instrument == eth }))
     let btcRow = try #require(input.positions.first(where: { $0.instrument == btc }))

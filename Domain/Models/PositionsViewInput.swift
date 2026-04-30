@@ -13,6 +13,12 @@ struct PositionsViewInput: Sendable, Hashable {
   let positions: [ValuedPosition]
   let historicalValue: HistoricalValueSeries?
 
+  /// Account-level performance numbers for the host. Non-nil triggers
+  /// the three-tile `AccountPerformanceTiles` strip in place of the
+  /// single-row `PositionsHeader`. Non-investment-account hosts leave
+  /// this `nil` and keep the existing header layout.
+  let performance: AccountPerformance?
+
   /// Sum of per-row values. `nil` if any row's `value` is `nil` — per the
   /// project rule "never display a partial aggregate", a single conversion
   /// failure marks the whole total unavailable.
@@ -78,5 +84,27 @@ struct PositionsViewInput: Sendable, Hashable {
       positions.lazy.filter { $0.quantity != 0 }.map(\.instrument)
     )
     return nonZeroInstruments == [hostCurrency]
+  }
+}
+
+extension PositionsViewInput {
+  /// Backward-compat init for the four-arg shape that pre-dates
+  /// `performance`. Lets non-investment-account callers (the
+  /// transaction list, all previews) keep their existing
+  /// `PositionsViewInput(title:hostCurrency:positions:historicalValue:)`
+  /// invocation unchanged. The investment-account path opts in via
+  /// the synthesised memberwise init.
+  init(
+    title: String,
+    hostCurrency: Instrument,
+    positions: [ValuedPosition],
+    historicalValue: HistoricalValueSeries?
+  ) {
+    self.init(
+      title: title,
+      hostCurrency: hostCurrency,
+      positions: positions,
+      historicalValue: historicalValue,
+      performance: nil)
   }
 }

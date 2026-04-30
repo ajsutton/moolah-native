@@ -1,4 +1,8 @@
 // swiftlint:disable multiline_arguments
+//
+// Previews and inline view-builder layouts construct PositionsViewInput
+// across multiple lines for readability; the rule fires on every such
+// call site in this file.
 
 import SwiftUI
 
@@ -21,7 +25,11 @@ struct PositionsView: View {
       EmptyView()
     } else {
       VStack(spacing: 0) {
-        PositionsHeader(input: input)
+        if let performance = input.performance {
+          AccountPerformanceTiles(title: input.title, performance: performance)
+        } else {
+          PositionsHeader(input: input)
+        }
         if input.showsChart {
           Divider()
           PositionsChart(
@@ -159,4 +167,37 @@ private func withChartPreviewInput() -> PositionsViewInput {
 #Preview("With chart") {
   PositionsView(input: withChartPreviewInput(), range: .constant(.threeMonths))
     .frame(width: 720, height: 640)
+}
+
+#Preview("With performance tiles") {
+  let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+  let aud = Instrument.AUD
+  return PositionsView(
+    input: PositionsViewInput(
+      title: "Brokerage",
+      hostCurrency: aud,
+      positions: [
+        ValuedPosition(
+          instrument: bhp, quantity: 250,
+          unitPrice: InstrumentAmount(quantity: 45.30, instrument: aud),
+          costBasis: InstrumentAmount(quantity: 10_125, instrument: aud),
+          value: InstrumentAmount(quantity: 11_325, instrument: aud)),
+        ValuedPosition(
+          instrument: aud, quantity: 2_480,
+          unitPrice: nil, costBasis: nil,
+          value: InstrumentAmount(quantity: 2_480, instrument: aud)),
+      ],
+      historicalValue: nil,
+      performance: AccountPerformance(
+        instrument: aud,
+        currentValue: InstrumentAmount(quantity: 13_805, instrument: aud),
+        totalContributions: InstrumentAmount(quantity: 12_605, instrument: aud),
+        profitLoss: InstrumentAmount(quantity: 1_200, instrument: aud),
+        profitLossPercent: Decimal(string: "0.0952"),
+        annualisedReturn: Decimal(string: "0.0833"),
+        firstFlowDate: Calendar.current.date(byAdding: .year, value: -2, to: Date()))
+    ),
+    range: .constant(.threeMonths)
+  )
+  .frame(width: 720, height: 480)
 }
