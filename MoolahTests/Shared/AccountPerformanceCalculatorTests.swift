@@ -67,7 +67,7 @@ struct AccountPerformanceCalculatorTests {
     let percent = try #require(perf.profitLossPercent)
     // Modified Dietz with one flow at t=0 and weighted-capital == ΣC = 10_000
     // is exactly (V − ΣC) / ΣC = 1000 / 10000 = 0.1.
-    #expect(percent == Decimal(string: "0.1"))
+    #expect(percent == Decimal(1) / Decimal(10))
   }
 
   @Test("opening balance with 10 percent growth converges on 10 percent annualised")
