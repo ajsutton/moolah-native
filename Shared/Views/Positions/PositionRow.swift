@@ -52,7 +52,7 @@ struct PositionRow: View {
           .foregroundStyle(.tertiary)
       }
       if let gain = row.gainLoss {
-        Text(gain.signedFormatted)
+        Text(gainCaption(gain: gain, percent: row.gainLossPercent))
           .font(.caption)
           .monospacedDigit()
           .foregroundStyle(gainColor(gain))
@@ -78,6 +78,39 @@ struct PositionRow: View {
     return .green
   }
 
+  /// `"+$1,200  +12.3%"` / `"−$50  −5.0%"` / `"$0  0.0%"`. The two
+  /// segments are double-spaced so the eye separates them at caption
+  /// size. When `costBasis` is missing, the percent segment is
+  /// omitted and only the dollar gain is shown.
+  ///
+  /// Negative values use a Unicode minus (U+2212) for typographic
+  /// consistency, matching `PositionsTable.gainCell`.
+  private func gainCaption(gain: InstrumentAmount, percent: Decimal?) -> String {
+    guard let percent else { return gain.signedFormatted }
+    let absDouble = abs(Double(truncating: percent as NSDecimalNumber))
+    let body = String(format: "%.1f", absDouble)
+    let pctText: String
+    if percent > 0 {
+      pctText = "+\(body)%"
+    } else if percent < 0 {
+      pctText = "−\(body)%"
+    } else {
+      pctText = "\(body)%"
+    }
+    return "\(gain.signedFormatted)  \(pctText)"
+  }
+
+  /// Constructs the ", up 12.3 percent" / ", down 5.0 percent" /
+  /// ", 0.0 percent" suffix for the accessibility label, or an empty
+  /// string when the percent is unavailable.
+  private func pctSuffix(for percent: Decimal?) -> String {
+    guard let percent else { return "" }
+    let absValue = percent < 0 ? -percent : percent
+    let formatted = String(format: "%.1f", Double(truncating: absValue as NSDecimalNumber))
+    if percent == 0 { return ", 0.0 percent" }
+    return percent < 0 ? ", down \(formatted) percent" : ", up \(formatted) percent"
+  }
+
   private var accessibilityLabel: String {
     var parts: [String] = [row.instrument.name, row.quantityCaption]
     if let value = row.value {
@@ -86,10 +119,13 @@ struct PositionRow: View {
       parts.append("value unavailable")
     }
     if let gain = row.gainLoss {
+      let pctSuffix = pctSuffix(for: row.gainLossPercent)
       if gain.isNegative {
-        parts.append("loss of \((-gain).formatted)")
+        parts.append("loss of \((-gain).formatted)\(pctSuffix)")
+      } else if gain.isZero {
+        parts.append(pctSuffix.isEmpty ? "no change" : "no change\(pctSuffix)")
       } else {
-        parts.append("gain of \(gain.formatted)")
+        parts.append("gain of \(gain.formatted)\(pctSuffix)")
       }
     }
     return parts.joined(separator: ", ")
