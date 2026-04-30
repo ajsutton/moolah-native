@@ -150,7 +150,22 @@ enum AccountPerformanceCalculator {
     now: Date
   ) -> AccountPerformance {
     guard let currentValue else {
-      return .unavailable(in: profileCurrency)
+      // Row 6: V failed but flows were extracted successfully. Surface
+      // totalContributions and firstFlowDate so the caller can show
+      // partial information (e.g. the "since Mar 2023" subtitle on the
+      // p.a. tile remains useful even when the rate itself is
+      // unavailable). profitLoss / profitLossPercent / annualisedReturn
+      // all require V and stay nil.
+      let totalContributions = flows.reduce(Decimal(0)) { $0 + $1.amount }
+      return AccountPerformance(
+        instrument: profileCurrency,
+        currentValue: nil,
+        totalContributions: InstrumentAmount(
+          quantity: totalContributions, instrument: profileCurrency),
+        profitLoss: nil,
+        profitLossPercent: nil,
+        annualisedReturn: nil,
+        firstFlowDate: flows.first?.date)
     }
     guard let firstFlow = flows.first else {
       // No external flows: the entire current value is treated as gain.

@@ -230,8 +230,11 @@ struct AccountPerformanceCalculatorTests {
   }
 
   /// V_now unavailable (any position's `value` is `nil`) → calculator
-  /// returns `.unavailable(in:)`. No throw — partial currentValue is just
-  /// nil, not a failure.
+  /// returns a partial `AccountPerformance` with `currentValue`,
+  /// `profitLoss`, `profitLossPercent`, and `annualisedReturn` all nil
+  /// (they all require V), but `totalContributions` and `firstFlowDate`
+  /// stay populated from the successfully-extracted flows. Matches the
+  /// design's §3 edge-case Row 6.
   @Test("missing position value yields unavailable performance")
   func unavailableValueYieldsUnavailablePerformance() async throws {
     let accountId = UUID()
@@ -256,6 +259,11 @@ struct AccountPerformanceCalculatorTests {
       conversionService: FixedConversionService(),
       now: now
     )
-    #expect(perf == AccountPerformance.unavailable(in: aud))
+    #expect(perf.currentValue == nil)
+    #expect(perf.totalContributions == InstrumentAmount(quantity: 1_000, instrument: aud))
+    #expect(perf.profitLoss == nil)
+    #expect(perf.profitLossPercent == nil)
+    #expect(perf.annualisedReturn == nil)
+    #expect(perf.firstFlowDate == openingDate)
   }
 }
