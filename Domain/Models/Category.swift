@@ -63,18 +63,22 @@ struct Categories: Sendable {
     return result
   }
 
-  /// Human-readable summary of a multi-category selection. Returns
-  /// `"All"` when nothing is selected (or every selected id is orphaned),
-  /// the full path when exactly one selected id is still present, and
-  /// `"\(N) selected"` when two or more selected ids are still present.
+  /// Filter-trigger label for a multi-category selection.
+  ///
+  /// Callers that hold an arbitrary `Set<UUID>` (e.g. a persisted filter
+  /// preference) use this instead of `path(for:)` directly because the
+  /// selection may reference deleted categories. Orphaned ids are silently
+  /// dropped so the label always reflects only categories that are still
+  /// selectable: `"All"` when none remain, the full path when exactly one
+  /// remains, and `"\(N) selected"` for two or more.
   func selectionSummary(for selectedIds: Set<UUID>) -> String {
     let presentIds = selectedIds.filter { byId[$0] != nil }
     switch presentIds.count {
     case 0:
       return "All"
     case 1:
-      let id = presentIds.first!  // safe: count == 1
-      return path(for: byId[id]!)
+      guard let id = presentIds.first, let category = byId[id] else { return "All" }
+      return path(for: category)
     default:
       return "\(presentIds.count) selected"
     }

@@ -129,25 +129,39 @@ struct CategoriesTests {
   }
 
   @Test
-  func selectionSummaryMultipleSelectionReturnsCount() {
-    let g = Category(name: "Groceries")
-    let t = Category(name: "Transport")
-    let i = Category(name: "Income")
-    let categories = Categories(from: [g, t, i])
+  func selectionSummaryTwoSelectionsReturnsCount() {
+    let groceries = Category(name: "Groceries")
+    let transport = Category(name: "Transport")
+    let categories = Categories(from: [groceries, transport])
 
-    #expect(categories.selectionSummary(for: [g.id, t.id]) == "2 selected")
-    #expect(categories.selectionSummary(for: [g.id, t.id, i.id]) == "3 selected")
+    #expect(categories.selectionSummary(for: [groceries.id, transport.id]) == "2 selected")
   }
 
   @Test
-  func selectionSummaryIgnoresOrphanedIds() {
-    let g = Category(name: "Groceries")
-    let categories = Categories(from: [g])
+  func selectionSummaryThreeSelectionsReturnsCount() {
+    let groceries = Category(name: "Groceries")
+    let transport = Category(name: "Transport")
+    let income = Category(name: "Income")
+    let categories = Categories(from: [groceries, transport, income])
+
+    let ids: Set<UUID> = [groceries.id, transport.id, income.id]
+    #expect(categories.selectionSummary(for: ids) == "3 selected")
+  }
+
+  @Test
+  func selectionSummaryWithOnePresentAndOrphanIdReturnsSinglePath() {
+    let groceries = Category(name: "Groceries")
+    let categories = Categories(from: [groceries])
     let orphan = UUID()
 
-    // One real id + one orphan → still "single" semantics, returns the real path.
-    #expect(categories.selectionSummary(for: [g.id, orphan]) == "Groceries")
-    // Two orphans → "All" because no present ids remain.
-    #expect(categories.selectionSummary(for: [orphan, UUID()]) == "All")
+    #expect(categories.selectionSummary(for: [groceries.id, orphan]) == "Groceries")
+  }
+
+  @Test
+  func selectionSummaryWithAllOrphanedIdsReturnsAll() {
+    let groceries = Category(name: "Groceries")
+    let categories = Categories(from: [groceries])
+
+    #expect(categories.selectionSummary(for: [UUID(), UUID()]) == "All")
   }
 }
