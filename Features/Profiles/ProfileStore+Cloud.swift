@@ -1,6 +1,5 @@
 import CloudKit
 import Foundation
-import SwiftData
 
 // Cloud-profile loading, iCloud validation helpers, and UserDefaults
 // persistence extracted from the main `ProfileStore` body so it stays under
@@ -10,71 +9,108 @@ extension ProfileStore {
 
   // MARK: - Cloud Profile Loading
 
+  /// Loads the cloud profile list from `profile-index.sqlite`. The fetch
+  /// itself runs off the main actor; the returned profiles are applied
+  /// back on the main actor via `applyLoadedProfiles(_:isInitialLoad:)`.
+  /// One main-actor tick passes between the call and the visible state
+  /// change. SwiftUI `@Observable` propagation handles the deferred
+  /// update transparently.
   func loadCloudProfiles(isInitialLoad: Bool = false) {
     guard let containerManager else { return }
-    let context = ModelContext(containerManager.indexContainer)
-    let descriptor = FetchDescriptor<ProfileRecord>(
-      sortBy: [SortDescriptor(\.createdAt)]
-    )
-    do {
-      let previousCloudProfiles = profiles
-      let records = try context.fetch(descriptor)
-      profiles = records.map { $0.toProfile() }
-      logger.debug("Loaded \(self.profiles.count) cloud profiles")
+    let repo = containerManager.profileIndexRepository
+    let task = Task { [weak self] in
+      do {
+        let loaded = try await repo.fetchAll()
+        self?.applyLoadedProfiles(loaded, isInitialLoad: isInitialLoad)
+      } catch {
+        self?.logger.error(
+          "Failed to load cloud profiles: \(error, privacy: .public)")
+      }
+    }
+    trackMutation(task)
+  }
 
-      // If this load produced cloud profiles, any pending retry is now
-      // redundant — cancel it so we don't do unnecessary work after the
-      // store is ready.
-      if !profiles.isEmpty {
-        cancelPendingRetry()
+  /// Applies a freshly-loaded cloud profile list. Mirrors the contract
+  /// of the previous synchronous fetch: in-place state mutation, the
+  /// auto-activate guard, the remote-deletion cleanup, and the
+  /// pending-retry cancel.
+  ///
+  /// Race-condition guard: the GRDB writes triggered by `addProfile`
+  /// are fire-and-forget. If `loadCloudProfiles` reads the table
+  /// after one optimistic add has committed but before another, a
+  /// blind `profiles = loaded` assignment would drop the still
+  /// in-flight addition and the UI would briefly show fewer
+  /// profiles. On the **initial** load we therefore *merge* `loaded`
+  /// onto the in-memory list rather than replacing it: ids that
+  /// appear in `loaded` win (so a fresher remote-imported version
+  /// supersedes the optimistic one), and ids that exist only
+  /// in-memory are preserved. Subsequent loads (`isInitialLoad ==
+  /// false`, e.g. driven by a remote-change notification) keep the
+  /// authoritative replace semantics so genuine remote deletions
+  /// still propagate.
+  private func applyLoadedProfiles(_ loaded: [Profile], isInitialLoad: Bool) {
+    let previousCloudProfiles = profiles
+    if isInitialLoad {
+      let loadedIDs = Set(loaded.map(\.id))
+      let localOnly = profiles.filter { !loadedIDs.contains($0.id) }
+      profiles = loaded + localOnly
+    } else {
+      profiles = loaded
+    }
+    logger.debug("Loaded \(self.profiles.count) cloud profiles")
+
+    // If this load produced cloud profiles, any pending retry is now
+    // redundant — cancel it so we don't do unnecessary work after the
+    // store is ready.
+    if !profiles.isEmpty {
+      cancelPendingRetry()
+    }
+
+    // Auto-select a profile when none is active AND there is exactly one
+    // profile in total (e.g. new device receiving its first cloud profile
+    // from another device). Suppressed when `WelcomeView` is mid-create —
+    // see design spec §3.3 race condition. With two or more profiles, the
+    // `WelcomeView` picker (state 5) lets the user choose explicitly.
+    if activeProfileID == nil,
+      profiles.count == 1,
+      let first = profiles.first,
+      welcomePhase != .creating
+    {
+      self.activeProfileID = first.id
+      saveActiveProfileID()
+      logger.debug("Auto-selected profile: \(first.id)")
+    } else if welcomePhase == .creating {
+      logger.debug("Skipped auto-select — welcomePhase == .creating")
+    } else if activeProfileID == nil, profiles.count > 1 {
+      let profileCount = profiles.count
+      logger.debug(
+        "Skipped auto-select — \(profileCount) profiles present, picker will choose"
+      )
+    }
+
+    // Handle profiles deleted on another device. Skipped on the
+    // initial load for the same reason as the empty-result guard
+    // above: a stale-empty read could otherwise erase the active
+    // profile and tear down its store before later loads return the
+    // real list.
+    if !isInitialLoad {
+      let newIDs = Set(profiles.map(\.id))
+      for oldProfile in previousCloudProfiles where !newIDs.contains(oldProfile.id) {
+        logger.info(
+          "Cloud profile \(oldProfile.id) was removed remotely — cleaning up local store")
+        containerManager?.deleteStore(for: oldProfile.id)
+        onProfileRemoved?(oldProfile.id)
       }
 
-      // Auto-select a profile when none is active AND there is exactly one
-      // profile in total (e.g. new device receiving its first cloud profile
-      // from another device). Suppressed when `WelcomeView` is mid-create —
-      // see design spec §3.3 race condition. With two or more profiles, the
-      // `WelcomeView` picker (state 5) lets the user choose explicitly.
-      if activeProfileID == nil,
-        profiles.count == 1,
-        let first = profiles.first,
-        welcomePhase != .creating
+      if let activeProfileID,
+        !profiles.contains(where: { $0.id == activeProfileID })
       {
-        self.activeProfileID = first.id
+        self.activeProfileID = profiles.first?.id
         saveActiveProfileID()
-        logger.debug("Auto-selected profile: \(first.id)")
-      } else if welcomePhase == .creating {
-        logger.debug("Skipped auto-select — welcomePhase == .creating")
-      } else if activeProfileID == nil, profiles.count > 1 {
-        let profileCount = profiles.count
         logger.debug(
-          "Skipped auto-select — \(profileCount) profiles present, picker will choose"
+          "Active profile was removed remotely, switched to: \(self.activeProfileID?.uuidString ?? "nil")"
         )
       }
-
-      // Handle profiles deleted on another device.
-      // Skip this on initial load — SwiftData with CloudKit may return empty results
-      // before the store is fully ready, which would incorrectly reset the active profile.
-      if !isInitialLoad {
-        let newIDs = Set(profiles.map(\.id))
-        for oldProfile in previousCloudProfiles where !newIDs.contains(oldProfile.id) {
-          logger.info(
-            "Cloud profile \(oldProfile.id) was removed remotely — cleaning up local store")
-          containerManager.deleteStore(for: oldProfile.id)
-          onProfileRemoved?(oldProfile.id)
-        }
-
-        if let activeProfileID,
-          !profiles.contains(where: { $0.id == activeProfileID })
-        {
-          self.activeProfileID = profiles.first?.id
-          saveActiveProfileID()
-          logger.debug(
-            "Active profile was removed remotely, switched to: \(self.activeProfileID?.uuidString ?? "nil")"
-          )
-        }
-      }
-    } catch {
-      logger.error("Failed to load cloud profiles: \(error.localizedDescription)")
     }
   }
 
@@ -86,7 +122,7 @@ extension ProfileStore {
     defer { isValidating = false }
 
     guard CloudKitAuthProvider.isCloudKitAvailable else {
-      // No CloudKit entitlements — allow local-only SwiftData profiles
+      // No CloudKit entitlements — allow local-only profiles.
       return true
     }
 
@@ -107,8 +143,8 @@ extension ProfileStore {
   // MARK: - Retry scheduling
 
   /// If the initial load returned no cloud profiles but we expect some (saved activeProfileID
-  /// doesn't match any remote profile), retry once after a short delay. SwiftData with CloudKit
-  /// may not have its store ready on the first synchronous fetch.
+  /// doesn't match any remote profile), retry once after a short delay. The GRDB
+  /// profile-index DB may not have its migration completed on the first synchronous fetch.
   func scheduleRetryIfNeeded() {
     guard profiles.isEmpty,
       activeProfileID != nil

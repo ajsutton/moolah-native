@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 import Testing
 
 @testable import Moolah
@@ -19,42 +18,48 @@ struct ProfileStoreTestsMoreSecondHalf {
   }
 
   @Test("updateProfile calls onProfileChanged for CloudKit profiles")
-  func updateCloudProfileCallsOnProfileChanged() throws {
+  func updateCloudProfileCallsOnProfileChanged() async throws {
     let defaults = makeDefaults()
     let containerManager = try ProfileContainerManager.forTesting()
     let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+    await drainPendingMutations(store)
 
     var profile = makeProfile(label: "Cloud")
     store.addProfile(profile)
+    await drainPendingMutations(store)
 
     var changedIDs: [UUID] = []
     store.onProfileChanged = { id in changedIDs.append(id) }
 
     profile.label = "Updated"
     store.updateProfile(profile)
+    await drainPendingMutations(store)
 
     #expect(changedIDs == [profile.id])
   }
 
   @Test("removeProfile calls onProfileDeleted for CloudKit profiles")
-  func removeCloudProfileCallsOnProfileDeleted() throws {
+  func removeCloudProfileCallsOnProfileDeleted() async throws {
     let defaults = makeDefaults()
     let containerManager = try ProfileContainerManager.forTesting()
     let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+    await drainPendingMutations(store)
 
     let profile = makeProfile(label: "Cloud")
     store.addProfile(profile)
+    await drainPendingMutations(store)
 
     var deletedIDs: [UUID] = []
     store.onProfileDeleted = { id in deletedIDs.append(id) }
 
     store.removeProfile(profile.id)
+    await drainPendingMutations(store)
 
     #expect(deletedIDs == [profile.id])
   }
 
   @Test("loadCloudProfiles does not clean up profiles on initial load")
-  func initialLoadDoesNotCleanUp() throws {
+  func initialLoadDoesNotCleanUp() async throws {
     let defaults = makeDefaults()
     let containerManager = try ProfileContainerManager.forTesting()
 
@@ -67,8 +72,9 @@ struct ProfileStoreTestsMoreSecondHalf {
     var removedIDs: [UUID] = []
     store.onProfileRemoved = { id in removedIDs.append(id) }
 
-    // Initial load with empty SwiftData — should NOT trigger cleanup
+    // Initial load with empty GRDB DB — should NOT trigger cleanup
     store.loadCloudProfiles(isInitialLoad: true)
+    await drainPendingMutations(store)
 
     #expect(removedIDs.isEmpty)
   }
@@ -88,7 +94,7 @@ struct ProfileStoreTestsMoreSecondHalf {
   }
 
   @Test("loadCloudProfiles cancels the pending retry once profiles are found")
-  func loadCloudProfilesCancelsPendingRetry() throws {
+  func loadCloudProfilesCancelsPendingRetry() async throws {
     let defaults = makeDefaults()
     let cloudProfileID = UUID()
     defaults.set(cloudProfileID.uuidString, forKey: "com.moolah.activeProfileID")
@@ -99,21 +105,20 @@ struct ProfileStoreTestsMoreSecondHalf {
     // Retry should be pending because the active profile has no backing record yet.
     #expect(store.isCloudLoadPending == true)
 
-    // Insert a ProfileRecord directly — simulates CloudKit finishing its initial
-    // import after the store was constructed.
-    let context = ModelContext(containerManager.indexContainer)
+    // Insert the matching profile into GRDB directly — simulates the
+    // sync engine landing a remote insert after the store was constructed.
     let profile = Profile(
       id: cloudProfileID,
       label: "Cloud",
       currencyCode: "AUD",
       financialYearStartMonth: 7
     )
-    context.insert(ProfileRecord.from(profile: profile))
-    try context.save()
+    try await containerManager.profileIndexRepository.upsert(profile)
 
     // A remote-change-driven reload should find the profile and cancel the
     // pending retry so we don't do redundant work.
     store.loadCloudProfiles(isInitialLoad: false)
+    await drainPendingMutations(store)
 
     #expect(store.profiles.count == 1)
     #expect(store.isCloudLoadPending == false)

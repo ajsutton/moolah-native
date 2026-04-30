@@ -15,6 +15,11 @@ extension SyncCoordinator: CKSyncEngineDelegate {
   nonisolated func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
     if case .fetchedRecordZoneChanges(let changes) = event {
       await handleFetchedRecordZoneChangesAsync(changes)
+    } else if case .accountChange(let accountChange) = event {
+      // Account-change handling now performs an `await` (GRDB read of
+      // every profile id) so it can't be hosted inside a synchronous
+      // `MainActor.run`. Hop directly to the main actor's async path.
+      await handleAccountChangeOnMain(accountChange)
     } else {
       await MainActor.run {
         handleEventOnMain(event)
@@ -23,13 +28,22 @@ extension SyncCoordinator: CKSyncEngineDelegate {
   }
 
   @MainActor
+  private func handleAccountChangeOnMain(
+    _ accountChange: CKSyncEngine.Event.AccountChange
+  ) async {
+    await handleAccountChange(accountChange)
+  }
+
+  @MainActor
   private func handleEventOnMain(_ event: CKSyncEngine.Event) {
     switch event {
     case .stateUpdate(let stateUpdate):
       saveStateSerialization(stateUpdate.stateSerialization)
 
-    case .accountChange(let accountChange):
-      handleAccountChange(accountChange)
+    case .accountChange:
+      // Routed through `handleAccountChangeOnMain` in `handleEvent`
+      // because the sign-out path performs an async GRDB read.
+      break
 
     case .fetchedDatabaseChanges(let changes):
       handleFetchedDatabaseChanges(changes)

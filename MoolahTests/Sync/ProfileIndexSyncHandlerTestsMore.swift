@@ -1,6 +1,6 @@
 import CloudKit
 import Foundation
-import SwiftData
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -9,23 +9,22 @@ import Testing
 @MainActor
 struct ProfileIndexSyncHandlerTestsMore {
 
-  private func makeHandler() throws -> (ProfileIndexSyncHandler, ModelContainer) {
-    let schema = Schema([ProfileRecord.self])
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try ModelContainer(for: schema, configurations: [config])
-    let handler = ProfileIndexSyncHandler(modelContainer: container)
-    return (handler, container)
+  private func makeHandler() throws -> (ProfileIndexSyncHandler, GRDBProfileIndexRepository) {
+    let database = try ProfileIndexDatabase.openInMemory()
+    let repository = GRDBProfileIndexRepository(database: database)
+    let handler = ProfileIndexSyncHandler(repository: repository)
+    return (handler, repository)
   }
 
   @Test
   func buildCKRecordPreservesCachedSystemFields() throws {
-    let (handler, container) = try makeHandler()
+    let (handler, repository) = try makeHandler()
 
     let profileId = UUID()
     let originalCK = CKRecord(
-      recordType: ProfileRecord.recordType,
+      recordType: ProfileRow.recordType,
       recordID: CKRecord.ID(
-        recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
+        recordType: ProfileRow.recordType, uuid: profileId, zoneID: handler.zoneID)
     )
     originalCK["label"] = "Test" as CKRecordValue
     originalCK["currencyCode"] = "AUD" as CKRecordValue
@@ -35,17 +34,13 @@ struct ProfileIndexSyncHandlerTestsMore {
     // Apply remote changes to store system fields
     _ = handler.applyRemoteChanges(saved: [originalCK], deleted: [])
 
-    let context = ModelContext(container)
-    let records = try context.fetch(
-      FetchDescriptor<ProfileRecord>(predicate: #Predicate { $0.id == profileId })
-    )
-    let profile = try #require(records.first)
-    #expect(profile.encodedSystemFields != nil)
+    let row = try #require(try repository.fetchRowSync(id: profileId))
+    #expect(row.encodedSystemFields != nil)
 
-    let built = handler.buildCKRecord(for: profile)
+    let built = handler.buildCKRecord(for: row)
     #expect(
       built.recordID.recordName
-        == "\(ProfileRecord.recordType)|\(profileId.uuidString)")
+        == "\(ProfileRow.recordType)|\(profileId.uuidString)")
     #expect(built.recordID.zoneID == handler.zoneID)
     #expect(built["label"] as? String == "Test")
   }
@@ -54,18 +49,18 @@ struct ProfileIndexSyncHandlerTestsMore {
 
   @Test
   func recordToSaveFindsProfileByUUID() throws {
-    let (handler, container) = try makeHandler()
+    let (handler, repository) = try makeHandler()
 
     let profileId = UUID()
-    let context = ModelContext(container)
-    context.insert(ProfileRecord(id: profileId, label: "Found", currencyCode: "AUD"))
-    try context.save()
+    let profile = Profile(id: profileId, label: "Found", currencyCode: "AUD")
+    try repository.applyRemoteChangesSync(
+      saved: [ProfileRow(domain: profile)], deleted: [])
 
     let recordID = CKRecord.ID(
-      recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
+      recordType: ProfileRow.recordType, uuid: profileId, zoneID: handler.zoneID)
     let result = handler.recordToSave(for: recordID)
     #expect(result != nil)
-    #expect(result?.recordType == ProfileRecord.recordType)
+    #expect(result?.recordType == ProfileRow.recordType)
     #expect(result?["label"] as? String == "Found")
   }
 
@@ -74,7 +69,7 @@ struct ProfileIndexSyncHandlerTestsMore {
     let (handler, _) = try makeHandler()
 
     let recordID = CKRecord.ID(
-      recordType: ProfileRecord.recordType, uuid: UUID(), zoneID: handler.zoneID)
+      recordType: ProfileRow.recordType, uuid: UUID(), zoneID: handler.zoneID)
     let result = handler.recordToSave(for: recordID)
     #expect(result == nil)
   }
@@ -83,13 +78,13 @@ struct ProfileIndexSyncHandlerTestsMore {
 
   @Test
   func clearAllSystemFieldsClearsOnAllProfiles() throws {
-    let (handler, container) = try makeHandler()
+    let (handler, repository) = try makeHandler()
 
     let profileId = UUID()
     let ckRecord = CKRecord(
-      recordType: ProfileRecord.recordType,
+      recordType: ProfileRow.recordType,
       recordID: CKRecord.ID(
-        recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
+        recordType: ProfileRow.recordType, uuid: profileId, zoneID: handler.zoneID)
     )
     ckRecord["label"] = "Test" as CKRecordValue
     ckRecord["currencyCode"] = "AUD" as CKRecordValue
@@ -98,84 +93,70 @@ struct ProfileIndexSyncHandlerTestsMore {
 
     _ = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
-    // Verify system fields are set
-    let preContext = ModelContext(container)
-    let preRecords = try preContext.fetch(
-      FetchDescriptor<ProfileRecord>(predicate: #Predicate { $0.id == profileId })
-    )
-    #expect(preRecords.first?.encodedSystemFields != nil)
+    let preRow = try #require(try repository.fetchRowSync(id: profileId))
+    #expect(preRow.encodedSystemFields != nil)
 
     handler.clearAllSystemFields()
 
-    let postContext = ModelContext(container)
-    let postRecords = try postContext.fetch(
-      FetchDescriptor<ProfileRecord>(predicate: #Predicate { $0.id == profileId })
-    )
-    #expect(postRecords.first?.encodedSystemFields == nil)
+    let postRow = try #require(try repository.fetchRowSync(id: profileId))
+    #expect(postRow.encodedSystemFields == nil)
   }
 
   // MARK: - updateEncodedSystemFields / clearEncodedSystemFields
 
   @Test
   func updateEncodedSystemFieldsSetsDataOnMatchingProfile() throws {
-    let (handler, container) = try makeHandler()
+    let (handler, repository) = try makeHandler()
 
     let profileId = UUID()
-    let context = ModelContext(container)
-    context.insert(ProfileRecord(id: profileId, label: "Test", currencyCode: "AUD"))
-    try context.save()
+    let profile = Profile(id: profileId, label: "Test", currencyCode: "AUD")
+    try repository.applyRemoteChangesSync(
+      saved: [ProfileRow(domain: profile)], deleted: [])
 
     let testData = Data([0x01, 0x02, 0x03])
     let recordID = CKRecord.ID(
-      recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
+      recordType: ProfileRow.recordType, uuid: profileId, zoneID: handler.zoneID)
     handler.updateEncodedSystemFields(recordID, data: testData)
 
-    let freshContext = ModelContext(container)
-    let records = try freshContext.fetch(
-      FetchDescriptor<ProfileRecord>(predicate: #Predicate { $0.id == profileId })
-    )
-    #expect(records.first?.encodedSystemFields == testData)
+    let row = try #require(try repository.fetchRowSync(id: profileId))
+    #expect(row.encodedSystemFields == testData)
   }
 
   @Test
   func clearEncodedSystemFieldsClearsDataOnMatchingProfile() throws {
-    let (handler, container) = try makeHandler()
+    let (handler, repository) = try makeHandler()
 
     let profileId = UUID()
-    let context = ModelContext(container)
-    let profile = ProfileRecord(id: profileId, label: "Test", currencyCode: "AUD")
-    profile.encodedSystemFields = Data([0x01, 0x02])
-    context.insert(profile)
-    try context.save()
+    var row = ProfileRow(
+      domain: Profile(id: profileId, label: "Test", currencyCode: "AUD"))
+    row.encodedSystemFields = Data([0x01, 0x02])
+    try repository.applyRemoteChangesSync(saved: [row], deleted: [])
 
     let recordID = CKRecord.ID(
-      recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
+      recordType: ProfileRow.recordType, uuid: profileId, zoneID: handler.zoneID)
     handler.clearEncodedSystemFields(recordID)
 
-    let freshContext = ModelContext(container)
-    let records = try freshContext.fetch(
-      FetchDescriptor<ProfileRecord>(predicate: #Predicate { $0.id == profileId })
-    )
-    #expect(records.first?.encodedSystemFields == nil)
+    let updated = try #require(try repository.fetchRowSync(id: profileId))
+    #expect(updated.encodedSystemFields == nil)
   }
 
   // MARK: - handleSentRecordZoneChanges
 
   @Test
   func handleSentRecordZoneChangesUpdatesSystemFieldsFromSavedRecords() throws {
-    let (handler, container) = try makeHandler()
+    let (handler, repository) = try makeHandler()
 
     let profileId = UUID()
-    let context = ModelContext(container)
-    context.insert(ProfileRecord(id: profileId, label: "Test", currencyCode: "AUD"))
-    try context.save()
+    let profile = Profile(id: profileId, label: "Test", currencyCode: "AUD")
+    try repository.applyRemoteChangesSync(
+      saved: [ProfileRow(domain: profile)], deleted: [])
 
-    // Build a CKRecord with encoded system fields (produced by applyRemoteChanges on a
-    // real record so the system fields blob is valid).
+    // Build a CKRecord with encoded system fields produced from a real
+    // record so the system fields blob is valid.
     let ckRecord = CKRecord(
-      recordType: ProfileRecord.recordType,
+      recordType: ProfileRow.recordType,
       recordID: CKRecord.ID(
-        recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
+        recordType: ProfileRow.recordType, uuid: profileId, zoneID: handler.zoneID)
     )
     ckRecord["label"] = "Test" as CKRecordValue
     ckRecord["currencyCode"] = "AUD" as CKRecordValue
@@ -194,15 +175,8 @@ struct ProfileIndexSyncHandlerTestsMore {
     #expect(failures.requeue.isEmpty)
     #expect(failures.requeueDeletes.isEmpty)
 
-    // Read the updated system fields back through a FRESH context. If the handler had
-    // mutated the shared mainContext without saving (or reused a stale context), a new
-    // context would not see the change. Using a fresh context here verifies the write
-    // was actually persisted to the store.
-    let freshContext = ModelContext(container)
-    let records = try freshContext.fetch(
-      FetchDescriptor<ProfileRecord>(predicate: #Predicate { $0.id == profileId })
-    )
-    #expect(records.first?.encodedSystemFields == expectedSystemFields)
+    let row = try #require(try repository.fetchRowSync(id: profileId))
+    #expect(row.encodedSystemFields == expectedSystemFields)
   }
 
   @Test

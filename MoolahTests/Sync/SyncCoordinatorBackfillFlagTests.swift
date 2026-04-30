@@ -43,10 +43,10 @@ struct SyncCoordinatorBackfillFlagTests {
     context.insert(
       AccountRecord(id: accountId, name: "A1", type: "bank", position: 0, isHidden: false))
     try context.save()
-    _ = coordinator.queueUnsyncedRecordsForAllProfiles()
+    _ = await coordinator.queueUnsyncedRecordsForAllProfiles()
 
     // Simulate the sign-out handler firing.
-    coordinator.handleSignOutForTesting()
+    await coordinator.handleSignOutForTesting()
 
     // After sign-out, backfill state is gone — a future scan would rerun for the profile.
     // We can't directly seed a profile back (deleteAllLocalData removed it), but we can
@@ -79,7 +79,7 @@ struct SyncCoordinatorBackfillFlagTests {
     context.insert(
       AccountRecord(id: accountId, name: "A1", type: "bank", position: 0, isHidden: false))
     try context.save()
-    _ = coordinator.queueUnsyncedRecordsForAllProfiles()
+    _ = await coordinator.queueUnsyncedRecordsForAllProfiles()
 
     let zoneID = CKRecordZone.ID(
       zoneName: "profile-\(profileId.uuidString)",
@@ -113,7 +113,7 @@ struct SyncCoordinatorBackfillFlagTests {
     context.insert(
       AccountRecord(id: UUID(), name: "A1", type: "bank", position: 0, isHidden: false))
     try context.save()
-    _ = coordinator.queueUnsyncedRecordsForAllProfiles()
+    _ = await coordinator.queueUnsyncedRecordsForAllProfiles()
 
     let zoneID = CKRecordZone.ID(
       zoneName: "profile-\(profileId.uuidString)",

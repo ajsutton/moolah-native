@@ -1,18 +1,21 @@
-// Backends/GRDB/ProfileDatabase.swift
+// Backends/GRDB/ProfileIndexDatabase.swift
 
 import Foundation
 import GRDB
 
-/// Factory for the per-profile GRDB `DatabaseQueue`.
+/// Factory for the app-scoped profile-index `DatabaseQueue`.
 ///
-/// The queue is owned by `ProfileSession` (one per active profile). Connect
-/// once at profile activation; let the queue go out of scope on profile
-/// switch / sign-out / delete.
+/// One database per app install — independent of any per-profile
+/// `data.sqlite`. Holds one row per CloudKit profile so the profile
+/// picker can list profiles before any of them is activated. Lives at
+/// `<URL.moolahScopedApplicationSupport>/Moolah/profile-index.sqlite`.
 ///
-/// See `guides/DATABASE_SCHEMA_GUIDE.md` §2 (lifecycle) and §5 (PRAGMAs)
-/// for the rules this factory enforces.
-enum ProfileDatabase {
-  /// Open (or create) the profile DB at `url` and apply pending migrations.
+/// The factory mirrors `ProfileDatabase` so the PRAGMA configuration
+/// stays in lock-step. See `guides/DATABASE_SCHEMA_GUIDE.md` §2
+/// (lifecycle) and §5 (PRAGMAs) for the rules this factory enforces.
+enum ProfileIndexDatabase {
+  /// Open (or create) the profile-index DB at `url` and apply pending
+  /// migrations.
   ///
   /// On-disk databases are required to use `journal_mode = WAL` per
   /// `guides/DATABASE_SCHEMA_GUIDE.md` §5. WAL is enabled via
@@ -26,7 +29,7 @@ enum ProfileDatabase {
     let queue = try DatabaseQueue(
       path: url.path,
       configuration: configuration(walMode: true))
-    try ProfileSchema.migrator.migrate(queue)
+    try ProfileIndexSchema.migrator.migrate(queue)
     try assertJournalMode(queue, expected: "wal")
     return queue
   }
@@ -36,7 +39,7 @@ enum ProfileDatabase {
   /// rejects WAL on `:memory:` databases (see sqlite.org WAL docs).
   static func openInMemory() throws -> DatabaseQueue {
     let queue = try DatabaseQueue(configuration: configuration(walMode: false))
-    try ProfileSchema.migrator.migrate(queue)
+    try ProfileIndexSchema.migrator.migrate(queue)
     return queue
   }
 
@@ -69,7 +72,7 @@ enum ProfileDatabase {
     }
     precondition(
       actual.lowercased() == expected.lowercased(),
-      "Profile DB opened with journal_mode='\(actual)', expected '\(expected)'"
+      "Profile-index DB opened with journal_mode='\(actual)', expected '\(expected)'"
     )
   }
 }

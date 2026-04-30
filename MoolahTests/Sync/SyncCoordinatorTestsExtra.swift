@@ -140,7 +140,7 @@ struct SyncCoordinatorTestsExtra {
   }
 
   @Test
-  func queueUnsyncedRecordsForAllProfilesSkipsSyncedRecords() throws {
+  func queueUnsyncedRecordsForAllProfilesSkipsSyncedRecords() async throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(
       containerManager: manager,
@@ -148,19 +148,17 @@ struct SyncCoordinatorTestsExtra {
       fallbackGRDBRepositoriesFactory:
         ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
 
-    // Register two profiles in the index.
+    // Register two profiles in the GRDB index.
     let profileA = UUID()
     let profileB = UUID()
-    let indexContext = ModelContext(manager.indexContainer)
-    indexContext.insert(
-      ProfileRecord(
+    try await manager.profileIndexRepository.upsert(
+      Profile(
         id: profileA, label: "A", currencyCode: "AUD",
-        financialYearStartMonth: 7, createdAt: Date()))
-    indexContext.insert(
-      ProfileRecord(
+        financialYearStartMonth: 7))
+    try await manager.profileIndexRepository.upsert(
+      Profile(
         id: profileB, label: "B", currencyCode: "USD",
-        financialYearStartMonth: 1, createdAt: Date()))
-    try indexContext.save()
+        financialYearStartMonth: 1))
 
     // Profile A: one unsynced account and one synced account.
     let unsyncedA = UUID()
@@ -180,7 +178,7 @@ struct SyncCoordinatorTestsExtra {
     contextB.insert(TransactionRecord(id: unsyncedB, date: Date(), payee: "B-unsynced"))
     try contextB.save()
 
-    let queued = coordinator.queueUnsyncedRecordsForAllProfiles()
+    let queued = await coordinator.queueUnsyncedRecordsForAllProfiles()
     let names = Set(queued.map(\.recordName))
 
     #expect(
@@ -204,19 +202,19 @@ struct SyncCoordinatorTestsExtra {
   }
 
   @Test
-  func queueUnsyncedRecordsForAllProfilesReturnsEmptyWhenNoProfiles() throws {
+  func queueUnsyncedRecordsForAllProfilesReturnsEmptyWhenNoProfiles() async throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(
       containerManager: manager, userDefaults: makeDefaults())
 
-    let queued = coordinator.queueUnsyncedRecordsForAllProfiles()
+    let queued = await coordinator.queueUnsyncedRecordsForAllProfiles()
     #expect(queued.isEmpty)
   }
 
   @Test(
     "queueUnsyncedRecordsForAllProfiles skips profiles whose backfill scan has already run"
   )
-  func queueUnsyncedRecordsForAllProfilesSkipsProfilesAlreadyScanned() throws {
+  func queueUnsyncedRecordsForAllProfilesSkipsProfilesAlreadyScanned() async throws {
     let manager = try ProfileContainerManager.forTesting()
     let defaults = makeDefaults()
     let coordinator = SyncCoordinator(
@@ -226,12 +224,10 @@ struct SyncCoordinatorTestsExtra {
         ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
 
     let profileId = UUID()
-    let indexContext = ModelContext(manager.indexContainer)
-    indexContext.insert(
-      ProfileRecord(
+    try await manager.profileIndexRepository.upsert(
+      Profile(
         id: profileId, label: "A", currencyCode: "AUD",
-        financialYearStartMonth: 7, createdAt: Date()))
-    try indexContext.save()
+        financialYearStartMonth: 7))
 
     // Seed an unsynced record (nil encodedSystemFields) for this profile.
     let accountId = UUID()
@@ -241,12 +237,12 @@ struct SyncCoordinatorTestsExtra {
     try context.save()
 
     // First scan should find and queue the unsynced record.
-    let first = coordinator.queueUnsyncedRecordsForAllProfiles()
+    let first = await coordinator.queueUnsyncedRecordsForAllProfiles()
     #expect(first.map(\.recordName) == ["\(AccountRow.recordType)|\(accountId.uuidString)"])
 
     // Second scan must NOT re-queue the same record — the profile has been marked
     // as scanned and is skipped. Avoids doing a SwiftData pass on every app launch.
-    let second = coordinator.queueUnsyncedRecordsForAllProfiles()
+    let second = await coordinator.queueUnsyncedRecordsForAllProfiles()
     #expect(second.isEmpty)
   }
 

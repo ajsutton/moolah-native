@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -16,6 +16,28 @@ struct ProfileStoreTests {
 
   private func makeProfile(label: String = "Test") -> Profile {
     Profile(label: label)
+  }
+
+  /// Installs a `BEFORE INSERT` trigger on the manager's profile-index
+  /// queue that aborts any write whose `label` matches the sentinel
+  /// `___FAIL___`. Mirrors the pattern in `ProfileIndexRollbackTests` —
+  /// gives tests a deterministic, in-process failure injection point
+  /// without mocking the repository.
+  private func installFailingProfileTrigger(
+    on manager: ProfileContainerManager,
+    name: String = "fail_profile_store_test"
+  ) async throws {
+    try await manager.profileIndexDatabase.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER \(name)
+          BEFORE INSERT ON profile
+          WHEN NEW.label = '___FAIL___'
+          BEGIN
+              SELECT RAISE(ABORT, 'forced failure for rollback test');
+          END;
+          """)
+    }
   }
 
   // MARK: - Add
@@ -151,6 +173,56 @@ struct ProfileStoreTests {
     #expect(store2.activeProfileID == second.id)
   }
 
+  // MARK: - Initial-load race
+
+  /// Regression for the missing first-paint population: previously the
+  /// SwiftData profile-index fetch in `init` was synchronous, so
+  /// `profiles` was non-empty before any view rendered. After the GRDB
+  /// migration the load became async, leaving `profiles` empty for the
+  /// first scene tick — `ProfileWindowView.resolvedProfile` then fell
+  /// through to `WelcomeView` even though a profile existed on disk,
+  /// breaking every UI test seed that relies on the seeded profile
+  /// being immediately resolvable.
+  @Test("init populates profiles synchronously from GRDB before any await")
+  func initSynchronousPopulation() async throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let preSeeded = Profile(label: "Pre-seeded")
+    try await manager.profileIndexRepository.upsert(preSeeded)
+
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
+    // No drain — the assertion is that `profiles` is populated before
+    // the first scene tick (i.e. without any await between init and
+    // the read).
+    #expect(store.profiles.map(\.id) == [preSeeded.id])
+  }
+
+  /// Regression for the race where an async initial cloud load lands
+  /// after an optimistic `addProfile`. Before the fix the load
+  /// blindly assigned `profiles = loaded`, dropping the optimistic
+  /// addition (and any GRDB row that hadn't yet committed when the
+  /// fetch ran). The pre-seeded GRDB row plus the in-memory addition
+  /// are both expected after `drainPendingMutations`.
+  @Test("initial cloud load merges with in-flight optimistic addProfile")
+  func initialLoadMergesOptimisticAdd() async throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let preSeeded = Profile(label: "Pre-seeded")
+    try await manager.profileIndexRepository.upsert(preSeeded)
+
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
+    // Optimistic addProfile lands synchronously, before the init's
+    // async load can read GRDB. The race the fix targets: the load
+    // sees only the pre-seeded row, not the just-added one.
+    let optimistic = Profile(label: "Optimistic")
+    store.addProfile(optimistic)
+
+    await drainPendingMutations(store)
+
+    let ids = Set(store.profiles.map(\.id))
+    #expect(ids == [preSeeded.id, optimistic.id])
+    let onDisk = try await manager.profileIndexRepository.fetchAll()
+    #expect(Set(onDisk.map(\.id)) == [preSeeded.id, optimistic.id])
+  }
+
   // MARK: - Empty state
 
   @Test("fresh store with no data has no profiles")
@@ -183,4 +255,98 @@ struct ProfileStoreTests {
   }
 
   // MARK: - Validation: Update
+
+  // MARK: - Rollback on GRDB write failure
+  //
+  // Each test installs a `BEFORE INSERT` trigger that aborts any write
+  // touching a sentinel label. The store performs an optimistic
+  // in-memory mutation, then awaits the GRDB write Task; once the
+  // failure surfaces the rollback closure must restore the prior
+  // state so what observers see matches what is on disk.
+
+  @Test("addProfile rolls back optimistic state when GRDB write fails")
+  func addProfileRollsBackOnFailure() async throws {
+    let manager = try ProfileContainerManager.forTesting()
+    try await installFailingProfileTrigger(on: manager)
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
+    let failing = Profile(label: "___FAIL___")
+
+    // Optimistic insert lands synchronously…
+    store.addProfile(failing)
+    #expect(store.profiles.contains { $0.id == failing.id })
+    #expect(store.activeProfileID == failing.id)
+
+    // …and is rolled back once the GRDB write Task surfaces the error.
+    await drainPendingMutations(store)
+    #expect(store.profiles.isEmpty)
+    #expect(store.activeProfileID == nil)
+    let onDisk = try await manager.profileIndexRepository.fetchAll()
+    #expect(onDisk.isEmpty)
+  }
+
+  @Test("updateProfile restores prior profile when GRDB write fails")
+  func updateProfileRollsBackOnFailure() async throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
+
+    let original = Profile(label: "Original")
+    store.addProfile(original)
+    await drainPendingMutations(store)
+
+    // Trigger installed AFTER the seed so the original write succeeds;
+    // the next write that touches the sentinel label will trip it.
+    try await installFailingProfileTrigger(on: manager)
+
+    var failing = original
+    failing.label = "___FAIL___"
+    store.updateProfile(failing)
+    #expect(store.profiles.first { $0.id == original.id }?.label == "___FAIL___")
+
+    await drainPendingMutations(store)
+    let restored = try #require(store.profiles.first { $0.id == original.id })
+    #expect(restored.label == "Original")
+    let onDisk = try await manager.profileIndexRepository.fetchAll()
+    #expect(onDisk.first?.label == "Original")
+  }
+
+  @Test("removeProfile re-inserts profile when GRDB delete fails")
+  func removeProfileRollsBackOnFailure() async throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
+
+    let first = Profile(label: "First")
+    let second = Profile(label: "Second")
+    store.addProfile(first)
+    store.addProfile(second)
+    await drainPendingMutations(store)
+
+    // Install a `BEFORE DELETE` trigger that always aborts so the
+    // delete throws. Distinct from the insert-side helper because
+    // upsert/delete travel different SQLite codepaths.
+    try await manager.profileIndexDatabase.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER fail_profile_store_delete
+          BEFORE DELETE ON profile
+          BEGIN
+              SELECT RAISE(ABORT, 'forced delete failure for rollback test');
+          END;
+          """)
+    }
+
+    store.setActiveProfile(first.id)
+    let priorIDs = store.profiles.map(\.id)
+    store.removeProfile(first.id)
+    // Optimistic removal lands synchronously.
+    #expect(!store.profiles.contains { $0.id == first.id })
+    #expect(store.activeProfileID == second.id)
+
+    await drainPendingMutations(store)
+    // Rolled back: the profile is back at its original index, and the
+    // active id is restored.
+    #expect(store.profiles.map(\.id) == priorIDs)
+    #expect(store.activeProfileID == first.id)
+    let onDisk = try await manager.profileIndexRepository.fetchAll()
+    #expect(Set(onDisk.map(\.id)) == Set(priorIDs))
+  }
 }

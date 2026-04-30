@@ -215,47 +215,47 @@ struct RecordNameCollisionTests {
 
   // MARK: - 6. ProfileIndexSyncHandler dual-format
 
-  private func makeProfileIndexHandler() throws -> (ProfileIndexSyncHandler, ModelContainer) {
-    let schema = Schema([ProfileRecord.self])
-    let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
-    let container = try ModelContainer(for: schema, configurations: [config])
-    let handler = ProfileIndexSyncHandler(modelContainer: container)
-    return (handler, container)
+  private func makeProfileIndexHandler() throws -> (
+    ProfileIndexSyncHandler, GRDBProfileIndexRepository
+  ) {
+    let database = try ProfileIndexDatabase.openInMemory()
+    let repository = GRDBProfileIndexRepository(database: database)
+    let handler = ProfileIndexSyncHandler(repository: repository)
+    return (handler, repository)
   }
 
   @Test("ProfileIndexSyncHandler.recordToSave accepts prefixed recordID")
   func profileIndexRecordToSaveAcceptsPrefixedRecordID() throws {
-    let (handler, container) = try makeProfileIndexHandler()
+    let (handler, repository) = try makeProfileIndexHandler()
 
     let profileId = UUID()
-    let profile = ProfileRecord(
+    let profile = Profile(
       id: profileId, label: "Test", currencyCode: "AUD",
-      financialYearStartMonth: 7, createdAt: Date())
-    let context = ModelContext(container)
-    context.insert(profile)
-    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
+      financialYearStartMonth: 7)
+    try repository.applyRemoteChangesSync(
+      saved: [ProfileRow(domain: profile)], deleted: [])
 
     let prefixedID = CKRecord.ID(
-      recordType: ProfileRecord.recordType,
+      recordType: ProfileRow.recordType,
       uuid: profileId,
       zoneID: handler.zoneID)
 
     let result = try #require(handler.recordToSave(for: prefixedID))
-    #expect(result.recordType == ProfileRecord.recordType)
+    #expect(result.recordType == ProfileRow.recordType)
     #expect(
       result.recordID.recordName
-        == "\(ProfileRecord.recordType)|\(profileId.uuidString)")
+        == "\(ProfileRow.recordType)|\(profileId.uuidString)")
   }
 
   @Test("ProfileIndexSyncHandler.applyRemoteChanges accepts prefixed ProfileRecord")
   func profileIndexApplyRemoteChangesAcceptsPrefixedProfileRecord() throws {
-    let (handler, container) = try makeProfileIndexHandler()
+    let (handler, repository) = try makeProfileIndexHandler()
 
     let profileId = UUID()
     let prefixedCK = CKRecord(
-      recordType: ProfileRecord.recordType,
+      recordType: ProfileRow.recordType,
       recordID: CKRecord.ID(
-        recordType: ProfileRecord.recordType,
+        recordType: ProfileRow.recordType,
         uuid: profileId,
         zoneID: handler.zoneID))
     prefixedCK["label"] = "Prefixed" as CKRecordValue
@@ -265,35 +265,30 @@ struct RecordNameCollisionTests {
 
     _ = handler.applyRemoteChanges(saved: [prefixedCK], deleted: [])
 
-    let context = ModelContext(container)
-    let records = try context.fetch(
-      FetchDescriptor<ProfileRecord>(
-        predicate: #Predicate { $0.id == profileId })
-    )
-    #expect(records.count == 1)
-    #expect(records.first?.label == "Prefixed")
-    #expect(records.first?.encodedSystemFields != nil)
+    let row = try #require(try repository.fetchRowSync(id: profileId))
+    #expect(row.label == "Prefixed")
+    #expect(row.encodedSystemFields != nil)
   }
 
   @Test(
     "ProfileIndexSyncHandler.handleSentRecordZoneChanges caches system fields for prefixed records"
   )
   func profileIndexHandleSentCachesSystemFieldsForPrefixedRecord() throws {
-    let (handler, container) = try makeProfileIndexHandler()
+    let (handler, repository) = try makeProfileIndexHandler()
 
     let profileId = UUID()
-    let context = ModelContext(container)
-    let profile = ProfileRecord(
+    let profile = Profile(
       id: profileId, label: "Test", currencyCode: "AUD",
-      financialYearStartMonth: 7, createdAt: Date())
-    context.insert(profile)
-    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
-    #expect(profile.encodedSystemFields == nil)
+      financialYearStartMonth: 7)
+    try repository.applyRemoteChangesSync(
+      saved: [ProfileRow(domain: profile)], deleted: [])
+    let preRow = try #require(try repository.fetchRowSync(id: profileId))
+    #expect(preRow.encodedSystemFields == nil)
 
     let savedCK = CKRecord(
-      recordType: ProfileRecord.recordType,
+      recordType: ProfileRow.recordType,
       recordID: CKRecord.ID(
-        recordType: ProfileRecord.recordType,
+        recordType: ProfileRow.recordType,
         uuid: profileId,
         zoneID: handler.zoneID))
     savedCK["label"] = "Test" as CKRecordValue
@@ -301,11 +296,7 @@ struct RecordNameCollisionTests {
     _ = handler.handleSentRecordZoneChanges(
       savedRecords: [savedCK], failedSaves: [], failedDeletes: [])
 
-    let fresh = ModelContext(container)
-    let reloaded = try fresh.fetch(
-      FetchDescriptor<ProfileRecord>(
-        predicate: #Predicate { $0.id == profileId })
-    ).first
-    #expect(reloaded?.encodedSystemFields != nil)
+    let row = try #require(try repository.fetchRowSync(id: profileId))
+    #expect(row.encodedSystemFields != nil)
   }
 }

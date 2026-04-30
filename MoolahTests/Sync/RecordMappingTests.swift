@@ -263,6 +263,13 @@ struct RecordMappingTests {
     let profileRecord = CKRecord(recordType: ProfileRecord.recordType, recordID: malformedID)
     #expect(ProfileRecord.fieldValues(from: profileRecord) == nil)
 
+    // ProfileRow shares the wire `recordType` with `ProfileRecord` but is a
+    // distinct local type; until `RecordTypeRegistry` flips its mapping
+    // there is no registry entry covering it, so assert the malformed
+    // guard explicitly.
+    let profileRowRecord = CKRecord(recordType: ProfileRow.recordType, recordID: malformedID)
+    #expect(ProfileRow.fieldValues(from: profileRowRecord) == nil)
+
     let csvProfileRecord = CKRecord(
       recordType: CSVImportProfileRow.recordType, recordID: malformedID)
     #expect(CSVImportProfileRow.fieldValues(from: csvProfileRecord) == nil)
@@ -285,5 +292,80 @@ struct RecordMappingTests {
 
     let restored = try #require(InstrumentRow.fieldValues(from: ckRecord))
     #expect(restored.id == "AUD")
+  }
+}
+
+/// Wire-format round-trip + boundary coverage for the GRDB `ProfileRow`
+/// `CloudKitRecordConvertible` conformance. Lives in its own suite so
+/// `RecordMappingTests`'s body stays under SwiftLint's
+/// `type_body_length` threshold; it would be a natural sibling section
+/// otherwise.
+@Suite("ProfileRowMapping")
+struct ProfileRowMappingTests {
+
+  let zoneID = CKRecordZone.ID(zoneName: "profile-test", ownerName: CKCurrentUserDefaultName)
+
+  @Test
+  func profileRowRoundTrip() throws {
+    let id = UUID()
+    let createdAt = Date(timeIntervalSince1970: 1_700_000_000)
+    let row = ProfileRow(
+      id: id,
+      recordName: ProfileRow.recordName(for: id),
+      label: "Household",
+      currencyCode: "AUD",
+      financialYearStartMonth: 7,
+      createdAt: createdAt,
+      encodedSystemFields: nil)
+
+    let ckRecord = row.toCKRecord(in: zoneID)
+
+    #expect(ckRecord.recordType == "ProfileRecord")
+    #expect(
+      ckRecord.recordID.recordName
+        == ProfileRow.recordName(for: id))
+    #expect(ckRecord.recordID.zoneID == zoneID)
+    #expect(ckRecord["label"] as? String == "Household")
+    #expect(ckRecord["currencyCode"] as? String == "AUD")
+    #expect(ckRecord["financialYearStartMonth"] as? Int == 7)
+    #expect(ckRecord["createdAt"] as? Date == createdAt)
+
+    let restored = try #require(ProfileRow.fieldValues(from: ckRecord))
+    #expect(restored.id == id)
+    #expect(restored.recordName == ProfileRow.recordName(for: id))
+    #expect(restored.label == "Household")
+    #expect(restored.currencyCode == "AUD")
+    #expect(restored.financialYearStartMonth == 7)
+    #expect(restored.createdAt == createdAt)
+    #expect(restored.encodedSystemFields == nil)
+  }
+
+  @Test
+  func profileRowCoercesOutOfRangeMonth() throws {
+    let id = UUID()
+    let recordID = CKRecord.ID(
+      recordType: ProfileRow.recordType, uuid: id, zoneID: zoneID)
+    let ckRecord = CKRecord(recordType: "ProfileRecord", recordID: recordID)
+    ckRecord["label"] = "Out of range" as CKRecordValue
+    ckRecord["currencyCode"] = "AUD" as CKRecordValue
+    ckRecord["financialYearStartMonth"] = 13 as CKRecordValue
+    ckRecord["createdAt"] = Date(timeIntervalSince1970: 1_700_000_000) as CKRecordValue
+
+    let restored = try #require(ProfileRow.fieldValues(from: ckRecord))
+    #expect(restored.financialYearStartMonth == 7)
+  }
+
+  @Test
+  func profileRowDefaultsMonthWhenAbsent() throws {
+    let id = UUID()
+    let recordID = CKRecord.ID(
+      recordType: ProfileRow.recordType, uuid: id, zoneID: zoneID)
+    let ckRecord = CKRecord(recordType: "ProfileRecord", recordID: recordID)
+    ckRecord["label"] = "No month" as CKRecordValue
+    ckRecord["currencyCode"] = "AUD" as CKRecordValue
+    // No financialYearStartMonth set
+
+    let restored = try #require(ProfileRow.fieldValues(from: ckRecord))
+    #expect(restored.financialYearStartMonth == 7)
   }
 }

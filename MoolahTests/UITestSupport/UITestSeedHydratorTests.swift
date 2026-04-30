@@ -1,6 +1,5 @@
 import Foundation
 import GRDB
-import SwiftData
 import XCTest
 
 @testable import Moolah
@@ -14,10 +13,9 @@ import XCTest
 /// runs. These tests guard that contract so UI tests can reference fixtures
 /// symbolically without worrying about non-determinism.
 ///
-/// **Storage split.** Profile metadata lives in SwiftData
-/// (`indexContainer`). Per-profile records (accounts, transactions,
-/// categories, instruments, legs) live in GRDB — the assertions below
-/// read from the corresponding `*Row` tables.
+/// Both the profile index (`profile-index.sqlite`) and per-profile
+/// records (`data.sqlite`) are GRDB-backed; the assertions below read
+/// from the corresponding `ProfileRow` / `*Row` tables.
 @MainActor
 final class UITestSeedHydratorTests: XCTestCase {
   private var _containerManager: ProfileContainerManager?
@@ -38,13 +36,12 @@ final class UITestSeedHydratorTests: XCTestCase {
     try await super.tearDown()
   }
 
-  // MARK: - Profile index (SwiftData)
+  // MARK: - Profile index (GRDB)
 
-  func testHydrateTradeBaselineSeedsTheProfile() throws {
+  func testHydrateTradeBaselineSeedsTheProfile() async throws {
     _ = try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager)
 
-    let context = ModelContext(containerManager.indexContainer)
-    let profiles = try context.fetch(FetchDescriptor<ProfileRecord>())
+    let profiles = try await containerManager.profileIndexRepository.fetchAll()
     XCTAssertEqual(profiles.count, 1, "expected exactly one seeded profile")
     let profile = try XCTUnwrap(profiles.first)
     XCTAssertEqual(profile.id, UITestFixtures.TradeBaseline.profileId)

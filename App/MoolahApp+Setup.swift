@@ -79,8 +79,14 @@ extension MoolahApp {
         ImportRuleRecord.self,
       ])
 
+      let profileIndexURL = URL.moolahScopedApplicationSupport
+        .appending(path: "Moolah", directoryHint: .isDirectory)
+        .appending(path: "profile-index.sqlite")
+      let profileIndexDatabase = try ProfileIndexDatabase.open(at: profileIndexURL)
+
       let manager = ProfileContainerManager(
         indexContainer: indexContainer,
+        profileIndexDatabase: profileIndexDatabase,
         dataSchema: dataSchema
       )
       return ContainerSetup(manager: manager, uiTestingProfileId: nil)
@@ -124,17 +130,23 @@ extension MoolahApp {
     _ = coordinator.addIndexObserver { [weak store] in
       store?.loadCloudProfiles()
     }
+    // `GRDBProfileIndexRepository.attachSyncHooks` (wired from
+    // `SyncCoordinator.init`) already queues these saves / deletions on
+    // every repo mutation. The store-side callbacks below stay as a
+    // belt-and-braces transition until a follow-up release deletes
+    // them. Double-firing is benign — `queueSave` / `queueDeletion`
+    // are idempotent on `(recordType, id, zoneID)`.
     store.onProfileChanged = { [weak coordinator] id in
       let zoneID = CKRecordZone.ID(
         zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
       coordinator?.queueSave(
-        recordType: ProfileRecord.recordType, id: id, zoneID: zoneID)
+        recordType: ProfileRow.recordType, id: id, zoneID: zoneID)
     }
     store.onProfileDeleted = { [weak coordinator] id in
       let zoneID = CKRecordZone.ID(
         zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
       coordinator?.queueDeletion(
-        recordType: ProfileRecord.recordType, id: id, zoneID: zoneID)
+        recordType: ProfileRow.recordType, id: id, zoneID: zoneID)
     }
     coordinator.start()
     // Clean up the legacy CloudKit zone from SwiftData's automatic sync.
@@ -242,5 +254,23 @@ extension MoolahApp {
       }
     }
     defaults.set(true, forKey: key)
+  }
+
+  /// Migrates the SwiftData profile index to GRDB once per install.
+  /// Logs and swallows errors — a failure leaves the GRDB database
+  /// empty and the next launch retries.
+  static func runProfileIndexMigrationIfNeeded(
+    setup: ContainerSetup,
+    defaults: UserDefaults = .standard
+  ) async {
+    do {
+      try await SwiftDataToGRDBMigrator().migrateProfileIndexIfNeeded(
+        indexContainer: setup.manager.indexContainer,
+        profileIndexDatabase: setup.manager.profileIndexDatabase,
+        defaults: defaults)
+    } catch {
+      Logger(subsystem: "com.moolah.app", category: "Setup")
+        .error("ProfileRecord migration failed: \(error, privacy: .public)")
+    }
   }
 }

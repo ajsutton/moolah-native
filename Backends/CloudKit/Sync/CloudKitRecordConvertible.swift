@@ -105,12 +105,14 @@ extension CKRecord {
 /// Maps CKRecord.recordType strings to the corresponding record types for dispatching.
 enum RecordTypeRegistry: Sendable {
   nonisolated(unsafe) static let allTypes: [String: any CloudKitRecordConvertible.Type] = [
-    // ProfileRecord remains on the SwiftData side; everything else
-    // dispatches to the GRDB row types. The CloudKit wire `recordType`
-    // strings are frozen contracts and remain byte-identical to the
-    // SwiftData @Model class names; only the local Swift type bound
-    // to each key changes.
-    ProfileRecord.recordType: ProfileRecord.self,
+    // Every record type now dispatches to its GRDB row type. The
+    // CloudKit wire `recordType` strings are frozen contracts and
+    // remain byte-identical to the original SwiftData @Model class
+    // names; only the local Swift type bound to each key changes.
+    // The legacy `ProfileRecord` SwiftData class remains in the build
+    // only as the one-shot migrator's source. A follow-up release
+    // deletes the class entirely.
+    ProfileRow.recordType: ProfileRow.self,
     InstrumentRow.recordType: InstrumentRow.self,
     AccountRow.recordType: AccountRow.self,
     TransactionRow.recordType: TransactionRow.self,

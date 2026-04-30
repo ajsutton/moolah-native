@@ -1,18 +1,15 @@
 import Foundation
 import GRDB
-import SwiftData
 
 // Upsert helpers split out of `UITestSeedHydrator` so the main enum body stays
 // under SwiftLint's `type_body_length` threshold. Every helper is idempotent:
 // re-running the same seed (e.g. after a UI-testing re-launch) doesn't
 // double-insert records.
 //
-// **Storage split.** Per-profile data (accounts, transactions, categories,
-// instruments) is written directly to GRDB — that is the layer the runtime's
-// repositories read from on PR #573. Profile metadata still lives in
-// SwiftData (`manager.indexContainer`) because the index container has not
-// yet moved to GRDB; that migration is out of scope for the per-profile
-// graph PR.
+// Per-profile data (accounts, transactions, categories, instruments) and
+// the profile index itself both live in GRDB. The legacy SwiftData
+// `ProfileRecord` class survives in the build only as the one-shot
+// migrator's source — nothing in the test hydration path touches it.
 extension UITestSeedHydrator {
   // MARK: - Specs
   //
@@ -55,22 +52,31 @@ extension UITestSeedHydrator {
     let accountId: UUID
   }
 
-  // MARK: - Profile (SwiftData index container)
+  // MARK: - Profile (GRDB profile-index DB)
 
-  /// Writes a `ProfileRecord` into the index container. Idempotent: an
-  /// existing row for the same id is left untouched.
+  /// Writes a `ProfileRow` into `profile-index.sqlite`. Idempotent —
+  /// `upsert` matches on the primary key, so a re-hydrated seed simply
+  /// overwrites with the same values.
+  ///
+  /// Synchronous because `MoolahApp.init` (the only caller chain) is
+  /// not `async`. Goes directly through the manager's
+  /// `profileIndexDatabase` queue with the GRDB sync write API rather
+  /// than the repository's `async upsert` so the call site stays
+  /// synchronous.
+  ///
+  /// SAFETY: this is a synchronous GRDB write invoked from `@MainActor`
+  /// (via `MoolahApp.init`). It is test-only and the profile-index DB
+  /// is small (a single row per profile, single-digit row count in
+  /// practice), so the main-thread block is sub-millisecond and the
+  /// calling-thread block is acceptable here. Production code must not
+  /// adopt this pattern.
   static func upsertProfile(
     _ profile: Profile,
     into manager: ProfileContainerManager
   ) throws {
-    let context = ModelContext(manager.indexContainer)
-    let targetId = profile.id
-    let descriptor = FetchDescriptor<ProfileRecord>(
-      predicate: #Predicate { $0.id == targetId }
-    )
-    if try context.fetch(descriptor).first != nil { return }
-    context.insert(ProfileRecord.from(profile: profile))
-    try context.save()
+    try manager.profileIndexDatabase.write { database in
+      try ProfileRow(domain: profile).upsert(database)
+    }
   }
 
   // MARK: - Per-profile graph (GRDB)

@@ -2,11 +2,11 @@ import CloudKit
 import Foundation
 import OSLog
 import Observation
-import SwiftData
 
 /// Manages the list of profiles and which one is active.
-/// Profiles persist as CloudKit `ProfileRecord` rows in SwiftData; the active
-/// profile ID is per-device via UserDefaults.
+/// Profiles persist as CloudKit `ProfileRecord` rows in the GRDB
+/// profile-index database; the active profile ID is per-device via
+/// UserDefaults.
 @Observable
 @MainActor
 final class ProfileStore {
@@ -35,7 +35,8 @@ final class ProfileStore {
   var welcomePhase: WelcomePhase?
 
   /// True while the initial cloud profile load may still be retrying.
-  /// SwiftData with CloudKit may not have its store ready on the first fetch.
+  /// CloudKit-driven remote inserts may not have landed yet on the
+  /// first fetch.
   var isCloudLoadPending = false
 
   /// The currently-scheduled retry task, tracked so it can be cancelled when a
@@ -43,6 +44,16 @@ final class ProfileStore {
   /// retry is queued. See `guides/CONCURRENCY_GUIDE.md` — fire-and-forget
   /// `Task {}` in stores must be tracked.
   var retryTask: Task<Void, Never>?
+
+  /// In-flight tracked tasks for fire-and-forget GRDB writes (add /
+  /// update / remove / cloud load). Tasks self-evict on completion so
+  /// the array doesn't grow unbounded across long-running sessions.
+  /// See `guides/CONCURRENCY_GUIDE.md` — every fire-and-forget Task
+  /// in a store must be tracked so the lifecycle is observable.
+  ///
+  /// `private(set)` so test code can read (drain) the array but only
+  /// the store can append to it.
+  private(set) var pendingMutationTasks: [Task<Void, Never>] = []
 
   /// Called when a cloud profile is removed (locally or via remote sync).
   /// Used by SessionManager to tear down the corresponding ProfileSession.
@@ -87,7 +98,24 @@ final class ProfileStore {
     self.containerManager = containerManager
     self.syncCoordinator = syncCoordinator
     loadFromDefaults()
-    if containerManager != nil {
+    if let containerManager {
+      // Synchronous initial population so the first scene tick already
+      // sees the on-disk profiles. Required so `ProfileWindowView`
+      // resolves to a profile (not `WelcomeView`) on launch — under
+      // `--ui-testing` the hydrator writes the seed profile to GRDB
+      // before this init runs, and the UI test interacts with the
+      // window immediately. Empty profile-index (e.g. fresh install
+      // before the SwiftData migrator runs) falls through to the async
+      // load + retry, which fills the list once the migrator commits.
+      do {
+        let initial = try containerManager.profileIndexRepository.fetchAllSync()
+        if !initial.isEmpty {
+          profiles = initial
+        }
+      } catch {
+        logger.error(
+          "Initial sync profile-index read failed: \(error, privacy: .public)")
+      }
       loadCloudProfiles(isInitialLoad: true)
       scheduleRetryIfNeeded()
     } else {
@@ -96,23 +124,72 @@ final class ProfileStore {
     }
   }
 
+  deinit {
+    // Cancel every in-flight fire-and-forget mutation and the retry
+    // task so GRDB writes don't outlive the store. Swift 6 makes
+    // `deinit` `nonisolated`, so reading `@MainActor`-isolated state
+    // requires `MainActor.assumeIsolated` — the deinit is invoked
+    // from a main-actor reference release in practice (the store is
+    // owned by main-actor code), so the assumption holds.
+    MainActor.assumeIsolated {
+      for task in pendingMutationTasks { task.cancel() }
+      retryTask?.cancel()
+    }
+  }
+
+  /// Tracks a fire-and-forget mutation Task. The task self-evicts from
+  /// `pendingMutationTasks` on completion so the array doesn't grow
+  /// unbounded over a long session.
+  func trackMutation(_ task: Task<Void, Never>) {
+    pendingMutationTasks.append(task)
+    // The bookkeeping Task is intentionally untracked: its only side
+    // effect is cleaning up the array, which becomes a no-op when
+    // `self` has already deallocated (the `[weak self]` capture goes
+    // nil and the array is gone). Tracking it would create infinite
+    // self-recursion through `trackMutation`.
+    Task { [weak self] in
+      _ = await task.value
+      self?.pendingMutationTasks.removeAll { $0 == task }
+    }
+  }
+
   func addProfile(_ profile: Profile) {
     guard let containerManager else {
       logger.error("Cannot add CloudKit profile without ProfileContainerManager")
       return
     }
-    let context = ModelContext(containerManager.indexContainer)
-    let record = ProfileRecord.from(profile: profile)
-    context.insert(record)
-    do {
-      try context.save()
-      onProfileChanged?(profile.id)
-    } catch {
-      logger.error("Failed to save CloudKit profile: \(error)")
-    }
+    // Snapshot prior state so the GRDB-write Task can roll back the
+    // optimistic in-memory mutation if the upsert throws.
+    let previousActiveID = activeProfileID
     profiles.append(profile)
+    let isFirstProfile = profiles.count == 1
+    let task = Task { [weak self] in
+      do {
+        try await containerManager.profileIndexRepository.upsert(profile)
+      } catch {
+        // Roll back the optimistic mutation: drop the appended profile
+        // and restore the previous active id so in-memory state matches
+        // what GRDB now contains. The Task body runs on @MainActor
+        // because the store is @MainActor-isolated, so direct mutation
+        // is safe.
+        self?.profiles.removeAll { $0.id == profile.id }
+        if isFirstProfile, self?.activeProfileID == profile.id {
+          self?.activeProfileID = previousActiveID
+          self?.saveActiveProfileID()
+        }
+        self?.logger.error("Failed to save CloudKit profile: \(error, privacy: .public)")
+      }
+    }
+    trackMutation(task)
+    // Fire the legacy store-side change callback synchronously to
+    // preserve the pre-Phase-A behaviour for callers that observe it
+    // (e.g. `ExportCoordinator.importNewProfileFromFile`'s rollback
+    // path captures the id mid-flight). The GRDB-side
+    // `onRecordChanged` hook from `attachSyncHooks` fires when the
+    // async write commits; both queue idempotent CKSyncEngine state.
+    onProfileChanged?(profile.id)
 
-    if profiles.count == 1 {
+    if isFirstProfile {
       activeProfileID = profile.id
       saveActiveProfileID()
     }
@@ -120,23 +197,71 @@ final class ProfileStore {
   }
 
   func removeProfile(_ id: UUID) {
-    if let index = profiles.firstIndex(where: { $0.id == id }) {
-      profiles.remove(at: index)
-
-      if let containerManager {
-        containerManager.deleteStore(for: id)
-        let context = ModelContext(containerManager.indexContainer)
-        let deleter = ProfileDataDeleter(modelContext: context)
-        deleter.deleteProfileRecord(for: id)
-      }
-      onProfileDeleted?(id)
-      onProfileRemoved?(id)
+    guard let index = profiles.firstIndex(where: { $0.id == id }) else {
+      logger.debug("Removed profile: \(id) — not present")
+      return
     }
-
-    if activeProfileID == id {
+    // Snapshot prior state so the Task can roll back on GRDB failure.
+    let previousProfile = profiles[index]
+    let previousIndex = index
+    let previousActiveID = activeProfileID
+    profiles.remove(at: index)
+    let activeChanged = activeProfileID == id
+    if activeChanged {
       activeProfileID = profiles.first?.id
       saveActiveProfileID()
     }
+
+    if let containerManager {
+      // Evict the in-memory container / GRDB-queue caches immediately
+      // so synchronous observers (e.g. `ExportCoordinator`'s import
+      // rollback path that asserts `hasContainer == false` after the
+      // `removeProfile` call returns) see a consistent view. The
+      // on-disk teardown stays inside the Task and is gated on the
+      // GRDB index-row delete succeeding.
+      containerManager.evictCachedStore(for: id)
+      // Delete order matters. The GRDB profile-index row is deleted
+      // FIRST: a remote sync that observes only the index row delete
+      // can re-create the per-profile files on the next pull, so the
+      // user's per-profile data is unaffected by an interrupted
+      // delete. The reverse ordering (delete files first, then
+      // index) would leave a tombstone-resurrect window — if the
+      // GRDB delete failed after the files were gone, the index row
+      // would survive and resurrect a profile whose data has been
+      // wiped on disk. Per-profile file deletion happens only after
+      // the index delete succeeds.
+      let task = Task { [weak self] in
+        do {
+          _ = try await containerManager.profileIndexRepository.delete(id: id)
+          // Index row is gone on disk — now wipe per-profile files
+          // (SwiftData store, GRDB queue, sync state, CloudKit zone).
+          containerManager.deleteStore(for: id)
+        } catch {
+          // Roll back: re-insert the profile at its original position
+          // and restore the active id. The per-profile files were not
+          // touched, so no file-system rollback is needed. The cache
+          // entries we evicted above are recoverable lazily — the next
+          // `container(for:)` / `database(for:)` call will repopulate
+          // them.
+          if let self {
+            let insertIndex = min(previousIndex, self.profiles.count)
+            self.profiles.insert(previousProfile, at: insertIndex)
+            if activeChanged {
+              self.activeProfileID = previousActiveID
+              self.saveActiveProfileID()
+            }
+            self.logger.error(
+              "Failed to delete CloudKit profile row: \(error, privacy: .public)")
+          }
+        }
+      }
+      trackMutation(task)
+    } else {
+      // No container manager (test/preview path). Optimistic in-memory
+      // removal stands; nothing to roll back.
+    }
+    onProfileDeleted?(id)
+    onProfileRemoved?(id)
     logger.debug("Removed profile: \(id)")
   }
 
@@ -150,24 +275,31 @@ final class ProfileStore {
   func updateProfile(_ profile: Profile) {
     guard let containerManager else { return }
     guard let index = profiles.firstIndex(where: { $0.id == profile.id }) else { return }
+    // Snapshot the prior profile so the GRDB-write Task can restore it
+    // on failure. Capturing by value is enough because `Profile` is a
+    // value type.
+    let previousProfile = profiles[index]
     profiles[index] = profile
 
-    let context = ModelContext(containerManager.indexContainer)
-    let profileId = profile.id
-    let descriptor = FetchDescriptor<ProfileRecord>(
-      predicate: #Predicate { $0.id == profileId }
-    )
-    if let record = try? context.fetch(descriptor).first {
-      record.label = profile.label
-      record.currencyCode = profile.currencyCode
-      record.financialYearStartMonth = profile.financialYearStartMonth
+    let task = Task { [weak self] in
       do {
-        try context.save()
-        onProfileChanged?(profile.id)
+        try await containerManager.profileIndexRepository.upsert(profile)
       } catch {
-        logger.error("Failed to save CloudKit profile update: \(error)")
+        // Roll back: restore the previous profile by id (the index may
+        // have shifted if other mutations interleaved, so look it up
+        // again rather than using the captured `index`).
+        if let currentIndex = self?.profiles.firstIndex(where: { $0.id == profile.id }) {
+          self?.profiles[currentIndex] = previousProfile
+        }
+        self?.logger.error(
+          "Failed to save CloudKit profile update: \(error, privacy: .public)")
       }
     }
+    trackMutation(task)
+    // See `addProfile` for the rationale: fire the legacy callback
+    // synchronously so observers see the change at the same point as
+    // the in-place state mutation.
+    onProfileChanged?(profile.id)
     logger.debug("Updated profile: \(profile.label)")
   }
 

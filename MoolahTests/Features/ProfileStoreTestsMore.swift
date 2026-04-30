@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 import Testing
 
 @testable import Moolah
@@ -38,32 +37,27 @@ struct ProfileStoreTestsMore {
   }
 
   @Test("remote change resets activeProfileID when cloud profile was deleted")
-  func remoteChangeResetsActiveProfileID() throws {
+  func remoteChangeResetsActiveProfileID() async throws {
     let defaults = makeDefaults()
     let containerManager = try ProfileContainerManager.forTesting()
     let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+    await drainPendingMutations(store)
 
     // Add two cloud profiles
     let firstProfile = makeProfile(label: "First")
     let secondProfile = makeProfile(label: "Second")
     store.addProfile(firstProfile)
     store.addProfile(secondProfile)
+    await drainPendingMutations(store)
     store.setActiveProfile(secondProfile.id)
     #expect(store.activeProfileID == secondProfile.id)
 
-    // Delete the second profile record from SwiftData directly (simulates remote deletion)
-    let context = ModelContext(containerManager.indexContainer)
-    let profileId = secondProfile.id
-    let descriptor = FetchDescriptor<ProfileRecord>(
-      predicate: #Predicate { $0.id == profileId }
-    )
-    if let record = try context.fetch(descriptor).first {
-      context.delete(record)
-      try context.save()
-    }
+    // Delete the second profile row from GRDB directly (simulates remote deletion)
+    _ = try await containerManager.profileIndexRepository.delete(id: secondProfile.id)
 
     // Simulate a remote change reload — should reset active to remaining profile
     store.loadCloudProfiles(isInitialLoad: false)
+    await drainPendingMutations(store)
 
     #expect(store.activeProfileID == firstProfile.id)
   }
@@ -71,59 +65,49 @@ struct ProfileStoreTestsMore {
   // MARK: - Remote deletion cleanup
 
   @Test("loadCloudProfiles calls onProfileRemoved for remotely-deleted profiles")
-  func remoteDeleteCallsOnProfileRemoved() throws {
+  func remoteDeleteCallsOnProfileRemoved() async throws {
     let defaults = makeDefaults()
     let containerManager = try ProfileContainerManager.forTesting()
     let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+    await drainPendingMutations(store)
 
     let cloudProfile = makeProfile(label: "Cloud")
     store.addProfile(cloudProfile)
+    await drainPendingMutations(store)
     store.setActiveProfile(cloudProfile.id)
 
     // Track which profiles the callback reports as removed
     var removedIDs: [UUID] = []
     store.onProfileRemoved = { id in removedIDs.append(id) }
 
-    // Delete the cloud profile record from SwiftData (simulates remote deletion)
-    let context = ModelContext(containerManager.indexContainer)
-    let profileId = cloudProfile.id
-    let descriptor = FetchDescriptor<ProfileRecord>(
-      predicate: #Predicate { $0.id == profileId }
-    )
-    if let record = try context.fetch(descriptor).first {
-      context.delete(record)
-      try context.save()
-    }
+    // Delete the cloud profile from GRDB (simulates remote deletion)
+    _ = try await containerManager.profileIndexRepository.delete(id: cloudProfile.id)
 
     store.loadCloudProfiles(isInitialLoad: false)
+    await drainPendingMutations(store)
 
     #expect(removedIDs == [cloudProfile.id])
   }
 
   @Test("loadCloudProfiles cleans up local store for remotely-deleted profiles")
-  func remoteDeleteCleansUpLocalStore() throws {
+  func remoteDeleteCleansUpLocalStore() async throws {
     let defaults = makeDefaults()
     let containerManager = try ProfileContainerManager.forTesting()
     let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+    await drainPendingMutations(store)
 
     let cloudProfile = makeProfile(label: "Cloud")
     store.addProfile(cloudProfile)
+    await drainPendingMutations(store)
 
     // Force creation of the per-profile container (simulates normal app usage)
     _ = try containerManager.container(for: cloudProfile.id)
 
-    // Delete the cloud profile record from SwiftData (simulates remote deletion)
-    let context = ModelContext(containerManager.indexContainer)
-    let profileId = cloudProfile.id
-    let descriptor = FetchDescriptor<ProfileRecord>(
-      predicate: #Predicate { $0.id == profileId }
-    )
-    if let record = try context.fetch(descriptor).first {
-      context.delete(record)
-      try context.save()
-    }
+    // Delete the cloud profile from GRDB (simulates remote deletion)
+    _ = try await containerManager.profileIndexRepository.delete(id: cloudProfile.id)
 
     store.loadCloudProfiles(isInitialLoad: false)
+    await drainPendingMutations(store)
 
     // The container cache should have been evicted
     // Creating a new container should give a different instance
@@ -133,16 +117,18 @@ struct ProfileStoreTestsMore {
   // MARK: - Sync change tracking
 
   @Test("addProfile calls onProfileChanged for CloudKit profiles")
-  func addCloudProfileCallsOnProfileChanged() throws {
+  func addCloudProfileCallsOnProfileChanged() async throws {
     let defaults = makeDefaults()
     let containerManager = try ProfileContainerManager.forTesting()
     let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+    await drainPendingMutations(store)
 
     var changedIDs: [UUID] = []
     store.onProfileChanged = { id in changedIDs.append(id) }
 
     let profile = makeProfile(label: "Cloud")
     store.addProfile(profile)
+    await drainPendingMutations(store)
 
     #expect(changedIDs == [profile.id])
   }
