@@ -107,8 +107,9 @@ enum IRRSolver {
     return pow(1 + dietz, 365 / totalDays) - 1
   }
 
-  /// `f(r) = Σ Cᵢ · (1+r)^(−tᵢ/365) − V · (1+r)^(−T/365)`. Stops when
-  /// `|f| < 1e-9` or 50 iterations elapsed. Returns `nil` on divergence.
+  /// Applies Newton–Raphson to `npv(rate:dayFlows:terminal:totalDays:)` seeded
+  /// at `seed`. Stops when `|f| < 1e-9` or 50 iterations elapsed. Returns
+  /// `nil` on divergence.
   private static func newtonRaphson(
     seed: Double,
     dayFlows: [DayFlow],
@@ -118,7 +119,6 @@ enum IRRSolver {
     var rate = seed
     for _ in 0..<50 {
       let onePlusR = 1 + rate
-      guard onePlusR > 0 else { return nil }
       let fValue = npv(rate: rate, dayFlows: dayFlows, terminal: terminal, totalDays: totalDays)
       if fValue.isNaN { return nil }
       var fPrime = 0.0
