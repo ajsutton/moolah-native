@@ -152,20 +152,27 @@ struct TransactionFilterView: View {
 
   @ViewBuilder
   private var categoryPickerRow: some View {
+    // Local `let` is fine before `#if` inside @ViewBuilder — it's a binding,
+    // not a result-builder statement.
     let summary = categories.selectionSummary(for: selectedCategoryIds)
     #if os(macOS)
-      Button {
-        showCategoryPicker = true
-      } label: {
-        LabeledContent("Categories", value: summary)
-      }
-      .buttonStyle(.plain)
-      .popover(isPresented: $showCategoryPicker, arrowEdge: .trailing) {
-        CategoryMultiSelectPicker(
-          categories: categories,
-          selectedIds: $selectedCategoryIds
-        )
-        .frame(width: 320, height: 420)
+      // `LabeledContent` is the form-row primitive (label left, value right,
+      // standard hover); the trigger Button lives in the value column with
+      // accent colouring so it reads as activatable, matching System Settings
+      // rows that open sub-panels.
+      LabeledContent("Categories") {
+        Button(summary) {
+          showCategoryPicker = true
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.tint)
+        .popover(isPresented: $showCategoryPicker, arrowEdge: .trailing) {
+          CategoryMultiSelectPicker(
+            categories: categories,
+            selectedIds: $selectedCategoryIds
+          )
+          .frame(width: 320, height: 420)
+        }
       }
     #else
       NavigationLink {
