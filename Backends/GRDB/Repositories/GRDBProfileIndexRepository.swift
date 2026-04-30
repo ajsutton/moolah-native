@@ -212,6 +212,19 @@ final class GRDBProfileIndexRepository: Sendable {
     }
   }
 
+  /// Async equivalent of `allRowIdsSync()` for callers that must not
+  /// block the calling thread (e.g. `@MainActor` sites such as
+  /// `ProfileContainerManager.allProfileIds()`). Returns ids only —
+  /// avoids materialising full `ProfileRow` objects when only the
+  /// primary key is needed.
+  func allRowIds() async throws -> [UUID] {
+    try await database.read { database in
+      try ProfileRow
+        .select(ProfileRow.Columns.id, as: UUID.self)
+        .fetchAll(database)
+    }
+  }
+
   /// Deletes every row in the table. Used on zone delete / sign-out.
   func deleteAllSync() throws {
     try database.write { database in

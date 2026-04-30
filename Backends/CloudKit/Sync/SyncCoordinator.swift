@@ -184,7 +184,10 @@ final class SyncCoordinator {
     .appending(path: "Moolah-v2-sync.syncstate")
 
   let containerManager: ProfileContainerManager
-  let profileIndexHandler: ProfileIndexSyncHandler
+  /// `nonisolated` because `ProfileIndexSyncHandler` is `Sendable` and the
+  /// reference is `let`. Lets the off-main `applyFetchedIndexChanges` path
+  /// read the handler without a MainActor hop.
+  nonisolated let profileIndexHandler: ProfileIndexSyncHandler
 
   // Cross-file-access note: members below this MARK that sibling extension
   // files (Lifecycle / Zones / Backfill / RecordChanges / Delegate) touch are

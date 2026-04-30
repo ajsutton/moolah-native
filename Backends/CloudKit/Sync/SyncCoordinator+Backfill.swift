@@ -63,11 +63,11 @@ extension SyncCoordinator {
   /// Idempotent: records that already have system fields are skipped, and CKSyncEngine's
   /// pending list dedupes against any other queued changes.
   @discardableResult
-  func queueUnsyncedRecordsForAllProfiles() -> [CKRecord.ID] {
+  func queueUnsyncedRecordsForAllProfiles() async -> [CKRecord.ID] {
     var queued: [CKRecord.ID] = []
     var scannedProfiles = 0
     var skippedProfiles = 0
-    let allProfiles = containerManager.allProfileIds()
+    let allProfiles = await containerManager.allProfileIds()
     for profileId in allProfiles {
       // Skip profiles whose backfill scan has already run — the only work left for
       // those is normal sync traffic. This keeps the startup scan O(1) on the happy
@@ -103,7 +103,7 @@ extension SyncCoordinator {
     return queued
   }
 
-  func queueAllExistingRecordsForAllZones() {
+  func queueAllExistingRecordsForAllZones() async {
     // Queue profile-index records
     let indexRecordIDs = profileIndexHandler.queueAllExistingRecords()
     if !indexRecordIDs.isEmpty {
@@ -113,7 +113,7 @@ extension SyncCoordinator {
     }
 
     // Queue per-profile records
-    for profileId in containerManager.allProfileIds() {
+    for profileId in await containerManager.allProfileIds() {
       let zoneID = CKRecordZone.ID(
         zoneName: "profile-\(profileId.uuidString)",
         ownerName: CKCurrentUserDefaultName)
@@ -169,8 +169,8 @@ extension SyncCoordinator {
 
   /// Test-only: runs the same bookkeeping as a CloudKit `.signOut` account event, so
   /// unit tests can verify backfill-flag cleanup without a real CKSyncEngine.
-  func handleSignOutForTesting() {
-    deleteAllLocalData()
+  func handleSignOutForTesting() async {
+    await deleteAllLocalData()
     deleteStateSerialization()
     clearAllBackfillScanFlags()
     isFetchingChanges = false

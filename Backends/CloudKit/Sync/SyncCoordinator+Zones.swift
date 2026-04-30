@@ -90,7 +90,7 @@ extension SyncCoordinator {
     }
   }
 
-  func handleAccountChange(_ change: CKSyncEngine.Event.AccountChange) {
+  func handleAccountChange(_ change: CKSyncEngine.Event.AccountChange) async {
     // Update observable availability first — pure assignment that is
     // safe to fire on every event (including the synthetic first-launch
     // `.signIn`), so views react immediately. The isFirstLaunch-gated
@@ -104,19 +104,19 @@ extension SyncCoordinator {
         isFirstLaunch = false
       } else {
         logger.info("Account signed in — re-uploading all local data")
-        queueAllExistingRecordsForAllZones()
+        await queueAllExistingRecordsForAllZones()
       }
 
     case .signOut:
       logger.info("Account signed out — deleting all local data and sync state")
-      deleteAllLocalData()
+      await deleteAllLocalData()
       deleteStateSerialization()
       clearAllBackfillScanFlags()
       isFetchingChanges = false
 
     case .switchAccounts:
       logger.info("Account switched — full reset")
-      deleteAllLocalData()
+      await deleteAllLocalData()
       deleteStateSerialization()
       clearAllBackfillScanFlags()
       isFetchingChanges = false
@@ -126,13 +126,13 @@ extension SyncCoordinator {
     }
   }
 
-  func deleteAllLocalData() {
+  func deleteAllLocalData() async {
     // Delete profile-index data
     profileIndexHandler.deleteLocalData()
     notifyIndexObservers()
 
     // Delete all profile data
-    for profileId in containerManager.allProfileIds() {
+    for profileId in await containerManager.allProfileIds() {
       let zoneID = CKRecordZone.ID(
         zoneName: "profile-\(profileId.uuidString)",
         ownerName: CKCurrentUserDefaultName)

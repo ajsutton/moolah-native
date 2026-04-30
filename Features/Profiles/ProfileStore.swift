@@ -141,11 +141,25 @@ final class ProfileStore {
       logger.error("Cannot add CloudKit profile without ProfileContainerManager")
       return
     }
+    // Snapshot prior state so the GRDB-write Task can roll back the
+    // optimistic in-memory mutation if the upsert throws.
+    let previousActiveID = activeProfileID
     profiles.append(profile)
+    let isFirstProfile = profiles.count == 1
     let task = Task { [weak self] in
       do {
         try await containerManager.profileIndexRepository.upsert(profile)
       } catch {
+        // Roll back the optimistic mutation: drop the appended profile
+        // and restore the previous active id so in-memory state matches
+        // what GRDB now contains. The Task body runs on @MainActor
+        // because the store is @MainActor-isolated, so direct mutation
+        // is safe.
+        self?.profiles.removeAll { $0.id == profile.id }
+        if isFirstProfile, self?.activeProfileID == profile.id {
+          self?.activeProfileID = previousActiveID
+          self?.saveActiveProfileID()
+        }
         self?.logger.error("Failed to save CloudKit profile: \(error, privacy: .public)")
       }
     }
@@ -158,7 +172,7 @@ final class ProfileStore {
     // async write commits; both queue idempotent CKSyncEngine state.
     onProfileChanged?(profile.id)
 
-    if profiles.count == 1 {
+    if isFirstProfile {
       activeProfileID = profile.id
       saveActiveProfileID()
     }
@@ -166,29 +180,71 @@ final class ProfileStore {
   }
 
   func removeProfile(_ id: UUID) {
-    if let index = profiles.firstIndex(where: { $0.id == id }) {
-      profiles.remove(at: index)
-
-      if let containerManager {
-        containerManager.deleteStore(for: id)
-        let task = Task { [weak self] in
-          do {
-            _ = try await containerManager.profileIndexRepository.delete(id: id)
-          } catch {
-            self?.logger.error(
-              "Failed to delete CloudKit profile row: \(error, privacy: .public)")
-          }
-        }
-        trackMutation(task)
-      }
-      onProfileDeleted?(id)
-      onProfileRemoved?(id)
+    guard let index = profiles.firstIndex(where: { $0.id == id }) else {
+      logger.debug("Removed profile: \(id) — not present")
+      return
     }
-
-    if activeProfileID == id {
+    // Snapshot prior state so the Task can roll back on GRDB failure.
+    let previousProfile = profiles[index]
+    let previousIndex = index
+    let previousActiveID = activeProfileID
+    profiles.remove(at: index)
+    let activeChanged = activeProfileID == id
+    if activeChanged {
       activeProfileID = profiles.first?.id
       saveActiveProfileID()
     }
+
+    if let containerManager {
+      // Evict the in-memory container / GRDB-queue caches immediately
+      // so synchronous observers (e.g. `ExportCoordinator`'s import
+      // rollback path that asserts `hasContainer == false` after the
+      // `removeProfile` call returns) see a consistent view. The
+      // on-disk teardown stays inside the Task and is gated on the
+      // GRDB index-row delete succeeding.
+      containerManager.evictCachedStore(for: id)
+      // Delete order matters. The GRDB profile-index row is deleted
+      // FIRST: a remote sync that observes only the index row delete
+      // can re-create the per-profile files on the next pull, so the
+      // user's per-profile data is unaffected by an interrupted
+      // delete. The reverse ordering (delete files first, then
+      // index) would leave a tombstone-resurrect window — if the
+      // GRDB delete failed after the files were gone, the index row
+      // would survive and resurrect a profile whose data has been
+      // wiped on disk. Per-profile file deletion happens only after
+      // the index delete succeeds.
+      let task = Task { [weak self] in
+        do {
+          _ = try await containerManager.profileIndexRepository.delete(id: id)
+          // Index row is gone on disk — now wipe per-profile files
+          // (SwiftData store, GRDB queue, sync state, CloudKit zone).
+          containerManager.deleteStore(for: id)
+        } catch {
+          // Roll back: re-insert the profile at its original position
+          // and restore the active id. The per-profile files were not
+          // touched, so no file-system rollback is needed. The cache
+          // entries we evicted above are recoverable lazily — the next
+          // `container(for:)` / `database(for:)` call will repopulate
+          // them.
+          if let self {
+            let insertIndex = min(previousIndex, self.profiles.count)
+            self.profiles.insert(previousProfile, at: insertIndex)
+            if activeChanged {
+              self.activeProfileID = previousActiveID
+              self.saveActiveProfileID()
+            }
+            self.logger.error(
+              "Failed to delete CloudKit profile row: \(error, privacy: .public)")
+          }
+        }
+      }
+      trackMutation(task)
+    } else {
+      // No container manager (test/preview path). Optimistic in-memory
+      // removal stands; nothing to roll back.
+    }
+    onProfileDeleted?(id)
+    onProfileRemoved?(id)
     logger.debug("Removed profile: \(id)")
   }
 
@@ -202,12 +258,22 @@ final class ProfileStore {
   func updateProfile(_ profile: Profile) {
     guard let containerManager else { return }
     guard let index = profiles.firstIndex(where: { $0.id == profile.id }) else { return }
+    // Snapshot the prior profile so the GRDB-write Task can restore it
+    // on failure. Capturing by value is enough because `Profile` is a
+    // value type.
+    let previousProfile = profiles[index]
     profiles[index] = profile
 
     let task = Task { [weak self] in
       do {
         try await containerManager.profileIndexRepository.upsert(profile)
       } catch {
+        // Roll back: restore the previous profile by id (the index may
+        // have shifted if other mutations interleaved, so look it up
+        // again rather than using the captured `index`).
+        if let currentIndex = self?.profiles.firstIndex(where: { $0.id == profile.id }) {
+          self?.profiles[currentIndex] = previousProfile
+        }
         self?.logger.error(
           "Failed to save CloudKit profile update: \(error, privacy: .public)")
       }

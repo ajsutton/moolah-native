@@ -14,12 +14,20 @@ import OSLog
 /// `ProfileRecord` class is no longer touched by the runtime — it stays
 /// in the build only as the one-shot migrator's source, copying any
 /// existing rows into `profile-index.sqlite` on first launch.
-@MainActor
-final class ProfileIndexSyncHandler {
-  nonisolated let zoneID: CKRecordZone.ID
-  nonisolated let repository: GRDBProfileIndexRepository
+///
+/// **Concurrency.** Nonisolated and `Sendable`. Every synchronous method
+/// calls into the repository's `*Sync(...)` helpers which block the
+/// calling thread on the GRDB queue. Declaring this `@MainActor` would
+/// force every caller to block the UI thread; instead, callers that
+/// care can hop off-actor (`Task.detached { handler.deleteLocalData() }`).
+/// All stored properties are themselves `Sendable` (`CKRecordZone.ID`,
+/// `GRDBProfileIndexRepository`, `Logger`), so the conformance holds
+/// without `@unchecked`.
+final class ProfileIndexSyncHandler: Sendable {
+  let zoneID: CKRecordZone.ID
+  let repository: GRDBProfileIndexRepository
 
-  nonisolated private let logger = Logger(
+  private let logger = Logger(
     subsystem: "com.moolah.app", category: "ProfileIndexSyncHandler")
 
   init(repository: GRDBProfileIndexRepository) {
@@ -36,7 +44,7 @@ final class ProfileIndexSyncHandler {
   /// The whole batch runs inside a single GRDB write so a mid-batch failure
   /// rolls back cleanly — required by the rollback contract in
   /// `guides/DATABASE_CODE_GUIDE.md`.
-  nonisolated func applyRemoteChanges(saved: [CKRecord], deleted: [CKRecord.ID]) -> ApplyResult {
+  func applyRemoteChanges(saved: [CKRecord], deleted: [CKRecord.ID]) -> ApplyResult {
     var savedRows: [ProfileRow] = []
     savedRows.reserveCapacity(saved.count)
     for ckRecord in saved {

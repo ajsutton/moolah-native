@@ -44,7 +44,7 @@ struct SyncCoordinatorTestsMore {
 
     // A subsequent startup scan must skip this profile — migration has already done
     // the equivalent work, and re-scanning would just do a pointless SwiftData pass.
-    let rescan = coordinator.queueUnsyncedRecordsForAllProfiles()
+    let rescan = await coordinator.queueUnsyncedRecordsForAllProfiles()
     #expect(rescan.isEmpty)
   }
 
@@ -61,15 +61,15 @@ struct SyncCoordinatorTestsMore {
     try await manager.profileIndexRepository.upsert(
       Profile(id: id2, label: "B", currencyCode: "USD", financialYearStartMonth: 1))
 
-    let ids = manager.allProfileIds()
+    let ids = await manager.allProfileIds()
     #expect(ids.count == 2)
     #expect(Set(ids) == Set([id1, id2]))
   }
 
   @Test
-  func allProfileIdsReturnsEmptyWhenNoProfiles() throws {
+  func allProfileIdsReturnsEmptyWhenNoProfiles() async throws {
     let manager = try ProfileContainerManager.forTesting()
-    let ids = manager.allProfileIds()
+    let ids = await manager.allProfileIds()
     #expect(ids.isEmpty)
   }
 

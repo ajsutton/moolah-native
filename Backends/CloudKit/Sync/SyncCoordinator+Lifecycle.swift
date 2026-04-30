@@ -121,17 +121,21 @@ extension SyncCoordinator {
     // below).
     purgeStaleBareUUIDPendingChanges()
 
-    // On first launch (migration or truly first launch), queue all existing records
-    if isFirstLaunch {
-      queueAllExistingRecordsForAllZones()
-    }
-
+    let shouldBackfillUnsynced = !isFirstLaunch
+    let runFirstLaunchQueue = isFirstLaunch
     // Eagerly create the profile-index zone and all known profile-data zones,
     // then send if needed. Reactive creation in `handleSentRecordZoneChanges`
     // remains as a fallback per SYNC_GUIDE Rule 3.
-    let profileIds = containerManager.allProfileIds()
-    let shouldBackfillUnsynced = !isFirstLaunch
+    //
+    // Profile id enumeration moved inside the Task because
+    // `containerManager.allProfileIds()` is now async (it must not block
+    // the main thread on the GRDB queue).
     zoneSetupTask = Task {
+      // On first launch (migration or truly first launch), queue all existing records
+      if runFirstLaunchQueue {
+        await self.queueAllExistingRecordsForAllZones()
+      }
+      let profileIds = await self.containerManager.allProfileIds()
       await self.ensureZoneExists(self.profileIndexHandler.zoneID)
       for profileId in profileIds {
         let zoneID = CKRecordZone.ID(
@@ -145,7 +149,7 @@ extension SyncCoordinator {
       // queue). Skipped on first launch because `queueAllExistingRecordsForAllZones`
       // has already queued everything.
       if shouldBackfillUnsynced {
-        _ = self.queueUnsyncedRecordsForAllProfiles()
+        _ = await self.queueUnsyncedRecordsForAllProfiles()
       }
       if self.hasPendingChanges {
         self.logger.info("Zones ready — sending pending changes")

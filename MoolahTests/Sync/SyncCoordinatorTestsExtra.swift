@@ -178,7 +178,7 @@ struct SyncCoordinatorTestsExtra {
     contextB.insert(TransactionRecord(id: unsyncedB, date: Date(), payee: "B-unsynced"))
     try contextB.save()
 
-    let queued = coordinator.queueUnsyncedRecordsForAllProfiles()
+    let queued = await coordinator.queueUnsyncedRecordsForAllProfiles()
     let names = Set(queued.map(\.recordName))
 
     #expect(
@@ -202,12 +202,12 @@ struct SyncCoordinatorTestsExtra {
   }
 
   @Test
-  func queueUnsyncedRecordsForAllProfilesReturnsEmptyWhenNoProfiles() throws {
+  func queueUnsyncedRecordsForAllProfilesReturnsEmptyWhenNoProfiles() async throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(
       containerManager: manager, userDefaults: makeDefaults())
 
-    let queued = coordinator.queueUnsyncedRecordsForAllProfiles()
+    let queued = await coordinator.queueUnsyncedRecordsForAllProfiles()
     #expect(queued.isEmpty)
   }
 
@@ -237,12 +237,12 @@ struct SyncCoordinatorTestsExtra {
     try context.save()
 
     // First scan should find and queue the unsynced record.
-    let first = coordinator.queueUnsyncedRecordsForAllProfiles()
+    let first = await coordinator.queueUnsyncedRecordsForAllProfiles()
     #expect(first.map(\.recordName) == ["\(AccountRow.recordType)|\(accountId.uuidString)"])
 
     // Second scan must NOT re-queue the same record — the profile has been marked
     // as scanned and is skipped. Avoids doing a SwiftData pass on every app launch.
-    let second = coordinator.queueUnsyncedRecordsForAllProfiles()
+    let second = await coordinator.queueUnsyncedRecordsForAllProfiles()
     #expect(second.isEmpty)
   }
 
