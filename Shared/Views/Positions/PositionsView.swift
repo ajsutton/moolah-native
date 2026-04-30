@@ -1,4 +1,8 @@
 // swiftlint:disable multiline_arguments
+//
+// Previews and inline view-builder layouts construct PositionsViewInput
+// across multiple lines for readability; the rule fires on every such
+// call site in this file.
 
 import SwiftUI
 
