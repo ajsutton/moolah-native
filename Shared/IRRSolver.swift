@@ -27,6 +27,9 @@ enum IRRSolver {
     let amount: Double
   }
 
+  /// Returns the effective annual rate for the given cash flows, or `nil`
+  /// if the rate cannot be determined. See `IRRSolver` type documentation
+  /// for nil-return conditions and the Double/Decimal boundary rationale.
   static func annualisedReturn(
     flows: [CashFlow],
     terminalValue: Decimal,
@@ -68,6 +71,23 @@ enum IRRSolver {
     return nil
   }
 
+  /// `f(r) = Σ Cᵢ · (1+r)^(−tᵢ/365) − V · (1+r)^(−T/365)`. Returns `.nan`
+  /// when `1 + rate ≤ 0` so callers know to treat the rate as out-of-domain.
+  private static func npv(
+    rate: Double,
+    dayFlows: [DayFlow],
+    terminal: Double,
+    totalDays: Double
+  ) -> Double {
+    let onePlusR = 1 + rate
+    guard onePlusR > 0 else { return .nan }
+    var sum = 0.0
+    for flow in dayFlows {
+      sum += flow.amount * pow(onePlusR, -flow.daysFromFirst / 365)
+    }
+    return sum - terminal * pow(onePlusR, -totalDays / 365)
+  }
+
   /// `(V − ΣCᵢ) / Σ(wᵢ · Cᵢ)` annualised to `(1 + MD)^(365/T) − 1`.
   /// Returns 0 if the weighted-capital denominator is zero (degenerate input).
   private static func modifiedDietzAnnualised(
@@ -99,17 +119,16 @@ enum IRRSolver {
     for _ in 0..<50 {
       let onePlusR = 1 + rate
       guard onePlusR > 0 else { return nil }
-      var fValue = 0.0
+      let fValue = npv(rate: rate, dayFlows: dayFlows, terminal: terminal, totalDays: totalDays)
+      if fValue.isNaN { return nil }
       var fPrime = 0.0
       for flow in dayFlows {
         let exponent = -flow.daysFromFirst / 365
         let powered = pow(onePlusR, exponent)
-        fValue += flow.amount * powered
         fPrime += flow.amount * exponent * powered / onePlusR
       }
       let terminalExponent = -totalDays / 365
       let terminalPower = pow(onePlusR, terminalExponent)
-      fValue -= terminal * terminalPower
       fPrime -= terminal * terminalExponent * terminalPower / onePlusR
 
       if abs(fValue) < 1e-9 { return rate }
@@ -119,31 +138,23 @@ enum IRRSolver {
     return nil
   }
 
-  /// Sign-change search over `[−0.99, 10.0]`, ~30 iterations. Last-resort
-  /// fallback for multi-root patterns that throw NR off.
+  /// Sign-change bisection search over `[−0.99, 10.0]`. Last-resort fallback
+  /// for multi-root patterns that throw Newton-Raphson off. Terminates when
+  /// `|f| < 1e-9` or the 60-step bound is reached (≈ `1e-17` interval width).
   private static func bisection(
     dayFlows: [DayFlow],
     terminal: Double,
     totalDays: Double
   ) -> Double? {
-    func evaluate(_ rate: Double) -> Double {
-      let onePlusR = 1 + rate
-      guard onePlusR > 0 else { return .nan }
-      var sum = 0.0
-      for flow in dayFlows {
-        sum += flow.amount * pow(onePlusR, -flow.daysFromFirst / 365)
-      }
-      return sum - terminal * pow(onePlusR, -totalDays / 365)
-    }
     var low = -0.99
     var high = 10.0
-    var fLow = evaluate(low)
-    let fHigh = evaluate(high)
+    var fLow = npv(rate: low, dayFlows: dayFlows, terminal: terminal, totalDays: totalDays)
+    let fHigh = npv(rate: high, dayFlows: dayFlows, terminal: terminal, totalDays: totalDays)
     if fLow.isNaN || fHigh.isNaN { return nil }
     if fLow * fHigh > 0 { return nil }
     for _ in 0..<60 {
       let mid = (low + high) / 2
-      let fMid = evaluate(mid)
+      let fMid = npv(rate: mid, dayFlows: dayFlows, terminal: terminal, totalDays: totalDays)
       if fMid.isNaN { return nil }
       if abs(fMid) < 1e-9 { return mid }
       if fLow * fMid < 0 {
