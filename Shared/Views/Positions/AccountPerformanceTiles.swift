@@ -30,6 +30,7 @@ struct AccountPerformanceTiles: View {
     }
     .padding(.horizontal)
     .padding(.vertical, 12)
+    .dynamicTypeSize(...DynamicTypeSize.accessibility2)
   }
 
   // MARK: - Tiles
@@ -73,7 +74,7 @@ struct AccountPerformanceTiles: View {
   }
 
   @ViewBuilder private var annualisedReturnTile: some View {
-    Tile(label: "Annualised Return") {
+    let tile = Tile(label: "Annualised Return") {
       if let rate = performance.annualisedReturn {
         Text(formattedPaPercent(rate))
           .font(.title3)
@@ -93,8 +94,12 @@ struct AccountPerformanceTiles: View {
       }
     }
     .accessibilityLabel(annualisedReturnAccessibilityLabel)
-    .accessibilityHint(
-      performance.annualisedReturn == nil ? annualisedReturnUnavailableTooltip : "")
+
+    if performance.annualisedReturn == nil {
+      tile.accessibilityHint(annualisedReturnUnavailableTooltip)
+    } else {
+      tile
+    }
   }
 
   // MARK: - Computed strings / colours

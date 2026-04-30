@@ -24,4 +24,4 @@ struct CashFlow {
 
 extension CashFlow: Sendable {}
 
-extension CashFlow: Hashable {}
+extension CashFlow: Equatable {}

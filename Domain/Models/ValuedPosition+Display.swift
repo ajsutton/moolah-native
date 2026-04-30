@@ -86,9 +86,9 @@ enum GainLossPercentDisplay {
   /// ambiguous.
   static func accessibilitySuffix(_ pct: Decimal?) -> String {
     guard let pct else { return "" }
+    if pct == 0 { return ", 0.0 percent" }
     let absValue = pct < 0 ? -pct : pct
     let formatted = String(format: "%.1f", Double(truncating: absValue as NSDecimalNumber))
-    if pct == 0 { return ", 0.0 percent" }
     return pct < 0 ? ", down \(formatted) percent" : ", up \(formatted) percent"
   }
 }

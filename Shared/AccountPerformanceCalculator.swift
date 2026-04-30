@@ -200,10 +200,10 @@ enum AccountPerformanceCalculator {
   private static func modifiedDietzPercent(
     flows: [CashFlow], terminal: Double, totalDays: Double
   ) -> Decimal? {
-    guard totalDays >= 1 else { return nil }
+    guard totalDays >= 1, let firstFlow = flows.first else { return nil }
     // Decimal has no fractional `pow`; convert to Double at the Modified
     // Dietz boundary.
-    let firstDate = flows[0].date
+    let firstDate = firstFlow.date
     var contributionSum = 0.0
     var weightedSum = 0.0
     for flow in flows {
