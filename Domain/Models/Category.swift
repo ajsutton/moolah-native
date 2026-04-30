@@ -47,7 +47,13 @@ struct Categories: Sendable {
     return parts.joined(separator: ":")
   }
 
-  /// All descendants of a given category, depth-first; excludes the category itself.
+  /// Every category in the subtree rooted at `parentId`, in depth-first
+  /// pre-order with siblings sorted by name (inherited from `children(of:)`).
+  ///
+  /// The category identified by `parentId` is not included — callers that
+  /// need to operate on the whole subtree (e.g. selecting parent + descendants
+  /// for a multi-category filter) must add the root id themselves. Returns an
+  /// empty array when `parentId` has no children or is not found.
   func descendants(of parentId: UUID) -> [Category] {
     var result: [Category] = []
     for child in children(of: parentId) {

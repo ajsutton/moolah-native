@@ -78,24 +78,35 @@ struct CategoriesTests {
     let adrian = Category(name: "Adrian", parentId: salary.id)
     let categories = Categories(from: [income, salary, janet, adrian])
 
-    let names = Set(categories.descendants(of: income.id).map(\.name))
+    let names = categories.descendants(of: income.id).map(\.name)
 
-    #expect(names == ["Salary", "Janet", "Adrian"])
+    // Depth-first pre-order; salary's children are sorted alphabetically
+    // (Adrian before Janet) by `children(of:)`.
+    #expect(names == ["Salary", "Adrian", "Janet"])
   }
 
   @Test
-  func descendantsExcludesSelfAndUnrelatedSubtrees() {
+  func descendantsExcludeSelf() {
+    let parent = Category(name: "Groceries")
+    let child = Category(name: "Costco", parentId: parent.id)
+    let categories = Categories(from: [parent, child])
+
+    let ids = Set(categories.descendants(of: parent.id).map(\.id))
+
+    #expect(!ids.contains(parent.id))
+  }
+
+  @Test
+  func descendantsExcludeUnrelatedSubtrees() {
     let groceries = Category(name: "Groceries")
     let costco = Category(name: "Costco", parentId: groceries.id)
     let transport = Category(name: "Transport")
     let fuel = Category(name: "Fuel", parentId: transport.id)
     let categories = Categories(from: [groceries, costco, transport, fuel])
 
-    let descendants = categories.descendants(of: groceries.id)
-    let ids = Set(descendants.map(\.id))
+    let ids = Set(categories.descendants(of: groceries.id).map(\.id))
 
     #expect(ids == [costco.id])
-    #expect(!ids.contains(groceries.id))
     #expect(!ids.contains(transport.id))
     #expect(!ids.contains(fuel.id))
   }
