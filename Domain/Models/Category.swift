@@ -63,6 +63,23 @@ struct Categories: Sendable {
     return result
   }
 
+  /// Human-readable summary of a multi-category selection. Returns
+  /// `"All"` when nothing is selected (or every selected id is orphaned),
+  /// the full path when exactly one selected id is still present, and
+  /// `"\(N) selected"` when two or more selected ids are still present.
+  func selectionSummary(for selectedIds: Set<UUID>) -> String {
+    let presentIds = selectedIds.filter { byId[$0] != nil }
+    switch presentIds.count {
+    case 0:
+      return "All"
+    case 1:
+      let id = presentIds.first!  // safe: count == 1
+      return path(for: byId[id]!)
+    default:
+      return "\(presentIds.count) selected"
+    }
+  }
+
   /// An entry in the flattened category list.
   struct FlatEntry: Sendable {
     let category: Category

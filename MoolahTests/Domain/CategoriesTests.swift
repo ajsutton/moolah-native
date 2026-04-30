@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import Moolah
@@ -109,5 +110,44 @@ struct CategoriesTests {
     #expect(ids == [costco.id])
     #expect(!ids.contains(transport.id))
     #expect(!ids.contains(fuel.id))
+  }
+
+  @Test
+  func selectionSummaryEmptyReturnsAll() {
+    let categories = Categories(from: [Category(name: "Groceries")])
+
+    #expect(categories.selectionSummary(for: []) == "All")
+  }
+
+  @Test
+  func selectionSummarySingleSelectionReturnsFullPath() {
+    let income = Category(name: "Income")
+    let salary = Category(name: "Salary", parentId: income.id)
+    let categories = Categories(from: [income, salary])
+
+    #expect(categories.selectionSummary(for: [salary.id]) == "Income:Salary")
+  }
+
+  @Test
+  func selectionSummaryMultipleSelectionReturnsCount() {
+    let g = Category(name: "Groceries")
+    let t = Category(name: "Transport")
+    let i = Category(name: "Income")
+    let categories = Categories(from: [g, t, i])
+
+    #expect(categories.selectionSummary(for: [g.id, t.id]) == "2 selected")
+    #expect(categories.selectionSummary(for: [g.id, t.id, i.id]) == "3 selected")
+  }
+
+  @Test
+  func selectionSummaryIgnoresOrphanedIds() {
+    let g = Category(name: "Groceries")
+    let categories = Categories(from: [g])
+    let orphan = UUID()
+
+    // One real id + one orphan → still "single" semantics, returns the real path.
+    #expect(categories.selectionSummary(for: [g.id, orphan]) == "Groceries")
+    // Two orphans → "All" because no present ids remain.
+    #expect(categories.selectionSummary(for: [orphan, UUID()]) == "All")
   }
 }
