@@ -130,4 +130,20 @@ struct ValuedPositionTests {
       value: nil)
     #expect(row.gainLossPercent == nil)
   }
+
+  /// Sign preservation: a position with `costBasis = +50` and
+  /// `value = -50` represents a 200% loss, not a 200% gain. The formula
+  /// `(value - costBasis) / costBasis * 100` evaluates to
+  /// `(-50 - 50) / 50 * 100 = -200`, preserving the negative sign per
+  /// CLAUDE.md's monetary-sign-convention rule.
+  @Test("negative value vs positive cost basis preserves negative sign")
+  func gainLossPercentSignPreservation() throws {
+    let row = ValuedPosition(
+      instrument: bhp, quantity: -100,
+      unitPrice: nil,
+      costBasis: InstrumentAmount(quantity: 50, instrument: aud),
+      value: InstrumentAmount(quantity: -50, instrument: aud))
+    let pct = try #require(row.gainLossPercent)
+    #expect(pct == -200)
+  }
 }
