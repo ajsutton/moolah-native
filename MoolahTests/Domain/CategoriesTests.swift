@@ -49,4 +49,54 @@ struct CategoriesTests {
     let categories = Categories(from: [])
     #expect(categories.flattenedByPath().isEmpty)
   }
+
+  @Test
+  func descendantsOfLeafCategoryIsEmpty() {
+    let leaf = Category(name: "Groceries")
+    let categories = Categories(from: [leaf])
+
+    #expect(categories.descendants(of: leaf.id).isEmpty)
+  }
+
+  @Test
+  func descendantsOfParentReturnsDirectChildren() {
+    let groceries = Category(name: "Groceries")
+    let costco = Category(name: "Costco", parentId: groceries.id)
+    let farmers = Category(name: "Farmers Market", parentId: groceries.id)
+    let categories = Categories(from: [groceries, costco, farmers])
+
+    let names = Set(categories.descendants(of: groceries.id).map(\.name))
+
+    #expect(names == ["Costco", "Farmers Market"])
+  }
+
+  @Test
+  func descendantsOfDeepParentReturnsAllLevels() {
+    let income = Category(name: "Income")
+    let salary = Category(name: "Salary", parentId: income.id)
+    let janet = Category(name: "Janet", parentId: salary.id)
+    let adrian = Category(name: "Adrian", parentId: salary.id)
+    let categories = Categories(from: [income, salary, janet, adrian])
+
+    let names = Set(categories.descendants(of: income.id).map(\.name))
+
+    #expect(names == ["Salary", "Janet", "Adrian"])
+  }
+
+  @Test
+  func descendantsExcludesSelfAndUnrelatedSubtrees() {
+    let groceries = Category(name: "Groceries")
+    let costco = Category(name: "Costco", parentId: groceries.id)
+    let transport = Category(name: "Transport")
+    let fuel = Category(name: "Fuel", parentId: transport.id)
+    let categories = Categories(from: [groceries, costco, transport, fuel])
+
+    let descendants = categories.descendants(of: groceries.id)
+    let ids = Set(descendants.map(\.id))
+
+    #expect(ids == [costco.id])
+    #expect(!ids.contains(groceries.id))
+    #expect(!ids.contains(transport.id))
+    #expect(!ids.contains(fuel.id))
+  }
 }

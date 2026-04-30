@@ -47,6 +47,16 @@ struct Categories: Sendable {
     return parts.joined(separator: ":")
   }
 
+  /// All descendants of a given category, depth-first; excludes the category itself.
+  func descendants(of parentId: UUID) -> [Category] {
+    var result: [Category] = []
+    for child in children(of: parentId) {
+      result.append(child)
+      result.append(contentsOf: descendants(of: child.id))
+    }
+    return result
+  }
+
   /// An entry in the flattened category list.
   struct FlatEntry: Sendable {
     let category: Category
