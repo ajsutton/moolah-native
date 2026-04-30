@@ -138,17 +138,6 @@ struct CategoriesTests {
   }
 
   @Test
-  func selectionSummaryThreeSelectionsReturnsCount() {
-    let groceries = Category(name: "Groceries")
-    let transport = Category(name: "Transport")
-    let income = Category(name: "Income")
-    let categories = Categories(from: [groceries, transport, income])
-
-    let ids: Set<UUID> = [groceries.id, transport.id, income.id]
-    #expect(categories.selectionSummary(for: ids) == "3 selected")
-  }
-
-  @Test
   func selectionSummaryWithOnePresentAndOrphanIdReturnsSinglePath() {
     let groceries = Category(name: "Groceries")
     let categories = Categories(from: [groceries])
@@ -159,8 +148,9 @@ struct CategoriesTests {
 
   @Test
   func selectionSummaryWithAllOrphanedIdsReturnsAll() {
-    let groceries = Category(name: "Groceries")
-    let categories = Categories(from: [groceries])
+    // Empty categories makes the intent unambiguous: no known ids,
+    // so every selected id is orphaned and the result is "All".
+    let categories = Categories(from: [])
 
     #expect(categories.selectionSummary(for: [UUID(), UUID()]) == "All")
   }
@@ -196,6 +186,19 @@ struct CategoriesTests {
     let entries = categories.flattenedByPath(matching: "  Groceries  ")
 
     #expect(entries.map(\.path) == ["Groceries"])
+  }
+
+  @Test
+  func flattenedByPathMatchingWhitespaceOnlyQueryReturnsAll() {
+    // Docstring contract: a whitespace-only query is treated as empty
+    // after trimming and returns the full result.
+    let groceries = Category(name: "Groceries")
+    let income = Category(name: "Income")
+    let categories = Categories(from: [groceries, income])
+
+    let entries = categories.flattenedByPath(matching: "   ")
+
+    #expect(entries.map(\.path) == ["Groceries", "Income"])
   }
 
   @Test

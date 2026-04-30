@@ -110,6 +110,13 @@ struct Categories: Sendable {
 
     /// Hierarchy depth derived from the colon-separated path.
     /// Roots have depth `0`; each level of nesting adds `1`.
+    ///
+    /// - Precondition: `Category.name` values must not contain `":"`.
+    ///   `path(for:)` uses `":"` as the hierarchy separator, so a colon
+    ///   inside a name produces an artificially high depth and incorrect
+    ///   indentation. The current model accepts arbitrary `String` names
+    ///   without UI validation, so callers that synthesise categories
+    ///   need to keep colons out of names themselves.
     var depth: Int { path.split(separator: ":").count - 1 }
   }
 
