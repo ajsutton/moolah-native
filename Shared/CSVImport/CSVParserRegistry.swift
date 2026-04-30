@@ -12,10 +12,11 @@ struct CSVParserRegistry: Sendable {
   // `any CSVParser & Sendable` keeps the Sendable guarantee visible through
   // the existential. `CSVParser: Sendable` alone does not propagate to `any
   // CSVParser` under strict concurrency.
-  let parsers: [any CSVParser & Sendable]
+  private let parsers: [any CSVParser & Sendable]
 
   static let `default` = CSVParserRegistry(parsers: [
-    SelfWealthParser(),
+    SelfWealthMovementsParser(),
+    SelfWealthCashReportParser(),
     GenericBankCSVParser(),
   ])
 

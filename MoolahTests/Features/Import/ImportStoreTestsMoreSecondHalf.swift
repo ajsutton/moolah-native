@@ -117,63 +117,76 @@ struct ImportStoreTestsMoreSecondHalf {
     #expect(FileManager.default.fileExists(atPath: tmp.path) == false)
   }
 
-  @Test("SelfWealth fixture creates two-leg trade transactions end-to-end")
-  func selfWealthFixtureCreatesTwoLegTrades() async throws {
+  /// Shared fixture for end-to-end Movements-parser assertions. Returns the
+  /// imported `Transaction`s so each `@Test` can assert its own behaviour
+  /// slice without duplicating the seed-account-and-profile setup.
+  private func ingestMovementsFixture() async throws -> [Transaction] {
     let (backend, _) = try TestBackend.create()
     let accountId = UUID()
     try await seedAccount(backend, id: accountId, name: "Brokerage")
     _ = try await seedProfile(
       backend,
       accountId: accountId,
-      parser: "selfwealth",
-      signature: ["date", "type", "description", "debit", "credit", "balance"])
+      parser: "selfwealth-movements",
+      signature: [
+        "trade date", "settlement date", "action", "reference", "code", "name",
+        "units", "average price", "consideration", "brokerage", "total",
+      ])
     let (store, dir) = try makeStore(backend: backend)
     defer { try? FileManager.default.removeItem(at: dir) }
-
-    let data = try CSVFixtureLoader.data("selfwealth-trades")
+    let data = try CSVFixtureLoader.data("selfwealth-movements")
     let result = await store.ingest(
       data: data,
       source: .pickedFile(
-        url: URL(fileURLWithPath: "/tmp/selfwealth.csv"), securityScoped: false))
+        url: URL(fileURLWithPath: "/tmp/selfwealth-movements.csv"), securityScoped: false))
     guard case .imported(_, let imported, _) = result else {
       Issue.record("expected .imported; got \(result)")
-      return
+      return []
     }
+    return imported
+  }
 
-    // BHP buy: 2-leg transaction, cash AUD leg -4550.00, position ASX:BHP +100.
-    let bhp = imported.first(where: {
-      $0.importOrigin?.rawDescription.contains("BHP") == true
-        && $0.legs.count == 2
+  @Test("SelfWealth Movements Buy creates a three-leg cash + position + brokerage transaction")
+  func selfWealthMovementsBuyEndToEnd() async throws {
+    let imported = try await ingestMovementsFixture()
+    #expect(
+      imported.allSatisfy {
+        $0.importOrigin?.parserIdentifier == "selfwealth-movements"
+      })
+    let buy = try #require(
+      imported.first(where: {
+        $0.importOrigin?.rawDescription.contains("Buy") == true
+          && $0.importOrigin?.rawDescription.contains("WXYZ") == true
+      }))
+    #expect(buy.legs.count == 3)
+    let cashLeg = buy.legs.first(where: {
+      $0.instrument == .AUD && $0.quantity == Decimal(string: "-5000.00")
     })
-    #expect(bhp != nil)
-    if let bhp {
-      let cashLeg = bhp.legs.first(where: { $0.instrument == .AUD })
-      #expect(cashLeg?.quantity == Decimal(string: "-4550.00"))
-      #expect(cashLeg?.type == .expense)
-      let positionLeg = bhp.legs.first(where: { $0.instrument.id == "ASX:BHP" })
-      #expect(positionLeg?.quantity == 100)
-      #expect(positionLeg?.type == .income)
-      #expect(positionLeg?.instrument.kind == .stock)
-    }
+    #expect(cashLeg?.type == .expense)
+    let positionLeg = buy.legs.first(where: { $0.instrument.id == "ASX:WXYZ" })
+    #expect(positionLeg?.quantity == 100)
+    #expect(positionLeg?.type == .income)
+    let brokerageLeg = buy.legs.first(where: {
+      $0.instrument == .AUD && $0.quantity == Decimal(string: "-9.50")
+    })
+    #expect(brokerageLeg?.type == .expense)
+  }
 
-    // CBA sell: cash AUD +5512.50, position ASX:CBA -50.
-    let cba = imported.first(where: {
-      $0.importOrigin?.rawDescription.contains("CBA") == true
+  @Test("SelfWealth Movements Sell + In rows produce expected leg shapes end-to-end")
+  func selfWealthMovementsSellAndInEndToEnd() async throws {
+    let imported = try await ingestMovementsFixture()
+    let sell = imported.first(where: {
+      $0.importOrigin?.rawDescription.contains("Sell") == true
+        && $0.importOrigin?.rawDescription.contains("ABCD") == true
     })
-    #expect(cba != nil)
-    if let cba {
-      let cashLeg = cba.legs.first(where: { $0.instrument == .AUD })
-      #expect(cashLeg?.quantity == Decimal(string: "5512.50"))
-      let positionLeg = cba.legs.first(where: { $0.instrument.id == "ASX:CBA" })
-      #expect(positionLeg?.quantity == -50)
-    }
-
-    // Dividend is single-leg AUD income with SW-DIV-<ticker> bank reference.
-    let dividend = imported.first(where: {
-      $0.importOrigin?.rawDescription.contains("DIVIDEND") == true
+    let sellPosition = sell?.legs.first(where: { $0.instrument.id == "ASX:ABCD" })
+    #expect(sellPosition?.quantity == -50)
+    // In row: one-leg position income, no cash counterpart. User reclassifies
+    // in-app if it's actually a transfer rather than DRP.
+    let drp = imported.first(where: {
+      $0.legs.count == 1 && $0.legs.first?.instrument.id == "ASX:WXYZ"
     })
-    #expect(dividend?.legs.count == 1)
-    #expect(dividend?.importOrigin?.bankReference == "SW-DIV-BHP")
+    #expect(drp?.legs.first?.type == .income)
   }
 
   @Test("recentSessions carries one entry per successful ingest")

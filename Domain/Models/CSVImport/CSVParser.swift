@@ -7,9 +7,10 @@ import Foundation
 /// Parsers are pure value types that run off the main actor — they must not
 /// touch any repository or UI state.
 protocol CSVParser: Sendable {
-  /// Stable identifier, e.g. `"generic-bank"`, `"selfwealth"`. Stored on
-  /// `ImportOrigin.parserIdentifier` for audit and on `CSVImportProfile` so a
-  /// file downloaded later routes through the same parser.
+  /// Stable identifier, e.g. `"generic-bank"`, `"selfwealth-movements"`,
+  /// `"selfwealth-cash-report"`. Stored on `ImportOrigin.parserIdentifier`
+  /// for audit and on `CSVImportProfile` so a file downloaded later routes
+  /// through the same parser.
   var identifier: String { get }
 
   /// Called with the file's normalised headers (lowercased + trimmed, per
