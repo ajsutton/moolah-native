@@ -133,7 +133,8 @@ final class InvestmentStore {
   }
 
   /// Recompute the position-tracked `accountPerformance` from the loaded
-  /// transactions and `valuedPositions`. Called from `loadAllData`. Sets
+  /// transactions and `valuedPositions`. Called from `loadAllData` and
+  /// `reloadPositionsIfNeeded` after a trade is recorded. Sets
   /// `accountPerformance` to `nil` and surfaces the error on conversion
   /// failure; partial sums are not shown.
   private func refreshPositionTrackedPerformance(
@@ -164,12 +165,24 @@ final class InvestmentStore {
     }
   }
 
+  /// Recompute the legacy `accountPerformance` from the in-memory `values`
+  /// and `dailyBalances` arrays, after a `setValue` / `removeValue`
+  /// mutation. Synchronous: the legacy path doesn't need conversion.
+  private func refreshLegacyPerformance(instrument: Instrument) {
+    accountPerformance = AccountPerformanceCalculator.computeLegacy(
+      dailyBalances: dailyBalances,
+      values: values,
+      instrument: instrument)
+  }
+
   /// Refreshes position data after a trade is recorded. Used from
   /// `.onChange` where we only care about position-tracked accounts.
   func reloadPositionsIfNeeded(accountId: UUID, profileCurrency: Instrument) async {
     guard !hasLegacyValuations else { return }
     await loadPositions(accountId: accountId)
     await valuatePositions(profileCurrency: profileCurrency, on: Date())
+    await refreshPositionTrackedPerformance(
+      accountId: accountId, profileCurrency: profileCurrency)
   }
 
   func setValue(accountId: UUID, date: Date, value: InstrumentAmount) async {
@@ -182,6 +195,7 @@ final class InvestmentStore {
       values.sort()
       // The latest value is the first one (values sorted descending by date)
       onInvestmentValueChanged?(accountId, values.first?.value)
+      refreshLegacyPerformance(instrument: value.instrument)
     } catch {
       logger.error("Failed to set investment value: \(error.localizedDescription)")
       self.error = error
@@ -194,6 +208,8 @@ final class InvestmentStore {
       try await repository.removeValue(accountId: accountId, date: date)
       values.removeAll { $0.date.isSameDay(as: date) }
       onInvestmentValueChanged?(accountId, values.first?.value)
+      let instrument = values.first?.value.instrument ?? loadedHostCurrency ?? .AUD
+      refreshLegacyPerformance(instrument: instrument)
     } catch {
       logger.error("Failed to remove investment value: \(error.localizedDescription)")
       self.error = error
