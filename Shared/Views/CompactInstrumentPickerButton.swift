@@ -36,8 +36,8 @@ struct CompactInstrumentPickerButton: View {
     }
     .layoutPriority(1)
     .buttonStyle(.plain)
-    .accessibilityLabel(Text("Instrument: \(selection.shortCode)"))
-    .accessibilityHint(Text("Activate to choose a different instrument"))
+    .accessibilityLabel(Text("Asset: \(selection.shortCode)"))
+    .accessibilityHint(Text("Activate to choose a different asset"))
     #if os(macOS)
       .popover(
         isPresented: $isPresented,
@@ -45,7 +45,7 @@ struct CompactInstrumentPickerButton: View {
         content: {
           InstrumentPickerSheet(
             store: store,
-            label: "Instrument",
+            label: "Asset",
             selection: $selection,
             isPresented: $isPresented
           )
@@ -58,7 +58,7 @@ struct CompactInstrumentPickerButton: View {
         content: {
           InstrumentPickerSheet(
             store: store,
-            label: "Instrument",
+            label: "Asset",
             selection: $selection,
             isPresented: $isPresented
           )

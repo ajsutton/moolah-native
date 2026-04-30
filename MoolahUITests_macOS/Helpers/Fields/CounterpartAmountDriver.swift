@@ -28,20 +28,25 @@ struct CounterpartAmountDriver {
           + "did not appear within \(timeout)s")
       return
     }
-    // Poll — the Text's content is exposed via `value` (not `label`) once
-    // an `.accessibilityIdentifier` is attached, and it updates via
-    // `.onChange` after the account picker selection propagates.
+    // The compact picker button exposes its content via the accessibility
+    // `label` ("Asset: <code>") rather than `value`. Poll both fields and
+    // accept either match — the value updates via `.onChange` after the
+    // account picker selection propagates.
     let deadline = Date().addingTimeInterval(timeout)
-    var lastValue = ""
+    var lastSeen = ""
     while Date() < deadline {
-      lastValue = (instrumentLabel.value as? String) ?? ""
-      if lastValue == instrumentCode { return }
+      let label = instrumentLabel.label
+      let value = (instrumentLabel.value as? String) ?? ""
+      lastSeen = label.isEmpty ? value : label
+      if value == instrumentCode || label.hasSuffix(": \(instrumentCode)") {
+        return
+      }
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     }
     Trace.recordFailure(
-      "counterpart instrument label was '\(lastValue)' (expected '\(instrumentCode)')")
+      "counterpart instrument label was '\(lastSeen)' (expected '\(instrumentCode)')")
     XCTFail(
-      "Counterpart instrument label expected '\(instrumentCode)', got '\(lastValue)' within \(timeout)s"
+      "Counterpart instrument label expected '\(instrumentCode)', got '\(lastSeen)' within \(timeout)s"
     )
   }
 
