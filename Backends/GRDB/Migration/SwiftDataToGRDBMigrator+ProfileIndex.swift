@@ -2,7 +2,6 @@
 
 import Foundation
 import GRDB
-import OSLog
 import SwiftData
 
 // One-shot SwiftData → GRDB migrator for the app-scoped profile index.
@@ -14,8 +13,9 @@ import SwiftData
 // index is **app-scoped** — one DB per install, independent of any
 // profile session — so its migrator has a different hook point and
 // different inputs (the index `ModelContainer` and the
-// `profile-index.sqlite` writer). Task 5 wires the call site at app
-// launch; this extension just exposes the entry point.
+// `profile-index.sqlite` writer). `MoolahApp` setup invokes this
+// entry point once at app launch, before the sync coordinator
+// starts.
 
 extension SwiftDataToGRDBMigrator {
 
@@ -30,7 +30,7 @@ extension SwiftDataToGRDBMigrator {
   /// has its own entry point — it is **not** invoked from
   /// `migrateIfNeeded(modelContainer:database:defaults:)` (which
   /// orchestrates the per-profile migrators against a profile's
-  /// `data.sqlite`). Task 5 calls this once at app launch.
+  /// `data.sqlite`). `MoolahApp` setup calls this once at app launch.
   ///
   /// The `committed` defer pattern matches the per-profile migrators:
   /// the gating flag is set only after the GRDB transaction commits,
