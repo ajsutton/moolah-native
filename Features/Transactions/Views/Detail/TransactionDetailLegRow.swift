@@ -58,6 +58,7 @@ struct TransactionDetailLegRow: View {
       Text(TransactionType.income.displayName).tag(TransactionType.income)
       Text(TransactionType.expense.displayName).tag(TransactionType.expense)
       Text(TransactionType.transfer.displayName).tag(TransactionType.transfer)
+      Text(TransactionType.trade.displayName).tag(TransactionType.trade)
     }
   }
 
