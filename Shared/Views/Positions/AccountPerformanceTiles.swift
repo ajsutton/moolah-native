@@ -1,0 +1,220 @@
+// Shared/Views/Positions/AccountPerformanceTiles.swift
+import SwiftUI
+
+/// Three-tile horizontal strip rendering account-level lifetime numbers
+/// from an `AccountPerformance`: Current Value, Profit / Loss (with %),
+/// and Annualised Return (with "since [first-flow-date]" subtitle).
+///
+/// Replaces both the position-tracked single-row `PositionsHeader` (when
+/// a performance is supplied via `PositionsViewInput.performance`) and
+/// the legacy `InvestmentSummaryView` (in Slice 5 Task 15). Each tile
+/// shows "—" / "Unavailable" rather than a partial sum when its source
+/// field is `nil` — see Rule 11 in
+/// `guides/INSTRUMENT_CONVERSION_GUIDE.md`.
+struct AccountPerformanceTiles: View {
+  let title: String
+  let performance: AccountPerformance
+
+  var body: some View {
+    VStack(spacing: 8) {
+      Text(title)
+        .font(.headline)
+        .frame(maxWidth: .infinity, alignment: .leading)
+      HStack(spacing: 0) {
+        currentValueTile
+        Divider().frame(height: 50)
+        profitLossTile
+        Divider().frame(height: 50)
+        annualisedReturnTile
+      }
+    }
+    .padding(.horizontal)
+    .padding(.vertical, 12)
+  }
+
+  // MARK: - Tiles
+
+  @ViewBuilder private var currentValueTile: some View {
+    Tile(label: "Current Value") {
+      if let value = performance.currentValue {
+        Text(value.formatted)
+          .font(.title3)
+          .monospacedDigit()
+      } else {
+        Text("Unavailable")
+          .font(.title3)
+          .foregroundStyle(.secondary)
+      }
+    } subtitle: {
+      EmptyView()
+    }
+  }
+
+  @ViewBuilder private var profitLossTile: some View {
+    Tile(label: "Profit / Loss") {
+      if let profitLoss = performance.profitLoss {
+        Text(profitLoss.signedFormatted)
+          .font(.title3)
+          .monospacedDigit()
+          .foregroundStyle(plColor)
+      } else {
+        Text("—")
+          .font(.title3)
+          .foregroundStyle(.tertiary)
+      }
+    } subtitle: {
+      if let text = profitLossPercentText {
+        Text(text)
+          .font(.caption)
+          .monospacedDigit()
+          .foregroundStyle(plColor)
+      }
+    }
+  }
+
+  @ViewBuilder private var annualisedReturnTile: some View {
+    Tile(label: "Annualised Return") {
+      if let rate = performance.annualisedReturn {
+        Text(formattedPaPercent(rate))
+          .font(.title3)
+          .monospacedDigit()
+          .foregroundStyle(paColor(rate))
+      } else {
+        Text("—")
+          .font(.title3)
+          .foregroundStyle(.tertiary)
+          .help(annualisedReturnUnavailableTooltip)
+      }
+    } subtitle: {
+      if let text = sinceText {
+        Text(text)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+    }
+  }
+
+  // MARK: - Computed strings / colours
+
+  private var profitLossPercentText: String? {
+    performance.profitLossPercent.map {
+      GainLossPercentDisplay.formatted($0 * 100)
+    }
+  }
+
+  private var sinceText: String? {
+    guard let date = performance.firstFlowDate else { return nil }
+    let formatter = DateFormatter()
+    formatter.dateFormat = "MMM yyyy"
+    return "since \(formatter.string(from: date))"
+  }
+
+  /// `+8.3% p.a.` / `−4.0% p.a.` / `0.0% p.a.`. Uses the shared
+  /// `GainLossPercentDisplay.formatted` so the percentage portion
+  /// matches `PositionsTable.gainCell` and `PositionRow.trailingColumn`.
+  private func formattedPaPercent(_ rate: Decimal) -> String {
+    "\(GainLossPercentDisplay.formatted(rate * 100)) p.a."
+  }
+
+  private var plColor: Color {
+    guard let profitLoss = performance.profitLoss else { return .secondary }
+    if profitLoss.isNegative { return .red }
+    if profitLoss.isZero { return .primary }
+    return .green
+  }
+
+  private func paColor(_ rate: Decimal) -> Color {
+    if rate < 0 { return .red }
+    if rate == 0 { return .primary }
+    return .green
+  }
+
+  /// Surfaced via `.help(...)` on the unavailable p.a. tile.
+  /// Distinguishes "not enough data" from "conversion broke" so the
+  /// user knows whether to wait or retry.
+  private var annualisedReturnUnavailableTooltip: String {
+    if performance.firstFlowDate == nil {
+      return "Not enough activity yet"
+    }
+    return "Annualised return unavailable — conversion may have failed"
+  }
+}
+
+// MARK: - Tile primitive
+
+private struct Tile<Content: View, Subtitle: View>: View {
+  let label: String
+  @ViewBuilder let content: () -> Content
+  @ViewBuilder let subtitle: () -> Subtitle
+
+  var body: some View {
+    VStack(spacing: 4) {
+      Text(label)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      content()
+      subtitle()
+    }
+    .frame(maxWidth: .infinity)
+    .accessibilityElement(children: .combine)
+  }
+}
+
+// MARK: - Previews
+
+#Preview("Gain") {
+  AccountPerformanceTiles(
+    title: "Brokerage",
+    performance: AccountPerformance(
+      instrument: .AUD,
+      currentValue: InstrumentAmount(quantity: 23_405, instrument: .AUD),
+      totalContributions: InstrumentAmount(quantity: 21_605, instrument: .AUD),
+      profitLoss: InstrumentAmount(quantity: 1_800, instrument: .AUD),
+      profitLossPercent: Decimal(string: "0.083"),
+      annualisedReturn: Decimal(string: "0.083"),
+      firstFlowDate: Date().addingTimeInterval(-3 * 365 * 86_400))
+  )
+  .frame(width: 720)
+  .padding()
+}
+
+#Preview("Loss") {
+  AccountPerformanceTiles(
+    title: "Brokerage",
+    performance: AccountPerformance(
+      instrument: .AUD,
+      currentValue: InstrumentAmount(quantity: 9_500, instrument: .AUD),
+      totalContributions: InstrumentAmount(quantity: 10_000, instrument: .AUD),
+      profitLoss: InstrumentAmount(quantity: -500, instrument: .AUD),
+      profitLossPercent: Decimal(string: "-0.05"),
+      annualisedReturn: Decimal(string: "-0.05"),
+      firstFlowDate: Date().addingTimeInterval(-365 * 86_400))
+  )
+  .frame(width: 720)
+  .padding()
+}
+
+#Preview("Unavailable") {
+  AccountPerformanceTiles(
+    title: "Brokerage",
+    performance: .unavailable(in: .AUD)
+  )
+  .frame(width: 720)
+  .padding()
+}
+
+#Preview("No flows yet") {
+  AccountPerformanceTiles(
+    title: "Brokerage",
+    performance: AccountPerformance(
+      instrument: .AUD,
+      currentValue: InstrumentAmount(quantity: 0, instrument: .AUD),
+      totalContributions: InstrumentAmount(quantity: 0, instrument: .AUD),
+      profitLoss: InstrumentAmount(quantity: 0, instrument: .AUD),
+      profitLossPercent: nil,
+      annualisedReturn: nil,
+      firstFlowDate: nil)
+  )
+  .frame(width: 720)
+  .padding()
+}
