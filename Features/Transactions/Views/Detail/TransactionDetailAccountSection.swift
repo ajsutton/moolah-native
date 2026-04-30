@@ -23,6 +23,14 @@ struct TransactionDetailAccountSection: View {
           Text(account.name).tag(UUID?.some(account.id))
         }
       }
+      // Snap the relevant leg's instrument to the newly chosen account's
+      // instrument so the inline picker on the Amount row tracks the
+      // account. Mirrors the multi-leg row in `TransactionDetailLegRow`.
+      .onChange(of: draft.legDrafts[draft.relevantLegIndex].accountId) { _, newAccountId in
+        if let newAccountId, let account = accounts.by(id: newAccountId) {
+          draft.legDrafts[draft.relevantLegIndex].instrument = account.instrument
+        }
+      }
 
       if draft.type == .transfer {
         transferRows
@@ -43,7 +51,13 @@ struct TransactionDetailAccountSection: View {
       }
     }
     .accessibilityIdentifier(UITestIdentifiers.Detail.toAccountPicker)
-    .onChange(of: draft.legDrafts[counterpartIndex].accountId) { _, _ in
+    .onChange(of: draft.legDrafts[counterpartIndex].accountId) { _, newAccountId in
+      // Snap the counterpart leg's instrument to the new account before
+      // mirroring amounts — the cross-currency picker reads the leg's
+      // instrument first.
+      if let newAccountId, let account = accounts.by(id: newAccountId) {
+        draft.legDrafts[counterpartIndex].instrument = account.instrument
+      }
       draft.snapToSameCurrencyIfNeeded(accounts: accounts)
     }
 

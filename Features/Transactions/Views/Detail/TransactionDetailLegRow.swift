@@ -35,7 +35,6 @@ struct TransactionDetailLegRow: View {
         typePicker
       }
       accountPicker
-      instrumentPicker
       amountRow
       if !isEarmarkOnly {
         categoryField
@@ -81,32 +80,27 @@ struct TransactionDetailLegRow: View {
     }
   }
 
-  @ViewBuilder private var instrumentPicker: some View {
-    let binding = Binding<Instrument>(
+  private var amountRow: some View {
+    let instrumentBinding = Binding<Instrument>(
       get: { draft.legDrafts[index].instrument ?? defaultInstrument },
       set: { draft.legDrafts[index].instrument = $0 }
     )
-    InstrumentPickerField(
-      label: "Asset",
-      kinds: Set(Instrument.Kind.allCases),
-      selection: binding
-    )
-    .accessibilityLabel("Currency for sub-transaction \(index + 1)")
-    .accessibilityHint("Overrides the currency derived from the account")
-  }
-
-  private var amountRow: some View {
-    HStack {
-      TextField("Amount", text: $draft.legDrafts[index].amountText)
-        .multilineTextAlignment(.trailing)
-        .monospacedDigit()
-        #if os(iOS)
-          .keyboardType(.decimalPad)
-        #endif
-        .focused($focusedField, equals: .legAmount(index))
-      Text(draft.legDrafts[index].instrument?.shortCode ?? defaultInstrument.shortCode)
-        .foregroundStyle(.secondary)
-        .monospacedDigit()
+    return LabeledContent {
+      HStack(spacing: 8) {
+        TextField("Amount", text: $draft.legDrafts[index].amountText)
+          .labelsHidden()
+          .multilineTextAlignment(.trailing)
+          .monospacedDigit()
+          #if os(iOS)
+            .keyboardType(.decimalPad)
+          #endif
+          .focused($focusedField, equals: .legAmount(index))
+        CompactInstrumentPickerButton(selection: instrumentBinding)
+          .accessibilityLabel("Currency for sub-transaction \(index + 1)")
+          .accessibilityHint("Overrides the currency derived from the account")
+      }
+    } label: {
+      Text("Amount")
     }
   }
 

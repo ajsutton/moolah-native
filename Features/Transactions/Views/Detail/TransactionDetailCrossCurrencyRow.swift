@@ -37,25 +37,45 @@ struct TransactionDetailCrossCurrencyRow: View {
     )
   }
 
+  /// Bridges the counterpart leg's `Instrument?` to the picker's
+  /// non-optional binding. Reads fall back to the account-derived
+  /// counterpart instrument; writes update the leg directly.
+  private var counterpartInstrumentBinding: Binding<Instrument> {
+    Binding(
+      get: {
+        if let idx = draft.counterpartLegIndex {
+          return draft.legDrafts[idx].instrument
+            ?? counterpartInstrument ?? .AUD
+        }
+        return counterpartInstrument ?? .AUD
+      },
+      set: { newValue in
+        guard let idx = draft.counterpartLegIndex else { return }
+        draft.legDrafts[idx].instrument = newValue
+      }
+    )
+  }
+
   var body: some View {
     let fieldLabel = draft.showFromAccount ? "Sent" : "Received"
-    HStack {
+    LabeledContent {
+      HStack(spacing: 8) {
+        TextField(fieldLabel, text: counterpartAmountBinding)
+          .labelsHidden()
+          .multilineTextAlignment(.trailing)
+          .monospacedDigit()
+          .accessibilityLabel(draft.showFromAccount ? "Sent amount" : "Received amount")
+          #if os(iOS)
+            .keyboardType(.decimalPad)
+          #endif
+          .focused($focusedField, equals: .counterpartAmount)
+          .onSubmit { focusedField = nil }
+          .accessibilityIdentifier(UITestIdentifiers.Detail.counterpartAmount)
+        CompactInstrumentPickerButton(selection: counterpartInstrumentBinding)
+          .accessibilityIdentifier(UITestIdentifiers.Detail.counterpartAmountInstrument)
+      }
+    } label: {
       Text(fieldLabel)
-      Spacer()
-      TextField(fieldLabel, text: counterpartAmountBinding)
-        .multilineTextAlignment(.trailing)
-        .monospacedDigit()
-        .accessibilityLabel(draft.showFromAccount ? "Sent amount" : "Received amount")
-        #if os(iOS)
-          .keyboardType(.decimalPad)
-        #endif
-        .focused($focusedField, equals: .counterpartAmount)
-        .onSubmit { focusedField = nil }
-        .accessibilityIdentifier(UITestIdentifiers.Detail.counterpartAmount)
-      Text(counterpartInstrument?.id ?? "")
-        .foregroundStyle(.secondary)
-        .monospacedDigit()
-        .accessibilityIdentifier(UITestIdentifiers.Detail.counterpartAmountInstrument)
     }
 
     if let rate = derivedRate {

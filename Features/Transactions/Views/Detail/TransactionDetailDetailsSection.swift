@@ -16,6 +16,20 @@ struct TransactionDetailDetailsSection: View {
   let onAutofill: (String) -> Void
   @FocusState.Binding var focusedField: TransactionDetailFocus?
 
+  /// Bridges `LegDraft.instrument` (`Instrument?`) to the picker's
+  /// non-optional binding. Reads fall back to the account-derived
+  /// instrument (and finally `.AUD`) so the picker always has something
+  /// to display; writes materialise the leg-level override.
+  private var relevantInstrumentBinding: Binding<Instrument> {
+    Binding(
+      get: {
+        draft.legDrafts[draft.relevantLegIndex].instrument
+          ?? relevantInstrument ?? .AUD
+      },
+      set: { draft.legDrafts[draft.relevantLegIndex].instrument = $0 }
+    )
+  }
+
   var body: some View {
     Section {
       PayeeAutocompleteRow(
@@ -27,21 +41,25 @@ struct TransactionDetailDetailsSection: View {
       )
       .focused($focusedField, equals: .payee)
 
-      HStack {
-        TextField("Amount", text: amountBinding)
-          .multilineTextAlignment(.trailing)
-          .monospacedDigit()
-          #if os(iOS)
-            .keyboardType(.decimalPad)
-          #endif
-          .focused($focusedField, equals: .amount)
-          .onSubmit {
-            if isCrossCurrency {
-              focusedField = .counterpartAmount
+      LabeledContent {
+        HStack(spacing: 8) {
+          TextField("Amount", text: amountBinding)
+            .labelsHidden()
+            .multilineTextAlignment(.trailing)
+            .monospacedDigit()
+            #if os(iOS)
+              .keyboardType(.decimalPad)
+            #endif
+            .focused($focusedField, equals: .amount)
+            .onSubmit {
+              if isCrossCurrency {
+                focusedField = .counterpartAmount
+              }
             }
-          }
-        Text(relevantInstrument?.id ?? "").foregroundStyle(.secondary)
-          .monospacedDigit()
+          CompactInstrumentPickerButton(selection: relevantInstrumentBinding)
+        }
+      } label: {
+        Text("Amount")
       }
 
       DatePicker("Date", selection: $draft.date, displayedComponents: .date)
