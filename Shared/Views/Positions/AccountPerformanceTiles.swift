@@ -22,9 +22,9 @@ struct AccountPerformanceTiles: View {
         .frame(maxWidth: .infinity, alignment: .leading)
       HStack(spacing: 0) {
         currentValueTile
-        Divider().frame(height: 50)
+        Divider().frame(height: tileDividerHeight)
         profitLossTile
-        Divider().frame(height: 50)
+        Divider().frame(height: tileDividerHeight)
         annualisedReturnTile
       }
     }
@@ -45,9 +45,8 @@ struct AccountPerformanceTiles: View {
           .font(.title3)
           .foregroundStyle(.secondary)
       }
-    } subtitle: {
-      EmptyView()
     }
+    .accessibilityLabel(currentValueAccessibilityLabel)
   }
 
   @ViewBuilder private var profitLossTile: some View {
@@ -63,13 +62,14 @@ struct AccountPerformanceTiles: View {
           .foregroundStyle(.tertiary)
       }
     } subtitle: {
-      if let text = profitLossPercentText {
+      if performance.profitLoss != nil, let text = profitLossPercentText {
         Text(text)
           .font(.caption)
           .monospacedDigit()
           .foregroundStyle(plColor)
       }
     }
+    .accessibilityLabel(profitLossAccessibilityLabel)
   }
 
   @ViewBuilder private var annualisedReturnTile: some View {
@@ -92,6 +92,9 @@ struct AccountPerformanceTiles: View {
           .foregroundStyle(.secondary)
       }
     }
+    .accessibilityLabel(annualisedReturnAccessibilityLabel)
+    .accessibilityHint(
+      performance.annualisedReturn == nil ? annualisedReturnUnavailableTooltip : "")
   }
 
   // MARK: - Computed strings / colours
@@ -102,11 +105,17 @@ struct AccountPerformanceTiles: View {
     }
   }
 
+  /// Re-used across renders. `DateFormatter` allocation is expensive
+  /// and SwiftUI views can re-render on every parent state change.
+  private static let flowDateFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.setLocalizedDateFormatFromTemplate("MMMyyyy")
+    return formatter
+  }()
+
   private var sinceText: String? {
     guard let date = performance.firstFlowDate else { return nil }
-    let formatter = DateFormatter()
-    formatter.dateFormat = "MMM yyyy"
-    return "since \(formatter.string(from: date))"
+    return "since \(Self.flowDateFormatter.string(from: date))"
   }
 
   /// `+8.3% p.a.` / `−4.0% p.a.` / `0.0% p.a.`. Uses the shared
@@ -138,7 +147,40 @@ struct AccountPerformanceTiles: View {
     }
     return "Annualised return unavailable — conversion may have failed"
   }
+
+  // MARK: - Accessibility labels
+
+  private var currentValueAccessibilityLabel: String {
+    guard let value = performance.currentValue else {
+      return "Current Value: Unavailable"
+    }
+    return "Current Value: \(value.formatted)"
+  }
+
+  private var profitLossAccessibilityLabel: String {
+    guard let profitLoss = performance.profitLoss else {
+      return "Profit and Loss: Not available"
+    }
+    var label = "Profit and Loss: \(profitLoss.signedFormatted)"
+    if let pct = profitLossPercentText {
+      label += ", \(pct)"
+    }
+    return label
+  }
+
+  private var annualisedReturnAccessibilityLabel: String {
+    guard let rate = performance.annualisedReturn else {
+      return "Annualised Return: \(annualisedReturnUnavailableTooltip)"
+    }
+    var label = "Annualised Return: \(formattedPaPercent(rate))"
+    if let since = sinceText {
+      label += " \(since)"
+    }
+    return label
+  }
 }
+
+private let tileDividerHeight: CGFloat = 50
 
 // MARK: - Tile primitive
 
@@ -146,6 +188,25 @@ private struct Tile<Content: View, Subtitle: View>: View {
   let label: String
   @ViewBuilder let content: () -> Content
   @ViewBuilder let subtitle: () -> Subtitle
+
+  init(
+    label: String,
+    @ViewBuilder content: @escaping () -> Content,
+    @ViewBuilder subtitle: @escaping () -> Subtitle
+  ) {
+    self.label = label
+    self.content = content
+    self.subtitle = subtitle
+  }
+
+  init(
+    label: String,
+    @ViewBuilder content: @escaping () -> Content
+  ) where Subtitle == EmptyView {
+    self.label = label
+    self.content = content
+    self.subtitle = { EmptyView() }
+  }
 
   var body: some View {
     VStack(spacing: 4) {
@@ -172,7 +233,7 @@ private struct Tile<Content: View, Subtitle: View>: View {
       profitLoss: InstrumentAmount(quantity: 1_800, instrument: .AUD),
       profitLossPercent: Decimal(string: "0.083"),
       annualisedReturn: Decimal(string: "0.083"),
-      firstFlowDate: Date().addingTimeInterval(-3 * 365 * 86_400))
+      firstFlowDate: Calendar.current.date(byAdding: .year, value: -3, to: Date()))
   )
   .frame(width: 720)
   .padding()
@@ -188,7 +249,7 @@ private struct Tile<Content: View, Subtitle: View>: View {
       profitLoss: InstrumentAmount(quantity: -500, instrument: .AUD),
       profitLossPercent: Decimal(string: "-0.05"),
       annualisedReturn: Decimal(string: "-0.05"),
-      firstFlowDate: Date().addingTimeInterval(-365 * 86_400))
+      firstFlowDate: Calendar.current.date(byAdding: .year, value: -1, to: Date()))
   )
   .frame(width: 720)
   .padding()
