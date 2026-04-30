@@ -3,7 +3,6 @@
 import Foundation
 import GRDB
 import Testing
-import os
 
 @testable import Moolah
 
@@ -16,10 +15,9 @@ struct GRDBProfileIndexRepositoryTests {
 
   // MARK: - Factory
 
-  private func makeRepo() throws -> (GRDBProfileIndexRepository, DatabaseQueue) {
+  private func makeRepo() throws -> GRDBProfileIndexRepository {
     let database = try ProfileIndexDatabase.openInMemory()
-    let repo = GRDBProfileIndexRepository(database: database)
-    return (repo, database)
+    return GRDBProfileIndexRepository(database: database)
   }
 
   private func makeProfile(
@@ -38,7 +36,7 @@ struct GRDBProfileIndexRepositoryTests {
 
   @Test("fetchAll, upsert, delete round-trip")
   func roundTrip() async throws {
-    let (repo, _) = try makeRepo()
+    let repo = try makeRepo()
     let earlier = makeProfile(
       label: "Personal", createdAt: Date(timeIntervalSince1970: 1_700_000_000))
     let later = makeProfile(
@@ -65,7 +63,7 @@ struct GRDBProfileIndexRepositoryTests {
 
   @Test("upsert preserves encodedSystemFields when row already exists")
   func upsertPreservesEncodedSystemFields() async throws {
-    let (repo, _) = try makeRepo()
+    let repo = try makeRepo()
     let id = UUID()
     let blob = Data([0xAA, 0xBB, 0xCC])
     // Seed a row with a non-nil system-fields blob via the sync entry
@@ -102,7 +100,7 @@ struct GRDBProfileIndexRepositoryTests {
 
   @Test("applyRemoteChangesSync applies saves and deletes atomically")
   func applyRemoteChangesUpsertAndDelete() async throws {
-    let (repo, _) = try makeRepo()
+    let repo = try makeRepo()
     let firstId = UUID()
     let secondId = UUID()
     let firstSeed = ProfileRow(
@@ -143,7 +141,7 @@ struct GRDBProfileIndexRepositoryTests {
 
   @Test("setEncodedSystemFieldsSync writes and clears")
   func setEncodedSystemFieldsWritesAndClears() async throws {
-    let (repo, _) = try makeRepo()
+    let repo = try makeRepo()
     let profile = makeProfile(
       label: "Personal", createdAt: Date(timeIntervalSince1970: 1_700_000_000))
     try await repo.upsert(profile)
@@ -168,7 +166,7 @@ struct GRDBProfileIndexRepositoryTests {
 
   @Test("clearAllSystemFieldsSync nulls every row's blob")
   func clearAllSystemFieldsNullsEveryRow() async throws {
-    let (repo, _) = try makeRepo()
+    let repo = try makeRepo()
     let firstId = UUID()
     let secondId = UUID()
     let blob = Data([0xFF])
@@ -202,7 +200,7 @@ struct GRDBProfileIndexRepositoryTests {
 
   @Test("delete returns true when row existed, false otherwise")
   func deleteReturnValue() async throws {
-    let (repo, _) = try makeRepo()
+    let repo = try makeRepo()
     let profile = makeProfile(
       label: "Personal", createdAt: Date(timeIntervalSince1970: 1_700_000_000))
     try await repo.upsert(profile)
@@ -221,7 +219,7 @@ struct GRDBProfileIndexRepositoryTests {
 
   @Test("attachSyncHooks fires after install, not before")
   func attachSyncHooksFiresAfterInstall() async throws {
-    let (repo, _) = try makeRepo()
+    let repo = try makeRepo()
 
     let firstProfile = makeProfile(
       label: "Before", createdAt: Date(timeIntervalSince1970: 1_700_000_000))
@@ -229,40 +227,27 @@ struct GRDBProfileIndexRepositoryTests {
     // no-op) hooks. We exercise the path to confirm it's a no-op.
     try await repo.upsert(firstProfile)
 
-    let changedCount = ThreadSafeCounter()
-    let deletedCount = ThreadSafeCounter()
+    let changedCount = LockedBox<Int>(0)
+    let deletedCount = LockedBox<Int>(0)
 
     repo.attachSyncHooks(
-      onRecordChanged: { _ in changedCount.increment() },
-      onRecordDeleted: { _ in deletedCount.increment() })
+      onRecordChanged: { _ in changedCount.set(changedCount.get() + 1) },
+      onRecordDeleted: { _ in deletedCount.set(deletedCount.get() + 1) })
 
     // After install, an upsert fires `onRecordChanged` exactly once.
     let secondProfile = makeProfile(
       label: "After", createdAt: Date(timeIntervalSince1970: 1_710_000_000))
     try await repo.upsert(secondProfile)
-    #expect(changedCount.value == 1)
-    #expect(deletedCount.value == 0)
+    #expect(changedCount.get() == 1)
+    #expect(deletedCount.get() == 0)
 
     // A delete fires `onRecordDeleted` exactly once.
     _ = try await repo.delete(id: secondProfile.id)
-    #expect(changedCount.value == 1)
-    #expect(deletedCount.value == 1)
+    #expect(changedCount.get() == 1)
+    #expect(deletedCount.get() == 1)
 
     // A delete that doesn't match a row does NOT fire the hook.
     _ = try await repo.delete(id: UUID())
-    #expect(deletedCount.value == 1)
-  }
-}
-
-/// Threadsafe counter for the hook-fire assertions. The hooks are
-/// `@Sendable (UUID) -> Void`; capturing a plain `Int` would not be
-/// `Sendable` and would race against the test's read.
-private final class ThreadSafeCounter: Sendable {
-  private let storage = OSAllocatedUnfairLock(initialState: 0)
-
-  var value: Int { storage.withLock { $0 } }
-
-  func increment() {
-    storage.withLock { $0 += 1 }
+    #expect(deletedCount.get() == 1)
   }
 }

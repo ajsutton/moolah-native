@@ -20,19 +20,18 @@ extension ProfileRow {
   /// its write closure so a cross-device upsert never strips the
   /// CKRecord change tag.
   init(domain profile: Profile) {
-    self.init(
-      id: profile.id,
-      recordName: ProfileRow.recordName(for: profile.id),
-      label: profile.label,
-      currencyCode: profile.currencyCode,
-      financialYearStartMonth: profile.financialYearStartMonth,
-      createdAt: profile.createdAt,
-      encodedSystemFields: nil)
+    self.id = profile.id
+    self.recordName = ProfileRow.recordName(for: profile.id)
+    self.label = profile.label
+    self.currencyCode = profile.currencyCode
+    self.financialYearStartMonth = profile.financialYearStartMonth
+    self.createdAt = profile.createdAt
+    self.encodedSystemFields = nil
   }
 
-  /// Domain projection. `Profile`'s designated initialiser carries the
-  /// full set of stored properties; nothing is computed at the mapping
-  /// boundary so the round-trip is total.
+  /// No data is transformed or synthesised at the mapping boundary —
+  /// the round-trip is total, so the only source of divergence between
+  /// the returned `Profile` and the original is an out-of-band DB edit.
   func toDomain() -> Profile {
     Profile(
       id: id,

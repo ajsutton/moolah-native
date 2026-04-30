@@ -72,6 +72,8 @@ final class GRDBProfileIndexRepository: @unchecked Sendable {
         onRecordDeleted: onRecordDeleted))
   }
 
+  // MARK: - Wiring
+
   /// Replaces both hook closures atomically. Called by the
   /// `SyncCoordinator` once it exists; before that the repo is using
   /// the no-op closures from `init`.
@@ -119,7 +121,12 @@ final class GRDBProfileIndexRepository: @unchecked Sendable {
       }
       try row.upsert(database)
     }
-    hooks.withLock { $0.onRecordChanged(profile.id) }
+    // Capture the closure under the lock, release, then invoke.
+    // `OSAllocatedUnfairLock` is non-reentrant, so calling an arbitrary
+    // client closure under the lock would deadlock if the closure ever
+    // re-entered the repo (e.g. a future `attachSyncHooks` rotation).
+    let notify = hooks.withLock { $0.onRecordChanged }
+    notify(profile.id)
   }
 
   /// Deletes a single profile by id. Returns `true` when a row was
@@ -132,7 +139,9 @@ final class GRDBProfileIndexRepository: @unchecked Sendable {
       try ProfileRow.deleteOne(database, id: id)
     }
     if didDelete {
-      hooks.withLock { $0.onRecordDeleted(id) }
+      // See `upsert` for the lock-then-invoke rationale.
+      let notify = hooks.withLock { $0.onRecordDeleted }
+      notify(id)
     }
     return didDelete
   }
@@ -145,9 +154,12 @@ final class GRDBProfileIndexRepository: @unchecked Sendable {
   // thread until the queue's serial executor admits the closure. Used
   // only off-MainActor; never call these synchronously from MainActor.
 
-  /// Apply a remote-change batch atomically: every saved row is
-  /// upserted and every deleted id is removed in a single write. If
-  /// any statement throws, the whole batch rolls back.
+  /// Applies a CKSyncEngine remote-change batch in one transaction:
+  /// every saved row is upserted and every deleted id is removed
+  /// inside a single `database.write`. If any statement throws, the
+  /// whole batch rolls back so prior on-disk state survives byte-equal
+  /// — required by the rollback contract in
+  /// `guides/DATABASE_CODE_GUIDE.md`.
   func applyRemoteChangesSync(saved rows: [ProfileRow], deleted ids: [UUID]) throws {
     try database.write { database in
       for row in rows {

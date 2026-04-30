@@ -26,7 +26,7 @@ struct ProfileIndexPlanPinningTests {
     try ProfileIndexDatabase.openInMemory()
   }
 
-  @Test
+  @Test("fetchAll ORDER BY created_at uses profile_by_created_at index")
   func profileOrderByCreatedAtUsesIndex() throws {
     let database = try makeDatabase()
     let detail = try PlanPinningTestHelpers.planDetail(
@@ -38,6 +38,13 @@ struct ProfileIndexPlanPinningTests {
     // pinning the index here prevents a future schema edit from
     // silently regressing fetchAll() to a temp-B-tree sort over the
     // entire table.
+    //
+    // SQLite emits `SCAN profile USING INDEX profile_by_created_at`
+    // for ORDER BY index scans (the table itself is "scanned" via the
+    // index in created_at order). A literal `!detail.contains("SCAN
+    // profile")` guard would always fail here — the absence of `USE
+    // TEMP B-TREE` is the correct regression signal that the planner
+    // is using the index for ordering rather than a transient sort.
     #expect(detail.contains("USING INDEX profile_by_created_at"))
     #expect(!detail.contains("USE TEMP B-TREE"))
   }
