@@ -23,7 +23,7 @@ extension InvestmentStore {
   func positionsViewInput(
     title: String,
     range: PositionsTimeRange
-  ) async -> PositionsViewInput {
+  ) async throws -> PositionsViewInput {
     guard let transactionRepository else {
       let hostCurrency = loadedHostCurrency ?? .AUD
       return PositionsViewInput(
@@ -39,6 +39,8 @@ extension InvestmentStore {
       txns = try await fetchAllTransactions(
         repository: transactionRepository,
         accountId: loadedAccountId ?? UUID())
+    } catch is CancellationError {
+      throw CancellationError()
     } catch {
       logger.warning(
         "fetchAllTransactions failed, cost basis will be empty: \(error.localizedDescription, privacy: .public)"
@@ -86,7 +88,7 @@ extension InvestmentStore {
         filter: TransactionFilter(accountId: accountId),
         page: page, pageSize: 200
       )
-      guard !Task.isCancelled else { return all }
+      try Task.checkCancellation()
       all.append(contentsOf: result.transactions)
       if result.transactions.count < 200 { break }
       page += 1

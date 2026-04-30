@@ -118,6 +118,7 @@ final class InvestmentStore {
   /// blocks stay one-liners.
   func loadAllData(accountId: UUID, profileCurrency: Instrument) async {
     loadedHostCurrency = profileCurrency
+    accountPerformance = nil  // clear stale data immediately
     await loadValues(accountId: accountId)
     if hasLegacyValuations {
       await loadDailyBalances(accountId: accountId, hostCurrency: profileCurrency)
@@ -163,7 +164,8 @@ final class InvestmentStore {
         "AccountPerformance unavailable: \(error.localizedDescription, privacy: .public)"
       )
       accountPerformance = nil
-      self.error = error
+      // self.error intentionally not set — performance tile degrades to
+      // "Unavailable" while the rest of the account view stays functional.
     }
   }
 

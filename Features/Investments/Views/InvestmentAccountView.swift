@@ -153,8 +153,15 @@ struct InvestmentAccountView: View {
       defer { isLoadingPositions = false }
       await investmentStore.loadAllData(
         accountId: account.id, profileCurrency: profileCurrencyInstrument)
-      positionsInput = await investmentStore.positionsViewInput(
-        title: account.name, range: positionsRange)
+      do {
+        positionsInput = try await investmentStore.positionsViewInput(
+          title: account.name, range: positionsRange)
+      } catch is CancellationError {
+        return
+      } catch {
+        // positionsViewInput is documented to only throw CancellationError;
+        // any other error here is unexpected.
+      }
       initialLoadComplete = true
     }
     .task(id: positionsRange) {
@@ -162,16 +169,30 @@ struct InvestmentAccountView: View {
       // block runs the first build. We only fire re-builds for subsequent
       // range changes.
       guard investmentStore.loadedAccountId != nil else { return }
-      positionsInput = await investmentStore.positionsViewInput(
-        title: account.name, range: positionsRange)
+      do {
+        positionsInput = try await investmentStore.positionsViewInput(
+          title: account.name, range: positionsRange)
+      } catch is CancellationError {
+        return
+      } catch {
+        // positionsViewInput is documented to only throw CancellationError;
+        // any other error here is unexpected.
+      }
     }
     .refreshable {
       isLoadingPositions = true
       defer { isLoadingPositions = false }
       await investmentStore.loadAllData(
         accountId: account.id, profileCurrency: profileCurrencyInstrument)
-      positionsInput = await investmentStore.positionsViewInput(
-        title: account.name, range: positionsRange)
+      do {
+        positionsInput = try await investmentStore.positionsViewInput(
+          title: account.name, range: positionsRange)
+      } catch is CancellationError {
+        return
+      } catch {
+        // positionsViewInput is documented to only throw CancellationError;
+        // any other error here is unexpected.
+      }
     }
   }
 
