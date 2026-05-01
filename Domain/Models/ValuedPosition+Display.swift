@@ -57,22 +57,25 @@ extension InstrumentAmount {
 }
 
 /// Display helpers for the cost-basis gain/loss percentage on a
-/// `ValuedPosition`. Centralised so `PositionsTable.gainCell` and
-/// `PositionRow.trailingColumn` produce byte-identical strings without
+/// `ValuedPosition`. Centralised so `PositionsTable.gainCell`,
+/// `PositionRow.trailingColumn`, `AccountPerformanceTiles`, and
+/// `PositionsHeader.plPill` produce byte-identical strings without
 /// duplicating the formatting logic.
 ///
-/// Note: the decimal separator is the C-locale `.` rather than the
-/// user's locale separator. This matches `PositionsHeader.plPill` and
-/// is a known limitation — fixing it requires switching to
-/// `NumberFormatter` across every percent-formatting call site
-/// (including `plPill`).
+/// Uses `Decimal.formatted(.number...)` so the decimal separator
+/// follows the user's locale (e.g. `+12,3%` in de_DE, `+12.3%` in
+/// en_US) — matching the rest of the app's number formatting.
 enum GainLossPercentDisplay {
-  /// `+12.3%` / `−4.0%` / `0.0%`. Standard one-decimal-place P/L
+  /// `+12.3%` / `−4.0%` / `0.0%` (en_US) or `+12,3%` / `−4,0%` /
+  /// `0,0%` (de_DE / fr_FR / etc). Standard one-decimal-place P/L
   /// convention. Negative values use a Unicode minus (U+2212) for
-  /// typographic consistency with the surrounding monospacedDigit text.
-  static func formatted(_ pct: Decimal) -> String {
-    let absDouble = abs(Double(truncating: pct as NSDecimalNumber))
-    let body = String(format: "%.1f", absDouble)
+  /// typographic consistency with the surrounding monospacedDigit
+  /// text.
+  ///
+  /// - Parameter locale: Defaults to `Locale.current`; tests pass
+  ///   a fixed locale to assert the separator behaviour.
+  static func formatted(_ pct: Decimal, locale: Locale = .current) -> String {
+    let body = formatBody(pct, locale: locale)
     if pct > 0 { return "+\(body)%" }
     if pct < 0 { return "−\(body)%" }
     return "\(body)%"
@@ -84,12 +87,27 @@ enum GainLossPercentDisplay {
   /// `guides/UI_GUIDE.md` every gain/loss tile renders an explicit
   /// accessibility suffix so VoiceOver doesn't read "+12%" as
   /// ambiguous.
-  static func accessibilitySuffix(_ pct: Decimal?) -> String {
+  ///
+  /// - Parameter locale: Defaults to `Locale.current`; tests pass
+  ///   a fixed locale to assert the separator behaviour.
+  static func accessibilitySuffix(_ pct: Decimal?, locale: Locale = .current) -> String {
     guard let pct else { return "" }
     if pct == 0 { return ", 0.0 percent" }
+    let body = formatBody(pct, locale: locale)
+    return pct < 0 ? ", down \(body) percent" : ", up \(body) percent"
+  }
+
+  /// One-decimal-place absolute value with the locale's decimal
+  /// separator, e.g. `12.3` (en_US) / `12,3` (de_DE). No sign, no
+  /// percent symbol, no thousands grouping.
+  private static func formatBody(_ pct: Decimal, locale: Locale) -> String {
     let absValue = pct < 0 ? -pct : pct
-    let formatted = String(format: "%.1f", Double(truncating: absValue as NSDecimalNumber))
-    return pct < 0 ? ", down \(formatted) percent" : ", up \(formatted) percent"
+    return absValue.formatted(
+      .number
+        .precision(.fractionLength(1))
+        .grouping(.never)
+        .locale(locale)
+    )
   }
 }
 

@@ -33,12 +33,8 @@ struct PositionsHeader: View {
 
   private func plPill(gain: InstrumentAmount, total: InstrumentAmount) -> some View {
     let cost = total - gain
-    let percent: Double =
-      cost.quantity == 0
-      ? 0
-      : Double(truncating: (gain.quantity / cost.quantity * 100) as NSDecimalNumber)
-    let percentSign = percent > 0 ? "+" : ""
-    let label = "\(gain.signedFormatted) (\(percentSign)\(String(format: "%.1f", abs(percent)))%)"
+    let percent: Decimal = cost.quantity == 0 ? 0 : gain.quantity / cost.quantity * 100
+    let label = "\(gain.signedFormatted) (\(GainLossPercentDisplay.formatted(percent)))"
     return Text(label)
       .font(.caption.weight(.semibold))
       .monospacedDigit()
@@ -67,15 +63,20 @@ struct PositionsHeader: View {
     gain.isNegative ? .red : .green
   }
 
-  private func plPillAccessibilityLabel(gain: InstrumentAmount, percent: Double) -> String {
-    let pctFmt = String(format: "%.1f", abs(percent))
+  private func plPillAccessibilityLabel(gain: InstrumentAmount, percent: Decimal) -> String {
+    // Locale-aware one-decimal-place body (e.g. `12.3` in en_US,
+    // `12,3` in de_DE). Drops the sign and `%` so the surrounding
+    // English phrasing carries the direction.
+    let absPercent = percent < 0 ? -percent : percent
+    let pctBody = absPercent.formatted(
+      .number.precision(.fractionLength(1)).grouping(.never))
     if gain.isNegative {
-      return "Down \((-gain).formatted), \(pctFmt) percent"
+      return "Down \((-gain).formatted), \(pctBody) percent"
     }
     if gain.isZero {
       return "No change"
     }
-    return "Up \(gain.formatted), \(pctFmt) percent"
+    return "Up \(gain.formatted), \(pctBody) percent"
   }
 }
 
