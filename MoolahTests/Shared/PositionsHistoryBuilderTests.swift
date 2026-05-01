@@ -185,4 +185,47 @@ struct PositionsHistoryBuilderTests {
     let cutoffDay = Calendar(identifier: .gregorian).startOfDay(for: cutoff)
     #expect(oneMonth.totalSeries.allSatisfy { $0.date >= cutoffDay })
   }
+
+  /// Locks in Rule 5 of `guides/INSTRUMENT_CONVERSION_GUIDE.md`: every
+  /// daily value point must be converted at that day's own rate, not at
+  /// today's rate. The other tests in this suite use
+  /// `FixedConversionService` (date-insensitive), which would silently
+  /// pass a regression that swapped `on: day` for `on: Date()`. This
+  /// test pins the per-day rate by using `DateBasedFixedConversionService`.
+  @Test("each day's value uses that day's rate, not today's rate")
+  func valueSeriesUsesPerDayRate() async {
+    // Single buy on day 1; rate steps day-by-day so each daily point
+    // exercises a different conversion rate.
+    let txns = [buy(instrument: bhp, qty: 100, fiat: 4_000, daysAfterEpoch: 1)]
+    let service = DateBasedFixedConversionService(rates: [
+      date(daysAfterEpoch: 1): [bhp.id: Decimal(50)],
+      date(daysAfterEpoch: 2): [bhp.id: Decimal(60)],
+      date(daysAfterEpoch: 3): [bhp.id: Decimal(70)],
+    ])
+    let builder = PositionsHistoryBuilder(conversionService: service)
+    let now = date(daysAfterEpoch: 3)
+    let series = await builder.build(
+      transactions: txns,
+      accountId: accountId,
+      hostCurrency: aud,
+      range: .threeMonths,
+      now: now
+    )
+
+    // Three points (days 1..3), each priced at that day's rate. A
+    // regression to "always use today's rate" would emit three equal
+    // values (all at day 3's rate of 70).
+    let bhpSeries = series.series(for: bhp)
+    #expect(bhpSeries.count == 3)
+    #expect(bhpSeries[0].value == 100 * Decimal(50))
+    #expect(bhpSeries[1].value == 100 * Decimal(60))
+    #expect(bhpSeries[2].value == 100 * Decimal(70))
+
+    // Aggregate series mirrors the per-instrument series for a single
+    // non-host instrument account.
+    #expect(series.totalSeries.count == 3)
+    #expect(series.totalSeries[0].value == 100 * Decimal(50))
+    #expect(series.totalSeries[1].value == 100 * Decimal(60))
+    #expect(series.totalSeries[2].value == 100 * Decimal(70))
+  }
 }
