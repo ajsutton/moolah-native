@@ -48,11 +48,24 @@ extension ValuedPosition {
 
 extension InstrumentAmount {
   /// Signed-amount string with explicit `+` prefix for positive values
-  /// (negative values keep their natural `-` from `formatted`). Zero shows
-  /// no prefix. Used for gain/loss display.
+  /// and a Unicode minus (U+2212) prefix for negative values. Zero shows
+  /// no prefix. Used for gain/loss display so the sign character lines
+  /// up with `GainLossPercentDisplay.formatted` under
+  /// `.monospacedDigit()` — the locale-native `formatted` produces an
+  /// ASCII hyphen-minus (U+002D) which renders narrower than digits and
+  /// disagrees with the percent text alongside it. See issue #608.
+  ///
+  /// Locales whose negative-currency form does not start with a leading
+  /// hyphen-minus (e.g. accounting paren-wrap `($500)`) are passed
+  /// through untouched — substitution only fires when the first
+  /// character of `formatted` is U+002D.
   var signedFormatted: String {
-    let sign = quantity > 0 ? "+" : ""
-    return "\(sign)\(formatted)"
+    let raw = formatted
+    if quantity > 0 { return "+\(raw)" }
+    if quantity < 0, raw.first == "-" {
+      return "\u{2212}" + raw.dropFirst()
+    }
+    return raw
   }
 }
 

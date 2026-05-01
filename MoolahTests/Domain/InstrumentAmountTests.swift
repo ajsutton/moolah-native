@@ -132,6 +132,74 @@ struct InstrumentAmountTests {
     #expect(text.contains("1234.56") || text.contains("1,234.56"))
   }
 
+  // MARK: - signedFormatted
+
+  /// Positive amounts get an explicit `+` prefix so gain/loss displays
+  /// distinguish gains from zero changes.
+  @Test
+  func signedFormattedPositiveFiatPrefixesPlus() {
+    let amount = InstrumentAmount(quantity: dec("500"), instrument: aud)
+    #expect(amount.signedFormatted.hasPrefix("+"))
+  }
+
+  /// Negative fiat amounts must use the Unicode minus (U+2212) not the
+  /// ASCII hyphen-minus (U+002D), so they line up with
+  /// `GainLossPercentDisplay.formatted` under `.monospacedDigit()`.
+  /// See issue #608.
+  @Test
+  func signedFormattedNegativeFiatUsesUnicodeMinus() {
+    let amount = InstrumentAmount(quantity: dec("-500"), instrument: aud)
+    let formatted = amount.signedFormatted
+    #expect(formatted.first == "\u{2212}")
+    #expect(!formatted.contains("\u{002D}"))
+  }
+
+  /// Negative stock amounts use the same leading-hyphen format from
+  /// `formatted` (e.g. `"-10 BHP.AX"`), so the same substitution must
+  /// apply.
+  @Test
+  func signedFormattedNegativeStockUsesUnicodeMinus() {
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let amount = InstrumentAmount(quantity: dec("-10"), instrument: bhp)
+    #expect(amount.signedFormatted == "\u{2212}10 BHP.AX")
+  }
+
+  /// Negative crypto amounts use the same leading-hyphen format from
+  /// `formatted`.
+  @Test
+  func signedFormattedNegativeCryptoUsesUnicodeMinus() {
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
+    let amount = InstrumentAmount(quantity: dec("-0.5"), instrument: eth)
+    #expect(amount.signedFormatted == "\u{2212}0.5 ETH")
+  }
+
+  /// Zero renders without a sign prefix.
+  @Test
+  func signedFormattedZeroHasNoPrefix() {
+    let amount = InstrumentAmount(quantity: 0, instrument: aud)
+    let formatted = amount.signedFormatted
+    #expect(!formatted.hasPrefix("+"))
+    #expect(!formatted.hasPrefix("\u{2212}"))
+    #expect(!formatted.hasPrefix("-"))
+  }
+
+  /// Locales that emit a non-leading-hyphen negative form (e.g.
+  /// accounting paren-wrap `($500)`) are left untouched — substitution
+  /// only fires when the first character is U+002D.
+  @Test
+  func signedFormattedPreservesNonHyphenNegativeFormats() {
+    // We can't force a specific locale here without invasive plumbing,
+    // but we can assert the invariant: if the underlying `formatted`
+    // does not start with U+002D, `signedFormatted` returns it
+    // unchanged for negative quantities.
+    let amount = InstrumentAmount(quantity: dec("-500"), instrument: aud)
+    let raw = amount.formatted
+    if raw.first != "-" {
+      #expect(amount.signedFormatted == raw)
+    }
+  }
+
   @Test
   func reduceForSumming() {
     let amounts = [
