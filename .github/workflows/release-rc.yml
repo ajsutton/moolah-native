@@ -143,7 +143,6 @@ jobs:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
           DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
-          CODE_SIGN_STYLE: "Manual"
         run: bundle exec fastlane ios beta
 
       - name: Capture TestFlight build number
@@ -169,7 +168,6 @@ jobs:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
           DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
-          CODE_SIGN_STYLE: "Manual"
         run: bundle exec fastlane mac zip version:${{ steps.version.outputs.base }}
 
       - name: Attach Mac zip and build-number to GH pre-release

@@ -37,15 +37,16 @@ settings:
     MARKETING_VERSION: "1.1.0"
     CURRENT_PROJECT_VERSION: "1"
 
-    # ---- Signing (env-driven) ----
+    # ---- Signing ----
+    # DEVELOPMENT_TEAM is env-driven so a developer can set their own team
+    # for local Debug builds without editing project.yml. The distribution
+    # signing settings (CODE_SIGN_STYLE, CODE_SIGN_IDENTITY,
+    # CODE_SIGN_ENTITLEMENTS) live on the Release config of each app
+    # target — they must be scoped to the app target so SPM dependencies
+    # (e.g. GRDB) don't try to apply provisioning profiles, which they
+    # don't support. The dynamic PROVISIONING_PROFILE_SPECIFIER comes
+    # from `match` at fastlane build-time via target-scoped xcargs.
     DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
-
-    # Default to Automatic if env var not set
-    CODE_SIGN_STYLE: ${CODE_SIGN_STYLE}
-
-    # Only used when CODE_SIGN_STYLE=Manual
-    CODE_SIGN_IDENTITY: ${CODE_SIGN_IDENTITY}
-    PROVISIONING_PROFILE_SPECIFIER: ${PROVISIONING_PROFILE_SPECIFIER}
 
     # Keep Xcode predictable
     CODE_SIGNING_REQUIRED: YES
@@ -106,6 +107,13 @@ targets:
           CLOUDKIT_ENVIRONMENT: Development
           CLOUDKIT_CONTAINER_ID: iCloud.rocks.moolah.app.test
         Release:
+          # Distribution signing scoped to this target only — never inherit
+          # to SPM dependencies which can't be signed with provisioning
+          # profiles. PROVISIONING_PROFILE_SPECIFIER comes from `match` at
+          # build time via target-scoped xcargs in fastlane/Fastfile.
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          CODE_SIGN_ENTITLEMENTS: fastlane/Moolah.entitlements
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CLOUDKIT_ENABLED"
           CLOUDKIT_ENVIRONMENT: Production
           CLOUDKIT_CONTAINER_ID: iCloud.rocks.moolah.app.v2
@@ -143,6 +151,11 @@ targets:
           CLOUDKIT_ENVIRONMENT: Development
           CLOUDKIT_CONTAINER_ID: iCloud.rocks.moolah.app.test
         Release:
+          # See Moolah_iOS.Release for why signing is scoped to the app
+          # target and not inherited from settings.base.
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Developer ID Application
+          CODE_SIGN_ENTITLEMENTS: fastlane/Moolah-mac.entitlements
           ENABLE_HARDENED_RUNTIME: YES
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CLOUDKIT_ENABLED"
           CLOUDKIT_ENVIRONMENT: Production
