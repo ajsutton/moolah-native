@@ -35,6 +35,17 @@ struct ContentView: View {
   @State private var showImportCSVPicker = false
   @State private var importError: String?
 
+  // Browser-style back/forward history for the sidebar selection.
+  // Helpers live in the history extension below.
+  @State private var backStack: [SidebarSelection] = []
+  @State private var forwardStack: [SidebarSelection] = []
+  // Token set just before goBack/goForward mutates `selection`. Compared
+  // against the new value inside `recordHistory(previous:new:)` to skip
+  // recording history-driven navigations. Using a value token rather than
+  // a Bool flag avoids any dependence on whether SwiftUI delivers
+  // `onChange` synchronously or on the next render cycle.
+  @State private var historyDrivenSelection: SidebarSelection?
+
   var body: some View {
     NavigationSplitView {
       SidebarView(selection: $selection)
@@ -80,6 +91,14 @@ struct ContentView: View {
         async let earmarksLoad: Void = earmarkStore.load()
         _ = await (accountsLoad, categoriesLoad, earmarksLoad)
       }
+    }
+    // Pass `nil` to disable the menu item when there is nothing to navigate
+    // to — the same pattern used by every other focused-value command above
+    // (e.g. `newTransactionAction == nil` disables File > New Transaction…).
+    .focusedSceneValue(\.goBackAction, backStack.isEmpty ? nil : { goBack() })
+    .focusedSceneValue(\.goForwardAction, forwardStack.isEmpty ? nil : { goForward() })
+    .onChange(of: selection) { oldValue, newValue in
+      recordHistory(previous: oldValue, new: newValue)
     }
     .sheet(isPresented: $showCreateEarmarkSheet) {
       CreateEarmarkSheet(
@@ -263,9 +282,54 @@ struct ContentView: View {
   }
 }
 
+// MARK: - Navigation History
+
+extension ContentView {
+  private static let historyLimit = 50
+
+  private func recordHistory(previous: SidebarSelection?, new: SidebarSelection?) {
+    if let token = historyDrivenSelection, token == new {
+      historyDrivenSelection = nil
+      return
+    }
+    guard let previous else { return }
+    backStack.append(previous)
+    Self.trimToHistoryLimit(&backStack)
+    forwardStack.removeAll()
+  }
+
+  private func goBack() {
+    guard let previous = backStack.popLast() else { return }
+    if let current = selection {
+      forwardStack.append(current)
+      Self.trimToHistoryLimit(&forwardStack)
+    }
+    historyDrivenSelection = previous
+    selection = previous
+  }
+
+  private func goForward() {
+    guard let next = forwardStack.popLast() else { return }
+    if let current = selection {
+      backStack.append(current)
+      Self.trimToHistoryLimit(&backStack)
+    }
+    historyDrivenSelection = next
+    selection = next
+  }
+
+  private static func trimToHistoryLimit(_ stack: inout [SidebarSelection]) {
+    if stack.count > historyLimit {
+      stack.removeFirst(stack.count - historyLimit)
+    }
+  }
+}
+
+// MARK: - Account Detail
+
 extension ContentView {
   @ViewBuilder
-  func accountDetail(id: UUID) -> some View {
+  private func accountDetail(id: UUID) -> some View {
     if let account = accountStore.accounts.by(id: id) {
       if account.type == .investment {
         InvestmentAccountView(
