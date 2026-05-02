@@ -217,43 +217,6 @@ enum ProfileDataSyncHandlerTestSupport {
       encodedSystemFields: record.encodedSystemFields)
   }
 
-  /// `@Sendable` factory closure suitable for
-  /// `SyncCoordinator.init(... fallbackGRDBRepositoriesFactory:)`. Each
-  /// invocation builds a fresh in-memory `ProfileGRDBRepositories` so
-  /// `SyncCoordinator` tests that drive `handlerForProfileZone` (directly
-  /// or via `queueAllRecordsAfterImport` etc.) don't have to register a
-  /// bundle for every profile they touch.
-  static let inMemoryFallbackFactory: @Sendable (UUID) throws -> ProfileGRDBRepositories = { _ in
-    let database = try ProfileDatabase.openInMemory()
-    return Self.makeBundle(database: database, instrument: .defaultTestInstrument)
-  }
-
-  /// Builds a fallback factory that resolves each profile's GRDB
-  /// repositories against the queue cached on the supplied
-  /// `ProfileContainerManager`. Use this from `SyncCoordinator` tests
-  /// that seed the manager's per-profile container and expect those
-  /// rows to surface through the coordinator's handler. Pairs with
-  /// `mirrorContainerToDatabase` so legacy SwiftData seeds round-trip
-  /// to GRDB.
-  @MainActor
-  static func managerBackedFallbackFactory(
-    manager: ProfileContainerManager
-  ) -> @Sendable (UUID) throws -> ProfileGRDBRepositories {
-    // The manager itself is `@MainActor`-isolated, so the closure must
-    // re-enter the main actor to ask for the queue. `MainActor.assumeIsolated`
-    // is safe here because tests that drive the factory route through
-    // SyncCoordinator methods that themselves run on the main actor.
-    { profileId in
-      try MainActor.assumeIsolated {
-        let database = try manager.database(for: profileId)
-        let container = try manager.container(for: profileId)
-        try Self.mirrorContainerToDatabase(
-          container: container, database: database)
-        return Self.makeBundle(database: database, instrument: .defaultTestInstrument)
-      }
-    }
-  }
-
   /// Three-value variant for tests that need to verify GRDB-side state.
   /// The caller retains a reference to `database` so the in-memory queue
   /// outlives the test's repos.

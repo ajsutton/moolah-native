@@ -290,16 +290,12 @@ final class SyncCoordinator {
   /// can be captured into the handler's `nonisolated` storage.
   var instrumentRemoteChangeCallbacks: [UUID: @Sendable () -> Void] = [:]
 
-  /// Per-profile GRDB repository bundle. Registered by `ProfileSession`
-  /// during `registerWithSyncCoordinator` so it is available when
-  /// `handlerForProfileZone(profileId:zoneID:)` lazily creates the
-  /// `ProfileDataSyncHandler`. The handler's dispatch tables address
-  /// these repositories directly so the per-record-type save / delete
-  /// helpers can write into SQLite without leaking GRDB types into the
-  /// CKSyncEngine wire layer. See `ProfileGRDBRepositories`.
-  var profileGRDBRepositories: [UUID: ProfileGRDBRepositories] = [:]
-  // Test-only fallback factory — see `+HandlerAccess.swift`.
-  let fallbackGRDBRepositoriesFactory: (@Sendable (UUID) throws -> ProfileGRDBRepositories)?
+  /// Per-profile cache of auto-constructed GRDB repository bundles, keyed by
+  /// profile UUID. Populated on first access in
+  /// `resolveGRDBRepositories(for:)` and retained so subsequent calls to
+  /// `handlerForProfileZone` reuse the same bundle without hitting the
+  /// database layer again. See `ProfileGRDBRepositories`.
+  var cachedGRDBRepositories: [UUID: ProfileGRDBRepositories] = [:]
 
   /// Zones with pending zone creation — records in these zones are skipped in nextRecordZoneChangeBatch.
   var pendingZoneCreation: [CKRecordZone.ID: [CKSyncEngine.PendingRecordZoneChange]] = [:]
@@ -349,8 +345,7 @@ final class SyncCoordinator {
   init(
     containerManager: ProfileContainerManager,
     userDefaults: UserDefaults = .standard,
-    isCloudKitAvailable: Bool = CloudKitAuthProvider.isCloudKitAvailable,
-    fallbackGRDBRepositoriesFactory: (@Sendable (UUID) throws -> ProfileGRDBRepositories)? = nil
+    isCloudKitAvailable: Bool = CloudKitAuthProvider.isCloudKitAvailable
   ) {
     self.containerManager = containerManager
     self.userDefaults = userDefaults
@@ -358,7 +353,6 @@ final class SyncCoordinator {
     self.profileIndexHandler = ProfileIndexSyncHandler(
       repository: containerManager.profileIndexRepository)
     self.isCloudKitAvailable = isCloudKitAvailable
-    self.fallbackGRDBRepositoriesFactory = fallbackGRDBRepositoriesFactory
     if !isCloudKitAvailable {
       applyICloudAvailability(.unavailable(reason: .entitlementsMissing))
     }
