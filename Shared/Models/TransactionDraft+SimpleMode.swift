@@ -173,7 +173,7 @@ extension TransactionDraft {
     if !wasTransfer && isTransfer {
       // Adding a counterpart leg for transfer
       let currentAccountId = relevantLeg.accountId
-      let defaultAccount = accounts.ordered.first { $0.id != currentAccountId }
+      let defaultAccount = accounts.sidebarOrdered(excluding: currentAccountId).first
 
       // Parse-negate-format the counterpart amount
       let counterpartAmount = negatedAmountText(relevantLeg.amountText)
