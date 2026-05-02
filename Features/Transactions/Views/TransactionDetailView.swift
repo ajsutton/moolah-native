@@ -210,7 +210,6 @@ extension TransactionDetailView {
     TransactionDetailTradeSection(
       draft: $draft,
       accounts: accounts,
-      sortedAccounts: sortedAccounts,
       focusedField: $focusedField
     )
     .disabled(!isEditable)

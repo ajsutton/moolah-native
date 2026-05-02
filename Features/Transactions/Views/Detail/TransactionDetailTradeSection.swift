@@ -14,7 +14,6 @@ import SwiftUI
 struct TransactionDetailTradeSection: View {
   @Binding var draft: TransactionDraft
   let accounts: Accounts
-  let sortedAccounts: [Account]
   @FocusState.Binding var focusedField: TransactionDetailFocus?
 
   var body: some View {
@@ -53,9 +52,11 @@ struct TransactionDetailTradeSection: View {
   private var accountPicker: some View {
     Picker("Account", selection: accountBinding) {
       Text("None").tag(UUID?.none)
-      ForEach(sortedAccounts) { account in
-        Text(account.name).tag(UUID?.some(account.id))
-      }
+      AccountPickerOptions(
+        accounts: accounts,
+        exclude: nil,
+        currentSelection: accountBinding.wrappedValue
+      )
     }
     .accessibilityIdentifier(UITestIdentifiers.Detail.tradeAccount)
   }
