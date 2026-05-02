@@ -135,6 +135,103 @@ struct RepositorySyncCascadeTests {
     }
   }
 
+  /// `applyRemoteChangesSync(saved: [], deleted: [earmarkId])` must
+  /// also delete `earmark_budget_item` rows for that earmark and null
+  /// `transaction_leg.earmark_id` references — replacing what the v3
+  /// FK CASCADE / SET NULL did before v5 dropped the FKs.
+  @Test
+  func earmarkSyncDeleteCascadesBudgetItemsAndNullsLegs() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    let earmarkRepo = GRDBEarmarkRepository(database: database, defaultInstrument: .AUD)
+    let earmarkId = UUID()
+    let categoryId = UUID()
+    let budgetId = UUID()
+    let txId = UUID()
+    let legId = UUID()
+
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          INSERT INTO instrument (id, record_name, kind, name, decimals)
+            VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
+          INSERT INTO category (id, record_name, name) VALUES (?, 'cat-1', 'Food');
+          INSERT INTO earmark (id, record_name, name, position, is_hidden)
+            VALUES (?, 'earmark-1', 'Holiday', 0, 0);
+          INSERT INTO earmark_budget_item (id, record_name, earmark_id, category_id, amount, instrument_id)
+            VALUES (?, 'budget-1', ?, ?, 5000, 'USD');
+          INSERT INTO "transaction" (id, record_name, date)
+            VALUES (?, 'tx-1', '2026-01-01');
+          INSERT INTO transaction_leg (id, record_name, transaction_id, instrument_id,
+                                       quantity, type, earmark_id, sort_order)
+            VALUES (?, 'leg-1', ?, 'USD', 100, 'expense', ?, 0);
+          """,
+        arguments: [
+          categoryId, earmarkId, budgetId, earmarkId, categoryId,
+          txId, legId, txId, earmarkId,
+        ])
+    }
+
+    try earmarkRepo.applyRemoteChangesSync(saved: [], deleted: [earmarkId])
+
+    try await database.read { database in
+      let budgetCount =
+        try Int.fetchOne(
+          database,
+          sql: "SELECT COUNT(*) FROM earmark_budget_item WHERE earmark_id = ?",
+          arguments: [earmarkId]) ?? -1
+      #expect(budgetCount == 0)
+
+      let nulledLeg =
+        try Int.fetchOne(
+          database,
+          sql: "SELECT COUNT(*) FROM transaction_leg WHERE id = ? AND earmark_id IS NULL",
+          arguments: [legId]) ?? -1
+      #expect(nulledLeg == 1)
+    }
+  }
+
+  /// After v5, `performSetBudget` must NOT insert a stub `category` row
+  /// when the category doesn't exist yet — the FK that required the
+  /// workaround was dropped in v5_drop_foreign_keys.
+  @Test
+  func setBudgetToleratesUnknownCategoryWithoutStubInsert() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    let earmarkRepo = GRDBEarmarkRepository(database: database, defaultInstrument: .USD)
+    let earmarkId = UUID()
+    let unknownCategoryId = UUID()
+
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          INSERT INTO instrument (id, record_name, kind, name, decimals)
+            VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
+          INSERT INTO earmark (id, record_name, name, position, is_hidden, instrument_id)
+            VALUES (?, 'earmark-1', 'Holiday', 0, 0, 'USD');
+          """,
+        arguments: [earmarkId])
+    }
+
+    let amount = InstrumentAmount(quantity: 5000, instrument: .USD)
+    try await earmarkRepo.setBudget(
+      earmarkId: earmarkId, categoryId: unknownCategoryId, amount: amount)
+
+    try await database.read { database in
+      let categoryCount =
+        try Int.fetchOne(
+          database,
+          sql: "SELECT COUNT(*) FROM category",
+          arguments: []) ?? -1
+      #expect(categoryCount == 0, "Expected no stub category row now that the FK is gone")
+
+      let budgetCount =
+        try Int.fetchOne(
+          database,
+          sql: "SELECT COUNT(*) FROM earmark_budget_item WHERE earmark_id = ?",
+          arguments: [earmarkId]) ?? -1
+      #expect(budgetCount == 1)
+    }
+  }
+
   /// After v5 + Task 6b, applying a CKRecord-equivalent leg upsert
   /// whose `account_id` / `category_id` / `earmark_id` reference rows
   /// that don't yet exist must NOT create blank-name stub rows. The
