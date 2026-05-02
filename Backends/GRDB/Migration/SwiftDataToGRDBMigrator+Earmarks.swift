@@ -7,8 +7,8 @@ import SwiftData
 // Per-type SwiftData → GRDB migrators for the earmark half of the core
 // financial graph (earmarks, earmark budget items, investment values).
 // Companion to `SwiftDataToGRDBMigrator+CoreFinancialGraph.swift`. Same
-// pattern: `defer`-then-flag, idempotent `upsert`, ordered so parents
-// commit before children.
+// pattern: `defer`-then-flag, idempotent `insert(onConflict: .ignore)`,
+// ordered so parents commit before children.
 
 extension SwiftDataToGRDBMigrator {
 
@@ -41,7 +41,7 @@ extension SwiftDataToGRDBMigrator {
     if !mappedRows.isEmpty {
       try await database.write { database in
         for row in mappedRows {
-          try row.upsert(database)
+          try row.insert(database, onConflict: .ignore)
         }
       }
     }
@@ -97,7 +97,7 @@ extension SwiftDataToGRDBMigrator {
     if !mappedRows.isEmpty {
       try await database.write { database in
         for row in mappedRows {
-          try row.upsert(database)
+          try row.insert(database, onConflict: .ignore)
         }
       }
     }
@@ -147,7 +147,7 @@ extension SwiftDataToGRDBMigrator {
     if !mappedRows.isEmpty {
       try await database.write { database in
         for row in mappedRows {
-          try row.upsert(database)
+          try row.insert(database, onConflict: .ignore)
         }
       }
     }

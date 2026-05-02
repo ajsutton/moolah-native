@@ -2,45 +2,18 @@
 import Foundation
 import OSLog
 
-/// Errors thrown by `SyncCoordinator.handlerForProfileZone(profileId:zoneID:)`.
-///
-/// `profileNotRegistered` indicates a wiring-order bug: a sync event
-/// arrived for a profile whose `ProfileSession` has not yet called
-/// `SyncCoordinator.setProfileGRDBRepositories(profileId:bundle:)`.
-/// Outbound paths (backfill, zone deletion / purge / encrypted reset,
-/// upload-batch building) treat this as recoverable and skip the
-/// profile — the records remain durable in GRDB and are re-queued by
-/// the next backfill scan or local-mutation hook. The inbound apply
-/// path (`applyFetchedProfileDataChanges`) treats it as fatal because
-/// `CKSyncEngine` advances the server change token after the delegate
-/// returns, so a silent skip would lose records permanently.
-enum SyncCoordinatorError: Error, Equatable {
-  case profileNotRegistered(UUID)
-}
-
 extension SyncCoordinator {
   // MARK: - Handler Access
 
   /// Returns (or creates) a `ProfileDataSyncHandler` for the given profile zone.
   ///
-  /// A GRDB repository bundle MUST have been registered via
-  /// `setProfileGRDBRepositories(profileId:bundle:)` before this is
-  /// called for the profile — production wiring guarantees this in
-  /// `ProfileSession.registerWithSyncCoordinator`. If no bundle is
-  /// registered and no `fallbackGRDBRepositoriesFactory` was injected
-  /// at coordinator init, the call throws
-  /// `SyncCoordinatorError.profileNotRegistered`. Each caller decides
-  /// what to do with that error: outbound paths skip + log (records
-  /// stay in GRDB and are picked up on the next backfill scan); the
-  /// inbound apply path traps via `preconditionFailure` because
-  /// `CKSyncEngine` would otherwise advance the server change token
-  /// past unapplied records.
-  ///
-  /// Constructing an empty in-memory bundle on the fly is never an
-  /// option — it would silently swallow GRDB writes. Tests that drive
-  /// paths reaching here without staging a bundle inject the factory
-  /// at init time so the throw doesn't fire — see
-  /// `SyncCoordinator.init(... fallbackGRDBRepositoriesFactory:)`.
+  /// Bundle resolution is delegated to `resolveGRDBRepositories(for:)`, which
+  /// returns a cached bundle if one was built before, or constructs a fresh
+  /// apply-path bundle via `ProfileGRDBRepositories.makeForApply(database:)` backed
+  /// by `containerManager.database(for:)`. This allows sync apply for
+  /// un-sessionized profiles (multi-profile background apply, pre-render race,
+  /// encrypted reset on an unopened profile) — the scenario that motivated
+  /// issue #619.
   func handlerForProfileZone(
     profileId: UUID, zoneID: CKRecordZone.ID
   ) throws -> ProfileDataSyncHandler {
@@ -48,15 +21,7 @@ extension SyncCoordinator {
       return existing
     }
     let container = try containerManager.container(for: profileId)
-    let grdbRepositories: ProfileGRDBRepositories
-    if let registered = profileGRDBRepositories[profileId] {
-      grdbRepositories = registered
-    } else if let factory = fallbackGRDBRepositoriesFactory {
-      grdbRepositories = try factory(profileId)
-      profileGRDBRepositories[profileId] = grdbRepositories
-    } else {
-      throw SyncCoordinatorError.profileNotRegistered(profileId)
-    }
+    let grdbRepositories = try resolveGRDBRepositories(for: profileId)
     let onInstrumentRemoteChange = instrumentRemoteChangeCallbacks[profileId] ?? {}
     let handler = ProfileDataSyncHandler(
       profileId: profileId,
@@ -68,36 +33,27 @@ extension SyncCoordinator {
     return handler
   }
 
-  /// Registers the GRDB repository bundle for a profile. Must be called
-  /// before the first sync event arrives for the profile so
-  /// `handlerForProfileZone` can construct a handler.
+  /// Returns the per-profile GRDB repository bundle, constructing and caching
+  /// it on first access. The bundle is built via
+  /// `ProfileGRDBRepositories.makeForApply(database:)` backed by
+  /// `containerManager.database(for:)`, which allows sync apply for
+  /// un-sessionized profiles — see issue #619.
   ///
-  /// If a handler was already cached (e.g. an earlier call constructed
-  /// it via the test-only fallback bundle), the cached entry is cleared
-  /// so the next `handlerForProfileZone` call rebuilds it against the
-  /// freshly-registered bundle. This makes registration idempotent
-  /// across the test/production boundary.
-  func setProfileGRDBRepositories(
-    profileId: UUID, bundle: ProfileGRDBRepositories
-  ) {
-    if dataHandlers[profileId] != nil {
-      logger.info(
-        """
-        GRDB repository bundle registered for profile \
-        \(profileId, privacy: .public) after handler was cached; \
-        clearing cached handler so the next handlerForProfileZone \
-        call rebuilds against the new bundle
-        """
-      )
-      dataHandlers.removeValue(forKey: profileId)
+  /// **Main-actor I/O.** First-access resolution opens the per-profile
+  /// `DatabaseQueue` synchronously on `@MainActor`. This matches the
+  /// pre-existing pattern of `containerManager.container(for:)` two
+  /// lines above. The work is bounded (queue init + idempotent schema
+  /// migration) and only happens once per profile per process. Moving
+  /// it off-actor would require `ProfileContainerManager` to expose
+  /// async open methods — a separate refactor.
+  private func resolveGRDBRepositories(for profileId: UUID) throws -> ProfileGRDBRepositories {
+    if let cached = cachedGRDBRepositories[profileId] {
+      return cached
     }
-    profileGRDBRepositories[profileId] = bundle
-  }
-
-  /// Removes the per-profile GRDB repository bundle (e.g. on session
-  /// teardown so the database queue it captures can be released).
-  func removeProfileGRDBRepositories(profileId: UUID) {
-    profileGRDBRepositories.removeValue(forKey: profileId)
+    let database = try containerManager.database(for: profileId)
+    let bundle = ProfileGRDBRepositories.makeForApply(database: database)
+    cachedGRDBRepositories[profileId] = bundle
+    return bundle
   }
 
   /// Registers the per-profile closure fired by the data handler whenever a
@@ -131,5 +87,16 @@ extension SyncCoordinator {
   /// teardown so the registry it captures can be released).
   func removeInstrumentRemoteChangeCallback(profileId: UUID) {
     instrumentRemoteChangeCallbacks.removeValue(forKey: profileId)
+  }
+
+  /// Drops the cached handler and GRDB repository bundle for a profile
+  /// being removed locally. The coordinator's caches retain
+  /// `DatabaseQueue` references which `ProfileContainerManager.deleteStore`
+  /// is about to invalidate; without this eviction a delayed sync event
+  /// for the deleted profile would write through a stale queue against
+  /// an unlinked file.
+  func evictCachedState(for profileId: UUID) {
+    dataHandlers.removeValue(forKey: profileId)
+    cachedGRDBRepositories.removeValue(forKey: profileId)
   }
 }

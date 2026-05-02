@@ -140,29 +140,16 @@ extension SyncCoordinator {
   ) async {
     // Resolve handler on main (accesses @MainActor-isolated state).
     //
-    // `profileNotRegistered` is fatal in this path: CKSyncEngine
-    // advances the server change token after this delegate call
-    // returns, so silently skipping the apply would lose records
-    // permanently. Production wiring (`MoolahApp.configureSyncCoordinator`
-    // → `coordinator.startAfter(profileIndexMigration:)`) defers
-    // engine start until the GRDB profile-index migration commits and
-    // `ProfileSession` registers its bundle, so reaching here with no
-    // bundle is an invariant violation. Other thrown errors (e.g.
-    // transient `containerManager.container(for:)` failures) fall
-    // through to the existing log + skip path.
+    // The catch-and-skip path covers genuinely transient errors from
+    // `containerManager.container(for:)` / `containerManager.database(for:)`
+    // (e.g. disk pressure or a migration in flight). These are recoverable:
+    // CKSyncEngine retries on the next launch and the records remain in
+    // iCloud. No invariant violations can reach this point — the coordinator
+    // constructs its own handler bundle, so `profileNotRegistered` is
+    // unreachable on the apply path.
     let handler: ProfileDataSyncHandler? = await MainActor.run {
       do {
         return try handlerForProfileZone(profileId: profileId, zoneID: zoneID)
-      } catch SyncCoordinatorError.profileNotRegistered(let id) {
-        preconditionFailure(
-          """
-          applyFetchedProfileDataChanges called for profile \(id.uuidString) \
-          before its GRDB repository bundle was registered. \
-          startAfter(profileIndexMigration:) must complete before any \
-          CKSyncEngine fetch event lands; reaching here means the gate \
-          failed. Crashing rather than advancing the server change token \
-          past unapplied records — restart will re-fetch.
-          """)
       } catch {
         logger.error("Failed to get handler for profile \(profileId): \(error, privacy: .public)")
         return nil

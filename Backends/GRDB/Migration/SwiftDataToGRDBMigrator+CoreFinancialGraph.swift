@@ -11,8 +11,10 @@ import SwiftData
 // `migrateCSVImportProfilesIfNeeded` pattern: open a `ModelContext`,
 // fetch all rows, map to the corresponding GRDB row, write inside one
 // `database.write` transaction, then flip the `UserDefaults` flag in
-// the `defer` block once `committed` is true. `upsert` keeps re-runs
-// idempotent if the app crashes between commit and flag-set.
+// the `defer` block once `committed` is true. `insert(onConflict:
+// .ignore)` keeps re-runs idempotent if the app crashes between commit
+// and flag-set, and preserves sync-applied rows that arrived before
+// the migrator ran.
 //
 // **Ordering.** Parents run before children so foreign-key references
 // resolve at commit time. `transaction_leg.account_id` is
@@ -55,7 +57,7 @@ extension SwiftDataToGRDBMigrator {
     if !mappedRows.isEmpty {
       try await database.write { database in
         for row in mappedRows {
-          try row.upsert(database)
+          try row.insert(database, onConflict: .ignore)
         }
       }
     }
@@ -113,12 +115,12 @@ extension SwiftDataToGRDBMigrator {
       logger: logger)
     // Self-referential FK: a category's `parent_id` references another
     // category in the same table. Sort parents before children so the
-    // child upsert has its parent already on disk under the FK pragma.
+    // child insert has its parent already on disk under the FK pragma.
     let mappedRows = Self.sortCategoriesParentFirst(unsortedRows)
     if !mappedRows.isEmpty {
       try await database.write { database in
         for row in mappedRows {
-          try row.upsert(database)
+          try row.insert(database, onConflict: .ignore)
         }
       }
     }
@@ -204,7 +206,7 @@ extension SwiftDataToGRDBMigrator {
     if !mappedRows.isEmpty {
       try await database.write { database in
         for row in mappedRows {
-          try row.upsert(database)
+          try row.insert(database, onConflict: .ignore)
         }
       }
     }

@@ -1,47 +1,6 @@
 import Foundation
 
 extension ProfileSession {
-  /// Wires the per-profile GRDB repository bundle with the sync
-  /// coordinator so local mutations queue the corresponding CloudKit
-  /// send. The GRDB repos receive their hooks injected at backend
-  /// construction time (see `makeCloudKitBackend`); this method
-  /// publishes the concrete-class instances to `SyncCoordinator` so
-  /// `handlerForProfileZone` can build a `ProfileDataSyncHandler` that
-  /// reaches them.
-  func wireRepositorySync(coordinator: SyncCoordinator) {
-    registerGRDBRepositoriesForSync(coordinator: coordinator)
-  }
-
-  /// Registers the per-profile GRDB repository bundle with the sync
-  /// coordinator so `handlerForProfileZone` can build a
-  /// `ProfileDataSyncHandler` that reaches them. Only registers when the
-  /// backend is a `CloudKitBackend` — preview / test code paths skip
-  /// registration silently.
-  ///
-  /// **Pre-condition.** Must be called before `SyncCoordinator`
-  /// processes any events for this profile. Guaranteed by
-  /// `ProfileSession.init` call order: `wireRepositorySync` (which
-  /// invokes this method) runs in `registerWithSyncCoordinator`, which
-  /// is the last statement of `init`. The first sync event for the
-  /// profile cannot arrive until `init` returns and the session is
-  /// retained by the caller, so registration always wins the race.
-  private func registerGRDBRepositoriesForSync(coordinator: SyncCoordinator) {
-    guard let cloudBackend = backend as? CloudKitBackend else { return }
-    coordinator.setProfileGRDBRepositories(
-      profileId: profile.id,
-      bundle: ProfileGRDBRepositories(
-        csvImportProfiles: cloudBackend.grdbCSVImportProfiles,
-        importRules: cloudBackend.grdbImportRules,
-        instruments: cloudBackend.grdbInstruments,
-        categories: cloudBackend.grdbCategories,
-        accounts: cloudBackend.grdbAccounts,
-        earmarks: cloudBackend.grdbEarmarks,
-        earmarkBudgetItems: cloudBackend.grdbEarmarkBudgetItems,
-        investmentValues: cloudBackend.grdbInvestments,
-        transactions: cloudBackend.grdbTransactions,
-        transactionLegs: cloudBackend.grdbTransactionLegs))
-  }
-
   /// OptionSet for coalesced store reloads after a sync batch.
   struct StoreReloadPlan: OptionSet, Sendable, Equatable {
     let rawValue: Int

@@ -20,9 +20,7 @@ struct SyncCoordinatorTestsMore {
     let defaults = makeDefaults()
     let coordinator = SyncCoordinator(
       containerManager: manager,
-      userDefaults: defaults,
-      fallbackGRDBRepositoriesFactory:
-        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
+      userDefaults: defaults)
 
     let profileId = UUID()
     try await manager.profileIndexRepository.upsert(
@@ -32,10 +30,14 @@ struct SyncCoordinatorTestsMore {
 
     // Simulate what CloudKitDataImporter produces: records with nil system fields.
     let accountId = UUID()
-    let context = ModelContext(try manager.container(for: profileId))
+    let container = try manager.container(for: profileId)
+    let context = ModelContext(container)
     context.insert(
       AccountRecord(id: accountId, name: "Migrated", type: "bank", position: 0, isHidden: false))
     try context.save()
+    let database = try manager.database(for: profileId)
+    try ProfileDataSyncHandlerTestSupport.mirrorContainerToDatabase(
+      container: container, database: database)
 
     // Migration queues all records up front.
     let queued = await coordinator.queueAllRecordsAfterImport(for: profileId)
@@ -86,14 +88,9 @@ struct SyncCoordinatorTestsMore {
   @Test
   func profileDataHandlerCreatedOnDemand() throws {
     let manager = try ProfileContainerManager.forTesting()
-    // `handlerForProfileZone` requires a GRDB repository bundle —
-    // production wiring registers via `ProfileSession.registerWithSyncCoordinator`;
-    // the test injects the in-memory factory so the handler can be
-    // constructed without a full session.
-    let coordinator = SyncCoordinator(
-      containerManager: manager,
-      fallbackGRDBRepositoriesFactory:
-        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
+    // `handlerForProfileZone` builds a bundle on demand from the
+    // containerManager when no bundle is pre-registered.
+    let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
     let zoneID = CKRecordZone.ID(
       zoneName: "profile-\(profileId.uuidString)",
@@ -104,35 +101,17 @@ struct SyncCoordinatorTestsMore {
     #expect(handler.zoneID == zoneID)
   }
 
-  @Test("handlerForProfileZone throws profileNotRegistered when no bundle and no factory")
-  func handlerForProfileZoneThrowsWhenUnregistered() throws {
+  @Test("queueUnsyncedRecordsForAllProfiles works for any profile in the index")
+  func queueUnsyncedRecordsForAnyProfileInIndex() async throws {
     let manager = try ProfileContainerManager.forTesting()
-    // No `setProfileGRDBRepositories` and no `fallbackGRDBRepositoriesFactory`
-    // — the production wiring-bug condition the throw is meant to surface.
-    let coordinator = SyncCoordinator(containerManager: manager)
-    let profileId = UUID()
-    let zoneID = CKRecordZone.ID(
-      zoneName: "profile-\(profileId.uuidString)",
-      ownerName: CKCurrentUserDefaultName)
-
-    #expect(throws: SyncCoordinatorError.profileNotRegistered(profileId)) {
-      _ = try coordinator.handlerForProfileZone(profileId: profileId, zoneID: zoneID)
-    }
-  }
-
-  @Test("queueUnsyncedRecordsForAllProfiles skips profiles without a registered bundle")
-  func queueUnsyncedRecordsSkipsUnregisteredProfile() async throws {
-    let manager = try ProfileContainerManager.forTesting()
-    // No bundle, no factory: the outbound backfill path must skip the
-    // profile (records remain durable in GRDB and a future scan picks
-    // them up) rather than crash.
     let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
     try await manager.profileIndexRepository.upsert(
       Profile(
-        id: profileId, label: "Unregistered", currencyCode: "AUD",
+        id: profileId, label: "Idle", currencyCode: "AUD",
         financialYearStartMonth: 7))
 
+    // No rows seeded; the call must succeed and produce nothing.
     let queued = await coordinator.queueUnsyncedRecordsForAllProfiles()
     #expect(queued.isEmpty)
   }
