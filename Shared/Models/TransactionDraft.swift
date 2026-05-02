@@ -86,6 +86,20 @@ struct TransactionDraft: Sendable, Equatable {
     var isEarmarkOnly: Bool {
       accountId == nil && earmarkId != nil
     }
+
+    /// The instrument the editor should default to for this leg when the
+    /// leg has no explicit instrument override stored. Resolves through
+    /// the leg's account, then its earmark, then falls back to AUD as a
+    /// last resort.
+    func resolvedInstrument(accounts: Accounts, earmarks: Earmarks) -> Instrument {
+      if let acctId = accountId, let account = accounts.by(id: acctId) {
+        return account.instrument
+      }
+      if let emId = earmarkId, let earmark = earmarks.by(id: emId) {
+        return earmark.instrument
+      }
+      return Instrument.AUD
+    }
   }
 
   // MARK: - Negation Helpers

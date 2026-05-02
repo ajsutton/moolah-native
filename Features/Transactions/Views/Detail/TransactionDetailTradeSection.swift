@@ -85,12 +85,7 @@ struct TransactionDetailTradeSection: View {
   }
 
   private func defaultInstrument(forLegAt idx: Int) -> Instrument {
-    if let acctId = draft.legDrafts[idx].accountId,
-      let account = accounts.by(id: acctId)
-    {
-      return account.instrument
-    }
-    return Instrument.AUD
+    draft.legDrafts[idx].resolvedInstrument(accounts: accounts, earmarks: Earmarks(from: []))
   }
 
   @ViewBuilder

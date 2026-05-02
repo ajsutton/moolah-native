@@ -141,17 +141,8 @@ struct TransactionDetailLegRow: View {
     }
   }
 
-  /// Falls back to the leg's account instrument and then earmark
-  /// instrument when the leg has no explicit instrument stored.
   private var defaultInstrument: Instrument {
-    let leg = draft.legDrafts[index]
-    if let acctId = leg.accountId, let account = accounts.by(id: acctId) {
-      return account.instrument
-    }
-    if let emId = leg.earmarkId, let earmark = earmarks.by(id: emId) {
-      return earmark.instrument
-    }
-    return Instrument.AUD
+    draft.legDrafts[index].resolvedInstrument(accounts: accounts, earmarks: earmarks)
   }
 
   /// Opens the dropdown in response to a *user-driven* edit. Programmatic
