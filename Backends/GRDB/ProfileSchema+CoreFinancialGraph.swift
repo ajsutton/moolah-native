@@ -22,19 +22,23 @@ import GRDB
 //     `sort_order`) are non-negative or strictly positive as
 //     applicable.
 //
-// Foreign keys: NONE. The eight FKs that v3 originally declared
+// Foreign keys (current schema, post-v5): NONE. The eight FKs that
+// the v3 SQL below originally declared
 // (`transaction_leg.transaction_id|account_id|category_id|earmark_id`,
 // `earmark_budget_item.earmark_id|category_id`,
-// `investment_value.account_id`, `category.parent_id`) were dropped
-// by `v5_drop_foreign_keys`. CKSyncEngine does not promise
-// parent-before-child arrival across batches, and an out-of-order
-// child insert under enforced FKs would fault the entire fetch
-// transaction and trap the sync coordinator in an infinite re-fetch
-// loop. Integrity is now enforced at the application boundary:
-// repository sync entry points (`applyRemoteChangesSync`) and domain
-// `delete(...)` methods replicate the cascade / null-out semantics
-// the FKs used to provide. See `ProfileSchema+DropForeignKeys.swift`
-// for the migration and `guides/SYNC_GUIDE.md` for the contract.
+// `investment_value.account_id`, `category.parent_id`) are dropped
+// by `v5_drop_foreign_keys` before the database opens for use; the
+// `REFERENCES` clauses still appear in this file because v3 created
+// them and shipped migrations are immutable. CKSyncEngine does not
+// promise parent-before-child arrival across batches, and an
+// out-of-order child insert under enforced FKs would fault the
+// entire fetch transaction and trap the sync coordinator in an
+// infinite re-fetch loop. Integrity is enforced at the application
+// boundary: repository sync entry points (`applyRemoteChangesSync`)
+// and domain `delete(...)` methods replicate the cascade / null-out
+// semantics the FKs used to provide. See
+// `ProfileSchema+DropForeignKeys.swift` for the migration and
+// `guides/SYNC_GUIDE.md` for the contract.
 //
 // Orphan child rows (a leg or budget item whose parent CKRecord was
 // deleted server-side or never delivered) are an expected consequence

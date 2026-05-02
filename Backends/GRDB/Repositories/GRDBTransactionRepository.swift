@@ -112,15 +112,13 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   }
 
   func create(_ transaction: Transaction) async throws -> Transaction {
-    let normalised = transaction
-
     let insertedLegIds = try await database.write { database -> [UUID] in
-      let txnRow = TransactionRow(domain: normalised)
+      let txnRow = TransactionRow(domain: transaction)
       try txnRow.insert(database)
 
       var legIds: [UUID] = []
-      legIds.reserveCapacity(normalised.legs.count)
-      for (index, leg) in normalised.legs.enumerated() {
+      legIds.reserveCapacity(transaction.legs.count)
+      for (index, leg) in transaction.legs.enumerated() {
         // Ensure non-fiat instrument rows exist so `fetchAll` can resolve
         // the full `Instrument` value on read. After v5 dropped FKs, a leg
         // referencing an account/category/earmark that hasn't arrived yet
@@ -132,7 +130,7 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
         let legRow = TransactionLegRow(
           id: legId,
           domain: leg,
-          transactionId: normalised.id,
+          transactionId: transaction.id,
           sortOrder: index)
         try legRow.insert(database)
         legIds.append(legId)
@@ -140,30 +138,28 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
       return legIds
     }
 
-    onRecordChanged(TransactionRow.recordType, normalised.id)
+    onRecordChanged(TransactionRow.recordType, transaction.id)
     for legId in insertedLegIds {
       onRecordChanged(TransactionLegRow.recordType, legId)
     }
-    return normalised
+    return transaction
   }
 
   func update(_ transaction: Transaction) async throws -> Transaction {
-    let normalised = transaction
-
     let outcome = try await database.write { database -> UpdateOutcome in
       try Self.performUpdate(
         database: database,
-        transaction: normalised)
+        transaction: transaction)
     }
 
-    onRecordChanged(TransactionRow.recordType, normalised.id)
+    onRecordChanged(TransactionRow.recordType, transaction.id)
     for legId in outcome.insertedLegIds {
       onRecordChanged(TransactionLegRow.recordType, legId)
     }
     for legId in outcome.deletedLegIds {
       onRecordDeleted(TransactionLegRow.recordType, legId)
     }
-    return normalised
+    return transaction
   }
 
   func delete(id: UUID) async throws {
@@ -238,6 +234,8 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
       return try String.fetchAll(database, sql: sql, arguments: [prefix])
     }
   }
+
+  // MARK: - Private helpers
 
   private struct UpdateOutcome {
     let deletedLegIds: [UUID]
