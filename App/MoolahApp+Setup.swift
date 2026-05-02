@@ -108,7 +108,8 @@ extension MoolahApp {
   static func configureSyncCoordinator(
     store: ProfileStore,
     coordinator: SyncCoordinator,
-    isUITesting: Bool
+    isUITesting: Bool,
+    profileIndexMigrationTask: Task<Void, Never>?
   ) {
     let logger = Logger(subsystem: "com.moolah.app", category: "BackgroundSync")
     let isRunningTests = NSClassFromString("XCTestCase") != nil
@@ -148,7 +149,15 @@ extension MoolahApp {
       coordinator?.queueDeletion(
         recordType: ProfileRow.recordType, id: id, zoneID: zoneID)
     }
-    coordinator.start()
+    // Defer the engine `start()` until the SwiftData → GRDB profile-index
+    // migration commits, otherwise CKSyncEngine can deliver fetched
+    // profile-data zone changes for a profile id whose `ProfileSession`
+    // has not yet been registered (the local index reads zero rows
+    // until the migration finishes), which traps in
+    // `SyncCoordinator.handlerForProfileZone(profileId:zoneID:)`. The
+    // coordinator owns the spawned `launchTask` so `stop()` can cancel
+    // it if the app tears down before the migration finishes.
+    coordinator.startAfter(profileIndexMigration: profileIndexMigrationTask)
     // Clean up the legacy CloudKit zone from SwiftData's automatic sync.
     LegacyZoneCleanup.performIfNeeded()
   }

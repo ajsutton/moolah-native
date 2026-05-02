@@ -245,6 +245,13 @@ extension SyncCoordinator {
           refreshPendingUploadsMirror()
         }
       }
+      // TODO(#619): if `handlerForProfileZone` threw because the profile's
+      // session has not yet been registered, the records keep their stale
+      // (non-nil) `encodedSystemFields` and the backfill scan won't re-queue
+      // them — `queueUnsyncedRecords` only picks up records where the
+      // system field is nil. Eager session construction will close this gap.
+      // https://github.com/ajsutton/moolah-native/issues/619
+      //
       // System fields were cleared; if a later crash happens before the re-upload
       // persists, the next backfill scan must revisit this profile instead of
       // trusting a stale "complete" flag from before the reset.

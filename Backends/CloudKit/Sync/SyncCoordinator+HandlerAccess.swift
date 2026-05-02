@@ -2,6 +2,22 @@
 import Foundation
 import OSLog
 
+/// Errors thrown by `SyncCoordinator.handlerForProfileZone(profileId:zoneID:)`.
+///
+/// `profileNotRegistered` indicates a wiring-order bug: a sync event
+/// arrived for a profile whose `ProfileSession` has not yet called
+/// `SyncCoordinator.setProfileGRDBRepositories(profileId:bundle:)`.
+/// Outbound paths (backfill, zone deletion / purge / encrypted reset,
+/// upload-batch building) treat this as recoverable and skip the
+/// profile — the records remain durable in GRDB and are re-queued by
+/// the next backfill scan or local-mutation hook. The inbound apply
+/// path (`applyFetchedProfileDataChanges`) treats it as fatal because
+/// `CKSyncEngine` advances the server change token after the delegate
+/// returns, so a silent skip would lose records permanently.
+enum SyncCoordinatorError: Error, Equatable {
+  case profileNotRegistered(UUID)
+}
+
 extension SyncCoordinator {
   // MARK: - Handler Access
 
@@ -12,11 +28,19 @@ extension SyncCoordinator {
   /// called for the profile — production wiring guarantees this in
   /// `ProfileSession.registerWithSyncCoordinator`. If no bundle is
   /// registered and no `fallbackGRDBRepositoriesFactory` was injected
-  /// at coordinator init, the call traps via `preconditionFailure`:
-  /// constructing an empty in-memory bundle on the fly would silently
-  /// swallow GRDB writes (data loss). Tests that drive paths reaching
-  /// here without staging a bundle inject the factory at init time so
-  /// the trap doesn't fire — see `SyncCoordinator.init(... fallbackGRDBRepositoriesFactory:)`.
+  /// at coordinator init, the call throws
+  /// `SyncCoordinatorError.profileNotRegistered`. Each caller decides
+  /// what to do with that error: outbound paths skip + log (records
+  /// stay in GRDB and are picked up on the next backfill scan); the
+  /// inbound apply path traps via `preconditionFailure` because
+  /// `CKSyncEngine` would otherwise advance the server change token
+  /// past unapplied records.
+  ///
+  /// Constructing an empty in-memory bundle on the fly is never an
+  /// option — it would silently swallow GRDB writes. Tests that drive
+  /// paths reaching here without staging a bundle inject the factory
+  /// at init time so the throw doesn't fire — see
+  /// `SyncCoordinator.init(... fallbackGRDBRepositoriesFactory:)`.
   func handlerForProfileZone(
     profileId: UUID, zoneID: CKRecordZone.ID
   ) throws -> ProfileDataSyncHandler {
@@ -31,18 +55,7 @@ extension SyncCoordinator {
       grdbRepositories = try factory(profileId)
       profileGRDBRepositories[profileId] = grdbRepositories
     } else {
-      preconditionFailure(
-        """
-        SyncCoordinator.handlerForProfileZone called for profile \
-        \(profileId.uuidString) without a registered GRDB repository \
-        bundle. This is a wiring bug — \
-        ProfileSession.registerWithSyncCoordinator (production) must call \
-        setProfileGRDBRepositories(profileId:bundle:) before any sync \
-        event for this profile, and tests should either register a bundle \
-        or inject a fallbackGRDBRepositoriesFactory at coordinator init. \
-        Constructing an empty in-memory bundle here would silently swallow \
-        GRDB writes.
-        """)
+      throw SyncCoordinatorError.profileNotRegistered(profileId)
     }
     let onInstrumentRemoteChange = instrumentRemoteChangeCallbacks[profileId] ?? {}
     let handler = ProfileDataSyncHandler(
