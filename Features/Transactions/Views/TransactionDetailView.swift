@@ -304,7 +304,7 @@ extension TransactionDetailView {
         onRequestDelete: { legPendingDeletion = index }
       )
     }
-    TransactionDetailAddLegSection(draft: $draft, sortedAccounts: sortedAccounts)
+    TransactionDetailAddLegSection(draft: $draft, accounts: accounts)
     if showRecurrence {
       TransactionDetailRecurrenceSection(draft: $draft)
     }
