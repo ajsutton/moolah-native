@@ -134,4 +134,68 @@ struct RepositorySyncCascadeTests {
       #expect(legCount == 0)
     }
   }
+
+  /// After v5 + Task 6b, applying a CKRecord-equivalent leg upsert
+  /// whose `account_id` / `category_id` / `earmark_id` reference rows
+  /// that don't yet exist must NOT create blank-name stub rows. The
+  /// FK-driven stub insertion in `ensureFKTargets` is removed; only
+  /// the non-fiat instrument insertion survives.
+  @Test
+  func legUpsertWithMissingParentsDoesNotCreatePhantomRows() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    let txRepo = GRDBTransactionRepository(
+      database: database,
+      defaultInstrument: .AUD,
+      conversionService: FixedConversionService())
+
+    let orphanAccountId = UUID()
+    let orphanCategoryId = UUID()
+    let orphanEarmarkId = UUID()
+
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          INSERT INTO instrument (id, record_name, kind, name, decimals)
+            VALUES ('AUD', 'instrument-AUD', 'fiatCurrency', 'Australian Dollar', 2);
+          """)
+    }
+
+    let txId = UUID()
+    let leg = TransactionLeg(
+      accountId: orphanAccountId,
+      instrument: .AUD,
+      quantity: -500,
+      type: .expense,
+      categoryId: orphanCategoryId,
+      earmarkId: orphanEarmarkId)
+    let transaction = Transaction(
+      id: txId,
+      date: Date(timeIntervalSince1970: 1_700_000_000),
+      legs: [leg])
+
+    _ = try await txRepo.create(transaction)
+
+    try await database.read { database in
+      let accountCount =
+        try Int.fetchOne(
+          database,
+          sql: "SELECT COUNT(*) FROM account WHERE id = ?",
+          arguments: [orphanAccountId]) ?? -1
+      #expect(accountCount == 0, "Expected no phantom account; found \(accountCount)")
+
+      let categoryCount =
+        try Int.fetchOne(
+          database,
+          sql: "SELECT COUNT(*) FROM category WHERE id = ?",
+          arguments: [orphanCategoryId]) ?? -1
+      #expect(categoryCount == 0, "Expected no phantom category; found \(categoryCount)")
+
+      let earmarkCount =
+        try Int.fetchOne(
+          database,
+          sql: "SELECT COUNT(*) FROM earmark WHERE id = ?",
+          arguments: [orphanEarmarkId]) ?? -1
+      #expect(earmarkCount == 0, "Expected no phantom earmark; found \(earmarkCount)")
+    }
+  }
 }

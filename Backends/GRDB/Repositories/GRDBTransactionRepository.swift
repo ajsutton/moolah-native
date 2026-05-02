@@ -113,7 +113,6 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
 
   func create(_ transaction: Transaction) async throws -> Transaction {
     let normalised = transaction
-    let defaultInstrument = self.defaultInstrument
 
     let insertedLegIds = try await database.write { database -> [UUID] in
       let txnRow = TransactionRow(domain: normalised)
@@ -122,19 +121,13 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
       var legIds: [UUID] = []
       legIds.reserveCapacity(normalised.legs.count)
       for (index, leg) in normalised.legs.enumerated() {
-        // Ensure FK targets exist. Production callers always pass
-        // ids that correspond to fetched parents; sync-race scenarios
-        // (a leg's CKRecord arrives before its account /
-        // category / earmark) would otherwise reject the legit insert
-        // under SQLite's enforced FKs. Materialising placeholders lets
-        // the parent's own remote insert upsert in place once it
-        // lands. Placeholder rows are also necessary for non-fiat
-        // instruments so `fetchAll` can resolve the full `Instrument`
-        // value on read.
-        try Self.ensureFKTargets(
+        // Ensure non-fiat instrument rows exist so `fetchAll` can resolve
+        // the full `Instrument` value on read. After v5 dropped FKs, a leg
+        // referencing an account/category/earmark that hasn't arrived yet
+        // is allowed to land as-is — see `+FKEnsure.swift` and SYNC_GUIDE.
+        try Self.ensureInstrumentReadable(
           database: database,
-          leg: leg,
-          defaultInstrument: defaultInstrument)
+          leg: leg)
         let legId = UUID()
         let legRow = TransactionLegRow(
           id: legId,
@@ -156,13 +149,11 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
 
   func update(_ transaction: Transaction) async throws -> Transaction {
     let normalised = transaction
-    let defaultInstrument = self.defaultInstrument
 
     let outcome = try await database.write { database -> UpdateOutcome in
       try Self.performUpdate(
         database: database,
-        transaction: normalised,
-        defaultInstrument: defaultInstrument)
+        transaction: normalised)
     }
 
     onRecordChanged(TransactionRow.recordType, normalised.id)
@@ -260,8 +251,7 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   /// transaction commits.
   private static func performUpdate(
     database: Database,
-    transaction: Transaction,
-    defaultInstrument: Instrument
+    transaction: Transaction
   ) throws -> UpdateOutcome {
     guard
       var existing =
@@ -287,8 +277,7 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     var newLegIds: [UUID] = []
     newLegIds.reserveCapacity(transaction.legs.count)
     for (index, leg) in transaction.legs.enumerated() {
-      try ensureFKTargets(
-        database: database, leg: leg, defaultInstrument: defaultInstrument)
+      try Self.ensureInstrumentReadable(database: database, leg: leg)
       let legId = UUID()
       let legRow = TransactionLegRow(
         id: legId,
