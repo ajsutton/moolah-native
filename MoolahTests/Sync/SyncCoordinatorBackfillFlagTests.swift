@@ -26,8 +26,7 @@ struct SyncCoordinatorBackfillFlagTests {
     let defaults = try makeDefaults()
     let coordinator = SyncCoordinator(
       containerManager: manager,
-      userDefaults: defaults,
-      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
+      userDefaults: defaults)
 
     let profileId = UUID()
     let indexContext = ModelContext(manager.indexContainer)
@@ -39,10 +38,14 @@ struct SyncCoordinatorBackfillFlagTests {
 
     // Seed an unsynced record and scan so the flag is set.
     let accountId = UUID()
-    let context = ModelContext(try manager.container(for: profileId))
+    let container = try manager.container(for: profileId)
+    let context = ModelContext(container)
     context.insert(
       AccountRecord(id: accountId, name: "A1", type: "bank", position: 0, isHidden: false))
     try context.save()
+    let database = try manager.database(for: profileId)
+    try ProfileDataSyncHandlerTestSupport.mirrorContainerToDatabase(
+      container: container, database: database)
     _ = await coordinator.queueUnsyncedRecordsForAllProfiles()
 
     // Simulate the sign-out handler firing.
@@ -63,8 +66,7 @@ struct SyncCoordinatorBackfillFlagTests {
     let defaults = try makeDefaults()
     let coordinator = SyncCoordinator(
       containerManager: manager,
-      userDefaults: defaults,
-      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
+      userDefaults: defaults)
 
     let profileId = UUID()
     let indexContext = ModelContext(manager.indexContainer)
@@ -75,10 +77,14 @@ struct SyncCoordinatorBackfillFlagTests {
     try indexContext.save()
 
     let accountId = UUID()
-    let context = ModelContext(try manager.container(for: profileId))
+    let container = try manager.container(for: profileId)
+    let context = ModelContext(container)
     context.insert(
       AccountRecord(id: accountId, name: "A1", type: "bank", position: 0, isHidden: false))
     try context.save()
+    let database = try manager.database(for: profileId)
+    try ProfileDataSyncHandlerTestSupport.mirrorContainerToDatabase(
+      container: container, database: database)
     _ = await coordinator.queueUnsyncedRecordsForAllProfiles()
 
     let zoneID = CKRecordZone.ID(
@@ -98,8 +104,7 @@ struct SyncCoordinatorBackfillFlagTests {
     let defaults = try makeDefaults()
     let coordinator = SyncCoordinator(
       containerManager: manager,
-      userDefaults: defaults,
-      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
+      userDefaults: defaults)
 
     let profileId = UUID()
     let indexContext = ModelContext(manager.indexContainer)
@@ -109,10 +114,14 @@ struct SyncCoordinatorBackfillFlagTests {
         financialYearStartMonth: 7, createdAt: Date()))
     try indexContext.save()
 
-    let context = ModelContext(try manager.container(for: profileId))
+    let container = try manager.container(for: profileId)
+    let context = ModelContext(container)
     context.insert(
       AccountRecord(id: UUID(), name: "A1", type: "bank", position: 0, isHidden: false))
     try context.save()
+    let database = try manager.database(for: profileId)
+    try ProfileDataSyncHandlerTestSupport.mirrorContainerToDatabase(
+      container: container, database: database)
     _ = await coordinator.queueUnsyncedRecordsForAllProfiles()
 
     let zoneID = CKRecordZone.ID(

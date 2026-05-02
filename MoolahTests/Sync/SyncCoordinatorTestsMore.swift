@@ -20,9 +20,7 @@ struct SyncCoordinatorTestsMore {
     let defaults = makeDefaults()
     let coordinator = SyncCoordinator(
       containerManager: manager,
-      userDefaults: defaults,
-      fallbackGRDBRepositoriesFactory:
-        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
+      userDefaults: defaults)
 
     let profileId = UUID()
     try await manager.profileIndexRepository.upsert(
@@ -32,10 +30,14 @@ struct SyncCoordinatorTestsMore {
 
     // Simulate what CloudKitDataImporter produces: records with nil system fields.
     let accountId = UUID()
-    let context = ModelContext(try manager.container(for: profileId))
+    let container = try manager.container(for: profileId)
+    let context = ModelContext(container)
     context.insert(
       AccountRecord(id: accountId, name: "Migrated", type: "bank", position: 0, isHidden: false))
     try context.save()
+    let database = try manager.database(for: profileId)
+    try ProfileDataSyncHandlerTestSupport.mirrorContainerToDatabase(
+      container: container, database: database)
 
     // Migration queues all records up front.
     let queued = await coordinator.queueAllRecordsAfterImport(for: profileId)
@@ -87,28 +89,7 @@ struct SyncCoordinatorTestsMore {
   func profileDataHandlerCreatedOnDemand() throws {
     let manager = try ProfileContainerManager.forTesting()
     // `handlerForProfileZone` builds a bundle on demand from the
-    // containerManager when no bundle is pre-registered. This test
-    // injects the explicit factory path to exercise that code branch.
-    let coordinator = SyncCoordinator(
-      containerManager: manager,
-      fallbackGRDBRepositoriesFactory:
-        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
-    let profileId = UUID()
-    let zoneID = CKRecordZone.ID(
-      zoneName: "profile-\(profileId.uuidString)",
-      ownerName: CKCurrentUserDefaultName)
-
-    let handler = try coordinator.handlerForProfileZone(profileId: profileId, zoneID: zoneID)
-    #expect(handler.profileId == profileId)
-    #expect(handler.zoneID == zoneID)
-  }
-
-  @Test("handlerForProfileZone builds handler from containerManager when no bundle and no factory")
-  func handlerForProfileZoneBuildsHandlerWhenUnregistered() throws {
-    let manager = try ProfileContainerManager.forTesting()
-    // No `setProfileGRDBRepositories` and no `fallbackGRDBRepositoriesFactory`
-    // — the coordinator builds its own bundle via containerManager.database(for:)
-    // so sync apply can proceed for un-sessionized profiles (issue #619).
+    // containerManager when no bundle is pre-registered.
     let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
     let zoneID = CKRecordZone.ID(
@@ -120,19 +101,17 @@ struct SyncCoordinatorTestsMore {
     #expect(handler.zoneID == zoneID)
   }
 
-  @Test("queueUnsyncedRecordsForAllProfiles skips profiles without a registered bundle")
-  func queueUnsyncedRecordsSkipsUnregisteredProfile() async throws {
+  @Test("queueUnsyncedRecordsForAllProfiles works for any profile in the index")
+  func queueUnsyncedRecordsForAnyProfileInIndex() async throws {
     let manager = try ProfileContainerManager.forTesting()
-    // No bundle, no factory: the outbound backfill path must skip the
-    // profile (records remain durable in GRDB and a future scan picks
-    // them up) rather than crash.
     let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
     try await manager.profileIndexRepository.upsert(
       Profile(
-        id: profileId, label: "Unregistered", currencyCode: "AUD",
+        id: profileId, label: "Idle", currencyCode: "AUD",
         financialYearStartMonth: 7))
 
+    // No rows seeded; the call must succeed and produce nothing.
     let queued = await coordinator.queueUnsyncedRecordsForAllProfiles()
     #expect(queued.isEmpty)
   }

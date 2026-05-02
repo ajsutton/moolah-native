@@ -82,10 +82,7 @@ struct SyncCoordinatorTestsExtra {
   @Test
   func queueAllRecordsAfterImportReturnsAllRecordsInProfileZone() async throws {
     let manager = try ProfileContainerManager.forTesting()
-    let coordinator = SyncCoordinator(
-      containerManager: manager,
-      fallbackGRDBRepositoriesFactory:
-        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
+    let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
 
     // Seed the new profile's data container (as a migration import would).
@@ -100,6 +97,9 @@ struct SyncCoordinatorTestsExtra {
       InstrumentRecord(
         id: "AUD", kind: "fiatCurrency", name: "Australian Dollar", decimals: 2))
     try context.save()
+    let database = try manager.database(for: profileId)
+    try ProfileDataSyncHandlerTestSupport.mirrorContainerToDatabase(
+      container: dataContainer, database: database)
 
     let queued = await coordinator.queueAllRecordsAfterImport(for: profileId)
     let names = Set(queued.map(\.recordName))
@@ -119,10 +119,7 @@ struct SyncCoordinatorTestsExtra {
   @Test
   func queueAllRecordsAfterImportReturnsEmptyForProfileWithNoData() async throws {
     let manager = try ProfileContainerManager.forTesting()
-    let coordinator = SyncCoordinator(
-      containerManager: manager,
-      fallbackGRDBRepositoriesFactory:
-        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
+    let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
 
     // Initialize the data container so the handler can be resolved,
@@ -144,9 +141,7 @@ struct SyncCoordinatorTestsExtra {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(
       containerManager: manager,
-      userDefaults: makeDefaults(),
-      fallbackGRDBRepositoriesFactory:
-        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
+      userDefaults: makeDefaults())
 
     // Register two profiles in the GRDB index.
     let profileA = UUID()
@@ -163,7 +158,8 @@ struct SyncCoordinatorTestsExtra {
     // Profile A: one unsynced account and one synced account.
     let unsyncedA = UUID()
     let syncedA = UUID()
-    let contextA = ModelContext(try manager.container(for: profileA))
+    let containerA = try manager.container(for: profileA)
+    let contextA = ModelContext(containerA)
     contextA.insert(
       AccountRecord(id: unsyncedA, name: "A-unsynced", type: "bank", position: 0, isHidden: false))
     let syncedRecord = AccountRecord(
@@ -171,12 +167,19 @@ struct SyncCoordinatorTestsExtra {
     syncedRecord.encodedSystemFields = Data([0x01])
     contextA.insert(syncedRecord)
     try contextA.save()
+    let databaseA = try manager.database(for: profileA)
+    try ProfileDataSyncHandlerTestSupport.mirrorContainerToDatabase(
+      container: containerA, database: databaseA)
 
     // Profile B: one unsynced transaction.
     let unsyncedB = UUID()
-    let contextB = ModelContext(try manager.container(for: profileB))
+    let containerB = try manager.container(for: profileB)
+    let contextB = ModelContext(containerB)
     contextB.insert(TransactionRecord(id: unsyncedB, date: Date(), payee: "B-unsynced"))
     try contextB.save()
+    let databaseB = try manager.database(for: profileB)
+    try ProfileDataSyncHandlerTestSupport.mirrorContainerToDatabase(
+      container: containerB, database: databaseB)
 
     let queued = await coordinator.queueUnsyncedRecordsForAllProfiles()
     let names = Set(queued.map(\.recordName))
@@ -219,9 +222,7 @@ struct SyncCoordinatorTestsExtra {
     let defaults = makeDefaults()
     let coordinator = SyncCoordinator(
       containerManager: manager,
-      userDefaults: defaults,
-      fallbackGRDBRepositoriesFactory:
-        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
+      userDefaults: defaults)
 
     let profileId = UUID()
     try await manager.profileIndexRepository.upsert(
@@ -231,10 +232,14 @@ struct SyncCoordinatorTestsExtra {
 
     // Seed an unsynced record (nil encodedSystemFields) for this profile.
     let accountId = UUID()
-    let context = ModelContext(try manager.container(for: profileId))
+    let container = try manager.container(for: profileId)
+    let context = ModelContext(container)
     context.insert(
       AccountRecord(id: accountId, name: "Unsynced", type: "bank", position: 0, isHidden: false))
     try context.save()
+    let database = try manager.database(for: profileId)
+    try ProfileDataSyncHandlerTestSupport.mirrorContainerToDatabase(
+      container: container, database: database)
 
     // First scan should find and queue the unsynced record.
     let first = await coordinator.queueUnsyncedRecordsForAllProfiles()
