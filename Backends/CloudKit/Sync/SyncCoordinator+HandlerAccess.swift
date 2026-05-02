@@ -38,6 +38,14 @@ extension SyncCoordinator {
   /// `ProfileGRDBRepositories.makeForApply(database:)` backed by
   /// `containerManager.database(for:)`, which allows sync apply for
   /// un-sessionized profiles — see issue #619.
+  ///
+  /// **Main-actor I/O.** First-access resolution opens the per-profile
+  /// `DatabaseQueue` synchronously on `@MainActor`. This matches the
+  /// pre-existing pattern of `containerManager.container(for:)` two
+  /// lines above. The work is bounded (queue init + idempotent schema
+  /// migration) and only happens once per profile per process. Moving
+  /// it off-actor would require `ProfileContainerManager` to expose
+  /// async open methods — a separate refactor.
   private func resolveGRDBRepositories(for profileId: UUID) throws -> ProfileGRDBRepositories {
     if let cached = cachedGRDBRepositories[profileId] {
       return cached
@@ -79,5 +87,16 @@ extension SyncCoordinator {
   /// teardown so the registry it captures can be released).
   func removeInstrumentRemoteChangeCallback(profileId: UUID) {
     instrumentRemoteChangeCallbacks.removeValue(forKey: profileId)
+  }
+
+  /// Drops the cached handler and GRDB repository bundle for a profile
+  /// being removed locally. The coordinator's caches retain
+  /// `DatabaseQueue` references which `ProfileContainerManager.deleteStore`
+  /// is about to invalidate; without this eviction a delayed sync event
+  /// for the deleted profile would write through a stale queue against
+  /// an unlinked file.
+  func evictCachedState(for profileId: UUID) {
+    dataHandlers.removeValue(forKey: profileId)
+    cachedGRDBRepositories.removeValue(forKey: profileId)
   }
 }
