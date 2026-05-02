@@ -54,17 +54,6 @@ struct SidebarRowView: View {
   }
 }
 
-extension Account {
-  var sidebarIcon: String {
-    switch type {
-    case .bank: return "building.columns"
-    case .asset: return "house.fill"
-    case .creditCard: return "creditcard"
-    case .investment: return "chart.line.uptrend.xyaxis"
-    }
-  }
-}
-
 /// Sidebar row for an account. Reads the converted balance from
 /// `AccountStore.convertedBalances` (populated and retried by the store
 /// when conversions fail). Shows a spinner while no balance is available.
