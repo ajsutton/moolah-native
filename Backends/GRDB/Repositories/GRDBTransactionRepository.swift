@@ -8,13 +8,16 @@ import OSLog
 /// SwiftData-backed `CloudKitTransactionRepository` for the
 /// `"transaction"` and `transaction_leg` tables.
 ///
-/// **Header + legs together.** Every write path (`create`, `update`)
-/// inserts the `TransactionRow` and its `TransactionLegRow`s inside a
-/// single `database.write { … }`. On any throw the entire mutation
-/// rolls back — the schema's FK from `transaction_leg.transaction_id`
-/// to `"transaction".id` (with `ON DELETE CASCADE`) means a partially
-/// committed header cannot leave orphaned legs. Rollback test mandatory;
-/// see `guides/DATABASE_CODE_GUIDE.md`.
+/// **Header + legs together.** Every write path (`create`, `update`,
+/// `delete`) inserts/deletes the `TransactionRow` and its
+/// `TransactionLegRow`s inside a single `database.write { … }`. On any
+/// throw the entire mutation rolls back. After
+/// `v5_drop_foreign_keys` the schema no longer enforces FK CASCADE on
+/// `transaction_leg.transaction_id`; `delete(id:)` and the sync
+/// `applyRemoteChangesSync` in `+Sync.swift` therefore delete legs
+/// explicitly before the parent, in the same write transaction, so a
+/// partially committed header cannot leave orphaned legs. Rollback
+/// test mandatory; see `guides/DATABASE_CODE_GUIDE.md`.
 ///
 /// **Instrument resolution.** Each leg's `instrument` is resolved by
 /// reading the `instrument` table inside the same read transaction
@@ -173,18 +176,23 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   }
 
   func delete(id: UUID) async throws {
-    // Legs cascade via the `transaction_leg.transaction_id` FK with
-    // `ON DELETE CASCADE`. CloudKit doesn't cascade deletes at the zone
-    // level, so we fetch the leg ids before deleting the parent (still
-    // inside the same write transaction) and emit `onRecordDeleted`
-    // for each leg after the write commits — mirrors the per-leg fan
-    // out in `create`/`update`.
+    // Explicit delete of legs before the parent, replacing the v3-era
+    // ON DELETE CASCADE on `transaction_leg.transaction_id` that v5
+    // dropped (`v5_drop_foreign_keys`). The `fetchAll(...).map(\.id)`
+    // for hook fan-out MUST precede `deleteAll(...)` — after the delete
+    // the fetch returns empty and per-leg `onRecordDeleted` hooks
+    // silently stop firing. Both deletes share the same write
+    // transaction so the parent + children disappear atomically.
     let outcome = try await database.write { database -> (didDelete: Bool, legIds: [UUID]) in
       let legIds =
         try TransactionLegRow
         .filter(TransactionLegRow.Columns.transactionId == id)
         .fetchAll(database)
         .map(\.id)
+      _ =
+        try TransactionLegRow
+        .filter(TransactionLegRow.Columns.transactionId == id)
+        .deleteAll(database)
       let didDelete = try TransactionRow.deleteOne(database, id: id)
       return (didDelete, legIds)
     }

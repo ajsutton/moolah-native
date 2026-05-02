@@ -18,6 +18,10 @@ extension GRDBTransactionRepository {
         try row.upsert(database)
       }
       for id in ids {
+        _ =
+          try TransactionLegRow
+          .filter(TransactionLegRow.Columns.transactionId == id)
+          .deleteAll(database)
         _ = try TransactionRow.deleteOne(database, id: id)
       }
     }

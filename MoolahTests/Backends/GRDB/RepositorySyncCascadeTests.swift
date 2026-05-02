@@ -58,4 +58,80 @@ struct RepositorySyncCascadeTests {
       #expect(nulledLegs == 1)
     }
   }
+
+  @Test
+  func transactionDomainDeleteRemovesLegs() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    let txRepo = GRDBTransactionRepository(
+      database: database,
+      defaultInstrument: .AUD,
+      conversionService: FixedConversionService())
+    let txId = UUID()
+    let leg1Id = UUID()
+    let leg2Id = UUID()
+
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          INSERT INTO instrument (id, record_name, kind, name, decimals)
+            VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
+          INSERT INTO "transaction" (id, record_name, date)
+            VALUES (?, 'tx-1', '2026-01-01');
+          INSERT INTO transaction_leg (id, record_name, transaction_id, instrument_id,
+                                       quantity, type, sort_order)
+            VALUES (?, 'leg-1', ?, 'USD', 100, 'expense', 0);
+          INSERT INTO transaction_leg (id, record_name, transaction_id, instrument_id,
+                                       quantity, type, sort_order)
+            VALUES (?, 'leg-2', ?, 'USD', -100, 'transfer', 1);
+          """,
+        arguments: [txId, leg1Id, txId, leg2Id, txId])
+    }
+
+    try await txRepo.delete(id: txId)
+
+    try await database.read { database in
+      let legCount =
+        try Int.fetchOne(
+          database,
+          sql: "SELECT COUNT(*) FROM transaction_leg WHERE transaction_id = ?",
+          arguments: [txId]) ?? -1
+      #expect(legCount == 0)
+    }
+  }
+
+  @Test
+  func transactionSyncDeleteRemovesLegs() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    let txRepo = GRDBTransactionRepository(
+      database: database,
+      defaultInstrument: .AUD,
+      conversionService: FixedConversionService())
+    let txId = UUID()
+    let legId = UUID()
+
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          INSERT INTO instrument (id, record_name, kind, name, decimals)
+            VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
+          INSERT INTO "transaction" (id, record_name, date)
+            VALUES (?, 'tx-1', '2026-01-01');
+          INSERT INTO transaction_leg (id, record_name, transaction_id, instrument_id,
+                                       quantity, type, sort_order)
+            VALUES (?, 'leg-1', ?, 'USD', 100, 'expense', 0);
+          """,
+        arguments: [txId, legId, txId])
+    }
+
+    try txRepo.applyRemoteChangesSync(saved: [], deleted: [txId])
+
+    try await database.read { database in
+      let legCount =
+        try Int.fetchOne(
+          database,
+          sql: "SELECT COUNT(*) FROM transaction_leg WHERE transaction_id = ?",
+          arguments: [txId]) ?? -1
+      #expect(legCount == 0)
+    }
+  }
 }
