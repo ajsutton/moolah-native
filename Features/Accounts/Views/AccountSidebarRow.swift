@@ -2,8 +2,14 @@ import SwiftUI
 
 /// Shared row view for sidebar items (accounts, earmarks) that displays
 /// an icon, name, and balance with selection-aware color coding.
-/// When `isSelected` is true, uses `.mint` / `.pink` instead of `.green` / `.red`
-/// for better contrast against the blue selection highlight.
+/// When `isSelected` is true and the selection background is prominent
+/// (focused sidebar), uses hand-tuned bright greens/reds instead of
+/// `.green` / `.red` so the amount stays legible against the saturated
+/// blue selection highlight. System colours `.mint` / `.pink` were tried
+/// and rejected — too desaturated. See
+/// guides/UI_GUIDE.md §5 "Selected-Row Contrast Override (Exception)"
+/// for the rationale and the rule that this is the only place in the
+/// app where hardcoded RGB values are permitted.
 struct SidebarRowView: View {
   let icon: String
   let name: String
@@ -12,9 +18,11 @@ struct SidebarRowView: View {
 
   @Environment(\.backgroundProminence) private var backgroundProminence
 
-  /// Bright system colours that contrast well against the blue selection highlight.
-  private static let selectedPositiveColor = Color.mint
-  private static let selectedNegativeColor = Color.pink
+  /// Hand-tuned bright greens/reds that contrast well against the blue
+  /// selection highlight. Documented exception to the "system colours
+  /// only" rule in guides/UI_GUIDE.md §5.
+  private static let selectedPositiveColor = Color(red: 0.55, green: 1.0, blue: 0.65)
+  private static let selectedNegativeColor = Color(red: 1.0, green: 0.6, blue: 0.6)
 
   private var amountColorOverride: Color? {
     // Only use bright overrides when the row has a prominent (blue) selection
@@ -110,4 +118,26 @@ struct AccountSidebarRow: View {
     .tag("selected")
   }
   .listStyle(.sidebar)
+}
+
+#Preview("Sidebar row — selected, dark mode") {
+  List(selection: .constant(Optional("selected"))) {
+    SidebarRowView(
+      icon: "building.columns",
+      name: "Bank Account (selected)",
+      amount: InstrumentAmount(quantity: 1234.56, instrument: .AUD),
+      isSelected: true
+    )
+    .tag("selected")
+
+    SidebarRowView(
+      icon: "creditcard",
+      name: "Credit Card",
+      amount: InstrumentAmount(quantity: -500.00, instrument: .AUD),
+      isSelected: true
+    )
+    .tag("other")
+  }
+  .listStyle(.sidebar)
+  .preferredColorScheme(.dark)
 }
