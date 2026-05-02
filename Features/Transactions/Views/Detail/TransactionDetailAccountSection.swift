@@ -24,6 +24,9 @@ struct TransactionDetailAccountSection: View {
           currentSelection: draft.legDrafts[draft.relevantLegIndex].accountId
         )
       }
+      #if os(macOS)
+        .pickerStyle(.menu)
+      #endif
       // Snap the relevant leg's instrument to the newly chosen account's
       // instrument so the inline picker on the Amount row tracks the
       // account. Mirrors the multi-leg row in `TransactionDetailLegRow`.
@@ -54,6 +57,9 @@ struct TransactionDetailAccountSection: View {
       )
     }
     .accessibilityIdentifier(UITestIdentifiers.Detail.toAccountPicker)
+    #if os(macOS)
+      .pickerStyle(.menu)
+    #endif
     .onChange(of: draft.legDrafts[counterpartIndex].accountId) { _, newAccountId in
       // Snap the counterpart leg's instrument to the new account before
       // mirroring amounts — the cross-currency picker reads the leg's

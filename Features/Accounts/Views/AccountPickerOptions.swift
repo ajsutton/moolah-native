@@ -47,8 +47,6 @@ struct AccountPickerOptions: View {
   }
 }
 
-// MARK: - Preview helpers
-
 private func previewAccounts() -> Accounts {
   Accounts(from: [
     Account(
@@ -72,9 +70,41 @@ private func previewAccounts() -> Accounts {
   ])
 }
 
+private func previewCurrentOnlyAccounts() -> Accounts {
+  Accounts(from: [
+    Account(
+      id: UUID(),
+      name: "Chequing",
+      type: .bank,
+      instrument: .AUD,
+      position: 0),
+    Account(
+      id: UUID(),
+      name: "Card",
+      type: .creditCard,
+      instrument: .AUD,
+      position: 1),
+  ])
+}
+
 #Preview("Account picker — both groups") {
   @Previewable @State var selection: UUID?
   let accounts = previewAccounts()
+  return Form {
+    Picker("Account", selection: $selection) {
+      Text("None").tag(UUID?.none)
+      AccountPickerOptions(
+        accounts: accounts,
+        exclude: nil,
+        currentSelection: selection
+      )
+    }
+  }
+}
+
+#Preview("Account picker — current accounts only") {
+  @Previewable @State var selection: UUID?
+  let accounts = previewCurrentOnlyAccounts()
   return Form {
     Picker("Account", selection: $selection) {
       Text("None").tag(UUID?.none)

@@ -1,5 +1,3 @@
-import Foundation
-
 /// SF Symbol used for an account in the sidebar and in account-selection
 /// pickers. Keep this mapping in one place so the sidebar and the pickers
 /// stay in sync.

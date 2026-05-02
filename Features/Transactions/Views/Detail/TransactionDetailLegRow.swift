@@ -46,7 +46,6 @@ struct TransactionDetailLegRow: View {
           Text("Delete Sub-transaction")
             .frame(maxWidth: .infinity)
         }
-        .accessibilityLabel("Delete Sub-transaction")
       }
     }
   }
@@ -69,6 +68,9 @@ struct TransactionDetailLegRow: View {
         currentSelection: draft.legDrafts[index].accountId
       )
     }
+    #if os(macOS)
+      .pickerStyle(.menu)
+    #endif
     .onChange(of: draft.legDrafts[index].accountId) { _, newAccountId in
       draft.enforceEarmarkOnlyInvariants(at: index)
       if let newAccountId, let account = accounts.by(id: newAccountId) {

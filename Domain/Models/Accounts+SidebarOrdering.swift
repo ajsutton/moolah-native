@@ -2,8 +2,8 @@ import Foundation
 
 extension Accounts {
   struct SidebarGroups: Equatable {
-    var current: [Account]
-    var investment: [Account]
+    let current: [Account]
+    let investment: [Account]
   }
 
   /// Accounts grouped and sorted the way the sidebar shows them.
@@ -28,10 +28,9 @@ extension Accounts {
       if account.isHidden && account.id != alwaysInclude { return false }
       return true
     }
-    let sorted = visible.sorted { $0.position < $1.position }
     var current: [Account] = []
     var investment: [Account] = []
-    for account in sorted {
+    for account in visible {
       if account.type.isCurrent {
         current.append(account)
       } else {

@@ -17,7 +17,6 @@ struct TransactionDetailAddLegSection: View {
           instrument: defaultAccount?.instrument
         )
       }
-      .accessibilityLabel("Add Sub-transaction")
     }
   }
 }
