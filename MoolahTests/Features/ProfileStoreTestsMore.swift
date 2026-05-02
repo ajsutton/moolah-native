@@ -36,6 +36,24 @@ struct ProfileStoreTestsMore {
     #expect(store.profiles.isEmpty)
   }
 
+  // Regression: a fresh-install / wiped Mac has no saved active profile
+  // but still needs the post-migration retry. Without it the store stays
+  // empty for the rest of the session, no `ProfileSession` ever gets
+  // constructed for incoming sync events, and CKSyncEngine's first
+  // fetch traps in `SyncCoordinator.handlerForProfileZone`.
+  @Test("initial load schedules a retry when cloud store is empty even with no active profile")
+  func initialLoadSchedulesRetryWhenNoActiveProfile() throws {
+    let defaults = makeDefaults()
+    // Intentionally do NOT seed `com.moolah.activeProfileID`.
+
+    let containerManager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+
+    #expect(store.activeProfileID == nil)
+    #expect(store.profiles.isEmpty)
+    #expect(store.isCloudLoadPending == true)
+  }
+
   @Test("remote change resets activeProfileID when cloud profile was deleted")
   func remoteChangeResetsActiveProfileID() async throws {
     let defaults = makeDefaults()

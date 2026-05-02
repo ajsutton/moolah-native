@@ -142,13 +142,27 @@ extension ProfileStore {
 
   // MARK: - Retry scheduling
 
-  /// If the initial load returned no cloud profiles but we expect some (saved activeProfileID
-  /// doesn't match any remote profile), retry once after a short delay. The GRDB
-  /// profile-index DB may not have its migration completed on the first synchronous fetch.
+  /// Recovers from a stale-empty initial load by retrying once after
+  /// a short delay. The launch-time SwiftData → GRDB profile-index
+  /// migration may still be in flight when `ProfileStore.init` runs
+  /// its synchronous and async fetches, so both can return zero
+  /// rows even when the user has profiles. Without the retry the
+  /// re-read never happens: `SessionManager.session(for:)` is
+  /// driven by `profiles`, so an empty list means no
+  /// `ProfileSession` is constructed, and any subsequent CKSyncEngine
+  /// fetch for that profile's data zone traps in
+  /// `SyncCoordinator.handlerForProfileZone(profileId:zoneID:)`.
+  ///
+  /// The retry fires whenever `profiles.isEmpty`, regardless of
+  /// `activeProfileID`. A fresh-install or wiped device legitimately
+  /// has no saved active profile but still needs the post-migration
+  /// re-read so the chain above can complete.
+  ///
+  /// Mechanism: cancels any prior retry, flips `isCloudLoadPending`
+  /// while it sleeps for one second, then calls `loadCloudProfiles()`
+  /// (which itself populates `profiles` from GRDB).
   func scheduleRetryIfNeeded() {
-    guard profiles.isEmpty,
-      activeProfileID != nil
-    else { return }
+    guard profiles.isEmpty else { return }
 
     // Cancel any existing retry before starting a new one so we never run
     // two pending retries concurrently.

@@ -104,6 +104,39 @@ struct SyncCoordinatorTestsMore {
     #expect(handler.zoneID == zoneID)
   }
 
+  @Test("handlerForProfileZone throws profileNotRegistered when no bundle and no factory")
+  func handlerForProfileZoneThrowsWhenUnregistered() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    // No `setProfileGRDBRepositories` and no `fallbackGRDBRepositoriesFactory`
+    // — the production wiring-bug condition the throw is meant to surface.
+    let coordinator = SyncCoordinator(containerManager: manager)
+    let profileId = UUID()
+    let zoneID = CKRecordZone.ID(
+      zoneName: "profile-\(profileId.uuidString)",
+      ownerName: CKCurrentUserDefaultName)
+
+    #expect(throws: SyncCoordinatorError.profileNotRegistered(profileId)) {
+      _ = try coordinator.handlerForProfileZone(profileId: profileId, zoneID: zoneID)
+    }
+  }
+
+  @Test("queueUnsyncedRecordsForAllProfiles skips profiles without a registered bundle")
+  func queueUnsyncedRecordsSkipsUnregisteredProfile() async throws {
+    let manager = try ProfileContainerManager.forTesting()
+    // No bundle, no factory: the outbound backfill path must skip the
+    // profile (records remain durable in GRDB and a future scan picks
+    // them up) rather than crash.
+    let coordinator = SyncCoordinator(containerManager: manager)
+    let profileId = UUID()
+    try await manager.profileIndexRepository.upsert(
+      Profile(
+        id: profileId, label: "Unregistered", currencyCode: "AUD",
+        financialYearStartMonth: 7))
+
+    let queued = await coordinator.queueUnsyncedRecordsForAllProfiles()
+    #expect(queued.isEmpty)
+  }
+
   // MARK: - Batch Kind Selection (issue #61)
 
   @Test

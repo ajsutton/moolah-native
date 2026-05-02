@@ -42,6 +42,43 @@ extension SyncCoordinator {
 
   // MARK: - Lifecycle
 
+  /// Spawns and tracks a launch task that waits for the
+  /// SwiftData → GRDB profile-index migration (if any) and then
+  /// invokes `start` (defaults to `self.start()` — production
+  /// callers omit the parameter). Production wiring (see
+  /// `MoolahApp.configureSyncCoordinator`) routes the launch-time
+  /// migration `Task` through here so CKSyncEngine cannot deliver
+  /// fetched profile-data zone changes before the local profile
+  /// index is hydrated. Without the gate, the index reads
+  /// `ProfileStore` performs at launch can return zero profiles, no
+  /// `ProfileSession` gets constructed for the unknown profile id,
+  /// and `handlerForProfileZone(profileId:zoneID:)` traps via
+  /// `preconditionFailure`.
+  ///
+  /// The spawned task is stored on `launchTask` so `stop()` can
+  /// cancel it if the coordinator is torn down before the migration
+  /// finishes; the post-await guard skips the start invocation in
+  /// that case. Calling this method again replaces (and cancels)
+  /// any prior pending launch.
+  ///
+  /// The `start` closure is a test seam so the await ordering can be
+  /// verified without invoking the real `start()`, which constructs
+  /// a `CKSyncEngine` (unsafe in a test process — it requires the
+  /// iCloud entitlement and leaks background work past test
+  /// teardown). Tests await `launchTask?.value` to observe the
+  /// closure firing.
+  func startAfter(
+    profileIndexMigration: Task<Void, Never>?,
+    start: (@MainActor @Sendable () -> Void)? = nil
+  ) {
+    launchTask?.cancel()
+    launchTask = Task { @MainActor [weak self] in
+      await profileIndexMigration?.value
+      guard !Task.isCancelled, let self else { return }
+      (start ?? self.start)()
+    }
+  }
+
   func start() {
     guard !isRunning, startTask == nil else { return }
 
@@ -177,6 +214,8 @@ extension SyncCoordinator {
   }
 
   func stop() {
+    launchTask?.cancel()
+    launchTask = nil
     startTask?.cancel()
     startTask = nil
     zoneSetupTask?.cancel()
