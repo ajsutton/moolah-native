@@ -88,6 +88,8 @@ struct MoolahDomainCommands: Commands {
   @FocusedValue(\.selectedEarmark) private var selectedEarmark
   @FocusedValue(\.selectedCategory) private var selectedCategory
   @FocusedValue(\.sidebarSelection) private var sidebarSelection
+  @FocusedValue(\.goBackAction) private var goBackAction
+  @FocusedValue(\.goForwardAction) private var goForwardAction
   @FocusedValue(\.findInListAction) private var findInListAction
   @Environment(\.openWindow) private var openWindow
   @Environment(\.openURL) private var openURL
@@ -229,6 +231,15 @@ struct MoolahDomainCommands: Commands {
   }
 
   @ViewBuilder private var goMenuItems: some View {
+    // Back/Forward at the top of the Go menu, matching macOS HIG / Safari /
+    // Xcode / Finder / Mail. Numbered destinations follow.
+    Button("Go Back") { goBackAction?() }
+      .keyboardShortcut("[", modifiers: .command)
+      .disabled(goBackAction == nil)
+    Button("Go Forward") { goForwardAction?() }
+      .keyboardShortcut("]", modifiers: .command)
+      .disabled(goForwardAction == nil)
+    Divider()
     Button("Transactions") { sidebarSelection?.wrappedValue = .allTransactions }
       .keyboardShortcut("1", modifiers: .command)
       .disabled(sidebarSelection == nil)
@@ -244,12 +255,5 @@ struct MoolahDomainCommands: Commands {
     Button("Analysis") { sidebarSelection?.wrappedValue = .analysis }
       .keyboardShortcut("5", modifiers: .command)
       .disabled(sidebarSelection == nil)
-    Divider()
-    Button("Go Back") {}
-      .keyboardShortcut("[", modifiers: .command)
-      .disabled(true)
-    Button("Go Forward") {}
-      .keyboardShortcut("]", modifiers: .command)
-      .disabled(true)
   }
 }

@@ -60,6 +60,16 @@ struct SidebarSelectionKey: FocusedValueKey {
   typealias Value = Binding<SidebarSelection?>
 }
 
+/// Trigger action for Go > Go Back (⌘[). `nil` when there is nothing to go back to.
+struct GoBackActionKey: FocusedValueKey {
+  typealias Value = () -> Void
+}
+
+/// Trigger action for Go > Go Forward (⌘]). `nil` when there is nothing to go forward to.
+struct GoForwardActionKey: FocusedValueKey {
+  typealias Value = () -> Void
+}
+
 /// Trigger action for File > Import CSV… (⇧⌘I). Opens the file picker in
 /// the focused window.
 struct ImportCSVActionKey: FocusedValueKey {
@@ -120,6 +130,14 @@ extension FocusedValues {
   var sidebarSelection: SidebarSelectionKey.Value? {
     get { self[SidebarSelectionKey.self] }
     set { self[SidebarSelectionKey.self] = newValue }
+  }
+  var goBackAction: GoBackActionKey.Value? {
+    get { self[GoBackActionKey.self] }
+    set { self[GoBackActionKey.self] = newValue }
+  }
+  var goForwardAction: GoForwardActionKey.Value? {
+    get { self[GoForwardActionKey.self] }
+    set { self[GoForwardActionKey.self] = newValue }
   }
   var importCSVAction: ImportCSVActionKey.Value? {
     get { self[ImportCSVActionKey.self] }
