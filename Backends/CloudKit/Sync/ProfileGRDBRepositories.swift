@@ -1,6 +1,7 @@
 // Backends/CloudKit/Sync/ProfileGRDBRepositories.swift
 
 import Foundation
+import GRDB
 
 /// Bundle of the GRDB-backed repositories for the per-profile data
 /// handler.
@@ -29,4 +30,62 @@ struct ProfileGRDBRepositories: Sendable {
   let investmentValues: GRDBInvestmentRepository
   let transactions: GRDBTransactionRepository
   let transactionLegs: GRDBTransactionLegRepository
+}
+
+extension ProfileGRDBRepositories {
+  /// Builds a bundle suitable for the sync apply path: every per-type
+  /// repository targets `database`, hooks are no-ops, and the read-side
+  /// `defaultInstrument` / `conversionService` parameters carry inert
+  /// placeholders. The apply path writes Row objects via
+  /// `applyRemoteChangesSync` and never invokes either placeholder; the
+  /// session-side bundle owned by `CloudKitBackend` continues to carry
+  /// real values for user-mutation paths.
+  static func forApply(database: any GRDB.DatabaseWriter) -> ProfileGRDBRepositories {
+    // USD is a stable, locale-independent fiat that satisfies
+    // `Instrument.fiat(code:)`'s `isoCurrencies` lookup. The choice is
+    // arbitrary — only the type matters for the apply path.
+    let placeholderInstrument = Instrument.fiat(code: "USD")
+    return ProfileGRDBRepositories(
+      csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
+      importRules: GRDBImportRuleRepository(database: database),
+      instruments: GRDBInstrumentRegistryRepository(database: database),
+      categories: GRDBCategoryRepository(database: database),
+      accounts: GRDBAccountRepository(database: database),
+      earmarks: GRDBEarmarkRepository(
+        database: database, defaultInstrument: placeholderInstrument),
+      earmarkBudgetItems: GRDBEarmarkBudgetItemRepository(database: database),
+      investmentValues: GRDBInvestmentRepository(
+        database: database, defaultInstrument: placeholderInstrument),
+      transactions: GRDBTransactionRepository(
+        database: database,
+        defaultInstrument: placeholderInstrument,
+        conversionService: ApplyPathConversionService()),
+      transactionLegs: GRDBTransactionLegRepository(database: database))
+  }
+}
+
+/// Placeholder `InstrumentConversionService` for the apply-path bundle.
+/// Reachable only from `ProfileGRDBRepositories.forApply(database:)`;
+/// every method traps because the apply path never reads through the
+/// conversion service. If a future code change starts invoking it from
+/// the apply path, the trap is preferable to silent zero-conversion.
+private struct ApplyPathConversionService: InstrumentConversionService, Sendable {
+  func convert(
+    _ quantity: Decimal,
+    from: Instrument,
+    to: Instrument,
+    on date: Date
+  ) async throws -> Decimal {
+    preconditionFailure(
+      "ApplyPathConversionService.convert called — apply path never converts")
+  }
+
+  func convertAmount(
+    _ amount: InstrumentAmount,
+    to instrument: Instrument,
+    on date: Date
+  ) async throws -> InstrumentAmount {
+    preconditionFailure(
+      "ApplyPathConversionService.convertAmount called — apply path never converts")
+  }
 }

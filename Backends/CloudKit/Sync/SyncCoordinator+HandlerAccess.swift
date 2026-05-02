@@ -23,24 +23,14 @@ extension SyncCoordinator {
 
   /// Returns (or creates) a `ProfileDataSyncHandler` for the given profile zone.
   ///
-  /// A GRDB repository bundle MUST have been registered via
-  /// `setProfileGRDBRepositories(profileId:bundle:)` before this is
-  /// called for the profile — production wiring guarantees this in
-  /// `ProfileSession.registerWithSyncCoordinator`. If no bundle is
-  /// registered and no `fallbackGRDBRepositoriesFactory` was injected
-  /// at coordinator init, the call throws
-  /// `SyncCoordinatorError.profileNotRegistered`. Each caller decides
-  /// what to do with that error: outbound paths skip + log (records
-  /// stay in GRDB and are picked up on the next backfill scan); the
-  /// inbound apply path traps via `preconditionFailure` because
-  /// `CKSyncEngine` would otherwise advance the server change token
-  /// past unapplied records.
-  ///
-  /// Constructing an empty in-memory bundle on the fly is never an
-  /// option — it would silently swallow GRDB writes. Tests that drive
-  /// paths reaching here without staging a bundle inject the factory
-  /// at init time so the throw doesn't fire — see
-  /// `SyncCoordinator.init(... fallbackGRDBRepositoriesFactory:)`.
+  /// Bundle resolution is delegated to `resolveGRDBRepositories(for:)`:
+  /// a session-registered bundle wins; a test-injected factory is next;
+  /// otherwise a fresh apply-path bundle is built via
+  /// `ProfileGRDBRepositories.forApply(database:)` backed by
+  /// `containerManager.database(for:)`. This last branch allows sync
+  /// apply for un-sessionized profiles (multi-profile background apply,
+  /// pre-render race, encrypted reset on an unopened profile) — the
+  /// scenario that motivated issue #619.
   func handlerForProfileZone(
     profileId: UUID, zoneID: CKRecordZone.ID
   ) throws -> ProfileDataSyncHandler {
@@ -48,15 +38,7 @@ extension SyncCoordinator {
       return existing
     }
     let container = try containerManager.container(for: profileId)
-    let grdbRepositories: ProfileGRDBRepositories
-    if let registered = profileGRDBRepositories[profileId] {
-      grdbRepositories = registered
-    } else if let factory = fallbackGRDBRepositoriesFactory {
-      grdbRepositories = try factory(profileId)
-      profileGRDBRepositories[profileId] = grdbRepositories
-    } else {
-      throw SyncCoordinatorError.profileNotRegistered(profileId)
-    }
+    let grdbRepositories = try resolveGRDBRepositories(for: profileId)
     let onInstrumentRemoteChange = instrumentRemoteChangeCallbacks[profileId] ?? {}
     let handler = ProfileDataSyncHandler(
       profileId: profileId,
@@ -66,6 +48,28 @@ extension SyncCoordinator {
       onInstrumentRemoteChange: onInstrumentRemoteChange)
     dataHandlers[profileId] = handler
     return handler
+  }
+
+  /// Returns the per-profile GRDB repository bundle. Prefers a bundle
+  /// registered by `ProfileSession.registerWithSyncCoordinator` (so the
+  /// session and the coordinator share an instance during normal app
+  /// lifetime), then a test-injected factory, then a freshly-built
+  /// apply-path bundle backed by `containerManager.database(for:)`.
+  /// The last branch is what allows sync apply for un-sessionized
+  /// profiles — see issue #619.
+  private func resolveGRDBRepositories(for profileId: UUID) throws -> ProfileGRDBRepositories {
+    if let registered = profileGRDBRepositories[profileId] {
+      return registered
+    }
+    if let factory = fallbackGRDBRepositoriesFactory {
+      let bundle = try factory(profileId)
+      profileGRDBRepositories[profileId] = bundle
+      return bundle
+    }
+    let database = try containerManager.database(for: profileId)
+    let bundle = ProfileGRDBRepositories.forApply(database: database)
+    profileGRDBRepositories[profileId] = bundle
+    return bundle
   }
 
   /// Registers the GRDB repository bundle for a profile. Must be called
