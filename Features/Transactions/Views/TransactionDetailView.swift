@@ -342,7 +342,7 @@ extension TransactionDetailView {
   }
 }
 
-// Computed helpers (sortedAccounts, isEditable, isSimpleEarmarkOnly, instruments,
+// Computed helpers (isEditable, isSimpleEarmarkOnly, instruments,
 // bindings, isScheduled) live in TransactionDetailView+Helpers.swift.
 // Actions (autofillFromPayee, debouncedSave, saveIfValid) live in
 // TransactionDetailView+Actions.swift.
