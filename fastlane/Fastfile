@@ -5,6 +5,17 @@ before_all do
   sh("cd .. && just generate")
 end
 
+# Provisioning profile is the only signing setting that varies per build —
+# `match` produces a fresh profile name each time. Everything else (style,
+# identity, entitlements) lives on the app target's Release config in
+# project.yml. The setting MUST be scoped to the app target with
+# `[target=...]`; an unscoped xcarg leaks to SPM dependencies (e.g. GRDB),
+# which fail at archive with "<package> does not support provisioning
+# profiles."
+def release_xcargs(target_name, profile_name)
+  "'PROVISIONING_PROFILE_SPECIFIER[target=#{target_name}]=#{profile_name}'"
+end
+
 platform :ios do
   before_all do
     setup_ci
@@ -40,26 +51,12 @@ platform :ios do
 
     profile_name = ENV["sigh_rocks.moolah.app_appstore_profile-name"]
 
-    # Distribution entitlements live in fastlane/Moolah.entitlements and are
-    # shared by both `validate` and `beta` lanes so they can never diverge.
-    # The file is intentionally kept outside any XcodeGen source path; XcodeGen
-    # auto-discovers .entitlements files in source directories and would apply
-    # them to all builds, breaking CI simulator tests without CloudKit.
-    entitlements_path = File.expand_path("Moolah.entitlements", __dir__)
-
     build_app(
       scheme: "Moolah-iOS",
       export_method: "app-store",
       output_directory: "./build",
       output_name: "Moolah.ipa",
-      xcargs: [
-        "CODE_SIGN_ENTITLEMENTS=#{entitlements_path}",
-        "CODE_SIGN_STYLE=Manual",
-        "DEVELOPMENT_TEAM=#{ENV['DEVELOPMENT_TEAM']}",
-        "'CODE_SIGN_IDENTITY=Apple Distribution'",
-        "'PROVISIONING_PROFILE_SPECIFIER=#{profile_name}'",
-        "SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) CLOUDKIT_ENABLED'"
-      ].join(" ")
+      xcargs: release_xcargs("Moolah_iOS", profile_name)
     )
 
     UI.message("Validating IPA against App Store rules...")
@@ -94,24 +91,12 @@ platform :ios do
 
     profile_name = ENV["sigh_rocks.moolah.app_appstore_profile-name"]
 
-    # Share the entitlements file with the `validate` lane so the IPA we upload
-    # to TestFlight always matches what validate inspected. See the comment in
-    # `validate` for why this file is kept in fastlane/ rather than App/.
-    entitlements_path = File.expand_path("Moolah.entitlements", __dir__)
-
     build_app(
       scheme: "Moolah-iOS",
       export_method: "app-store",
       output_directory: "./build",
       output_name: "Moolah.ipa",
-      xcargs: [
-        "CODE_SIGN_ENTITLEMENTS=#{entitlements_path}",
-        "CODE_SIGN_STYLE=Manual",
-        "DEVELOPMENT_TEAM=#{ENV['DEVELOPMENT_TEAM']}",
-        "'CODE_SIGN_IDENTITY=Apple Distribution'",
-        "'PROVISIONING_PROFILE_SPECIFIER=#{profile_name}'",
-        "SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) CLOUDKIT_ENABLED'"
-      ].join(" ")
+      xcargs: release_xcargs("Moolah_iOS", profile_name)
     )
 
     upload_to_testflight(
@@ -207,7 +192,6 @@ platform :mac do
     # iOS appstore uses `sigh_<bundle>_appstore_profile-name` (no platform suffix)
     # because iOS is fastlane's default platform.
     profile_name = ENV["sigh_rocks.moolah.app_developer_id_macos_profile-name"]
-    entitlements_path = File.expand_path("Moolah-mac.entitlements", __dir__)
 
     # Resolve build dir to an absolute path off the repo root. gym/build_app
     # writes outputs to <repo_root>/build/ regardless of fastlane's own cwd,
@@ -221,15 +205,7 @@ platform :mac do
       export_method: "developer-id",
       output_directory: build_dir,
       output_name: "Moolah",
-      xcargs: [
-        "CODE_SIGN_ENTITLEMENTS=#{entitlements_path}",
-        "CODE_SIGN_STYLE=Manual",
-        "DEVELOPMENT_TEAM=#{ENV['DEVELOPMENT_TEAM']}",
-        "'CODE_SIGN_IDENTITY=Developer ID Application'",
-        "'PROVISIONING_PROFILE_SPECIFIER=#{profile_name}'",
-        "ENABLE_HARDENED_RUNTIME=YES",
-        "SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) CLOUDKIT_ENABLED'"
-      ].join(" ")
+      xcargs: release_xcargs("Moolah_macOS", profile_name)
     )
 
     app_path = File.join(build_dir, "Moolah.app")
