@@ -190,6 +190,10 @@ struct SwiftDataToGRDBMigratorProfileIndexTests {
     #expect(
       !defaults.bool(forKey: SwiftDataToGRDBMigrator.profileIndexFlag),
       "Flag must remain false so the next launch retries")
+    let rowCount = try await database.read { database in
+      try ProfileRow.fetchCount(database)
+    }
+    #expect(rowCount == 0, "Failed write must leave the GRDB table empty")
   }
 
   // MARK: - Empty source

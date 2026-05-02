@@ -9,7 +9,7 @@ extension SyncCoordinator {
   ///
   /// Bundle resolution is delegated to `resolveGRDBRepositories(for:)`, which
   /// returns a cached bundle if one was built before, or constructs a fresh
-  /// apply-path bundle via `ProfileGRDBRepositories.forApply(database:)` backed
+  /// apply-path bundle via `ProfileGRDBRepositories.makeForApply(database:)` backed
   /// by `containerManager.database(for:)`. This allows sync apply for
   /// un-sessionized profiles (multi-profile background apply, pre-render race,
   /// encrypted reset on an unopened profile) — the scenario that motivated
@@ -35,7 +35,7 @@ extension SyncCoordinator {
 
   /// Returns the per-profile GRDB repository bundle, constructing and caching
   /// it on first access. The bundle is built via
-  /// `ProfileGRDBRepositories.forApply(database:)` backed by
+  /// `ProfileGRDBRepositories.makeForApply(database:)` backed by
   /// `containerManager.database(for:)`, which allows sync apply for
   /// un-sessionized profiles — see issue #619.
   private func resolveGRDBRepositories(for profileId: UUID) throws -> ProfileGRDBRepositories {
@@ -43,7 +43,7 @@ extension SyncCoordinator {
       return cached
     }
     let database = try containerManager.database(for: profileId)
-    let bundle = ProfileGRDBRepositories.forApply(database: database)
+    let bundle = ProfileGRDBRepositories.makeForApply(database: database)
     cachedGRDBRepositories[profileId] = bundle
     return bundle
   }

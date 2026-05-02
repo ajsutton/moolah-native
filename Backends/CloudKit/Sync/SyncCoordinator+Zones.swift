@@ -144,6 +144,10 @@ extension SyncCoordinator {
       }
     }
     dataHandlers.removeAll()
+    // Release the per-profile GRDB bundle cache. Each entry retains
+    // a `DatabaseQueue` reference; sign-out / account-switch needs
+    // those rebuilt against the post-reset on-disk state.
+    cachedGRDBRepositories.removeAll()
   }
 
   // MARK: - Fetched Database Changes (Zone Deletions)

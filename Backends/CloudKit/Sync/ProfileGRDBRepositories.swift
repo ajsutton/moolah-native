@@ -40,7 +40,7 @@ extension ProfileGRDBRepositories {
   /// `applyRemoteChangesSync` and never invokes either placeholder; the
   /// session-side bundle owned by `CloudKitBackend` continues to carry
   /// real values for user-mutation paths.
-  static func forApply(database: any GRDB.DatabaseWriter) -> ProfileGRDBRepositories {
+  static func makeForApply(database: any GRDB.DatabaseWriter) -> ProfileGRDBRepositories {
     // USD is a stable, locale-independent fiat that satisfies
     // `Instrument.fiat(code:)`'s `isoCurrencies` lookup. The choice is
     // arbitrary — only the type matters for the apply path.
@@ -65,13 +65,13 @@ extension ProfileGRDBRepositories {
 }
 
 /// Placeholder `InstrumentConversionService` for the apply-path bundle.
-/// Reachable only from `ProfileGRDBRepositories.forApply(database:)`;
+/// Reachable only from `ProfileGRDBRepositories.makeForApply(database:)`;
 /// every method throws `ConversionError.unsupportedConversion` because
 /// the apply path never reads through the conversion service. If a
 /// future code change starts invoking it from the apply path, the
 /// error surfaces as a saveFailed result and the offending call site
 /// is identifiable from the logs — preferable to silent zero-conversion.
-private struct ApplyPathConversionService: InstrumentConversionService, Sendable {
+private struct ApplyPathConversionService: InstrumentConversionService {
   func convert(
     _ quantity: Decimal,
     from: Instrument,
