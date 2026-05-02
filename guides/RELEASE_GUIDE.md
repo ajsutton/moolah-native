@@ -37,18 +37,23 @@ The pipeline writes detailed instructions to the workflow run's job summary when
 
 1. **Pre-flight.** Run `just release-preflight`. Fix any issue it reports (push outstanding work, sync with origin, authenticate `gh`, wait for green CI) before continuing.
 
-2. **Determine the version.** Run `just release-next-version rc`. Read the JSON output:
+2. **Confirm intent.** Pre-flight verifies your local main is in sync with `origin/main`; it cannot verify which PRs you *believe* are in this release. A stale local main, an unmerged PR, or a merge that landed seconds after you tagged will all sail through pre-flight.
+   - [ ] Run `git log <previous-rc-tag>..HEAD --oneline` and read the list end-to-end. Every issue / PR you mean to ship must appear.
+   - [ ] For any PR you're unsure about, run `gh pr view <N> --json mergedAt,mergeCommit | jq` and confirm `mergedAt` is non-null AND `mergeCommit.oid` shows up in the log above.
+   - [ ] If anything you expected is missing: either wait for the merge to land and re-run pre-flight, or accept reduced scope and adjust the release notes accordingly. Don't tag and "fix it in the next rc" — once an rc is installed, it takes on a life of its own.
+
+3. **Determine the version.** Run `just release-next-version rc`. Read the JSON output:
    - `version` — the proposed RC version (e.g. `1.2.0-rc.2`).
    - `confirm_marketing` — `true` when the previous tag was a final release. When true, confirm the marketing version in `project.yml` is right for the new RC. If wrong, run `just bump-version <X.Y.Z>`, open a PR to land it, then return to step 1.
    - `notes_base` — the previous RC tag (or previous final, if this is `rc.1`). Use this as the comparison base when authoring release notes. If this is the first release ever for the project (no prior tags), `notes_base` will be empty — in that case, summarise the project's purpose and headline features rather than describing a delta.
 
-3. **Author release notes.** RC notes describe what changed since `notes_base` — the audience is testers; they want the delta from the previous RC. See "Authoring release notes" below for the procedure. Save the draft to `.agent-tmp/release-notes-<version>.md`.
+4. **Author release notes.** RC notes describe what changed since `notes_base` — the audience is testers; they want the delta from the previous RC. See "Authoring release notes" below for the procedure. Save the draft to `.agent-tmp/release-notes-<version>.md`.
 
-4. **Cut the GH pre-release.** Run `just release-create-rc <version> .agent-tmp/release-notes-<version>.md`. This creates the tag, which fires `release-rc.yml`.
+5. **Cut the GH pre-release.** Run `just release-create-rc <version> .agent-tmp/release-notes-<version>.md`. This creates the tag, which fires `release-rc.yml`.
 
-5. **Wait + verify.** Run `just release-wait v<version>`. The workflow may pause on the `await-prod-deploy` job — if so, follow the "Schema deploys" procedure above (open Console → Deploy → approve the GH job). When the workflow concludes green, run `just release-status v<version>` to confirm the Mac zip is attached to the GH pre-release and the IPA reached TestFlight.
+6. **Wait + verify.** Run `just release-wait v<version>`. The workflow may pause on the `await-prod-deploy` job — if so, follow the "Schema deploys" procedure above (open Console → Deploy → approve the GH job). When the workflow concludes green, run `just release-status v<version>` to confirm the Mac zip is attached to the GH pre-release and the IPA reached TestFlight.
 
-6. **Smoke-test.** Install the TestFlight build (iOS device + simulator) and the Mac zip (extract, drag `Moolah.app` to `/Applications`, run). If anything is broken, document the issue, fix on `main`, and cut a fresh RC. Don't delete the bad RC; mark its release body to note it is obsolete.
+7. **Smoke-test.** Install the TestFlight build (iOS device + simulator) and the Mac zip (extract, drag `Moolah.app` to `/Applications`, run). If anything is broken, document the issue, fix on `main`, and cut a fresh RC. Don't delete the bad RC; mark its release body to note it is obsolete.
 
 ## Promote an RC to final
 
