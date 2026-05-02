@@ -239,6 +239,13 @@ extension SyncCoordinator {
     )
     profileIndexFetchedAtLeastOnce = false
     fetchSessionTouchedIndexZone = false
+    // `dataHandlers` and `cachedGRDBRepositories` are intentionally
+    // retained across `stop()` / `start()` cycles. Both reference the
+    // same `containerManager`-owned `DatabaseQueue` instances, which
+    // remain valid; rebuilding them would just churn allocations. They
+    // are cleared only by `deleteAllLocalData` (sign-out / account
+    // switch), where the queues themselves need to be rebuilt against
+    // the post-reset on-disk state.
     logger.info("Stopped unified sync coordinator")
     progress.didStop()
   }
