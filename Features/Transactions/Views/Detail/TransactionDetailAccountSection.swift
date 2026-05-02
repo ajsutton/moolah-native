@@ -8,7 +8,6 @@ import SwiftUI
 struct TransactionDetailAccountSection: View {
   @Binding var draft: TransactionDraft
   let accounts: Accounts
-  let sortedAccounts: [Account]
   let relevantInstrument: Instrument?
   let counterpartInstrument: Instrument?
   let counterpartAmountBinding: Binding<String>
@@ -19,9 +18,11 @@ struct TransactionDetailAccountSection: View {
     Section {
       Picker("Account", selection: $draft.legDrafts[draft.relevantLegIndex].accountId) {
         Text("None").tag(UUID?.none)
-        ForEach(sortedAccounts) { account in
-          Text(account.name).tag(UUID?.some(account.id))
-        }
+        AccountPickerOptions(
+          accounts: accounts,
+          exclude: nil,
+          currentSelection: draft.legDrafts[draft.relevantLegIndex].accountId
+        )
       }
       // Snap the relevant leg's instrument to the newly chosen account's
       // instrument so the inline picker on the Amount row tracks the
@@ -42,13 +43,15 @@ struct TransactionDetailAccountSection: View {
     let counterpartIndex = draft.relevantLegIndex == 0 ? 1 : 0
     let toAccountLabel = draft.showFromAccount ? "From Account" : "To Account"
     let currentAccountId = draft.legDrafts[draft.relevantLegIndex].accountId
-    let eligibleAccounts = eligibleTransferAccounts(excluding: currentAccountId)
+    let counterpartId = draft.legDrafts[counterpartIndex].accountId
 
     Picker(toAccountLabel, selection: $draft.legDrafts[counterpartIndex].accountId) {
       Text("Select...").tag(UUID?.none)
-      ForEach(eligibleAccounts) { account in
-        Text(account.name).tag(UUID?.some(account.id))
-      }
+      AccountPickerOptions(
+        accounts: accounts,
+        exclude: currentAccountId,
+        currentSelection: counterpartId
+      )
     }
     .accessibilityIdentifier(UITestIdentifiers.Detail.toAccountPicker)
     .onChange(of: draft.legDrafts[counterpartIndex].accountId) { _, newAccountId in
@@ -70,10 +73,5 @@ struct TransactionDetailAccountSection: View {
         focusedField: $focusedField
       )
     }
-  }
-
-  /// Filter transfer account options, excluding the current account and hidden accounts.
-  private func eligibleTransferAccounts(excluding currentAccountId: UUID?) -> [Account] {
-    sortedAccounts.filter { $0.id != currentAccountId && !$0.isHidden }
   }
 }

@@ -265,7 +265,6 @@ extension TransactionDetailView {
     TransactionDetailAccountSection(
       draft: $draft,
       accounts: accounts,
-      sortedAccounts: sortedAccounts,
       relevantInstrument: relevantInstrument,
       counterpartInstrument: counterpartInstrument,
       counterpartAmountBinding: counterpartAmountBinding,
