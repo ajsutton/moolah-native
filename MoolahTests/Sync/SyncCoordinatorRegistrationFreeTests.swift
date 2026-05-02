@@ -86,4 +86,38 @@ struct SyncCoordinatorRegistrationFreeTests {
     }
     #expect(stored?.name == "Synced from another device")
   }
+
+  @Test("encrypted-data-reset clears system fields and re-queues records without session")
+  func encryptedResetWithoutSession() async throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+    let profileId = UUID()
+    try await manager.profileIndexRepository.upsert(
+      Profile(
+        id: profileId, label: "Reset", currencyCode: "AUD",
+        financialYearStartMonth: 7))
+    let zoneID = CKRecordZone.ID(
+      zoneName: "profile-\(profileId.uuidString)",
+      ownerName: CKCurrentUserDefaultName)
+
+    // Seed a row directly in GRDB with a non-nil encodedSystemFields.
+    let database = try manager.database(for: profileId)
+    let categoryId = UUID()
+    try await database.write { db in
+      try CategoryRow(
+        id: categoryId,
+        recordName: CategoryRow.recordName(for: categoryId),
+        name: "Reset me",
+        parentId: nil,
+        encodedSystemFields: Data([0xDE, 0xAD, 0xBE, 0xEF])
+      ).insert(db)
+    }
+
+    coordinator.handleEncryptedDataReset(zoneID, zoneType: .profileData(profileId))
+
+    let stored = try await database.read { db in
+      try CategoryRow.filter(CategoryRow.Columns.id == categoryId).fetchOne(db)
+    }
+    #expect(stored?.encodedSystemFields == nil)
+  }
 }
