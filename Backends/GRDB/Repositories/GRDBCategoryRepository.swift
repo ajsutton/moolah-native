@@ -243,6 +243,30 @@ final class GRDBCategoryRepository: CategoryRepository, @unchecked Sendable {
         try row.upsert(database)
       }
       for id in ids {
+        // Replaces v3 FKs (transaction_leg.category_id ON DELETE SET NULL,
+        // earmark_budget_item.category_id ON DELETE NO ACTION). Sync deletes
+        // are server-authoritative, so we cannot fail on surviving children
+        // the way NO ACTION did; we delete the budget items (matching the
+        // domain delete-without-replacement path in `reassignBudgets`).
+        _ =
+          try TransactionLegRow
+          .filter(TransactionLegRow.Columns.categoryId == id)
+          .updateAll(
+            database,
+            [TransactionLegRow.Columns.categoryId.set(to: nil)])
+        _ =
+          try EarmarkBudgetItemRow
+          .filter(EarmarkBudgetItemRow.Columns.categoryId == id)
+          .deleteAll(database)
+        // category.parent_id was ON DELETE NO ACTION — children are
+        // orphaned (set to NULL) in CategoryRepository.delete via
+        // `orphanChildren`. Sync apply mirrors that for consistency.
+        _ =
+          try CategoryRow
+          .filter(CategoryRow.Columns.parentId == id)
+          .updateAll(
+            database,
+            [CategoryRow.Columns.parentId.set(to: nil)])
         _ = try CategoryRow.deleteOne(database, id: id)
       }
     }
