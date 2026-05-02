@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"
+  workflow_call:
+    inputs:
+      tag:
+        description: "Existing RC tag to build (e.g. v1.1.0-rc.11). Required when invoked via workflow_call; ignored on push:tags."
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -21,6 +27,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - name: Install tools
         run: brew install just
@@ -68,6 +75,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - name: Install tools
         run: brew install just
@@ -98,6 +106,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - name: Install tools
         run: brew install xcodegen just
@@ -110,13 +119,15 @@ jobs:
 
       - name: Extract base version from tag
         id: version
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           # v1.2.0-rc.1 → 1.2.0
-          BASE_VERSION="${GITHUB_REF_NAME#v}"
+          BASE_VERSION="${TAG#v}"
           BASE_VERSION="${BASE_VERSION%%-rc.*}"
           {
               echo "base=$BASE_VERSION"
-              echo "tag=$GITHUB_REF_NAME"
+              echo "tag=$TAG"
           } >> "$GITHUB_OUTPUT"
 
       - name: Update marketing version

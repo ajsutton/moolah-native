@@ -7,11 +7,14 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   cut-rc:
     name: Cut monthly RC
     runs-on: macos-26
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -33,6 +36,11 @@ jobs:
         # requires a `--notes-file`, and the cron path uses `--generate-notes`
         # (mutually exclusive). The version is computed by the same library
         # used in release-create-rc and is well-formed by construction.
+        #
+        # The downstream `build-rc` job invokes release-rc.yml via
+        # workflow_call: tags created by GITHUB_TOKEN don't fire other
+        # workflows, so the implicit tag-push trigger on release-rc.yml is
+        # not enough on the cron path.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -41,4 +49,11 @@ jobs:
               --title "${{ steps.version.outputs.tag }}" \
               --prerelease \
               --generate-notes
-          # release-rc.yml fires from the tag push that gh release just created.
+
+  build-rc:
+    name: Build & publish RC artefacts
+    needs: cut-rc
+    uses: ./.github/workflows/release-rc.yml
+    with:
+      tag: ${{ needs.cut-rc.outputs.tag }}
+    secrets: inherit
