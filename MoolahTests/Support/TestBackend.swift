@@ -177,15 +177,17 @@ enum TestBackend {
     var earmarks: Set<UUID> = []
   }
 
-  /// Materialises the FK parents (`instrument`, `account`, `category`,
-  /// `earmark`) referenced by a single leg, if any of them are missing.
+  /// Materialises placeholder parents (`instrument`, `account`,
+  /// `category`, `earmark`) referenced by a single leg, if any of them
+  /// are missing in the test database.
   ///
-  /// Auto-create FK parents on demand. SwiftData-era tests rarely
-  /// pre-seeded accounts/categories/earmarks before the legs that
-  /// referenced them; under the GRDB schema's enforced FKs we have to
-  /// materialise lightweight placeholder rows so the leg insert doesn't
-  /// trip the constraint. Tests that care about the parent shape seed
-  /// it explicitly, which the `ensurePlaceholder*` helpers respect.
+  /// Convenience for SwiftData-era tests that rarely pre-seed parents
+  /// before legs that reference them. Under v5 the schema no longer
+  /// enforces FKs (`v5_drop_foreign_keys`); the helper continues to
+  /// exist so those tests can read back fully-resolved domain
+  /// `Transaction` values with non-trivial parent rows for assertion
+  /// purposes. Tests that care about a specific parent shape seed it
+  /// explicitly; the `ensurePlaceholder*` helpers respect existing rows.
   private static func ensureLegParents(
     database: Database,
     leg: TransactionLeg,
@@ -214,10 +216,10 @@ enum TestBackend {
   }
 
   /// Inserts a stub `account` row keyed by `id` if one isn't already
-  /// present. Used by the seed helpers to keep the FK enforcement from
-  /// rejecting leg / investment-value inserts that reference an
-  /// account the test didn't bother to seed (most existing tests rely on
-  /// this implicit behaviour from the SwiftData era).
+  /// present. Used by the seed helpers so tests can read back
+  /// fully-resolved domain values for legs / investment-values that
+  /// reference an account the test didn't bother to seed (most existing
+  /// tests rely on this implicit behaviour from the SwiftData era).
   private static func ensurePlaceholderAccount(
     database: Database, id: UUID, instrument: Instrument
   ) throws {

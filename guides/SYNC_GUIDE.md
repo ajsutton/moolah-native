@@ -63,6 +63,16 @@ This project uses a single `CKSyncEngine` instance (owned by `SyncCoordinator`) 
 
 Create and start CKSyncEngine as early as possible in the app lifecycle. The initializer is synchronous and immediately begins processing pending changes from the saved state serialization.
 
+### Per-profile schema does not enforce FKs
+
+- **The contract.** The per-profile `data.sqlite` schema declares no foreign keys. CKSyncEngine has no parent-before-child guarantee within a fetch session or across sessions; an FK-enforced child insert can fault the entire write transaction and trap the sync coordinator in an infinite re-fetch loop. See `Backends/GRDB/ProfileSchema+DropForeignKeys.swift` and the rc.12 incident write-up.
+- **Cascade replication.** Sync delete paths in repositories must replicate the cascade / null-out semantics that the v3 FKs used to provide:
+  - `GRDBAccountRepository.applyRemoteChangesSync` deletes `investment_value` rows for the account and nulls `transaction_leg.account_id` references.
+  - `GRDBTransactionRepository.applyRemoteChangesSync` (and the domain `delete(id:)`) deletes `transaction_leg` rows for the transaction.
+  - `GRDBEarmarkRepository.applyRemoteChangesSync` deletes `earmark_budget_item` rows and nulls `transaction_leg.earmark_id`.
+  - `GRDBCategoryRepository.applyRemoteChangesSync` (or its `+Sync.swift`) nulls `transaction_leg.category_id`, deletes `earmark_budget_item` rows referencing the deleted category, and orphans child categories (`parent_id := NULL`).
+- **Zombie rows are accepted.** A child whose parent CKRecord is deleted server-side or never delivered remains as an orphan row. This is intentional: the alternative (FK enforcement) traps the entire sync stream on a single delta. Repository read paths filter through known parents, so orphans do not surface in computed views; they occupy storage. Do not "fix" zombies by reintroducing FKs.
+
 ---
 
 ## 4. Rules

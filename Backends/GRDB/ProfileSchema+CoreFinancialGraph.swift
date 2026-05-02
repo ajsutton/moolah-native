@@ -35,6 +35,12 @@ import GRDB
 // `delete(...)` methods replicate the cascade / null-out semantics
 // the FKs used to provide. See `ProfileSchema+DropForeignKeys.swift`
 // for the migration and `guides/SYNC_GUIDE.md` for the contract.
+//
+// Orphan child rows (a leg or budget item whose parent CKRecord was
+// deleted server-side or never delivered) are an expected consequence
+// of the FK-free design — repository read paths filter through known
+// parents, so orphans do not surface in computed views. Do not
+// reintroduce FKs to suppress them.
 
 extension ProfileSchema {
   static func createCoreFinancialGraphTables(_ database: Database) throws {
