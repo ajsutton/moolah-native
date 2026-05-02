@@ -1,5 +1,6 @@
 import CloudKit
 import Foundation
+import GRDB
 import SwiftData
 import Testing
 
@@ -43,5 +44,46 @@ struct SyncCoordinatorRegistrationFreeTests {
     let second = try coordinator.handlerForProfileZone(profileId: profileId, zoneID: zoneID)
 
     #expect(first === second)
+  }
+
+  @Test("applyFetchedRecordZoneChanges writes rows for an un-sessionized profile")
+  func applyWritesRowsWithoutSession() async throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+    let profileId = UUID()
+    try await manager.profileIndexRepository.upsert(
+      Profile(
+        id: profileId, label: "Background", currencyCode: "AUD",
+        financialYearStartMonth: 7))
+    let zoneID = CKRecordZone.ID(
+      zoneName: "profile-\(profileId.uuidString)",
+      ownerName: CKCurrentUserDefaultName)
+
+    let accountId = UUID()
+    let record = CKRecord(
+      recordType: AccountRow.recordType,
+      recordID: CKRecord.ID(
+        recordName: AccountRow.recordName(for: accountId),
+        zoneID: zoneID))
+    record["name"] = "Synced from another device" as CKRecordValue
+    record["instrumentId"] = "AUD" as CKRecordValue
+    record["position"] = Int64(0) as CKRecordValue
+    record["isHidden"] = Int64(0) as CKRecordValue
+    record["type"] = "bank" as CKRecordValue
+
+    // Drive the apply path directly — no ProfileSession has been
+    // constructed, so this would have trapped before the fix.
+    let handler = try coordinator.handlerForProfileZone(profileId: profileId, zoneID: zoneID)
+    let result = handler.applyRemoteChanges(
+      saved: [record], deleted: [], preExtractedSystemFields: [])
+
+    if case .saveFailed(let description) = result {
+      Issue.record("apply failed: \(description)")
+    }
+    let database = try manager.database(for: profileId)
+    let stored = try await database.read { db in
+      try AccountRow.filter(AccountRow.Columns.id == accountId).fetchOne(db)
+    }
+    #expect(stored?.name == "Synced from another device")
   }
 }
