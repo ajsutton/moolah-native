@@ -20,6 +20,10 @@ import GRDB
 /// .replace`) instead of `record.upsert(database)` — GRDB 7's
 /// `upsert` hard-codes `RETURNING "rowid"` which fails against
 /// rowid-less tables. See `ProfileSchema+RateCacheWithoutRowid.swift`.
+/// `v5_drop_foreign_keys` — recreates the four child tables of the
+/// core financial graph (`category`, `earmark_budget_item`,
+/// `transaction_leg`, `investment_value`) without any FK clauses.
+/// See `ProfileSchema+DropForeignKeys.swift` for rationale.
 ///
 /// **Retention policy for the cache tables.** All six cache tables
 /// created by `v1_initial` (`exchange_rate`, `exchange_rate_meta`,
@@ -40,7 +44,7 @@ enum ProfileSchema {
   /// Bumped each time a migration is added. Surfaced for open-time
   /// integrity checks; not used by `DatabaseMigrator` (which keys on
   /// the stable string IDs of registered migrations).
-  static let version = 4
+  static let version = 5
 
   static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
@@ -56,6 +60,8 @@ enum ProfileSchema {
       "v3_core_financial_graph", migrate: createCoreFinancialGraphTables)
     migrator.registerMigration(
       "v4_rate_cache_without_rowid", migrate: rebuildRateCacheMetaWithoutRowid)
+    migrator.registerMigration(
+      "v5_drop_foreign_keys", migrate: dropForeignKeys)
 
     return migrator
   }

@@ -230,11 +230,13 @@ enum ProfileSchema {
                 """)
         }
 
-        migrator.registerMigration("v2_add_earmark_fk") { db in
+        migrator.registerMigration("v2_add_account_archived_state") { db in
             try db.execute(sql: """
-                ALTER TABLE leg ADD COLUMN earmark_id BLOB
-                    REFERENCES earmark(id) ON DELETE SET NULL;
-                CREATE INDEX leg_by_earmark ON leg (earmark_id) WHERE earmark_id IS NOT NULL;
+                ALTER TABLE account
+                    ADD COLUMN archived_state TEXT NOT NULL DEFAULT 'active'
+                    CHECK (archived_state IN ('active', 'archived'));
+                CREATE INDEX account_by_archived_state
+                    ON account (archived_state) WHERE archived_state = 'archived';
                 """)
         }
 
@@ -251,6 +253,9 @@ enum ProfileSchema {
 4. **Migration code is decoupled from app code.** Use string table / column names, never `AccountRecord.databaseTableName`. The v1 migration must keep compiling unchanged through every later refactor.
 5. **`eraseDatabaseOnSchemaChange = true` is `#if DEBUG` only.** Any unconditioned use is Critical.
 6. **Foreign-key handling.** `DatabaseMigrator` disables FK enforcement, runs the migration, runs `PRAGMA foreign_key_check` before commit. For migrations that **rename FK columns**, set `foreignKeyChecks: .immediate`. For migrations that **recreate a table** (the standard ALTER workaround), do not use `.immediate`.
+
+   **Per-profile schema is FK-free.** As of `v5_drop_foreign_keys`, the per-profile `data.sqlite` schema declares no foreign keys. CKSyncEngine has no parent-before-child guarantee within or across batches, and an FK-enforced child insert can fault the entire write transaction and trap the sync coordinator in an infinite re-fetch loop. Integrity is enforced at the application boundary — repository sync entry points (`applyRemoteChangesSync`) and domain `delete(...)` methods replicate the cascade / null-out semantics the FKs used to provide. See `guides/SYNC_GUIDE.md` "Per-profile schema does not enforce FKs" for the contract.
+
 7. **Drop-and-recreate is forbidden for the profile DB.** Allowed only for derived caches whose source of truth is elsewhere (network, CloudKit) — currently CoinGecko. A `DROP TABLE` outside a `DatabaseMigrator` registration on a profile DB is Critical.
 
 ### `ALTER TABLE` and the rebuild pattern

@@ -6,15 +6,25 @@ import Testing
 
 @testable import Moolah
 
+/// Suite is intentionally NOT `@MainActor`. The remote-changes tests
+/// drive `applyRemoteChanges` (which is `nonisolated` and must run off
+/// the main actor in production) and verify GRDB state via async
+/// `database.read`/`write` overloads — exercising those from
+/// `@MainActor` would block the main thread on a synchronous DB write.
+/// Harness construction (`makeHandler` / `makeHandlerAndDatabase`) is
+/// `@MainActor`-isolated and goes through `try await MainActor.run`.
+/// `buildCKRecord` is `@MainActor`; the tests that invoke it carry
+/// per-method `@MainActor` annotations.
 @Suite("ProfileDataSyncHandler — remote changes & record building")
-@MainActor
 struct ProfileDataSyncHandlerTests {
 
   // MARK: - Remote Insert
 
   @Test
-  func applyRemoteInsertCreatesLocalRecord() throws {
-    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerAndDatabase()
+  func applyRemoteInsertCreatesLocalRecord() async throws {
+    let harness = try await MainActor.run {
+      try ProfileDataSyncHandlerTestSupport.makeHandlerAndDatabase()
+    }
     let handler = harness.handler
 
     let accountId = UUID()
@@ -30,7 +40,7 @@ struct ProfileDataSyncHandlerTests {
 
     let result = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
-    let rows = try harness.database.read { database in
+    let rows = try await harness.database.read { database in
       try AccountRow.filter(AccountRow.Columns.id == accountId).fetchAll(database)
     }
     #expect(rows.count == 1)
@@ -45,8 +55,10 @@ struct ProfileDataSyncHandlerTests {
   // MARK: - Remote Update
 
   @Test
-  func applyRemoteUpdateModifiesExistingRecord() throws {
-    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerAndDatabase()
+  func applyRemoteUpdateModifiesExistingRecord() async throws {
+    let harness = try await MainActor.run {
+      try ProfileDataSyncHandlerTestSupport.makeHandlerAndDatabase()
+    }
     let handler = harness.handler
     let database = harness.database
 
@@ -54,7 +66,7 @@ struct ProfileDataSyncHandlerTests {
     let stub = Account(
       id: accountId, name: "Old Name", type: .bank,
       instrument: .defaultTestInstrument, position: 0, isHidden: false)
-    try database.write { database in
+    try await database.write { database in
       try AccountRow(domain: stub).insert(database)
     }
 
@@ -70,7 +82,7 @@ struct ProfileDataSyncHandlerTests {
 
     _ = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
-    let rows = try database.read { database in
+    let rows = try await database.read { database in
       try AccountRow.filter(AccountRow.Columns.id == accountId).fetchAll(database)
     }
     #expect(rows.count == 1)
@@ -82,8 +94,10 @@ struct ProfileDataSyncHandlerTests {
   // MARK: - Remote Deletion
 
   @Test
-  func applyRemoteDeletionRemovesLocalRecord() throws {
-    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerAndDatabase()
+  func applyRemoteDeletionRemovesLocalRecord() async throws {
+    let harness = try await MainActor.run {
+      try ProfileDataSyncHandlerTestSupport.makeHandlerAndDatabase()
+    }
     let handler = harness.handler
     let database = harness.database
 
@@ -91,7 +105,7 @@ struct ProfileDataSyncHandlerTests {
     let stub = Account(
       id: accountId, name: "To Delete", type: .bank,
       instrument: .defaultTestInstrument, position: 0, isHidden: false)
-    try database.write { database in
+    try await database.write { database in
       try AccountRow(domain: stub).insert(database)
     }
 
@@ -100,7 +114,7 @@ struct ProfileDataSyncHandlerTests {
     let result = handler.applyRemoteChanges(
       saved: [], deleted: [(recordID, "AccountRecord")])
 
-    let rows = try database.read { database in
+    let rows = try await database.read { database in
       try AccountRow.filter(AccountRow.Columns.id == accountId).fetchAll(database)
     }
     #expect(rows.isEmpty)
@@ -114,6 +128,7 @@ struct ProfileDataSyncHandlerTests {
   // MARK: - buildCKRecord
 
   @Test
+  @MainActor
   func buildCKRecordProducesCorrectRecord() throws {
     let (handler, _) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
@@ -139,6 +154,7 @@ struct ProfileDataSyncHandlerTests {
   }
 
   @Test("buildCKRecord drops cached system fields when they point to a different zone")
+  @MainActor
   func buildCKRecordDropsCachedFieldsOnZoneMismatch() throws {
     let (handler, _) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
@@ -185,6 +201,7 @@ struct ProfileDataSyncHandlerTests {
   }
 
   @Test
+  @MainActor
   func buildCKRecordPreservesCachedSystemFields() throws {
     let (handler, _) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 

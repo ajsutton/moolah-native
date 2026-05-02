@@ -65,7 +65,6 @@ final class GRDBInvestmentRepository: InvestmentRepository, @unchecked Sendable 
 
   func setValue(accountId: UUID, date: Date, value: InstrumentAmount) async throws {
     let normalisedDate = Calendar.current.startOfDay(for: date)
-    let defaultInstrument = self.defaultInstrument
     let changedId = try await database.write { database -> UUID in
       if var existing =
         try InvestmentValueRow
@@ -81,16 +80,6 @@ final class GRDBInvestmentRepository: InvestmentRepository, @unchecked Sendable 
         return existing.id
       }
 
-      // Ensure the FK target exists. Production callers always pass an
-      // `accountId` that corresponds to a fetched account, so the row
-      // already exists. Sync-race scenarios (the value's CKRecord
-      // arrives before its account's) would otherwise reject the legit
-      // insert under SQLite's enforced FK; materialising a placeholder
-      // lets the account's own remote insert upsert in place once it
-      // lands.
-      try Self.ensureAccountExists(
-        database: database, id: accountId, defaultInstrument: defaultInstrument)
-
       let id = UUID()
       let row = InvestmentValueRow(
         id: id,
@@ -104,21 +93,6 @@ final class GRDBInvestmentRepository: InvestmentRepository, @unchecked Sendable 
       return id
     }
     onRecordChanged(InvestmentValueRow.recordType, changedId)
-  }
-
-  /// Inserts a stub `account` row keyed by `id` if one isn't already
-  /// present. See `setValue`'s comment for why.
-  private static func ensureAccountExists(
-    database: Database, id: UUID, defaultInstrument: Instrument
-  ) throws {
-    let exists =
-      try AccountRow
-      .filter(AccountRow.Columns.id == id)
-      .fetchOne(database)
-    guard exists == nil else { return }
-    let stub = Account(
-      id: id, name: "", type: .investment, instrument: defaultInstrument)
-    try AccountRow(domain: stub).insert(database)
   }
 
   func removeValue(accountId: UUID, date: Date) async throws {

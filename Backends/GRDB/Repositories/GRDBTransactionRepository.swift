@@ -8,13 +8,16 @@ import OSLog
 /// SwiftData-backed `CloudKitTransactionRepository` for the
 /// `"transaction"` and `transaction_leg` tables.
 ///
-/// **Header + legs together.** Every write path (`create`, `update`)
-/// inserts the `TransactionRow` and its `TransactionLegRow`s inside a
-/// single `database.write { … }`. On any throw the entire mutation
-/// rolls back — the schema's FK from `transaction_leg.transaction_id`
-/// to `"transaction".id` (with `ON DELETE CASCADE`) means a partially
-/// committed header cannot leave orphaned legs. Rollback test mandatory;
-/// see `guides/DATABASE_CODE_GUIDE.md`.
+/// **Header + legs together.** Every write path (`create`, `update`,
+/// `delete`) inserts/deletes the `TransactionRow` and its
+/// `TransactionLegRow`s inside a single `database.write { … }`. On any
+/// throw the entire mutation rolls back. After
+/// `v5_drop_foreign_keys` the schema no longer enforces FK CASCADE on
+/// `transaction_leg.transaction_id`; `delete(id:)` and the sync
+/// `applyRemoteChangesSync` in `+Sync.swift` therefore delete legs
+/// explicitly before the parent, in the same write transaction, so a
+/// partially committed header cannot leave orphaned legs. Rollback
+/// test mandatory; see `guides/DATABASE_CODE_GUIDE.md`.
 ///
 /// **Instrument resolution.** Each leg's `instrument` is resolved by
 /// reading the `instrument` table inside the same read transaction
@@ -109,34 +112,25 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   }
 
   func create(_ transaction: Transaction) async throws -> Transaction {
-    let normalised = transaction
-    let defaultInstrument = self.defaultInstrument
-
     let insertedLegIds = try await database.write { database -> [UUID] in
-      let txnRow = TransactionRow(domain: normalised)
+      let txnRow = TransactionRow(domain: transaction)
       try txnRow.insert(database)
 
       var legIds: [UUID] = []
-      legIds.reserveCapacity(normalised.legs.count)
-      for (index, leg) in normalised.legs.enumerated() {
-        // Ensure FK targets exist. Production callers always pass
-        // ids that correspond to fetched parents; sync-race scenarios
-        // (a leg's CKRecord arrives before its account /
-        // category / earmark) would otherwise reject the legit insert
-        // under SQLite's enforced FKs. Materialising placeholders lets
-        // the parent's own remote insert upsert in place once it
-        // lands. Placeholder rows are also necessary for non-fiat
-        // instruments so `fetchAll` can resolve the full `Instrument`
-        // value on read.
-        try Self.ensureFKTargets(
+      legIds.reserveCapacity(transaction.legs.count)
+      for (index, leg) in transaction.legs.enumerated() {
+        // Ensure non-fiat instrument rows exist so `fetchAll` can resolve
+        // the full `Instrument` value on read. After v5 dropped FKs, a leg
+        // referencing an account/category/earmark that hasn't arrived yet
+        // is allowed to land as-is — see `+FKEnsure.swift` and SYNC_GUIDE.
+        try Self.ensureInstrumentReadable(
           database: database,
-          leg: leg,
-          defaultInstrument: defaultInstrument)
+          leg: leg)
         let legId = UUID()
         let legRow = TransactionLegRow(
           id: legId,
           domain: leg,
-          transactionId: normalised.id,
+          transactionId: transaction.id,
           sortOrder: index)
         try legRow.insert(database)
         legIds.append(legId)
@@ -144,47 +138,48 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
       return legIds
     }
 
-    onRecordChanged(TransactionRow.recordType, normalised.id)
+    onRecordChanged(TransactionRow.recordType, transaction.id)
     for legId in insertedLegIds {
       onRecordChanged(TransactionLegRow.recordType, legId)
     }
-    return normalised
+    return transaction
   }
 
   func update(_ transaction: Transaction) async throws -> Transaction {
-    let normalised = transaction
-    let defaultInstrument = self.defaultInstrument
-
     let outcome = try await database.write { database -> UpdateOutcome in
       try Self.performUpdate(
         database: database,
-        transaction: normalised,
-        defaultInstrument: defaultInstrument)
+        transaction: transaction)
     }
 
-    onRecordChanged(TransactionRow.recordType, normalised.id)
+    onRecordChanged(TransactionRow.recordType, transaction.id)
     for legId in outcome.insertedLegIds {
       onRecordChanged(TransactionLegRow.recordType, legId)
     }
     for legId in outcome.deletedLegIds {
       onRecordDeleted(TransactionLegRow.recordType, legId)
     }
-    return normalised
+    return transaction
   }
 
   func delete(id: UUID) async throws {
-    // Legs cascade via the `transaction_leg.transaction_id` FK with
-    // `ON DELETE CASCADE`. CloudKit doesn't cascade deletes at the zone
-    // level, so we fetch the leg ids before deleting the parent (still
-    // inside the same write transaction) and emit `onRecordDeleted`
-    // for each leg after the write commits — mirrors the per-leg fan
-    // out in `create`/`update`.
+    // Explicit delete of legs before the parent, replacing the v3-era
+    // ON DELETE CASCADE on `transaction_leg.transaction_id` that v5
+    // dropped (`v5_drop_foreign_keys`). The `fetchAll(...).map(\.id)`
+    // for hook fan-out MUST precede `deleteAll(...)` — after the delete
+    // the fetch returns empty and per-leg `onRecordDeleted` hooks
+    // silently stop firing. Both deletes share the same write
+    // transaction so the parent + children disappear atomically.
     let outcome = try await database.write { database -> (didDelete: Bool, legIds: [UUID]) in
       let legIds =
         try TransactionLegRow
         .filter(TransactionLegRow.Columns.transactionId == id)
         .fetchAll(database)
         .map(\.id)
+      _ =
+        try TransactionLegRow
+        .filter(TransactionLegRow.Columns.transactionId == id)
+        .deleteAll(database)
       let didDelete = try TransactionRow.deleteOne(database, id: id)
       return (didDelete, legIds)
     }
@@ -240,6 +235,8 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     }
   }
 
+  // MARK: - Private helpers
+
   private struct UpdateOutcome {
     let deletedLegIds: [UUID]
     let insertedLegIds: [UUID]
@@ -252,8 +249,7 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   /// transaction commits.
   private static func performUpdate(
     database: Database,
-    transaction: Transaction,
-    defaultInstrument: Instrument
+    transaction: Transaction
   ) throws -> UpdateOutcome {
     guard
       var existing =
@@ -279,8 +275,7 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     var newLegIds: [UUID] = []
     newLegIds.reserveCapacity(transaction.legs.count)
     for (index, leg) in transaction.legs.enumerated() {
-      try ensureFKTargets(
-        database: database, leg: leg, defaultInstrument: defaultInstrument)
+      try Self.ensureInstrumentReadable(database: database, leg: leg)
       let legId = UUID()
       let legRow = TransactionLegRow(
         id: legId,

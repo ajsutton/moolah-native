@@ -212,14 +212,6 @@ final class GRDBEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       return SetBudgetOutcome(changedId: existing.id, deletedId: nil)
     }
 
-    // Ensure the FK target exists. Production callers always pass a
-    // `categoryId` selected from `CategoryStore`, so the row already
-    // exists. Sync-race scenarios (the budget item's CKRecord arrives
-    // before its category's) would otherwise reject the legit insert
-    // under SQLite's enforced FK; materialising a placeholder lets the
-    // category's own remote insert upsert in place once it lands.
-    try ensureCategoryExists(database: database, id: categoryId)
-
     let newItem = EarmarkBudgetItem(
       id: UUID(),
       categoryId: categoryId,
@@ -227,17 +219,6 @@ final class GRDBEarmarkRepository: EarmarkRepository, @unchecked Sendable {
     let row = EarmarkBudgetItemRow(domain: newItem, earmarkId: earmarkId)
     try row.insert(database)
     return SetBudgetOutcome(changedId: row.id, deletedId: nil)
-  }
-
-  /// Inserts a stub `category` row keyed by `id` if one isn't already
-  /// present. See `performSetBudget`'s comment for why.
-  private static func ensureCategoryExists(database: Database, id: UUID) throws {
-    let exists =
-      try CategoryRow
-      .filter(CategoryRow.Columns.id == id)
-      .fetchOne(database)
-    guard exists == nil else { return }
-    try CategoryRow(domain: Moolah.Category(id: id, name: "")).insert(database)
   }
 
   // MARK: - Helpers
@@ -260,10 +241,21 @@ final class GRDBEarmarkRepository: EarmarkRepository, @unchecked Sendable {
 
   func applyRemoteChangesSync(saved rows: [EarmarkRow], deleted ids: [UUID]) throws {
     try database.write { database in
-      for row in rows {
-        try row.upsert(database)
-      }
+      for row in rows { try row.upsert(database) }
       for id in ids {
+        // Replaces v3's ON DELETE CASCADE on earmark_budget_item.earmark_id
+        // and ON DELETE SET NULL on transaction_leg.earmark_id (both
+        // dropped in v5_drop_foreign_keys).
+        _ =
+          try EarmarkBudgetItemRow
+          .filter(EarmarkBudgetItemRow.Columns.earmarkId == id)
+          .deleteAll(database)
+        _ =
+          try TransactionLegRow
+          .filter(TransactionLegRow.Columns.earmarkId == id)
+          .updateAll(
+            database,
+            [TransactionLegRow.Columns.earmarkId.set(to: nil)])
         _ = try EarmarkRow.deleteOne(database, id: id)
       }
     }
