@@ -66,9 +66,11 @@ extension ProfileGRDBRepositories {
 
 /// Placeholder `InstrumentConversionService` for the apply-path bundle.
 /// Reachable only from `ProfileGRDBRepositories.forApply(database:)`;
-/// every method traps because the apply path never reads through the
-/// conversion service. If a future code change starts invoking it from
-/// the apply path, the trap is preferable to silent zero-conversion.
+/// every method throws `ConversionError.unsupportedConversion` because
+/// the apply path never reads through the conversion service. If a
+/// future code change starts invoking it from the apply path, the
+/// error surfaces as a saveFailed result and the offending call site
+/// is identifiable from the logs — preferable to silent zero-conversion.
 private struct ApplyPathConversionService: InstrumentConversionService, Sendable {
   func convert(
     _ quantity: Decimal,
@@ -76,8 +78,7 @@ private struct ApplyPathConversionService: InstrumentConversionService, Sendable
     to: Instrument,
     on date: Date
   ) async throws -> Decimal {
-    preconditionFailure(
-      "ApplyPathConversionService.convert called — apply path never converts")
+    throw ConversionError.unsupportedConversion(from: from.id, to: to.id)
   }
 
   func convertAmount(
@@ -85,7 +86,7 @@ private struct ApplyPathConversionService: InstrumentConversionService, Sendable
     to instrument: Instrument,
     on date: Date
   ) async throws -> InstrumentAmount {
-    preconditionFailure(
-      "ApplyPathConversionService.convertAmount called — apply path never converts")
+    throw ConversionError.unsupportedConversion(
+      from: amount.instrument.id, to: instrument.id)
   }
 }

@@ -81,8 +81,8 @@ struct SyncCoordinatorRegistrationFreeTests {
       Issue.record("apply failed: \(description)")
     }
     let database = try manager.database(for: profileId)
-    let stored = try await database.read { db in
-      try AccountRow.filter(AccountRow.Columns.id == accountId).fetchOne(db)
+    let stored = try await database.read { reader in
+      try AccountRow.filter(AccountRow.Columns.id == accountId).fetchOne(reader)
     }
     #expect(stored?.name == "Synced from another device")
   }
@@ -103,20 +103,20 @@ struct SyncCoordinatorRegistrationFreeTests {
     // Seed a row directly in GRDB with a non-nil encodedSystemFields.
     let database = try manager.database(for: profileId)
     let categoryId = UUID()
-    try await database.write { db in
+    try await database.write { writer in
       try CategoryRow(
         id: categoryId,
         recordName: CategoryRow.recordName(for: categoryId),
         name: "Reset me",
         parentId: nil,
         encodedSystemFields: Data([0xDE, 0xAD, 0xBE, 0xEF])
-      ).insert(db)
+      ).insert(writer)
     }
 
     coordinator.handleEncryptedDataReset(zoneID, zoneType: .profileData(profileId))
 
-    let stored = try await database.read { db in
-      try CategoryRow.filter(CategoryRow.Columns.id == categoryId).fetchOne(db)
+    let stored = try await database.read { reader in
+      try CategoryRow.filter(CategoryRow.Columns.id == categoryId).fetchOne(reader)
     }
     #expect(stored?.encodedSystemFields == nil)
   }
