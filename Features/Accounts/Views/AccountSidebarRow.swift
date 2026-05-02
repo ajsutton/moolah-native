@@ -12,9 +12,9 @@ struct SidebarRowView: View {
 
   @Environment(\.backgroundProminence) private var backgroundProminence
 
-  /// Bright green/red that contrast well against the blue selection highlight.
-  private static let selectedPositiveColor = Color(red: 0.55, green: 1.0, blue: 0.65)
-  private static let selectedNegativeColor = Color(red: 1.0, green: 0.6, blue: 0.6)
+  /// Bright system colours that contrast well against the blue selection highlight.
+  private static let selectedPositiveColor = Color.mint
+  private static let selectedNegativeColor = Color.pink
 
   private var amountColorOverride: Color? {
     // Only use bright overrides when the row has a prominent (blue) selection
@@ -51,17 +51,6 @@ struct SidebarRowView: View {
   private var accessibilitySummary: String {
     guard let amount else { return "\(name), balance loading" }
     return "\(name), \(amount.formatted)"
-  }
-}
-
-extension Account {
-  var sidebarIcon: String {
-    switch type {
-    case .bank: return "building.columns"
-    case .asset: return "house.fill"
-    case .creditCard: return "creditcard"
-    case .investment: return "chart.line.uptrend.xyaxis"
-    }
   }
 }
 
@@ -106,6 +95,19 @@ struct AccountSidebarRow: View {
       amount: InstrumentAmount(quantity: -500.00, instrument: .AUD)
     )
     .tag("other2")
+  }
+  .listStyle(.sidebar)
+}
+
+#Preview("Sidebar row — negative balance selected") {
+  List(selection: .constant(Optional("selected"))) {
+    SidebarRowView(
+      icon: "creditcard",
+      name: "Credit Card (selected)",
+      amount: InstrumentAmount(quantity: -500.00, instrument: .AUD),
+      isSelected: true
+    )
+    .tag("selected")
   }
   .listStyle(.sidebar)
 }

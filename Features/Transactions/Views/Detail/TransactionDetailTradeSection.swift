@@ -14,7 +14,6 @@ import SwiftUI
 struct TransactionDetailTradeSection: View {
   @Binding var draft: TransactionDraft
   let accounts: Accounts
-  let sortedAccounts: [Account]
   @FocusState.Binding var focusedField: TransactionDetailFocus?
 
   var body: some View {
@@ -53,11 +52,16 @@ struct TransactionDetailTradeSection: View {
   private var accountPicker: some View {
     Picker("Account", selection: accountBinding) {
       Text("None").tag(UUID?.none)
-      ForEach(sortedAccounts) { account in
-        Text(account.name).tag(UUID?.some(account.id))
-      }
+      AccountPickerOptions(
+        accounts: accounts,
+        exclude: nil,
+        currentSelection: accountBinding.wrappedValue
+      )
     }
     .accessibilityIdentifier(UITestIdentifiers.Detail.tradeAccount)
+    #if os(macOS)
+      .pickerStyle(.menu)
+    #endif
   }
 
   private var paidRow: some View {
@@ -80,6 +84,10 @@ struct TransactionDetailTradeSection: View {
     )
   }
 
+  private func defaultInstrument(forLegAt idx: Int) -> Instrument {
+    draft.legDrafts[idx].resolvedInstrument(accounts: accounts)
+  }
+
   @ViewBuilder
   private func legAmountRow(
     label: LocalizedStringKey,
@@ -93,7 +101,7 @@ struct TransactionDetailTradeSection: View {
         get: { draft.legDrafts[idx].amountText },
         set: { draft.legDrafts[idx].amountText = $0 })
       let instrumentBinding = Binding<Instrument>(
-        get: { draft.legDrafts[idx].instrument ?? Instrument.AUD },
+        get: { draft.legDrafts[idx].instrument ?? defaultInstrument(forLegAt: idx) },
         set: { draft.legDrafts[idx].instrument = $0 })
 
       LabeledContent {
@@ -124,8 +132,8 @@ struct TransactionDetailTradeSection: View {
     else { return nil }
     let paid = draft.legDrafts[paidIdx]
     let received = draft.legDrafts[receivedIdx]
-    let paidInst = paid.instrument ?? Instrument.AUD
-    let receivedInst = received.instrument ?? Instrument.AUD
+    let paidInst = paid.instrument ?? defaultInstrument(forLegAt: paidIdx)
+    let receivedInst = received.instrument ?? defaultInstrument(forLegAt: receivedIdx)
     guard
       let paidQty = InstrumentAmount.parseQuantity(
         from: paid.amountText, decimals: paidInst.decimals),

@@ -210,7 +210,6 @@ extension TransactionDetailView {
     TransactionDetailTradeSection(
       draft: $draft,
       accounts: accounts,
-      sortedAccounts: sortedAccounts,
       focusedField: $focusedField
     )
     .disabled(!isEditable)
@@ -265,7 +264,6 @@ extension TransactionDetailView {
     TransactionDetailAccountSection(
       draft: $draft,
       accounts: accounts,
-      sortedAccounts: sortedAccounts,
       relevantInstrument: relevantInstrument,
       counterpartInstrument: counterpartInstrument,
       counterpartAmountBinding: counterpartAmountBinding,
@@ -301,13 +299,12 @@ extension TransactionDetailView {
         accounts: accounts,
         categories: categories,
         earmarks: earmarks,
-        sortedAccounts: sortedAccounts,
         categoryState: legCategoryStateBinding(for: index),
         focusedField: $focusedField,
         onRequestDelete: { legPendingDeletion = index }
       )
     }
-    TransactionDetailAddLegSection(draft: $draft, sortedAccounts: sortedAccounts)
+    TransactionDetailAddLegSection(draft: $draft, accounts: accounts)
     if showRecurrence {
       TransactionDetailRecurrenceSection(draft: $draft)
     }
@@ -345,7 +342,7 @@ extension TransactionDetailView {
   }
 }
 
-// Computed helpers (sortedAccounts, isEditable, isSimpleEarmarkOnly, instruments,
+// Computed helpers (isEditable, isSimpleEarmarkOnly, instruments,
 // bindings, isScheduled) live in TransactionDetailView+Helpers.swift.
 // Actions (autofillFromPayee, debouncedSave, saveIfValid) live in
 // TransactionDetailView+Actions.swift.

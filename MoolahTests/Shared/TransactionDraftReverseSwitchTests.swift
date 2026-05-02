@@ -69,6 +69,81 @@ struct TransactionDraftReverseSwitchTests {
     #expect(acctIds == Set([acctA, acctB]))
   }
 
+  // MARK: - Sidebar-order tests for applyTransferLegs
+
+  // Fixture: brokerage (investment, pos 0) is the paid leg's account.
+  // accounts.ordered = [brokerage, crypto, chequing]
+  //   → ordered.first { != brokerage } = crypto   (the bug)
+  // accounts.sidebarOrdered(excluding: brokerage) = [chequing, crypto]
+  //   → first = chequing                           (the fix)
+  private let brokerageId = UUID()
+  private let cryptoId = UUID()
+  private let chequingId = UUID()
+
+  private func threeAccounts() -> Accounts {
+    Accounts(from: [
+      Account(
+        id: brokerageId, name: "Brokerage", type: .investment,
+        instrument: Instrument.AUD, positions: [], position: 0),
+      Account(
+        id: cryptoId, name: "Crypto", type: .investment,
+        instrument: Instrument.AUD, positions: [], position: 1),
+      Account(
+        id: chequingId, name: "Chequing", type: .bank,
+        instrument: Instrument.AUD, positions: [], position: 5),
+    ])
+  }
+
+  private func brokerageTradeDraft() -> TransactionDraft {
+    var draft = TransactionDraft(accountId: brokerageId, instrument: Instrument.AUD)
+    draft.legDrafts = [
+      TransactionDraft.LegDraft(
+        type: .trade, accountId: brokerageId, amountText: "-500",
+        categoryId: nil, categoryText: "", earmarkId: nil, instrument: Instrument.AUD),
+      TransactionDraft.LegDraft(
+        type: .trade, accountId: brokerageId, amountText: "10",
+        categoryId: nil, categoryText: "", earmarkId: nil,
+        instrument: Instrument.stock(ticker: "VGS.AX", exchange: "ASX", name: "VGS")),
+    ]
+    return draft
+  }
+
+  @Test("Trade → Transfer counterpart uses sidebar order, not insertion order")
+  func toTransferUsesCurrentAccountFirst() {
+    var draft = brokerageTradeDraft()
+    draft.switchFromTrade(to: .transfer, accounts: threeAccounts())
+    #expect(draft.legDrafts.count == 2)
+    #expect(draft.legDrafts.allSatisfy { $0.type == .transfer })
+    let counterpart = draft.legDrafts.first { $0.accountId != brokerageId }
+    // Must pick chequing (sidebar-first current account), not crypto
+    // (ordered-first investment account that isn't the paid-leg account).
+    #expect(counterpart?.accountId == chequingId)
+  }
+
+  @Test("Trade → Transfer counterpart skips hidden accounts")
+  func toTransferSkipsHiddenAccount() {
+    let hiddenChequingId = UUID()
+    let visibleChequingId = UUID()
+    let accounts = Accounts(from: [
+      Account(
+        id: brokerageId, name: "Brokerage", type: .investment,
+        instrument: Instrument.AUD, positions: [], position: 0),
+      Account(
+        id: hiddenChequingId, name: "HiddenChequing", type: .bank,
+        instrument: Instrument.AUD, positions: [], position: 5,
+        isHidden: true),
+      Account(
+        id: visibleChequingId, name: "VisibleChequing", type: .bank,
+        instrument: Instrument.AUD, positions: [], position: 6),
+    ])
+    var draft = brokerageTradeDraft()
+    draft.switchFromTrade(to: .transfer, accounts: accounts)
+    #expect(draft.legDrafts.count == 2)
+    let counterpart = draft.legDrafts.first { $0.accountId != brokerageId }
+    // Hidden account must be skipped; visible chequing is the correct pick.
+    #expect(counterpart?.accountId == visibleChequingId)
+  }
+
   @Test("Trade → Custom: lossless, all legs preserved with .trade types")
   func toCustom() {
     var draft = tradeDraft(withFee: true)

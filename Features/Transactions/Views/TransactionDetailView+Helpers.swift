@@ -3,15 +3,6 @@ import SwiftUI
 // MARK: - Computed Helpers
 
 extension TransactionDetailView {
-  var sortedAccounts: [Account] {
-    accounts.ordered.sorted { lhs, rhs in
-      if lhs.type.isCurrent != rhs.type.isCurrent {
-        return lhs.type.isCurrent
-      }
-      return lhs.position < rhs.position
-    }
-  }
-
   var isEditable: Bool { transaction.isSimple || transaction.isTrade || draft.isCustom }
 
   /// Whether the current draft is a simple earmark-only transaction.

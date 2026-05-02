@@ -15,7 +15,6 @@ struct TransactionDetailLegRow: View {
   let accounts: Accounts
   let categories: Categories
   let earmarks: Earmarks
-  let sortedAccounts: [Account]
   @Binding var categoryState: CategoryAutocompleteState
   @FocusState.Binding var focusedField: TransactionDetailFocus?
   let onRequestDelete: () -> Void
@@ -47,7 +46,6 @@ struct TransactionDetailLegRow: View {
           Text("Delete Sub-transaction")
             .frame(maxWidth: .infinity)
         }
-        .accessibilityLabel("Delete Sub-transaction")
       }
     }
   }
@@ -64,10 +62,15 @@ struct TransactionDetailLegRow: View {
   private var accountPicker: some View {
     Picker("Account", selection: $draft.legDrafts[index].accountId) {
       Text("None").tag(UUID?.none)
-      ForEach(sortedAccounts) { account in
-        Text(account.name).tag(UUID?.some(account.id))
-      }
+      AccountPickerOptions(
+        accounts: accounts,
+        exclude: nil,
+        currentSelection: draft.legDrafts[index].accountId
+      )
     }
+    #if os(macOS)
+      .pickerStyle(.menu)
+    #endif
     .onChange(of: draft.legDrafts[index].accountId) { _, newAccountId in
       draft.enforceEarmarkOnlyInvariants(at: index)
       if let newAccountId, let account = accounts.by(id: newAccountId) {
@@ -138,17 +141,8 @@ struct TransactionDetailLegRow: View {
     }
   }
 
-  /// Falls back to the leg's account instrument and then earmark
-  /// instrument when the leg has no explicit instrument stored.
   private var defaultInstrument: Instrument {
-    let leg = draft.legDrafts[index]
-    if let acctId = leg.accountId, let account = accounts.by(id: acctId) {
-      return account.instrument
-    }
-    if let emId = leg.earmarkId, let earmark = earmarks.by(id: emId) {
-      return earmark.instrument
-    }
-    return Instrument.AUD
+    draft.legDrafts[index].resolvedInstrument(accounts: accounts, earmarks: earmarks)
   }
 
   /// Opens the dropdown in response to a *user-driven* edit. Programmatic

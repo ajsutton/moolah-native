@@ -49,7 +49,11 @@ struct TransactionDetailFeeSection: View {
       get: { draft.legDrafts[legIndex].amountText },
       set: { draft.legDrafts[legIndex].amountText = $0 })
     let instrumentBinding = Binding<Instrument>(
-      get: { draft.legDrafts[legIndex].instrument ?? Instrument.AUD },
+      get: {
+        draft.legDrafts[legIndex].instrument
+          ?? draft.legDrafts[legIndex].resolvedInstrument(
+            accounts: accounts, earmarks: earmarks)
+      },
       set: { draft.legDrafts[legIndex].instrument = $0 })
 
     return LabeledContent {
