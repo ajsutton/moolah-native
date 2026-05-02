@@ -186,7 +186,7 @@ extension TransactionDraft {
 
   private mutating func applyTransferLegs(paidLeg: LegDraft, accounts: Accounts) {
     let primaryText = Self.adjustAmountText(paidLeg.amountText, from: .trade, to: .transfer)
-    let other = accounts.ordered.first { $0.id != paidLeg.accountId }
+    let other = accounts.sidebarOrdered(excluding: paidLeg.accountId).first
     let counterpart = LegDraft(
       type: .transfer,
       accountId: other?.id,
