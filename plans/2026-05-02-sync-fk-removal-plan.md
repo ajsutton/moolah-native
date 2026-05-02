@@ -97,18 +97,23 @@ Extending that "app-enforced integrity" rule to every child relationship makes s
 - `Backends/GRDB/ProfileSchema+DropForeignKeys.swift` — body of the `v5_drop_foreign_keys` migration.
 - `MoolahTests/Backends/GRDB/ProfileSchemaV5DropForeignKeysTests.swift` — schema-state and migration-data tests.
 - `MoolahTests/Sync/ApplyRemoteChangesOutOfOrderTests.swift` — end-to-end test for out-of-order CKRecord delivery (child arrives before parent).
-- `MoolahTests/Backends/GRDB/RepositorySyncCascadeTests.swift` — repository-level cascade behaviour for hard sync deletes.
+- `MoolahTests/Backends/GRDB/RepositorySyncCascadeTests.swift` — repository-level cascade behaviour for hard sync deletes (Tasks 5–8) and the `ensureFKTargets` no-phantom-rows test (Task 6b).
+- `MoolahTests/Backends/GRDB/TransactionDeleteRollbackTests.swift` — paired rollback test for `GRDBTransactionRepository.delete(id:)`, which becomes a multi-statement write under v5 (Task 6).
 
 ### Modified
 
-- `Backends/GRDB/ProfileSchema.swift` — register `v5_drop_foreign_keys`; bump `static let version` from `4` to `5`.
-- `Backends/GRDB/ProfileSchema+CoreFinancialGraph.swift` — file-header doc rewrites the FK contract section to point at the new app-enforced model and `+DropForeignKeys.swift`.
+- `Backends/GRDB/ProfileSchema.swift` — register `v5_drop_foreign_keys`; bump `static let version` from `4` to `5`. Promote any `private` migrator-body static methods (`createInitialTables`, `createCSVImportAndRulesTables`, `createCoreFinancialGraphTables`, `rebuildRateCacheMetaWithoutRowid`) to `internal` so the v5 data-preservation test in Task 3 can run them step-wise (Task 0).
+- `Backends/GRDB/ProfileSchema+CoreFinancialGraph.swift` — file-header doc rewrites the FK contract section to point at the new app-enforced model. Adds an explicit paragraph about the zombie-row trade-off (a child whose parent CKRecord is never delivered remains as an orphan; this is intentional and accepted, not a bug).
 - `Backends/GRDB/Repositories/GRDBAccountRepository.swift` — `applyRemoteChangesSync` gains explicit cascade for `investment_value` and `transaction_leg.account_id`.
-- `Backends/GRDB/Repositories/GRDBTransactionRepository.swift` — `delete(id:)` and `applyRemoteChangesSync` gain explicit `DELETE FROM transaction_leg WHERE transaction_id = ?`.
+- `Backends/GRDB/Repositories/GRDBTransactionRepository.swift` — `delete(id:)` body gains an explicit `DELETE FROM transaction_leg WHERE transaction_id = ?` (the `fetchAll(...).map(\.id)` for hook fan-out must precede the `deleteAll`, otherwise `legIds` is empty). The stale doc-comment at lines 175-180 (`// Legs cascade via the … FK with ON DELETE CASCADE`) and the file-level header at lines 14-16 referencing the FK CASCADE contract are rewritten to describe the explicit-delete contract.
+- `Backends/GRDB/Repositories/GRDBTransactionRepository+Sync.swift` — `applyRemoteChangesSync` gains the same explicit `DELETE FROM transaction_leg` before `TransactionRow.deleteOne`.
+- `Backends/GRDB/Repositories/GRDBTransactionRepository+FKEnsure.swift` — **Task 6b.** `ensureFKTargets` has four branches: instrument (read-time resolution for non-fiat — KEEP), account / category / earmark (FK-driven stubs — REMOVE). Function is renamed to `ensureInstrumentReadable` (or similar) to make the post-v5 scope obvious; the file header is rewritten to describe the remaining purpose (non-fiat instrument resolution under `fetchAll`), with no FK-ordering reference.
 - `Backends/GRDB/Repositories/GRDBEarmarkRepository.swift` — `applyRemoteChangesSync` gains explicit cascade for `earmark_budget_item` and null-out of `transaction_leg.earmark_id`. **Remove** `performSetBudget`'s `ensureCategoryExists` call and the `ensureCategoryExists` private helper (lines ~215-241). Update the comment block above the call site.
-- `Backends/GRDB/Repositories/GRDBCategoryRepository.swift` — `applyRemoteChangesSync` gains explicit null-out of `transaction_leg.category_id` and `earmark_budget_item.category_id`. The domain `delete(id:withReplacement:)` is unchanged — it already does the reassignment explicitly.
-- `guides/DATABASE_SCHEMA_GUIDE.md` — §6 example currently shows a synthetic `v2_add_earmark_fk` migration that adds an FK; replace with a generic example that doesn't presume FK enforcement, since the schema no longer relies on FKs.
-- `guides/SYNC_GUIDE.md` — under "Core Principles", add a short note that per-profile schema does not enforce FKs and that integrity for synced child relationships is a repository concern (cross-reference `RULES.md` Rule 14 if it discusses dependency ordering).
+- `Backends/GRDB/Repositories/GRDBCategoryRepository.swift` (or its `+Sync.swift` extension if the apply method lives there — verify in Task 8 Step 1) — `applyRemoteChangesSync` gains explicit null-out of `transaction_leg.category_id` and `earmark_budget_item.category_id`. The domain `delete(id:withReplacement:)` is unchanged — it already does the reassignment explicitly.
+- `MoolahTests/Support/TestBackend.swift` — update the `ensureLegParents` (~lines 183-188) comment block: remove the FK-ordering justification ("under the GRDB schema's enforced FKs we have to materialise lightweight placeholder rows"). Whatever non-FK reason remains for placeholder seeding stays in the comment; if no reason remains, remove the helper entirely (verify by search after the production `ensureFKTargets` cleanup lands).
+- `MoolahTests/Backends/GRDB/SyncRoundTripTransactionTests.swift` — update the `seedLegParents` (~lines 69-100) comment to clarify that parent seeding is now an *optional* setup detail (kept so existing assertions still hold), not a structural requirement of leg sync apply. Future tests of leg sync apply against a missing parent are added in Task 9.
+- `guides/DATABASE_SCHEMA_GUIDE.md` — §6 example currently shows a synthetic `v2_add_earmark_fk` migration that adds an FK; replace with a generic example that doesn't presume FK enforcement (e.g., adding a column with a CHECK). The replacement **must** still demonstrate `registerMigration("vN_<name>", …)` with a stable string-literal ID so the §6.2 invariant remains visible in the example.
+- `guides/SYNC_GUIDE.md` — under "Core Principles", add a subsection titled "Per-profile schema does not enforce FKs". Required content (three bullets, in order): (1) the no-FK contract and why (CKSyncEngine has no parent-before-child guarantee within or across batches); (2) sync delete paths in repositories must replicate the cascade / null-out semantics that the FKs used to provide — listed by repository; (3) zombie child rows (orphaned because the parent CKRecord was deleted server-side or never delivered) are an expected artefact of the FK-free design, not a bug; do not "fix" them by re-introducing FKs.
 
 ### Not modified (verified — already correct)
 
@@ -118,6 +123,51 @@ Extending that "app-enforced integrity" rule to every child relationship makes s
 ---
 
 ## Tasks
+
+### Task 0: Promote migrator-body visibility
+
+The data-preservation test in Task 3 calls `ProfileSchema.createInitialTables`, `createCSVImportAndRulesTables`, `createCoreFinancialGraphTables`, `rebuildRateCacheMetaWithoutRowid`, and `dropForeignKeys` directly so it can run only the migrations up through v4 before exercising v5 in isolation. `@testable import Moolah` lifts `internal` visibility into the test target but does **not** lift `private`.
+
+**Files:**
+- Read: `Backends/GRDB/ProfileSchema.swift`, `Backends/GRDB/ProfileSchema+RateCaches.swift`, `Backends/GRDB/ProfileSchema+CSVImportAndRules.swift`, `Backends/GRDB/ProfileSchema+CoreFinancialGraph.swift`, `Backends/GRDB/ProfileSchema+RateCacheWithoutRowid.swift`
+- Modify: any of the above whose `migrate:` body is currently `private`
+
+- [ ] **Step 1: Survey access levels**
+
+```
+grep -n "static func createInitialTables\|static func createCSVImportAndRulesTables\|static func createCoreFinancialGraphTables\|static func rebuildRateCacheMetaWithoutRowid" Backends/GRDB/ProfileSchema*.swift
+```
+
+For each match, note the access level. The first keyword on the line tells you: a leading `private static func …` needs promotion; a bare `static func …` (= internal) is fine.
+
+- [ ] **Step 2: Promote any `private` to `internal`**
+
+Replace `private static func` with `static func` (delete the `private` keyword) for any matches that need it. Do not alter signatures or bodies.
+
+- [ ] **Step 3: Build to confirm**
+
+```
+just build-mac 2>&1 | tee .agent-tmp/t0-step3.txt
+grep -i 'error:' .agent-tmp/t0-step3.txt
+```
+Expected: no errors. `internal` is the default in Swift, so the change is a no-op for production callers (the migrator inside `ProfileSchema.swift` already calls these via `migrate:` references).
+
+- [ ] **Step 4: Commit**
+
+```
+git -C .worktrees/sync-fk-removal add Backends/GRDB/ProfileSchema*.swift
+git -C .worktrees/sync-fk-removal commit -m "chore(schema): promote v1-v4 migrator bodies to internal
+
+Required by the v5 data-preservation test in Task 3, which runs
+migrations through v4 in isolation before invoking v5. \`@testable
+import\` lifts internal visibility but not private.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+```
+
+If the survey in Step 1 finds every function is already `internal`, skip Steps 2-4 and note in the worktree.
+
+---
 
 ### Task 1: Pin the FK contract before changing it
 
@@ -476,7 +526,7 @@ Append to the suite:
   }
 ```
 
-(Note: where the test references `ProfileSchema.createInitialTables` etc., those are existing `internal` static methods — confirm visibility before relying on them; promote to `internal` if currently `private`.)
+(Visibility for these `static func` migrator bodies is enforced internal by Task 0; this task assumes that ran first.)
 
 - [ ] **Step 2: Run; should PASS**
 
@@ -546,6 +596,8 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing test**
 
+The existing pattern in `MoolahTests/Backends/GRDB/CSVImportRollbackTests.swift` and `CoreFinancialGraphRollbackTests.swift` is the canonical shape: open a fresh in-memory `ProfileDatabase`, construct the concrete GRDB repository against it, seed via direct row inserts, exercise, assert via `database.read { db in … }`. **Do not** introduce `session.accountRepository`, `backend.openSession`, or `session.databaseQueue` — none of those exist on the existing test surface.
+
 ```swift
 // MoolahTests/Backends/GRDB/RepositorySyncCascadeTests.swift
 import Foundation
@@ -560,36 +612,46 @@ struct RepositorySyncCascadeTests {
   /// `transaction_leg.account_id` references — replacing what the v4
   /// FK CASCADE / SET NULL did before v5 dropped the FKs.
   @Test func accountSyncDeleteCascadesToInvestmentValuesAndNullsLegs() async throws {
-    let backend = TestBackend()
-    let profile = try await backend.profileIndexRepository.create(...)  // [seed helpers]
-    let session = try await backend.openSession(profile: profile)
+    let database = try ProfileDatabase.openInMemory()
+    let accountRepo = GRDBAccountRepository(database: database)
+    let accountId = UUID()
+    let legId = UUID()
+    let txId = UUID()
+    let ivId = UUID()
 
-    let account = try await session.accountRepository.create(...)
-    try await session.investmentRepository.create(accountId: account.id, ...)
-    try await session.transactionRepository.create(...)  // with a leg referencing account.id
+    try await database.write { db in
+      try db.execute(sql: """
+        INSERT INTO instrument (id, record_name, kind, name, decimals)
+          VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
+        INSERT INTO account (id, record_name, name, type, instrument_id, position, is_hidden)
+          VALUES (?, 'account-1', 'Checking', 'bank', 'USD', 0, 0);
+        INSERT INTO "transaction" (id, record_name, date)
+          VALUES (?, 'tx-1', '2026-01-01');
+        INSERT INTO transaction_leg (id, record_name, transaction_id, account_id, instrument_id,
+                                     quantity, type, sort_order)
+          VALUES (?, 'leg-1', ?, ?, 'USD', 100, 'expense', 0);
+        INSERT INTO investment_value (id, record_name, account_id, date, value, instrument_id)
+          VALUES (?, 'iv-1', ?, '2026-01-01', 100000, 'USD');
+        """, arguments: [accountId, txId, legId, txId, accountId, ivId, accountId])
+    }
 
     // Hard-delete via sync path.
-    try (session.accountRepository as! GRDBAccountRepository)
-      .applyRemoteChangesSync(saved: [], deleted: [account.id])
+    try accountRepo.applyRemoteChangesSync(saved: [], deleted: [accountId])
 
-    let ivCount = try await session.databaseQueue.read { db in
-      try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM investment_value WHERE account_id = ?",
-                       arguments: [account.id]) ?? -1
-    }
-    #expect(ivCount == 0)
+    try await database.read { db in
+      let ivCount = try Int.fetchOne(db,
+        sql: "SELECT COUNT(*) FROM investment_value WHERE account_id = ?",
+        arguments: [accountId]) ?? -1
+      #expect(ivCount == 0)
 
-    let nulledLegs = try await session.databaseQueue.read { db in
-      try Int.fetchOne(db, sql: """
-        SELECT COUNT(*) FROM transaction_leg
-        WHERE account_id IS NULL
-        """) ?? -1
+      let nulledLegs = try Int.fetchOne(db,
+        sql: "SELECT COUNT(*) FROM transaction_leg WHERE id = ? AND account_id IS NULL",
+        arguments: [legId]) ?? -1
+      #expect(nulledLegs == 1)
     }
-    #expect(nulledLegs >= 1)
   }
 }
 ```
-
-(The exact seed helpers depend on existing `TestBackend` factories; confirm by reading `MoolahTests/Support/TestBackend.swift` and copying the pattern from `MoolahTests/Sync/SyncRoundTripTransactionTests.swift`. The shape above is illustrative; concrete factories are: `Profile.testFixture`, `Account.testFixture`, etc.)
 
 Run:
 ```
@@ -659,35 +721,91 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Add failing tests**
 
-Append to `RepositorySyncCascadeTests`:
+Append to `RepositorySyncCascadeTests` (mirror the Task-5 scaffold — `ProfileDatabase.openInMemory()` + direct repo construction; no `session.*`):
 
 ```swift
   @Test func transactionDomainDeleteRemovesLegs() async throws {
-    let backend = TestBackend()
-    /* … seed a transaction with two legs … */
-    try await session.transactionRepository.delete(id: txId)
-    let legCount = try await session.databaseQueue.read { db in
-      try Int.fetchOne(db,
+    let database = try ProfileDatabase.openInMemory()
+    let txRepo = GRDBTransactionRepository(database: database)
+    let txId = UUID()
+    let leg1Id = UUID()
+    let leg2Id = UUID()
+
+    try await database.write { db in
+      try db.execute(sql: """
+        INSERT INTO instrument (id, record_name, kind, name, decimals)
+          VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
+        INSERT INTO "transaction" (id, record_name, date)
+          VALUES (?, 'tx-1', '2026-01-01');
+        INSERT INTO transaction_leg (id, record_name, transaction_id, instrument_id,
+                                     quantity, type, sort_order)
+          VALUES (?, 'leg-1', ?, 'USD', 100, 'expense', 0);
+        INSERT INTO transaction_leg (id, record_name, transaction_id, instrument_id,
+                                     quantity, type, sort_order)
+          VALUES (?, 'leg-2', ?, 'USD', -100, 'transfer', 1);
+        """, arguments: [txId, leg1Id, txId, leg2Id, txId])
+    }
+
+    try await txRepo.delete(id: txId)
+
+    try await database.read { db in
+      let legCount = try Int.fetchOne(db,
         sql: "SELECT COUNT(*) FROM transaction_leg WHERE transaction_id = ?",
         arguments: [txId]) ?? -1
+      #expect(legCount == 0)
     }
-    #expect(legCount == 0)
   }
 
   @Test func transactionSyncDeleteRemovesLegs() async throws {
-    let backend = TestBackend()
-    /* … seed identically … */
-    try (session.transactionRepository as! GRDBTransactionRepository)
-      .applyRemoteChangesSync(saved: [], deleted: [txId])
-    /* … same expectation … */
+    let database = try ProfileDatabase.openInMemory()
+    let txRepo = GRDBTransactionRepository(database: database)
+    let txId = UUID()
+    let legId = UUID()
+
+    try await database.write { db in
+      try db.execute(sql: """
+        INSERT INTO instrument (id, record_name, kind, name, decimals)
+          VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
+        INSERT INTO "transaction" (id, record_name, date)
+          VALUES (?, 'tx-1', '2026-01-01');
+        INSERT INTO transaction_leg (id, record_name, transaction_id, instrument_id,
+                                     quantity, type, sort_order)
+          VALUES (?, 'leg-1', ?, 'USD', 100, 'expense', 0);
+        """, arguments: [txId, legId, txId])
+    }
+
+    try txRepo.applyRemoteChangesSync(saved: [], deleted: [txId])
+
+    try await database.read { db in
+      let legCount = try Int.fetchOne(db,
+        sql: "SELECT COUNT(*) FROM transaction_leg WHERE transaction_id = ?",
+        arguments: [txId]) ?? -1
+      #expect(legCount == 0)
+    }
   }
 ```
 
 Run; expect FAIL on both (legs are now orphaned because v5 dropped the CASCADE).
 
-- [ ] **Step 2: Update `delete(id:)`**
+- [ ] **Step 2: Update `delete(id:)` and rewrite the stale FK comments**
 
-In `GRDBTransactionRepository.swift:175`, the existing implementation already pre-fetches `legIds`. Add an explicit `deleteAll` call for the legs **before** deleting the parent (a CASCADE-equivalent statement, but explicit and visible in the diff). Replace the `try await database.write { … }` body:
+Two edits to `Backends/GRDB/Repositories/GRDBTransactionRepository.swift`:
+
+(a) Lines 175-180 — replace the `// Legs cascade via the …` doc-comment block on `delete(id:)` with:
+
+```swift
+  // Explicit delete of legs before the parent, replacing the v3-era
+  // ON DELETE CASCADE on `transaction_leg.transaction_id` that v5
+  // dropped (`v5_drop_foreign_keys`). The `fetchAll(...).map(\.id)`
+  // for hook fan-out MUST precede `deleteAll(...)` — after the delete
+  // the fetch returns empty and per-leg `onRecordDeleted` hooks
+  // silently stop firing. Both deletes share the same write
+  // transaction so the parent + children disappear atomically.
+```
+
+(b) Lines 14-16 (file-level header) — there is similar FK-CASCADE wording in the file's top doc-comment that becomes false after v5. Read lines 1-30 of the file and rewrite any reference to `ON DELETE CASCADE` to point at the explicit cascade in `delete(id:)` and the `applyRemoteChangesSync` site in `+Sync.swift`.
+
+(c) The existing implementation pre-fetches `legIds`. Add an explicit `deleteAll` call for the legs **after** the fetch and **before** deleting the parent. Replace the `try await database.write { … }` body:
 
 ```swift
     let outcome = try await database.write { database -> (didDelete: Bool, legIds: [UUID]) in
@@ -696,10 +814,8 @@ In `GRDBTransactionRepository.swift:175`, the existing implementation already pr
         .filter(TransactionLegRow.Columns.transactionId == id)
         .fetchAll(database)
         .map(\.id)
-      // Replaces v3's ON DELETE CASCADE on transaction_leg.transaction_id
-      // (dropped in v5_drop_foreign_keys). Both deletes inside the same
-      // write transaction so the parent + children disappear atomically.
-      _ = try TransactionLegRow
+      _ =
+        try TransactionLegRow
         .filter(TransactionLegRow.Columns.transactionId == id)
         .deleteAll(database)
       let didDelete = try TransactionRow.deleteOne(database, id: id)
@@ -741,16 +857,243 @@ Add the explicit child delete inside the loop:
 just test RepositorySyncCascadeTests 2>&1 | tee .agent-tmp/t6-step4.txt
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Add a paired rollback test**
+
+`delete(id:)` is now a multi-statement write. Per `DATABASE_CODE_GUIDE.md` §5, every multi-statement write needs a paired test asserting that a thrown error inside the closure leaves the database unchanged. Mirror the existing patterns in `MoolahTests/Backends/GRDB/CoreFinancialGraphRollbackTests.swift`.
+
+Create `MoolahTests/Backends/GRDB/TransactionDeleteRollbackTests.swift`:
+
+```swift
+import Foundation
+import GRDB
+import Testing
+@testable import Moolah
+
+@Suite("Transaction delete is atomic under failure")
+struct TransactionDeleteRollbackTests {
+  @Test func deleteRollsBackOnFailureAfterLegDelete() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    let txRepo = GRDBTransactionRepository(database: database)
+    let txId = UUID()
+    let legId = UUID()
+
+    try await database.write { db in
+      try db.execute(sql: """
+        INSERT INTO instrument (id, record_name, kind, name, decimals)
+          VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
+        INSERT INTO "transaction" (id, record_name, date)
+          VALUES (?, 'tx-1', '2026-01-01');
+        INSERT INTO transaction_leg (id, record_name, transaction_id, instrument_id,
+                                     quantity, type, sort_order)
+          VALUES (?, 'leg-1', ?, 'USD', 100, 'expense', 0);
+        // BEFORE-DELETE trigger on "transaction" raises an error,
+        // simulating a write failure mid-transaction.
+        CREATE TRIGGER force_failure BEFORE DELETE ON "transaction"
+        BEGIN
+          SELECT RAISE(ABORT, 'forced failure for rollback test');
+        END;
+        """, arguments: [txId, legId, txId])
+    }
+
+    do {
+      try await txRepo.delete(id: txId)
+      Issue.record("Expected delete to throw")
+    } catch {
+      // Expected.
+    }
+
+    // Both rows must still exist — the explicit DELETE on transaction_leg
+    // ran but the surrounding GRDB transaction must have rolled back.
+    try await database.read { db in
+      let txCount = try Int.fetchOne(db,
+        sql: "SELECT COUNT(*) FROM \"transaction\" WHERE id = ?",
+        arguments: [txId]) ?? -1
+      #expect(txCount == 1)
+
+      let legCount = try Int.fetchOne(db,
+        sql: "SELECT COUNT(*) FROM transaction_leg WHERE id = ?",
+        arguments: [legId]) ?? -1
+      #expect(legCount == 1)
+    }
+  }
+}
+```
+
+Run:
+```
+just test TransactionDeleteRollbackTests 2>&1 | tee .agent-tmp/t6-step5.txt
+```
+Expected: PASS. (`database.write { db in … }` is a single GRDB transaction — anything raised inside it rolls back the whole closure.)
+
+- [ ] **Step 6: Commit**
 
 ```
-git -C .worktrees/sync-fk-removal add MoolahTests/Backends/GRDB/RepositorySyncCascadeTests.swift Backends/GRDB/Repositories/GRDBTransactionRepository.swift Backends/GRDB/Repositories/GRDBTransactionRepository+Sync.swift
+git -C .worktrees/sync-fk-removal add MoolahTests/Backends/GRDB/RepositorySyncCascadeTests.swift MoolahTests/Backends/GRDB/TransactionDeleteRollbackTests.swift Backends/GRDB/Repositories/GRDBTransactionRepository.swift Backends/GRDB/Repositories/GRDBTransactionRepository+Sync.swift
 git -C .worktrees/sync-fk-removal commit -m "feat(transaction): explicit leg cascade on domain + sync delete
 
 Replaces the v3-era ON DELETE CASCADE on transaction_leg.transaction_id
 (dropped in v5) with an explicit DELETE inside the same write
 transaction. Covers both the domain delete(id:) and the sync
-applyRemoteChangesSync paths.
+applyRemoteChangesSync paths. Adds the §5 paired rollback test for
+the now-multi-statement delete(id:). Stale FK-CASCADE doc comments
+on delete(id:) and the file header are rewritten.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
+### Task 6b: Audit `ensureFKTargets` and remove FK-driven stub insertions
+
+`Backends/GRDB/Repositories/GRDBTransactionRepository+FKEnsure.swift` defines a single helper called from `GRDBTransactionRepository.create` (line 131) and `performUpdate` (line 282). Its body has four conditional branches; only one survives v5.
+
+The branches and their fates:
+
+| Branch | Lines | Reason it exists | Fate after v5 |
+|---|---|---|---|
+| Instrument | 24-32 | Non-fiat instrument rows are required for `fetchAll` to resolve the full `Instrument` value (NOT FK-driven; `instrument_id` columns have no FK in any version of the schema) | **Keep** |
+| Account | 33-43 | Stub row to satisfy the v3 FK `transaction_leg.account_id → account.id ON DELETE SET NULL` when a leg's CKRecord arrived before its account's | **Remove** |
+| Category | 44-52 | Stub row to satisfy the v3 FK `transaction_leg.category_id → category.id ON DELETE SET NULL` | **Remove** |
+| Earmark | 53-62 | Stub row to satisfy the v3 FK `transaction_leg.earmark_id → earmark.id ON DELETE SET NULL` | **Remove** |
+
+Leaving the account / category / earmark stubs in place is a correctness hazard: a sync-delivered CKRecord for a leg whose parent hasn't yet arrived would insert a phantom blank-name row that could persist after the real CKRecord lands (the real one would upsert in place via the unique `id` PK, but only if it arrives — server-side deletes would leave the stub forever).
+
+**Files:**
+- Modify: `Backends/GRDB/Repositories/GRDBTransactionRepository+FKEnsure.swift`
+- Modify: `MoolahTests/Backends/GRDB/RepositorySyncCascadeTests.swift` (add no-phantom-rows test)
+
+- [ ] **Step 1: Write the failing no-phantom-rows test**
+
+Append to `RepositorySyncCascadeTests`:
+
+```swift
+  /// After v5 + Task 6b, applying a CKRecord-equivalent leg upsert
+  /// whose `account_id` / `category_id` / `earmark_id` reference rows
+  /// that don't yet exist must NOT create blank-name stub rows. The
+  /// FK-driven stub insertion in `ensureFKTargets` is removed; only
+  /// the non-fiat instrument insertion survives.
+  @Test func legUpsertWithMissingParentsDoesNotCreatePhantomRows() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    let txRepo = GRDBTransactionRepository(database: database)
+    let orphanAccountId = UUID()
+    let orphanCategoryId = UUID()
+    let orphanEarmarkId = UUID()
+
+    let leg = TransactionLeg(
+      /* … domain leg referencing the three orphan ids,
+         instrument = USD (fiat — no instrument stub needed) … */)
+    let tx = Transaction(/* … one leg … */)
+
+    try await txRepo.create(tx)
+
+    try await database.read { db in
+      // No phantom blank-name rows.
+      let accountCount = try Int.fetchOne(db,
+        sql: "SELECT COUNT(*) FROM account WHERE id = ?",
+        arguments: [orphanAccountId]) ?? -1
+      #expect(accountCount == 0,
+              "Expected no phantom account; found \(accountCount)")
+
+      let categoryCount = try Int.fetchOne(db,
+        sql: "SELECT COUNT(*) FROM category WHERE id = ?",
+        arguments: [orphanCategoryId]) ?? -1
+      #expect(categoryCount == 0)
+
+      let earmarkCount = try Int.fetchOne(db,
+        sql: "SELECT COUNT(*) FROM earmark WHERE id = ?",
+        arguments: [orphanEarmarkId]) ?? -1
+      #expect(earmarkCount == 0)
+    }
+  }
+```
+
+(Concrete `TransactionLeg` and `Transaction` initialiser shapes: copy from `MoolahTests/Backends/GRDB/SyncRoundTripTransactionTests.swift`.)
+
+Run:
+```
+just test RepositorySyncCascadeTests/legUpsertWithMissingParentsDoesNotCreatePhantomRows 2>&1 | tee .agent-tmp/t6b-step1.txt
+```
+Expected: FAIL. The current `ensureFKTargets` will have inserted three stub rows.
+
+- [ ] **Step 2: Remove the three FK-driven branches**
+
+Replace the body of `ensureFKTargets` in `Backends/GRDB/Repositories/GRDBTransactionRepository+FKEnsure.swift` with only the instrument branch, and rename the function to make the post-v5 scope explicit:
+
+```swift
+// Backends/GRDB/Repositories/GRDBTransactionRepository+FKEnsure.swift
+
+import Foundation
+import GRDB
+
+// Read-time instrument-resolution helper. Split out of
+// `GRDBTransactionRepository` to keep the main class body under
+// SwiftLint's `type_body_length` threshold.
+//
+// Non-fiat instrument rows must exist locally for `fetchAll` to
+// resolve the full `Instrument` value when reading transactions. The
+// `instrument_id` column has never had an FK and this helper has
+// never been about FK enforcement for that column. Other parent
+// references (`account_id`, `category_id`, `earmark_id`) had FKs in
+// v3 that this helper used to dodge by inserting blank-name stubs
+// when the parent CKRecord hadn't arrived yet. v5 dropped those FKs;
+// the stubs are gone and a leg whose parent isn't in the local DB is
+// allowed to land — see `guides/SYNC_GUIDE.md` "Per-profile schema
+// does not enforce FKs" and the zombie-row trade-off documented in
+// `ProfileSchema+CoreFinancialGraph.swift`.
+extension GRDBTransactionRepository {
+  /// Inserts a placeholder `instrument` row for any non-fiat
+  /// instrument a leg references that isn't already present. Required
+  /// so `fetchAll` can resolve the full `Instrument` domain value on
+  /// read.
+  static func ensureInstrumentReadable(
+    database: Database,
+    leg: TransactionLeg
+  ) throws {
+    guard leg.instrument.kind != .fiatCurrency else { return }
+    let exists =
+      try InstrumentRow
+      .filter(InstrumentRow.Columns.id == leg.instrument.id)
+      .fetchOne(database)
+    guard exists == nil else { return }
+    try InstrumentRow(domain: leg.instrument).insert(database)
+  }
+}
+```
+
+- [ ] **Step 3: Update the call sites**
+
+Two call sites in `Backends/GRDB/Repositories/GRDBTransactionRepository.swift`:
+
+(a) Line 131 (inside `create(_:)`): `try Self.ensureFKTargets(database: database, leg: leg, defaultInstrument: defaultInstrument)` becomes `try Self.ensureInstrumentReadable(database: database, leg: leg)`.
+
+(b) Line 282 (inside `performUpdate(...)`): `try ensureFKTargets(database: database, leg: leg, defaultInstrument: defaultInstrument)` becomes `try Self.ensureInstrumentReadable(database: database, leg: leg)`.
+
+The `defaultInstrument` parameter is no longer used by the helper; the call sites that previously passed it should drop the argument. If `defaultInstrument` was sourced from a containing call (e.g. `performUpdate`'s parameter), check whether it has any other use — if not, prune the parameter chain back to the public entry point.
+
+- [ ] **Step 4: Re-run the test — must PASS**
+
+```
+just test RepositorySyncCascadeTests/legUpsertWithMissingParentsDoesNotCreatePhantomRows 2>&1 | tee .agent-tmp/t6b-step4.txt
+```
+Expected: PASS. Also re-run the existing transaction round-trip suite:
+```
+just test SyncRoundTripTransactionTests 2>&1 | tee .agent-tmp/t6b-step4-rt.txt
+```
+Expected: PASS. If any test fails because it relied on the implicit stub insertion (it shouldn't — the seeding helper `seedLegParents` already inserts real parents), update that test's seeding to be explicit.
+
+- [ ] **Step 5: Commit**
+
+```
+git -C .worktrees/sync-fk-removal add Backends/GRDB/Repositories/GRDBTransactionRepository+FKEnsure.swift Backends/GRDB/Repositories/GRDBTransactionRepository.swift MoolahTests/Backends/GRDB/RepositorySyncCascadeTests.swift
+git -C .worktrees/sync-fk-removal commit -m "refactor(transaction): drop FK-driven stub insertions; keep instrument resolution
+
+ensureFKTargets had four branches: instrument (read-time non-fiat
+resolution) and account / category / earmark (FK-driven blank-name
+stubs to dodge the v3 FK ordering bug). v5 dropped those FKs; the
+three FK branches are removed. Renames the helper to
+ensureInstrumentReadable to make the post-v5 scope obvious. New
+RepositorySyncCascadeTests case verifies that a leg insert with
+unknown parent ids no longer creates phantom blank-name rows.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
@@ -765,24 +1108,81 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write failing tests**
 
-Append:
+Append (using the same `ProfileDatabase.openInMemory()` + direct repo construction pattern as Tasks 5–6):
 
 ```swift
   @Test func earmarkSyncDeleteCascadesBudgetItemsAndNullsLegs() async throws {
-    /* seed earmark + budget_item + leg.earmark_id reference */
-    try (session.earmarkRepository as! GRDBEarmarkRepository)
-      .applyRemoteChangesSync(saved: [], deleted: [earmarkId])
-    /* expect 0 budget items remain; affected leg has earmark_id IS NULL */
+    let database = try ProfileDatabase.openInMemory()
+    let earmarkRepo = GRDBEarmarkRepository(database: database)
+    let earmarkId = UUID()
+    let categoryId = UUID()
+    let budgetId = UUID()
+    let txId = UUID()
+    let legId = UUID()
+
+    try await database.write { db in
+      try db.execute(sql: """
+        INSERT INTO instrument (id, record_name, kind, name, decimals)
+          VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
+        INSERT INTO category (id, record_name, name) VALUES (?, 'cat-1', 'Food');
+        INSERT INTO earmark (id, record_name, name, position, is_hidden)
+          VALUES (?, 'earmark-1', 'Holiday', 0, 0);
+        INSERT INTO earmark_budget_item (id, record_name, earmark_id, category_id, amount, instrument_id)
+          VALUES (?, 'budget-1', ?, ?, 5000, 'USD');
+        INSERT INTO "transaction" (id, record_name, date)
+          VALUES (?, 'tx-1', '2026-01-01');
+        INSERT INTO transaction_leg (id, record_name, transaction_id, instrument_id,
+                                     quantity, type, earmark_id, sort_order)
+          VALUES (?, 'leg-1', ?, 'USD', 100, 'expense', ?, 0);
+        """, arguments: [categoryId, earmarkId, budgetId, earmarkId, categoryId,
+                         txId, legId, txId, earmarkId])
+    }
+
+    try earmarkRepo.applyRemoteChangesSync(saved: [], deleted: [earmarkId])
+
+    try await database.read { db in
+      let budgetCount = try Int.fetchOne(db,
+        sql: "SELECT COUNT(*) FROM earmark_budget_item WHERE earmark_id = ?",
+        arguments: [earmarkId]) ?? -1
+      #expect(budgetCount == 0)
+
+      let nulledLeg = try Int.fetchOne(db,
+        sql: "SELECT COUNT(*) FROM transaction_leg WHERE id = ? AND earmark_id IS NULL",
+        arguments: [legId]) ?? -1
+      #expect(nulledLeg == 1)
+    }
   }
 
-  @Test func setBudgetTolertesUnknownCategoryWithoutStubInsert() async throws {
-    /* seed earmark; pass a categoryId that does NOT exist in `category` */
-    /* call performSetBudget; expect budget row inserted; expect zero rows in `category` */
-    let categoryRows = try await session.databaseQueue.read { db in
-      try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM category") ?? -1
+  @Test func setBudgetToleratesUnknownCategoryWithoutStubInsert() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    let earmarkRepo = GRDBEarmarkRepository(database: database)
+    let earmarkId = UUID()
+    let unknownCategoryId = UUID()  // deliberately NOT inserted
+
+    try await database.write { db in
+      try db.execute(sql: """
+        INSERT INTO instrument (id, record_name, kind, name, decimals)
+          VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
+        INSERT INTO earmark (id, record_name, name, position, is_hidden)
+          VALUES (?, 'earmark-1', 'Holiday', 0, 0);
+        """, arguments: [earmarkId])
     }
-    #expect(categoryRows == 0,
-            "Expected no stub category insertion now that the FK is gone")
+
+    let amount = MonetaryAmount(/* … 5000 USD … */)
+    try await earmarkRepo.setBudget(
+      earmarkId: earmarkId, categoryId: unknownCategoryId, amount: amount)
+
+    try await database.read { db in
+      let categoryCount = try Int.fetchOne(db,
+        sql: "SELECT COUNT(*) FROM category", arguments: []) ?? -1
+      #expect(categoryCount == 0,
+              "Expected no stub category row now that the FK is gone")
+
+      let budgetCount = try Int.fetchOne(db,
+        sql: "SELECT COUNT(*) FROM earmark_budget_item WHERE earmark_id = ?",
+        arguments: [earmarkId]) ?? -1
+      #expect(budgetCount == 1)
+    }
   }
 ```
 
@@ -872,16 +1272,49 @@ Note the exact file and line numbers. (If it lives in a `+Sync.swift` extension 
 
 - [ ] **Step 2: Write the failing test**
 
-Append:
+Append (same `ProfileDatabase.openInMemory()` + direct repo construction pattern):
 
 ```swift
   @Test func categorySyncDeleteNullsLegAndBudgetReferences() async throws {
-    /* seed category + leg.category_id + earmark_budget_item.category_id */
-    try (session.categoryRepository as! GRDBCategoryRepository)
-      .applyRemoteChangesSync(saved: [], deleted: [categoryId])
-    /* expect: leg.category_id IS NULL; budget_item with that category_id
-       is deleted (matching CategoryRepository.delete's behaviour with
-       replacementId = nil — see `reassignBudgets`) */
+    let database = try ProfileDatabase.openInMemory()
+    let categoryRepo = GRDBCategoryRepository(database: database)
+    let categoryId = UUID()
+    let earmarkId = UUID()
+    let budgetId = UUID()
+    let txId = UUID()
+    let legId = UUID()
+
+    try await database.write { db in
+      try db.execute(sql: """
+        INSERT INTO instrument (id, record_name, kind, name, decimals)
+          VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
+        INSERT INTO category (id, record_name, name) VALUES (?, 'cat-1', 'Food');
+        INSERT INTO earmark (id, record_name, name, position, is_hidden)
+          VALUES (?, 'earmark-1', 'Holiday', 0, 0);
+        INSERT INTO earmark_budget_item (id, record_name, earmark_id, category_id, amount, instrument_id)
+          VALUES (?, 'budget-1', ?, ?, 5000, 'USD');
+        INSERT INTO "transaction" (id, record_name, date)
+          VALUES (?, 'tx-1', '2026-01-01');
+        INSERT INTO transaction_leg (id, record_name, transaction_id, instrument_id,
+                                     quantity, type, category_id, sort_order)
+          VALUES (?, 'leg-1', ?, 'USD', 100, 'expense', ?, 0);
+        """, arguments: [categoryId, earmarkId, budgetId, earmarkId, categoryId,
+                         txId, legId, txId, categoryId])
+    }
+
+    try categoryRepo.applyRemoteChangesSync(saved: [], deleted: [categoryId])
+
+    try await database.read { db in
+      let nulledLeg = try Int.fetchOne(db,
+        sql: "SELECT COUNT(*) FROM transaction_leg WHERE id = ? AND category_id IS NULL",
+        arguments: [legId]) ?? -1
+      #expect(nulledLeg == 1)
+
+      let remainingBudgets = try Int.fetchOne(db,
+        sql: "SELECT COUNT(*) FROM earmark_budget_item WHERE category_id = ?",
+        arguments: [categoryId]) ?? -1
+      #expect(remainingBudgets == 0)
+    }
   }
 ```
 
@@ -939,7 +1372,32 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 This is the test that proves the original incident cannot recur: a single CKRecord batch carrying just an `InvestmentValueRecord` whose parent `account` is missing locally must succeed.
 
-- [ ] **Step 1: Write the test**
+The CKRecord must be constructed via the project's existing record-mapping path (the same one CKSyncEngine uses on inbound delivery), not hand-rolled. Hand-rolling can omit required fields silently — the `id` field for `InvestmentValueRow` is one example; others may exist. Reuse the helper used by the existing `SyncRoundTrip*Tests`.
+
+- [ ] **Step 1: Locate the existing CKRecord round-trip helper**
+
+```
+grep -rn "func toCKRecord\|CloudKitRecordConvertible\|func ckRecord" Backends/CloudKit/Sync 2>&1 | head -20
+grep -rn "InvestmentValueRow\|investmentValueRecord" MoolahTests/Backends/GRDB/SyncRoundTrip*Tests.swift 2>&1 | head -20
+```
+
+The existing `SyncRoundTripTransactionTests.swift` and the `ProfileDataSyncHandlerTestSupport` (or equivalent) module shows how to build a `CKRecord` for a row type. Mirror that pattern. If a round-trip helper exists for `InvestmentValueRow` (likely via `CloudKitRecordConvertible` conformance), call it directly:
+
+```swift
+let ivRow = InvestmentValueRow(
+  id: ivId,
+  recordName: "InvestmentValueRecord|\(ivId.uuidString)",
+  accountId: orphanAccountId,
+  date: Date(),
+  value: 100_000,
+  instrumentId: "USD",
+  encodedSystemFields: nil)
+let ivRecord = ivRow.toCKRecord(in: zoneID)  // or the project's actual helper
+```
+
+If the project doesn't expose `toCKRecord` as such, find the `record(from:in:)` / `ckRecord(in:)` / equivalent mapping site under `Backends/CloudKit/Sync/` and use the same call shape the production sync handler uses. **Do not** assemble fields by name from scratch.
+
+- [ ] **Step 2: Write the test**
 
 ```swift
 // MoolahTests/Sync/ApplyRemoteChangesOutOfOrderTests.swift
@@ -950,55 +1408,63 @@ import Testing
 
 @Suite("Sync apply tolerates out-of-order CKRecord delivery")
 struct ApplyRemoteChangesOutOfOrderTests {
+  /// Reproduces the rc.12 incident as a unit test: a single CKRecord
+  /// for an `InvestmentValueRow` whose parent `account` row doesn't
+  /// exist locally must succeed at apply time. Failed under v4 (FK
+  /// enforced); passes under v5.
   @Test func investmentValueArrivesBeforeAccount() async throws {
-    let backend = TestBackend()
-    let profile = try await /* seed profile */
-    let session = try await backend.openSession(profile: profile)
-    let handler = /* obtain ProfileDataSyncHandler — see existing tests for the hook */
+    // Use `ProfileDataSyncHandlerTestSupport` (or the equivalent test
+    // harness — confirmed in Step 1) to obtain a handler bound to a
+    // fresh in-memory ProfileDatabase. The harness construction pattern
+    // is the same one used by `SyncRoundTripTransactionTests`.
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    // No parent rows seeded — the database is fresh.
 
-    // Build a single CKRecord for an InvestmentValue whose parent
-    // account does NOT exist locally. The record's account_id field
-    // points at a UUID with no row in `account`.
     let orphanAccountId = UUID()
     let ivId = UUID()
-    let ivRecord = CKRecord(recordType: "InvestmentValueRecord", recordID:
-      .init(recordName: "iv-\(ivId.uuidString)", zoneID: profile.zoneID))
-    ivRecord["accountId"] = orphanAccountId.uuidString
-    ivRecord["date"] = Date()
-    ivRecord["value"] = 100_000
-    ivRecord["instrumentId"] = "USD"
+    let ivRow = InvestmentValueRow(
+      id: ivId,
+      recordName: InvestmentValueRow.recordName(for: ivId),
+      accountId: orphanAccountId,
+      date: Date(),
+      value: 100_000,
+      instrumentId: "USD",
+      encodedSystemFields: nil)
+    let ivRecord = ivRow.toCKRecord(in: harness.zoneID)  // or the project's actual helper
 
     // Apply — must NOT throw, must NOT report .saveFailed.
-    let result = handler.applyRemoteChanges(saved: [ivRecord], deleted: [])
+    let result = harness.handler.applyRemoteChanges(saved: [ivRecord], deleted: [])
 
     switch result {
     case .success(let changedTypes):
-      #expect(changedTypes.contains("InvestmentValueRecord"))
+      #expect(changedTypes.contains(InvestmentValueRow.recordType))
     case .saveFailed(let msg):
       Issue.record("Expected success, got .saveFailed(\(msg))")
     }
 
-    // The row landed in GRDB even though the account is missing — that
-    // is the new contract.
-    let stored = try await session.databaseQueue.read { db in
-      try Int.fetchOne(db,
+    // The row landed in GRDB even though the account is missing —
+    // that is the new contract.
+    try await harness.database.read { db in
+      let stored = try Int.fetchOne(db,
         sql: "SELECT COUNT(*) FROM investment_value WHERE id = ?",
         arguments: [ivId]) ?? -1
+      #expect(stored == 1)
     }
-    #expect(stored == 1)
   }
 }
 ```
 
-- [ ] **Step 2: Run; PASS**
+If `ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()` is named differently in the actual codebase, use the actual name; the structure (harness exposing `handler`, `database`, and `zoneID`) is invariant.
+
+- [ ] **Step 3: Run; PASS**
 
 ```
-just test ApplyRemoteChangesOutOfOrderTests 2>&1 | tee .agent-tmp/t9-step2.txt
+just test ApplyRemoteChangesOutOfOrderTests 2>&1 | tee .agent-tmp/t9-step3.txt
 ```
 
-If this fails with a SQLite-19 (FK), v5 didn't take effect — re-check Task 2. If it fails because the CKRecord building didn't cover all required fields, mirror an existing sync test (see `MoolahTests/Backends/GRDB/SyncRoundTrip*Tests.swift`).
+If this fails with a SQLite-19 (FK), v5 didn't take effect — re-check Task 2. If it fails because of a missing CKRecord field, the `toCKRecord` helper isn't being used correctly — return to Step 1.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```
 git -C .worktrees/sync-fk-removal commit -m "test(sync): pin out-of-order CKRecord delivery succeeds
@@ -1012,28 +1478,75 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 10: Update guides
+### Task 10: Update guides and stale doc-comments
 
 **Files:**
 - Modify: `guides/DATABASE_SCHEMA_GUIDE.md` (§6 example uses an FK ALTER; replace)
-- Modify: `guides/SYNC_GUIDE.md` (note FK contract under "Core Principles" or "Rules")
+- Modify: `guides/SYNC_GUIDE.md` (add "Per-profile schema does not enforce FKs" subsection)
+- Modify: `Backends/GRDB/ProfileSchema+CoreFinancialGraph.swift` (file-header zombie-row paragraph)
+- Modify: `MoolahTests/Backends/GRDB/SyncRoundTripTransactionTests.swift` (`seedLegParents` comment)
+- Modify: `MoolahTests/Support/TestBackend.swift` (`ensureLegParents` comment)
 
-- [ ] **Step 1: Update DATABASE_SCHEMA_GUIDE.md §6**
+- [ ] **Step 1: Update `DATABASE_SCHEMA_GUIDE.md` §6**
 
-The example at lines ~233-238 shows a synthetic v2 migration that adds an FK. Replace it with a generic example that doesn't presume FK enforcement (e.g., adding a column with a CHECK), and add a note under "Foreign-key handling" (§6.6) that the per-profile schema does not enforce FKs and integrity is repository-level.
+The example at lines ~233-238 shows a synthetic `v2_add_earmark_fk` migration that adds an FK. Replace with a generic example that doesn't presume FK enforcement (e.g. adding a column with a CHECK). The replacement **must**:
 
-- [ ] **Step 2: Update SYNC_GUIDE.md**
+- Use a `registerMigration("vN_<name>", …)` call with a string-literal stable ID (so §6.2 stays visible in the example).
+- Show `try db.execute(sql: """ ALTER TABLE … ADD COLUMN … TEXT NOT NULL DEFAULT '…' CHECK (… IN (…)); """)` (or similar) to demonstrate a non-FK schema-evolution shape.
 
-Add a short subsection (e.g., under §3 Core Principles) titled "Per-profile schema does not enforce FKs" with the rationale (CKSyncEngine ordering) and pointer to the repository sync delete paths and `ProfileSchema+DropForeignKeys.swift`.
+Suggested replacement (adjust to fit guide voice):
 
-- [ ] **Step 3: Commit**
+```swift
+migrator.registerMigration("v2_add_account_archived_state") { db in
+    try db.execute(sql: """
+        ALTER TABLE account
+            ADD COLUMN archived_state TEXT NOT NULL DEFAULT 'active'
+            CHECK (archived_state IN ('active', 'archived'));
+        CREATE INDEX account_by_archived_state
+            ON account (archived_state) WHERE archived_state = 'archived';
+        """)
+}
+```
+
+Also: under §6 ("Foreign-key handling") add one paragraph noting that the per-profile schema does not enforce FKs after `v5_drop_foreign_keys` and integrity is enforced in repository code; cross-reference `SYNC_GUIDE.md`.
+
+- [ ] **Step 2: Update `SYNC_GUIDE.md`**
+
+Add a new subsection under §3 Core Principles titled **"Per-profile schema does not enforce FKs"**. Required content (three bullets, in order):
+
+> - **The contract.** The per-profile `data.sqlite` schema declares no foreign keys. CKSyncEngine has no parent-before-child guarantee within a fetch session or across sessions; an FK-enforced child insert can fault the entire write transaction and trap the sync coordinator in an infinite re-fetch loop. See `Backends/GRDB/ProfileSchema+DropForeignKeys.swift` and the rc.12 incident write-up.
+> - **Cascade replication.** Sync delete paths in repositories must replicate the cascade / null-out semantics that the v3 FKs used to provide:
+>   - `GRDBAccountRepository.applyRemoteChangesSync` deletes `investment_value` rows for the account and nulls `transaction_leg.account_id` references.
+>   - `GRDBTransactionRepository.applyRemoteChangesSync` (and the domain `delete(id:)`) deletes `transaction_leg` rows for the transaction.
+>   - `GRDBEarmarkRepository.applyRemoteChangesSync` deletes `earmark_budget_item` rows and nulls `transaction_leg.earmark_id`.
+>   - `GRDBCategoryRepository.applyRemoteChangesSync` (or its `+Sync.swift`) nulls `transaction_leg.category_id`, deletes `earmark_budget_item` rows referencing the deleted category, and orphans child categories (`parent_id := NULL`).
+> - **Zombie rows are accepted.** A child whose parent CKRecord is deleted server-side or never delivered remains as an orphan row. This is intentional: the alternative (FK enforcement) traps the entire sync stream on a single delta. Repository read paths filter through known parents, so orphans do not surface in computed views; they occupy storage. Do not "fix" zombies by reintroducing FKs.
+
+- [ ] **Step 3: Update `+CoreFinancialGraph.swift` file header**
+
+Append to the FK section already rewritten in Task 4 (or fold into it): a sentence acknowledging that orphan child rows (a leg or budget item whose parent CKRecord was deleted server-side or never delivered) are an expected consequence of the FK-free design. Repository read paths filter through known parents; orphans do not surface in computed views. Do not reintroduce FKs to suppress them.
+
+- [ ] **Step 4: Update `MoolahTests/Backends/GRDB/SyncRoundTripTransactionTests.swift:69-100` `seedLegParents` comment**
+
+Replace any wording that implies "parents must exist before legs can be inserted under FK enforcement" with a clarifying note that under v5 the seeding is an *optional* setup detail (kept so the round-trip assertions still hold against fully-formed transactions), **not** a structural requirement of leg sync apply. New tests of leg arrival without a parent live in `MoolahTests/Sync/ApplyRemoteChangesOutOfOrderTests.swift` (Task 9).
+
+- [ ] **Step 5: Update `MoolahTests/Support/TestBackend.swift` `ensureLegParents` comment (~lines 183-188)**
+
+The current comment justifies placeholder seeding under "the GRDB schema's enforced FKs". Remove the FK justification. If any non-FK reason for placeholder seeding remains (e.g. enabling the test to read back a fully-resolved domain `Transaction` with non-trivial parents for assertion purposes), note that as the new justification. If no reason remains, delete the helper and update the call sites — confirm by `grep -rn "ensureLegParents" MoolahTests/`.
+
+- [ ] **Step 6: Commit**
 
 ```
-git -C .worktrees/sync-fk-removal commit -m "docs(guides): record FK-removal contract
+git -C .worktrees/sync-fk-removal add guides/DATABASE_SCHEMA_GUIDE.md guides/SYNC_GUIDE.md Backends/GRDB/ProfileSchema+CoreFinancialGraph.swift MoolahTests/Backends/GRDB/SyncRoundTripTransactionTests.swift MoolahTests/Support/TestBackend.swift
+git -C .worktrees/sync-fk-removal commit -m "docs(guides): record FK-removal contract; clear stale FK comments
 
-DATABASE_SCHEMA_GUIDE example no longer presumes FK enforcement.
-SYNC_GUIDE notes the new app-enforced integrity contract for the
-per-profile schema.
+DATABASE_SCHEMA_GUIDE §6 example no longer presumes FK enforcement
+and retains a stable string-ID demonstration. SYNC_GUIDE §3 documents
+the no-FK contract, the cascade-replication responsibilities of each
+repository's sync delete path, and the zombie-row trade-off.
++CoreFinancialGraph.swift file header acknowledges orphan rows as
+intentional. SyncRoundTripTransactionTests and TestBackend comments
+are updated to remove stale FK-ordering justifications.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
@@ -1108,8 +1621,32 @@ Use `~/.claude/skills/merge-queue/scripts/merge-queue-ctl.sh` per the project's 
 ## Self-review checklist
 
 - [x] Spec coverage: every FK in §Scope has a removal task; every cascade contract has an app-side replacement task; the original incident has an end-to-end test.
+- [x] `ensureFKTargets` (Task 6b) and `ensureCategoryExists` (Task 7) — both stub-row workarounds that exist *only* to dodge FK enforcement — are explicitly removed (or, for `ensureFKTargets`, the non-FK instrument-resolution branch is preserved).
 - [x] No placeholders. Every step shows the actual SQL / Swift to write or run.
 - [x] Type consistency: `applyRemoteChangesSync` signature matches across Account/Transaction/Earmark/Category. Index names match `+CoreFinancialGraph.swift`. Migration ID `v5_drop_foreign_keys` is consistent everywhere.
-- [x] Test framework: Swift Testing (`@Test`/`#expect`) per project convention.
+- [x] Test framework: Swift Testing (`@Test`/`#expect`) per project convention. Tests use `ProfileDatabase.openInMemory()` + direct concrete-repo construction (the project's established pattern in `MoolahTests/Backends/GRDB/CSVImportRollbackTests.swift` etc.). No `session.databaseQueue`, `backend.openSession`, or `as!` casts to the concrete repo.
+- [x] Multi-statement domain delete (`GRDBTransactionRepository.delete(id:)`) is paired with a §5 rollback test (Task 6 Step 5).
+- [x] Stale FK doc-comments in `GRDBTransactionRepository.swift` (lines 175-180 and the file-level header at lines 14-16) are explicitly rewritten in Task 6 Step 2.
+- [x] Migrator-body visibility (Task 0) is gated as a numbered step before Task 3 needs the methods to be `internal`-visible.
+- [x] CKRecord construction in Task 9 goes through the project's existing record-mapping helper, not a hand-rolled field-by-field assembly.
+- [x] Zombie-child-row trade-off is documented in three places: the `+CoreFinancialGraph.swift` file header (Task 4 / Task 10 Step 3), `SYNC_GUIDE.md` (Task 10 Step 2 third bullet), and the `Background → What this plan changes` section above.
 - [x] Worktree path: `.worktrees/sync-fk-removal`. All git commands use `git -C <path>`.
 - [x] Reviewers: schema, code-database, sync, concurrency, code — all listed in Task 11.
+
+### Findings applied from v1 → v2
+
+| Source | Severity | Finding | Resolution in v2 |
+|---|---|---|---|
+| sync-review | Critical | `GRDBTransactionRepository.ensureFKTargets` unaddressed | New **Task 6b** removes the FK-driven stub branches; renames helper to `ensureInstrumentReadable`; new test asserts no phantom blank-name rows after a leg upsert with missing parents. |
+| database-code-review | Important | Stale `// Legs cascade via the FK` comment in `delete(id:)` and file header | Explicit rewrite step in **Task 6 Step 2(a)/(b)**. |
+| database-code-review | Important | Tasks 5-8 use non-existent `session.*` / `backend.openSession` / `as!` test pattern | All four tasks rewritten to use `ProfileDatabase.openInMemory()` + direct repo construction (the project's established pattern). |
+| database-code-review | Important | Multi-statement `delete(id:)` lacks §5 rollback test | New `TransactionDeleteRollbackTests.swift` in **Task 6 Step 5**. |
+| database-code-review | Important | Migrator-body visibility check buried in a parenthetical | New numbered **Task 0**. |
+| database-code-review | Minor | `MoolahTests/Support/TestBackend.swift` `ensureLegParents` stale comment | Added to file inventory and **Task 10 Step 5**. |
+| sync-review | Important | Task 9 hand-built CKRecord may omit fields | **Task 9 Step 1** locates the existing round-trip helper; Step 2 uses it instead of hand-rolled fields. |
+| sync-review | Important | Zombie-row trade-off not documented | Documented in `+CoreFinancialGraph.swift` (**Task 4 / Task 10 Step 3**) and `SYNC_GUIDE.md` (**Task 10 Step 2** third bullet). |
+| sync-review | Important | `seedLegParents` comment in `SyncRoundTripTransactionTests` becomes misleading | Added to file inventory and **Task 10 Step 4**. |
+| sync-review | Minor | `SYNC_GUIDE.md` update lacked prescribed content | **Task 10 Step 2** mandates three required bullets. |
+| schema-review | Minor | Schema-guide example replacement should retain stable string-ID | **Task 10 Step 1** mandates a `registerMigration("vN_<name>", …)` literal in the replacement. |
+| concurrency-review | Minor | Tests reading `session.databaseQueue` would force a public-API exposure | Resolved by the same Tasks 5-8 rewrite (no `session.databaseQueue` reference anywhere). |
+| concurrency-review | Minor | `TestBackend()` ctor pattern was wrong | Same — direct `ProfileDatabase.openInMemory()` + repo construction; `TestBackend` is no longer instantiated by the new tests. |
