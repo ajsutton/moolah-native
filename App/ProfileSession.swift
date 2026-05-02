@@ -209,7 +209,6 @@ final class ProfileSession: Identifiable {
     self.syncObserverToken = coordinator.addObserver(for: profileId) { [weak self] changedTypes in
       self?.scheduleReloadFromSync(changedTypes: changedTypes)
     }
-    wireRepositorySync(coordinator: coordinator)
   }
 
   // MARK: - CloudKit Sync
@@ -269,7 +268,6 @@ final class ProfileSession: Identifiable {
       syncObserverToken = nil
     }
     coordinator.removeInstrumentRemoteChangeCallback(profileId: profile.id)
-    coordinator.removeProfileGRDBRepositories(profileId: profile.id)
     syncReloadTask?.cancel()
     syncReloadTask = nil
     catalogRefreshTask?.cancel()

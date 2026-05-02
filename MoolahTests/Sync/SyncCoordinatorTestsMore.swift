@@ -86,10 +86,9 @@ struct SyncCoordinatorTestsMore {
   @Test
   func profileDataHandlerCreatedOnDemand() throws {
     let manager = try ProfileContainerManager.forTesting()
-    // `handlerForProfileZone` requires a GRDB repository bundle —
-    // production wiring registers via `ProfileSession.registerWithSyncCoordinator`;
-    // the test injects the in-memory factory so the handler can be
-    // constructed without a full session.
+    // `handlerForProfileZone` builds a bundle on demand from the
+    // containerManager when no bundle is pre-registered. This test
+    // injects the explicit factory path to exercise that code branch.
     let coordinator = SyncCoordinator(
       containerManager: manager,
       fallbackGRDBRepositoriesFactory:
@@ -104,20 +103,21 @@ struct SyncCoordinatorTestsMore {
     #expect(handler.zoneID == zoneID)
   }
 
-  @Test("handlerForProfileZone throws profileNotRegistered when no bundle and no factory")
-  func handlerForProfileZoneThrowsWhenUnregistered() throws {
+  @Test("handlerForProfileZone builds handler from containerManager when no bundle and no factory")
+  func handlerForProfileZoneBuildsHandlerWhenUnregistered() throws {
     let manager = try ProfileContainerManager.forTesting()
     // No `setProfileGRDBRepositories` and no `fallbackGRDBRepositoriesFactory`
-    // — the production wiring-bug condition the throw is meant to surface.
+    // — the coordinator builds its own bundle via containerManager.database(for:)
+    // so sync apply can proceed for un-sessionized profiles (issue #619).
     let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
     let zoneID = CKRecordZone.ID(
       zoneName: "profile-\(profileId.uuidString)",
       ownerName: CKCurrentUserDefaultName)
 
-    #expect(throws: SyncCoordinatorError.profileNotRegistered(profileId)) {
-      _ = try coordinator.handlerForProfileZone(profileId: profileId, zoneID: zoneID)
-    }
+    let handler = try coordinator.handlerForProfileZone(profileId: profileId, zoneID: zoneID)
+    #expect(handler.profileId == profileId)
+    #expect(handler.zoneID == zoneID)
   }
 
   @Test("queueUnsyncedRecordsForAllProfiles skips profiles without a registered bundle")
