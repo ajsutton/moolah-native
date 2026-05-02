@@ -98,3 +98,16 @@ struct AccountSidebarRow: View {
   }
   .listStyle(.sidebar)
 }
+
+#Preview("Sidebar row — negative balance selected") {
+  List(selection: .constant(Optional("selected"))) {
+    SidebarRowView(
+      icon: "creditcard",
+      name: "Credit Card (selected)",
+      amount: InstrumentAmount(quantity: -500.00, instrument: .AUD),
+      isSelected: true
+    )
+    .tag("selected")
+  }
+  .listStyle(.sidebar)
+}

@@ -100,6 +100,14 @@ struct TransactionDraft: Sendable, Equatable {
       }
       return Instrument.AUD
     }
+
+    /// Convenience overload for callers (e.g. trade legs) that have no
+    /// earmarks to consult. Behaves the same as
+    /// ``resolvedInstrument(accounts:earmarks:)`` with an empty earmarks
+    /// collection.
+    func resolvedInstrument(accounts: Accounts) -> Instrument {
+      resolvedInstrument(accounts: accounts, earmarks: Earmarks(from: []))
+    }
   }
 
   // MARK: - Negation Helpers

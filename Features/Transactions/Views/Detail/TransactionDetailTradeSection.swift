@@ -85,7 +85,7 @@ struct TransactionDetailTradeSection: View {
   }
 
   private func defaultInstrument(forLegAt idx: Int) -> Instrument {
-    draft.legDrafts[idx].resolvedInstrument(accounts: accounts, earmarks: Earmarks(from: []))
+    draft.legDrafts[idx].resolvedInstrument(accounts: accounts)
   }
 
   @ViewBuilder

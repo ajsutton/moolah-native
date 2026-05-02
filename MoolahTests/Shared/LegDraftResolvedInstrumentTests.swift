@@ -64,4 +64,29 @@ struct LegDraftResolvedInstrumentTests {
     let result = leg.resolvedInstrument(accounts: Accounts(from: []), earmarks: earmarks)
     #expect(result == .USD)
   }
+
+  @Test("Overload without earmarks returns account instrument when set")
+  func overloadWithoutEarmarksReturnsAccountInstrument() {
+    let usd = Instrument.fiat(code: "USD")
+    let bankAccount = Account(
+      id: accountId,
+      name: "Bank",
+      type: .bank,
+      instrument: usd
+    )
+    let accounts = Accounts(from: [bankAccount])
+    let leg = TransactionDraft.LegDraft(
+      type: .trade,
+      accountId: accountId,
+      amountText: "0",
+      categoryId: nil,
+      categoryText: "",
+      earmarkId: nil,
+      instrument: nil
+    )
+
+    #expect(leg.resolvedInstrument(accounts: accounts) == usd)
+    // Sanity check: also returns AUD when accounts is empty.
+    #expect(leg.resolvedInstrument(accounts: Accounts(from: [])) == .AUD)
+  }
 }
