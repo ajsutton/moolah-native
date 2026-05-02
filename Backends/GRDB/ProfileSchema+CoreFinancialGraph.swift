@@ -22,26 +22,19 @@ import GRDB
 //     `sort_order`) are non-negative or strictly positive as
 //     applicable.
 //
-// Foreign keys:
-//   * `transaction_leg.transaction_id` → `transaction.id` ON DELETE
-//     CASCADE — legs cannot outlive their transaction.
-//   * `transaction_leg.account_id` → `account.id` ON DELETE SET NULL —
-//     account-less legs are valid (`Domain/Models/TransactionLeg.swift`
-//     `accountId: UUID?`).
-//   * `transaction_leg.category_id` / `earmark_id` → SET NULL —
-//     repository-managed delete-with-replacement.
-//   * `category.parent_id` → `category.id` ON DELETE NO ACTION —
-//     hierarchy deletion is an explicit repository step.
-//   * `earmark_budget_item.earmark_id` → `earmark.id` ON DELETE
-//     CASCADE — items belong to their earmark.
-//   * `earmark_budget_item.category_id` → `category.id` ON DELETE NO
-//     ACTION — silent budget mutation is unsafe.
-//   * `investment_value.account_id` → `account.id` ON DELETE CASCADE —
-//     values belong to the account.
-//
-// No FK on `*.instrument_id`: `Instrument` is dual-role — synced
-// stocks/crypto have rows; ambient fiat (`Locale.Currency`) does not.
-// Integrity is enforced at the application boundary.
+// Foreign keys: NONE. The eight FKs that v3 originally declared
+// (`transaction_leg.transaction_id|account_id|category_id|earmark_id`,
+// `earmark_budget_item.earmark_id|category_id`,
+// `investment_value.account_id`, `category.parent_id`) were dropped
+// by `v5_drop_foreign_keys`. CKSyncEngine does not promise
+// parent-before-child arrival across batches, and an out-of-order
+// child insert under enforced FKs would fault the entire fetch
+// transaction and trap the sync coordinator in an infinite re-fetch
+// loop. Integrity is now enforced at the application boundary:
+// repository sync entry points (`applyRemoteChangesSync`) and domain
+// `delete(...)` methods replicate the cascade / null-out semantics
+// the FKs used to provide. See `ProfileSchema+DropForeignKeys.swift`
+// for the migration and `guides/SYNC_GUIDE.md` for the contract.
 
 extension ProfileSchema {
   static func createCoreFinancialGraphTables(_ database: Database) throws {
