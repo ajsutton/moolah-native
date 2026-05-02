@@ -6,14 +6,20 @@ before_all do
 end
 
 # Provisioning profile is the only signing setting that varies per build —
-# `match` produces a fresh profile name each time. Everything else (style,
-# identity, entitlements) lives on the app target's Release config in
-# project.yml. The setting MUST be scoped to the app target with
-# `[target=...]`; an unscoped xcarg leaks to SPM dependencies (e.g. GRDB),
-# which fail at archive with "<package> does not support provisioning
-# profiles."
-def release_xcargs(target_name, profile_name)
-  "'PROVISIONING_PROFILE_SPECIFIER[target=#{target_name}]=#{profile_name}'"
+# `match` produces a fresh profile name each time. The Release config of
+# the relevant app target in project.yml has
+# `PROVISIONING_PROFILE_SPECIFIER: ${<env_var>}`; setting that env var
+# and re-running `just generate` bakes the profile name into the project
+# file scoped to the app target only — SPM packages don't see it and
+# don't fail with "<package> does not support provisioning profiles."
+#
+# An xcargs override would be simpler but doesn't work: xcodebuild's
+# command-line setting overrides apply globally to every target in the
+# workspace, and the `[target=...]` qualifier that scopes them inside
+# xcconfig files isn't parsed correctly on the command line.
+def bake_profile(env_var, profile_name)
+  ENV[env_var] = profile_name
+  sh("cd .. && just generate")
 end
 
 platform :ios do
@@ -49,14 +55,13 @@ platform :ios do
       is_key_content_base64: true
     )
 
-    profile_name = ENV["sigh_rocks.moolah.app_appstore_profile-name"]
+    bake_profile("IOS_PROVISIONING_PROFILE", ENV["sigh_rocks.moolah.app_appstore_profile-name"])
 
     build_app(
       scheme: "Moolah-iOS",
       export_method: "app-store",
       output_directory: "./build",
-      output_name: "Moolah.ipa",
-      xcargs: release_xcargs("Moolah_iOS", profile_name)
+      output_name: "Moolah.ipa"
     )
 
     UI.message("Validating IPA against App Store rules...")
@@ -80,23 +85,23 @@ platform :ios do
       is_key_content_base64: true
     )
 
-    # `increment_build_number` edits the generated pbxproj, which is wiped by
-    # `just generate`. That's fine here: nothing regenerates between this call
-    # and `build_app`, and TestFlight is the persistent source of truth for the
-    # next build number (not project.yml's hard-coded "1"). Do NOT add a
-    # `just generate` below this point or the bump will be lost.
+    # Order matters: `bake_profile` re-runs `just generate`, which wipes the
+    # pbxproj. Run it BEFORE `increment_build_number` (which mutates the
+    # pbxproj). Anything that mutates the pbxproj must come AFTER the last
+    # `just generate` and BEFORE `build_app`, since TestFlight (not
+    # project.yml's hard-coded "1") is the persistent source of truth for
+    # the next build number.
+    bake_profile("IOS_PROVISIONING_PROFILE", ENV["sigh_rocks.moolah.app_appstore_profile-name"])
+
     increment_build_number(
       build_number: latest_testflight_build_number(api_key: api_key) + 1
     )
-
-    profile_name = ENV["sigh_rocks.moolah.app_appstore_profile-name"]
 
     build_app(
       scheme: "Moolah-iOS",
       export_method: "app-store",
       output_directory: "./build",
-      output_name: "Moolah.ipa",
-      xcargs: release_xcargs("Moolah_iOS", profile_name)
+      output_name: "Moolah.ipa"
     )
 
     upload_to_testflight(
@@ -191,7 +196,7 @@ platform :mac do
     # match exports this with `_macos` infix because we passed `platform: "macos"`.
     # iOS appstore uses `sigh_<bundle>_appstore_profile-name` (no platform suffix)
     # because iOS is fastlane's default platform.
-    profile_name = ENV["sigh_rocks.moolah.app_developer_id_macos_profile-name"]
+    bake_profile("MAC_PROVISIONING_PROFILE", ENV["sigh_rocks.moolah.app_developer_id_macos_profile-name"])
 
     # Resolve build dir to an absolute path off the repo root. gym/build_app
     # writes outputs to <repo_root>/build/ regardless of fastlane's own cwd,
@@ -204,8 +209,7 @@ platform :mac do
       configuration: "Release",
       export_method: "developer-id",
       output_directory: build_dir,
-      output_name: "Moolah",
-      xcargs: release_xcargs("Moolah_macOS", profile_name)
+      output_name: "Moolah"
     )
 
     app_path = File.join(build_dir, "Moolah.app")

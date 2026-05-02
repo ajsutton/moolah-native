@@ -109,11 +109,16 @@ targets:
         Release:
           # Distribution signing scoped to this target only — never inherit
           # to SPM dependencies which can't be signed with provisioning
-          # profiles. PROVISIONING_PROFILE_SPECIFIER comes from `match` at
-          # build time via target-scoped xcargs in fastlane/Fastfile.
+          # profiles. PROVISIONING_PROFILE_SPECIFIER is xcodegen-substituted
+          # from $IOS_PROVISIONING_PROFILE; fastlane sets that env var from
+          # `match`'s output and re-runs `just generate` before `build_app`.
+          # Local Debug builds ignore this Release block, so an unset env
+          # var (xcodegen writing the literal `${IOS_PROVISIONING_PROFILE}`)
+          # is harmless.
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: Apple Distribution
           CODE_SIGN_ENTITLEMENTS: fastlane/Moolah.entitlements
+          PROVISIONING_PROFILE_SPECIFIER: ${IOS_PROVISIONING_PROFILE}
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CLOUDKIT_ENABLED"
           CLOUDKIT_ENVIRONMENT: Production
           CLOUDKIT_CONTAINER_ID: iCloud.rocks.moolah.app.v2
@@ -156,6 +161,7 @@ targets:
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: Developer ID Application
           CODE_SIGN_ENTITLEMENTS: fastlane/Moolah-mac.entitlements
+          PROVISIONING_PROFILE_SPECIFIER: ${MAC_PROVISIONING_PROFILE}
           ENABLE_HARDENED_RUNTIME: YES
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CLOUDKIT_ENABLED"
           CLOUDKIT_ENVIRONMENT: Production
