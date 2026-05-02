@@ -299,7 +299,6 @@ extension TransactionDetailView {
         accounts: accounts,
         categories: categories,
         earmarks: earmarks,
-        sortedAccounts: sortedAccounts,
         categoryState: legCategoryStateBinding(for: index),
         focusedField: $focusedField,
         onRequestDelete: { legPendingDeletion = index }

@@ -15,7 +15,6 @@ struct TransactionDetailLegRow: View {
   let accounts: Accounts
   let categories: Categories
   let earmarks: Earmarks
-  let sortedAccounts: [Account]
   @Binding var categoryState: CategoryAutocompleteState
   @FocusState.Binding var focusedField: TransactionDetailFocus?
   let onRequestDelete: () -> Void
@@ -64,9 +63,11 @@ struct TransactionDetailLegRow: View {
   private var accountPicker: some View {
     Picker("Account", selection: $draft.legDrafts[index].accountId) {
       Text("None").tag(UUID?.none)
-      ForEach(sortedAccounts) { account in
-        Text(account.name).tag(UUID?.some(account.id))
-      }
+      AccountPickerOptions(
+        accounts: accounts,
+        exclude: nil,
+        currentSelection: draft.legDrafts[index].accountId
+      )
     }
     .onChange(of: draft.legDrafts[index].accountId) { _, newAccountId in
       draft.enforceEarmarkOnlyInvariants(at: index)
