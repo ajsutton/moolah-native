@@ -878,6 +878,10 @@ struct TransactionDeleteRollbackTests {
     let legId = UUID()
 
     try await database.write { db in
+      // BEFORE-DELETE trigger on "transaction" raises ABORT,
+      // simulating a write failure mid-transaction. SQL comments
+      // inside the literal use `--`, not `//`, otherwise SQLite
+      // returns a parse error before the seed completes.
       try db.execute(sql: """
         INSERT INTO instrument (id, record_name, kind, name, decimals)
           VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
@@ -886,8 +890,6 @@ struct TransactionDeleteRollbackTests {
         INSERT INTO transaction_leg (id, record_name, transaction_id, instrument_id,
                                      quantity, type, sort_order)
           VALUES (?, 'leg-1', ?, 'USD', 100, 'expense', 0);
-        // BEFORE-DELETE trigger on "transaction" raises an error,
-        // simulating a write failure mid-transaction.
         CREATE TRIGGER force_failure BEFORE DELETE ON "transaction"
         BEGIN
           SELECT RAISE(ABORT, 'forced failure for rollback test');
@@ -1399,6 +1401,8 @@ If the project doesn't expose `toCKRecord` as such, find the `record(from:in:)` 
 
 - [ ] **Step 2: Write the test**
 
+`HandlerHarness` does NOT expose a `zoneID` property — only `handler`, `container`, and `database` (verified in `MoolahTests/Support/ProfileDataSyncHandlerTestSupport.swift`). Existing round-trip test suites that need a zone declare a suite-local `private static let zoneID = …` constant. Follow that pattern.
+
 ```swift
 // MoolahTests/Sync/ApplyRemoteChangesOutOfOrderTests.swift
 @preconcurrency import CloudKit
@@ -1408,15 +1412,22 @@ import Testing
 
 @Suite("Sync apply tolerates out-of-order CKRecord delivery")
 struct ApplyRemoteChangesOutOfOrderTests {
+  // Mirrors the suite-local zone constant used by every existing
+  // round-trip test (e.g. SyncRoundTripTransactionTests). The handler
+  // does not constrain which zone its records live in for apply
+  // semantics; this just needs to be a valid CKRecordZone.ID.
+  private static let zoneID = CKRecordZone.ID(
+    zoneName: "TestZone", ownerName: CKCurrentUserDefaultName)
+
   /// Reproduces the rc.12 incident as a unit test: a single CKRecord
   /// for an `InvestmentValueRow` whose parent `account` row doesn't
   /// exist locally must succeed at apply time. Failed under v4 (FK
   /// enforced); passes under v5.
   @Test func investmentValueArrivesBeforeAccount() async throws {
-    // Use `ProfileDataSyncHandlerTestSupport` (or the equivalent test
-    // harness — confirmed in Step 1) to obtain a handler bound to a
-    // fresh in-memory ProfileDatabase. The harness construction pattern
-    // is the same one used by `SyncRoundTripTransactionTests`.
+    // Use `ProfileDataSyncHandlerTestSupport` to obtain a handler
+    // bound to a fresh in-memory ProfileDatabase. Harness exposes
+    // `handler`, `container`, `database` — and nothing else; the
+    // zone is declared at suite level above.
     let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
     // No parent rows seeded — the database is fresh.
 
@@ -1430,7 +1441,7 @@ struct ApplyRemoteChangesOutOfOrderTests {
       value: 100_000,
       instrumentId: "USD",
       encodedSystemFields: nil)
-    let ivRecord = ivRow.toCKRecord(in: harness.zoneID)  // or the project's actual helper
+    let ivRecord = ivRow.toCKRecord(in: Self.zoneID)  // or the project's actual helper
 
     // Apply — must NOT throw, must NOT report .saveFailed.
     let result = harness.handler.applyRemoteChanges(saved: [ivRecord], deleted: [])
@@ -1454,7 +1465,7 @@ struct ApplyRemoteChangesOutOfOrderTests {
 }
 ```
 
-If `ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()` is named differently in the actual codebase, use the actual name; the structure (harness exposing `handler`, `database`, and `zoneID`) is invariant.
+If `ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()` is named differently in the actual codebase, use the actual name. The harness exposes `handler` and `database`; the zone is declared at the suite level (above) following the established round-trip test pattern.
 
 - [ ] **Step 3: Run; PASS**
 
@@ -1650,3 +1661,10 @@ Use `~/.claude/skills/merge-queue/scripts/merge-queue-ctl.sh` per the project's 
 | schema-review | Minor | Schema-guide example replacement should retain stable string-ID | **Task 10 Step 1** mandates a `registerMigration("vN_<name>", …)` literal in the replacement. |
 | concurrency-review | Minor | Tests reading `session.databaseQueue` would force a public-API exposure | Resolved by the same Tasks 5-8 rewrite (no `session.databaseQueue` reference anywhere). |
 | concurrency-review | Minor | `TestBackend()` ctor pattern was wrong | Same — direct `ProfileDatabase.openInMemory()` + repo construction; `TestBackend` is no longer instantiated by the new tests. |
+
+### Findings applied from v2 → v3
+
+| Source | Severity | Finding | Resolution in v3 |
+|---|---|---|---|
+| database-code-review | Important | Task 6 Step 5 rollback test seed used `//` Swift comments inside the SQL string literal (would parse-error at runtime, aborting seed before the trigger is created). | SQL comments rewritten to `--`. The Swift comment moved outside the string literal. |
+| database-code-review | Important | Task 9 Step 2 referenced `harness.zoneID`; `HandlerHarness` only exposes `handler`, `container`, `database`. | Suite-local `private static let zoneID = CKRecordZone.ID(zoneName: "TestZone", ownerName: CKCurrentUserDefaultName)` declared, mirroring the established pattern in every existing round-trip test suite. CKRecord construction now uses `Self.zoneID`. |
