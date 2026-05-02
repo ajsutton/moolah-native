@@ -146,8 +146,29 @@ This matches the web app's `Math.max(0, -totalExpenses)` pattern. This conventio
 - Use `.secondary` for muted text (e.g., running balances, notes)
 
 **Don't:**
-- Mix custom RGB values with semantic colors
+- Mix custom RGB values with semantic colors (one documented exception: see `Selected-Row Contrast Override (Exception)` below)
 - Use color alone to convey information (always pair with text/icons for accessibility)
+
+#### Selected-Row Contrast Override (Exception)
+When an amount is rendered on a row whose selection background is prominent (the focused sidebar's blue selection highlight), the standard `.green` / `.red` system colours read as muddy and lose legibility. Verified visually on light and dark mode in Xcode previews; system colours `.mint` and `.pink` were also tried and rejected — both are too desaturated against the saturated blue.
+
+In this **specific** context, override with hand-tuned bright values:
+
+```swift
+private static let selectedPositiveColor = Color(red: 0.55, green: 1.0, blue: 0.65)
+private static let selectedNegativeColor = Color(red: 1.0, green: 0.6, blue: 0.6)
+```
+
+These literals are the **only** place in the app where hardcoded RGB values are permitted.
+
+Apply the override only when both:
+
+1. The row is selected (`isSelected == true`), and
+2. The selection background is prominent (`backgroundProminence == .increased`). When the sidebar is unfocused the background is grey and the standard `.green` / `.red` are more readable — fall back to those.
+
+`Color(red:green:blue:)` uses sRGB and does **not** adapt between light and dark appearances. The chosen values are intentionally bright (HSL lightness > 0.80) so they read well against the focused-sidebar blue in both modes without needing appearance variants. Tuned against the macOS 26 sidebar selection palette; re-verify visually if Apple revises the focused-sidebar selection colour in a future macOS release.
+
+The reference implementation is `SidebarRowView.amountColorOverride` in `Features/Accounts/Views/AccountSidebarRow.swift`. Any new override site must follow the same two-condition gate.
 
 #### Accent Color
 - **macOS:** Default blue (`.accentColor(.blue)`) for buttons, links, selection
@@ -163,7 +184,7 @@ This matches the web app's `Math.max(0, -totalExpenses)` pattern. This conventio
 
 ### Dark Mode
 - **Always test in dark mode** via Xcode preview or system settings
-- Use system colors exclusively to ensure proper adaptation
+- Use system colors exclusively to ensure proper adaptation (the one permitted exception is documented in `Selected-Row Contrast Override (Exception)` above)
 - Avoid pure black (`#000000`) or pure white (`#FFFFFF`); use `.primary` / `.background`
 
 ---
