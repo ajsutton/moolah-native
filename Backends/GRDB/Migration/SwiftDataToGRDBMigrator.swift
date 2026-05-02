@@ -11,12 +11,15 @@ import SwiftData
 /// re-runs against an already-populated table.
 ///
 /// **Idempotency.** Set the flag *only* after the GRDB transaction
-/// commits. The write path uses `upsert` rather than `insert` so a
-/// crash *between* the transaction commit and the `defaults.set(...)`
+/// commits. The write path uses `insert(onConflict: .ignore)` so that
+/// a crash *between* the transaction commit and the `defaults.set(...)`
 /// call (the unavoidable gap) re-running on next launch is harmless —
-/// the upsert no-ops on already-present rows. A `defer { committed ?
-/// flag = true : () }` pattern makes the flag-set-on-success invariant
-/// structurally visible.
+/// insert-or-ignore silently skips already-present rows. Critically,
+/// insert-or-ignore also preserves any row written by sync apply
+/// *before* the migrator runs: a sync-applied row represents a
+/// server-authoritative version and must never be clobbered by an
+/// older SwiftData copy. A `defer { committed ? flag = true : () }`
+/// pattern makes the flag-set-on-success invariant structurally visible.
 ///
 /// **Bit-for-bit `encodedSystemFields`.** The migrator copies the cached
 /// CKRecord change-tag blob byte-for-byte from the SwiftData row to the
@@ -103,7 +106,7 @@ struct SwiftDataToGRDBMigrator {
   /// `async throws` because each per-type migrator awaits
   /// `database.write { ... }` to push the GRDB transaction onto GRDB's
   /// own writer queue (off-MainActor) instead of holding the calling
-  /// thread for the duration of the upsert. The bounded SwiftData
+  /// thread for the duration of the insert. The bounded SwiftData
   /// fetch stays on `@MainActor` (where the `mainContext`-bound
   /// container requires it). Total work is bounded by the row counts
   /// in the source SwiftData store. The eight v3 migrators run in
@@ -137,7 +140,7 @@ struct SwiftDataToGRDBMigrator {
     // Core financial graph — parents before children so each
     // transaction's FK references resolve at commit. PRAGMA
     // foreign_keys = ON is in effect; an unresolved parent fails the
-    // upsert loudly, which is the correct behaviour.
+    // insert loudly, which is the correct behaviour.
     try await migrateInstrumentsIfNeeded(
       modelContainer: modelContainer, database: database, defaults: defaults)
     try await migrateCategoriesIfNeeded(
@@ -174,9 +177,10 @@ struct SwiftDataToGRDBMigrator {
     // The `committed` flag is flipped after the write transaction commits
     // and consulted by the `defer` block — making the
     // "flag is set iff the write committed" invariant visible without
-    // duplicating the success path. `upsert` (rather than `insert`)
-    // keeps re-runs harmless if the app crashes between commit and
-    // flag-set: existing rows are a no-op match.
+    // duplicating the success path. `insert(onConflict: .ignore)` keeps
+    // re-runs harmless if the app crashes between commit and flag-set,
+    // and also preserves any sync-applied row that already exists in GRDB
+    // so it is not clobbered by an older SwiftData copy.
     var committed = false
     var rowCount = 0
     defer {
@@ -198,7 +202,7 @@ struct SwiftDataToGRDBMigrator {
     if !mappedRows.isEmpty {
       try await database.write { database in
         for row in mappedRows {
-          try row.upsert(database)
+          try row.insert(database, onConflict: .ignore)
         }
       }
     }
@@ -234,7 +238,8 @@ struct SwiftDataToGRDBMigrator {
   ) async throws {
     guard !defaults.bool(forKey: Self.importRulesFlag) else { return }
     // See `migrateCSVImportProfilesIfNeeded` for why this uses a
-    // `committed` defer flag and `upsert` (idempotent re-migration).
+    // `committed` defer flag and `insert(onConflict: .ignore)`
+    // (idempotent re-migration; preserves sync-applied rows).
     var committed = false
     var rowCount = 0
     defer {
@@ -256,7 +261,7 @@ struct SwiftDataToGRDBMigrator {
     if !mappedRows.isEmpty {
       try await database.write { database in
         for row in mappedRows {
-          try row.upsert(database)
+          try row.insert(database, onConflict: .ignore)
         }
       }
     }

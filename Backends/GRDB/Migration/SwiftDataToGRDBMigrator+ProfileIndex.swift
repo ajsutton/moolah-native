@@ -34,8 +34,10 @@ extension SwiftDataToGRDBMigrator {
   ///
   /// The `committed` defer pattern matches the per-profile migrators:
   /// the gating flag is set only after the GRDB transaction commits,
-  /// and `upsert` (rather than `insert`) keeps a re-run after a crash
-  /// between commit and flag-set harmless.
+  /// and `insert(onConflict: .ignore)` keeps a re-run after a crash
+  /// between commit and flag-set harmless, and preserves any
+  /// sync-applied row so it is not overwritten by an older SwiftData
+  /// copy.
   ///
   /// `encodedSystemFields` is copied byte-for-byte. Decoding it would
   /// lose precision (the `NSKeyedArchiver` round-trip is not guaranteed
@@ -68,7 +70,7 @@ extension SwiftDataToGRDBMigrator {
     if !mappedRows.isEmpty {
       try await profileIndexDatabase.write { database in
         for row in mappedRows {
-          try row.upsert(database)
+          try row.insert(database, onConflict: .ignore)
         }
       }
     }

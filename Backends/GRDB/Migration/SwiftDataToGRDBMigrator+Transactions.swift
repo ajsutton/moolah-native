@@ -7,8 +7,8 @@ import SwiftData
 // Per-type SwiftData → GRDB migrators for the transaction half of the
 // core financial graph (transactions and transaction legs). Companion
 // to `SwiftDataToGRDBMigrator+CoreFinancialGraph.swift`. Same pattern:
-// `defer`-then-flag, idempotent `upsert`, ordered so parents commit
-// before children.
+// `defer`-then-flag, idempotent `insert(onConflict: .ignore)`, ordered
+// so parents commit before children.
 
 extension SwiftDataToGRDBMigrator {
 
@@ -41,7 +41,7 @@ extension SwiftDataToGRDBMigrator {
     if !mappedRows.isEmpty {
       try await database.write { database in
         for row in mappedRows {
-          try row.upsert(database)
+          try row.insert(database, onConflict: .ignore)
         }
       }
     }
@@ -103,7 +103,7 @@ extension SwiftDataToGRDBMigrator {
     if !mappedRows.isEmpty {
       try await database.write { database in
         for row in mappedRows {
-          try row.upsert(database)
+          try row.insert(database, onConflict: .ignore)
         }
       }
     }

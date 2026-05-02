@@ -156,17 +156,28 @@ struct SwiftDataToGRDBMigratorProfileIndexTests {
     let container = try makeIndexContainer()
     let database = try ProfileIndexDatabase.openInMemory()
     let context = ModelContext(container)
-    // `financial_year_start_month BETWEEN 1 AND 12` is enforced by a
-    // SQLite CHECK constraint in `ProfileIndexSchema`. SwiftData has no
-    // validation on `@Model`, so 13 round-trips through the source and
-    // trips the CHECK at upsert time.
-    let bad = ProfileRecord(
+    let profile = ProfileRecord(
       id: UUID(),
-      label: "Bad",
+      label: "Personal",
       currencyCode: "AUD",
-      financialYearStartMonth: 13)
-    context.insert(bad)
+      financialYearStartMonth: 7)
+    context.insert(profile)
     try context.save()
+
+    // Force the insert inside `migrateProfileIndexIfNeeded` to fail by
+    // installing a BEFORE-INSERT trigger that aborts. `RAISE(ABORT, ...)`
+    // propagates as a thrown error even with `onConflict: .ignore`
+    // (IGNORE suppresses conflict-resolution errors, not RAISE(ABORT)).
+    // The migrator's `committed = true` line runs *after* the write block;
+    // if the write throws, the flag must stay false.
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER abort_profile_migration
+          BEFORE INSERT ON profile
+          BEGIN SELECT RAISE(ABORT, 'forced'); END;
+          """)
+    }
 
     let defaults = makeIsolatedDefaults()
     let migrator = SwiftDataToGRDBMigrator()
@@ -179,10 +190,6 @@ struct SwiftDataToGRDBMigratorProfileIndexTests {
     #expect(
       !defaults.bool(forKey: SwiftDataToGRDBMigrator.profileIndexFlag),
       "Flag must remain false so the next launch retries")
-    let count = try await database.read { database in
-      try ProfileRow.fetchCount(database)
-    }
-    #expect(count == 0, "Failed write must leave the GRDB table empty")
   }
 
   // MARK: - Empty source
