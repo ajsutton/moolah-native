@@ -82,6 +82,14 @@ struct PasteCSVActionKey: FocusedValueKey {
   typealias Value = () -> Void
 }
 
+/// Action published by an open transaction inspector while its type
+/// picker is interactive. Drives the Transaction > Type submenu (⌥⌘1–⌥⌘5).
+/// `nil` whenever no editable inspector is in scope (e.g. opening-balance
+/// transactions, irreducible-custom shapes, or no inspector open).
+struct SetTransactionTypeActionKey: FocusedValueKey {
+  typealias Value = (TransactionDetailMode) -> Void
+}
+
 extension FocusedValues {
   var newTransactionAction: NewTransactionActionKey.Value? {
     get { self[NewTransactionActionKey.self] }
@@ -146,5 +154,9 @@ extension FocusedValues {
   var pasteCSVAction: PasteCSVActionKey.Value? {
     get { self[PasteCSVActionKey.self] }
     set { self[PasteCSVActionKey.self] = newValue }
+  }
+  var setTransactionTypeAction: SetTransactionTypeActionKey.Value? {
+    get { self[SetTransactionTypeActionKey.self] }
+    set { self[SetTransactionTypeActionKey.self] = newValue }
   }
 }

@@ -54,6 +54,11 @@ struct KeyboardShortcutsView: View {
     section("Transaction") {
       row("Return", "Edit Transaction (on selected row)")
       row("Delete", "Delete Transaction (on selected row)")
+      row("⌥⌘1", "Type ▸ Income")
+      row("⌥⌘2", "Type ▸ Expense")
+      row("⌥⌘3", "Type ▸ Transfer")
+      row("⌥⌘4", "Type ▸ Trade")
+      row("⌥⌘5", "Type ▸ Custom")
     }
     section("List Navigation") {
       row("↑ / ↓", "Move selection")

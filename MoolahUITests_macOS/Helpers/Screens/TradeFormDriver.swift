@@ -27,13 +27,19 @@ struct TradeFormDriver {
 
     // ui-test-review: allow single-resolver — on macOS, SwiftUI Pickers open
     // a native NSMenu whose items attach to the application's menu hierarchy
-    // at runtime. `.accessibilityIdentifier(_:)` on the inline `Text(…)`
-    // inside the ForEach does not propagate to the NSMenuItem, so querying by
-    // label via `menuItems["Trade"]` is the only viable resolution path here.
-    let tradeItem = app.application.menuItems["Trade"]
+    // at runtime as descendants of the popUpButton. Their AX labels are
+    // empty (the inline `Text(…)` inside the ForEach doesn't propagate to
+    // the NSMenuItem), so label-based lookup is unavailable; positional
+    // indexing scoped to the picker is the only stable handle. The
+    // production picker is built from
+    // `[.income, .expense, .transfer, .trade, .custom]`, so Trade is at
+    // index 3. Scoping to `picker.menuItems` excludes the static
+    // `Transaction > Type ▸ Trade` menu-bar entry, which descends from the
+    // app's menu bar, not the popUpButton.
+    let tradeItem = picker.menuItems.element(boundBy: 3)
     if !tradeItem.waitForExistence(timeout: 3) {
-      Trace.recordFailure("'Trade' menu item did not appear after opening type picker")
-      XCTFail("'Trade' menu item did not appear within 3s of opening the Type picker")
+      Trace.recordFailure("popup menu item at index 3 did not appear after opening type picker")
+      XCTFail("Picker popup item at index 3 (Trade) did not appear within 3s of opening")
       return
     }
     tradeItem.click()

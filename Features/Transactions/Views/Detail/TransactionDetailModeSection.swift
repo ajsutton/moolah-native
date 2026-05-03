@@ -1,26 +1,5 @@
 import SwiftUI
 
-/// User-facing transaction mode driving the simple-mode/custom-mode picker.
-///
-/// `expense`, `income`, `transfer`, and `trade` map onto `TransactionType` via
-/// `TransactionDraft.setType(_:accounts:)` or the trade-switch helpers.
-/// `custom` flips `TransactionDraft.isCustom` to switch the editor into
-/// multi-leg mode. `openingBalance` legs collapse onto `.expense` for binding
-/// purposes — the section disables the picker entirely for those transactions.
-private enum TransactionMode: Hashable {
-  case income, expense, transfer, trade, custom
-
-  var displayName: String {
-    switch self {
-    case .income: return "Income"
-    case .expense: return "Expense"
-    case .transfer: return "Transfer"
-    case .trade: return "Trade"
-    case .custom: return "Custom"
-    }
-  }
-}
-
 /// The "Type" picker section.
 ///
 /// Renders one of three forms depending on the underlying transaction:
@@ -29,16 +8,29 @@ private enum TransactionMode: Hashable {
 /// - Read-only "Custom" label when the transaction has multi-leg structure
 ///   that can't be re-expressed as a simple income/expense/transfer/trade.
 /// - The interactive `Picker` of income / expense / transfer / trade / custom.
+///
+/// While the interactive picker is visible, the section publishes a
+/// `setTransactionTypeAction` focused-scene-value so the Transaction > Type
+/// menu items (⌥⌘1–⌥⌘5) drive the same code path as the picker — even
+/// while a text field has focus. Focus is migrated to the new mode's
+/// primary amount slot when the form structure changes (see
+/// `TransactionDetailFocus.remapping(toStructure:)`).
 struct TransactionDetailModeSection: View {
   let transaction: Transaction
   @Binding var draft: TransactionDraft
   let accounts: Accounts
+  @FocusState.Binding var focusedField: TransactionDetailFocus?
 
-  private var modeBinding: Binding<TransactionMode> {
-    Binding(get: { modeGet() }, set: { modeSet($0) })
+  /// Available modes, in display order (also the ⌥⌘1–⌥⌘5 mapping).
+  private static let modes: [TransactionDetailMode] = [
+    .income, .expense, .transfer, .trade, .custom,
+  ]
+
+  private var modeBinding: Binding<TransactionDetailMode> {
+    Binding(get: { currentMode() }, set: { applyModeChange(to: $0) })
   }
 
-  private func modeGet() -> TransactionMode {
+  private func currentMode() -> TransactionDetailMode {
     if draft.isCustom { return .custom }
     if draft.legDrafts.contains(where: { $0.type == .trade }) { return .trade }
     switch draft.type {
@@ -50,7 +42,18 @@ struct TransactionDetailModeSection: View {
     }
   }
 
-  private func modeSet(_ newMode: TransactionMode) {
+  /// Apply a mode change and migrate focus when the form's structure
+  /// changes. Used by both the picker binding and the menu-driven
+  /// `setTransactionTypeAction` so the two paths share semantics.
+  private func applyModeChange(to newMode: TransactionDetailMode) {
+    let oldStructure = currentMode().focusStructure
+    let newStructure = newMode.focusStructure
+    applyMode(newMode)
+    guard oldStructure != newStructure, let oldFocus = focusedField else { return }
+    focusedField = oldFocus.remapping(toStructure: newStructure)
+  }
+
+  private func applyMode(_ newMode: TransactionDetailMode) {
     let wasTrade = draft.legDrafts.contains { $0.type == .trade }
     switch newMode {
     case .custom: draft.isCustom = true
@@ -80,14 +83,28 @@ struct TransactionDetailModeSection: View {
     }
   }
 
+  /// Single source of truth for whether the type can be interactively
+  /// changed. Drives both the body's branching (picker vs read-only label)
+  /// and the publication of `setTransactionTypeAction` to the menu.
+  private var pickerInteractive: Bool {
+    let hasOpeningBalance = transaction.legs.contains(where: { $0.type == .openingBalance })
+    let irreducibleCustom =
+      !transaction.isSimple && !transaction.isTrade && !draft.isCustom
+    return !hasOpeningBalance && !irreducibleCustom
+  }
+
+  private var hasOpeningBalance: Bool {
+    transaction.legs.contains { $0.type == .openingBalance }
+  }
+
   var body: some View {
     Section {
-      if transaction.legs.contains(where: { $0.type == .openingBalance }) {
+      if hasOpeningBalance {
         LabeledContent("Type") {
           Text(TransactionType.openingBalance.displayName)
             .foregroundStyle(.secondary)
         }
-      } else if !transaction.isSimple && !transaction.isTrade && !draft.isCustom {
+      } else if !pickerInteractive {
         LabeledContent("Type") {
           Text("Custom").foregroundStyle(.secondary)
         }
@@ -95,9 +112,7 @@ struct TransactionDetailModeSection: View {
           "This transaction has custom sub-transactions and cannot be changed to a simpler type.")
       } else {
         Picker("Type", selection: modeBinding) {
-          ForEach(
-            [TransactionMode.income, .expense, .transfer, .trade, .custom], id: \.self
-          ) { mode in
+          ForEach(Self.modes, id: \.self) { mode in
             Text(mode.displayName).tag(mode)
           }
         }
@@ -105,8 +120,41 @@ struct TransactionDetailModeSection: View {
         .accessibilityIdentifier(UITestIdentifiers.Detail.modeTypePicker)
         #if os(iOS)
           .pickerStyle(.segmented)
+          .background { iPadShortcutButtons }
+        #else
+          .focusedSceneValue(\.setTransactionTypeAction) { mode in
+            applyModeChange(to: mode)
+          }
         #endif
       }
     }
   }
+
+  #if os(iOS)
+    /// Hidden buttons that bind ⌥⌘1–⌥⌘5 on iPad with a hardware keyboard.
+    /// macOS uses the Transaction > Type menu items instead (per UI Guide
+    /// §14), but iOS has no menu bar — `keyboardShortcut` only fires when
+    /// the bound `Button` is in the view tree, hence this tiny invisible
+    /// surface placed inside the section's `.background` so it joins the
+    /// responder chain only while the picker is visible.
+    @ViewBuilder private var iPadShortcutButtons: some View {
+      HStack(spacing: 0) {
+        shortcutButton(label: "Income", key: "1") { applyModeChange(to: .income) }
+        shortcutButton(label: "Expense", key: "2") { applyModeChange(to: .expense) }
+        shortcutButton(label: "Transfer", key: "3") { applyModeChange(to: .transfer) }
+        shortcutButton(label: "Trade", key: "4") { applyModeChange(to: .trade) }
+        shortcutButton(label: "Custom", key: "5") { applyModeChange(to: .custom) }
+      }
+      .frame(width: 0, height: 0)
+      .opacity(0)
+      .accessibilityHidden(true)
+    }
+
+    private func shortcutButton(
+      label: String, key: KeyEquivalent, action: @escaping () -> Void
+    ) -> some View {
+      Button(label, action: action)
+        .keyboardShortcut(key, modifiers: [.option, .command])
+    }
+  #endif
 }
