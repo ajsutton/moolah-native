@@ -3,14 +3,13 @@ import os
 
 @testable import Moolah
 
-/// One recorded call to `RecordingConversionService.convert(...)`. Top-level
-/// (not nested in the service) so the SwiftLint `nesting: type_level` rule
-/// stays at 0 — adding a nested type would cross the warn threshold and
-/// cannot be appeased without growing the baseline.
+/// One recorded call to `RecordingConversionService.convert(...)`.
+/// Top-level so tests can construct, compare, and pattern-match values
+/// without needing to fully qualify them through the service type.
 struct RecordingConversionServiceCall: Sendable, Equatable {
   let quantity: Decimal
-  let fromId: String
-  let toId: String
+  let from: Instrument
+  let to: Instrument
   let date: Date
 }
 
@@ -34,7 +33,7 @@ final class RecordingConversionService: InstrumentConversionService, Sendable {
     recorded.withLock {
       $0.append(
         RecordingConversionServiceCall(
-          quantity: quantity, fromId: from.id, toId: to.id, date: date))
+          quantity: quantity, from: from, to: to, date: date))
     }
     return quantity
   }

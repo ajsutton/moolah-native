@@ -180,9 +180,7 @@ struct CapitalGainsCalculatorTestsMore {
   // `tx.date` for `Date()` or another date; this test uses
   // `DateBasedFixedConversionService` to make that observable.
 
-  /// Crypto-to-crypto swap: both legs are valued via the conversion
-  /// service. The rate schedule below has a different rate effective at
-  /// the swap date than would be returned for "today" (`Date()`), so a
-  /// regression that misrouted the lookup date would yield a different
-  /// gain than the assertion permits.
+  // Crypto-to-crypto swap test placeholder — described above but not
+  // implemented. Tracking issue not filed; dead documentation kept as
+  // a `//` block so it isn't picked up by DocC.
 }

@@ -107,7 +107,7 @@ struct TradeEventClassifierTests {
     #expect(result.sells.isEmpty)
   }
 
-  // MARK: - Fee-folding tests (#558)
+  // MARK: - Fee folding
 
   @Test("buy: AUD fee on AUD-host trade folds into per-unit cost")
   func buyFoldsAUDFee() async throws {

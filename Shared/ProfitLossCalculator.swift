@@ -36,12 +36,12 @@ enum ProfitLossCalculator {
   /// `totalInvested` is the lifetime fiat input attributed to each
   /// non-fiat acquisition: every fiat `.trade` outflow plus every
   /// `.expense` fee leg attached to the same transaction, all converted
-  /// to `profileCurrency` on the transaction's date. Mirrors
-  /// `TradeEventClassifier`'s fee fold-in (#558) so `totalInvested`
-  /// stays consistent with `remainingCostBasis` from the FIFO engine —
-  /// otherwise `returnPercentage` (computed against `totalInvested`)
-  /// would over-state returns by ignoring transaction costs.
-  /// See guides/INSTRUMENT_CONVERSION_GUIDE.md Rules 1, 5, and 8.
+  /// to `profileCurrency` on the transaction's date. Mirrors the
+  /// classifier's fee fold-in via `TradeEventClassifier.feeContribution`
+  /// so `totalInvested` stays consistent with `remainingCostBasis` from
+  /// the FIFO engine — otherwise `returnPercentage` (computed against
+  /// `totalInvested`) would over-state returns by ignoring transaction
+  /// costs. See guides/INSTRUMENT_CONVERSION_GUIDE.md Rules 1, 5, and 8.
   private static func accumulateInvested(
     into instrumentData: inout [String: InstrumentData],
     transactions: [LegTransaction],
@@ -57,28 +57,15 @@ enum ProfitLossCalculator {
       var fiatOutflow: Decimal = 0
       for leg in fiatLegs where leg.quantity < 0 {
         let converted = try await conversionService.convert(
-          abs(leg.quantity), from: leg.instrument, to: profileCurrency, on: transaction.date
+          -leg.quantity, from: leg.instrument, to: profileCurrency, on: transaction.date
         )
         fiatOutflow += converted
       }
-      // Fold attached `.expense` fee legs in. Same-instrument fast path
-      // matches the classifier (host-currency fees skip the conversion
-      // hop). Negate so a normal negative-quantity fee becomes a positive
-      // cost contribution; a positive-quantity refund correctly reduces
-      // the contribution. Sign-preserving; never abs().
-      for feeLeg in transaction.legs where feeLeg.type == .expense {
-        let convertedFee: Decimal
-        if feeLeg.instrument == profileCurrency {
-          convertedFee = feeLeg.quantity
-        } else {
-          convertedFee = try await conversionService.convert(
-            feeLeg.quantity,
-            from: feeLeg.instrument,
-            to: profileCurrency,
-            on: transaction.date)
-        }
-        fiatOutflow += -convertedFee
-      }
+      fiatOutflow += try await TradeEventClassifier.feeContribution(
+        from: transaction.legs,
+        hostCurrency: profileCurrency,
+        on: transaction.date,
+        using: conversionService)
 
       for leg in nonFiatLegs where leg.quantity > 0 {
         instrumentData[leg.instrument.id, default: InstrumentData(instrument: leg.instrument)]

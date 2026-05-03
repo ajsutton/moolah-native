@@ -196,6 +196,76 @@ struct ProfitLossCalculatorTestsMore {
     #expect(result.unrealizedGain == 2000)
   }
 
+  /// Buy with an attached AUD fee leg: `totalInvested` must include the
+  /// fee, otherwise it diverges from the FIFO `remainingCostBasis` and
+  /// `returnPercentage` over-states returns.
+  @Test
+  func buyWithHostCurrencyFeeIncreasesTotalInvested() async throws {
+    let bhp = stockInstrument("BHP")
+    let accountId = UUID()
+    let buyTx = LegTransaction(
+      date: date(0),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: -4000, type: .trade,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: -10, type: .expense,
+          categoryId: nil, earmarkId: nil),
+      ])
+    let results = try await ProfitLossCalculator.compute(
+      transactions: [buyTx],
+      profileCurrency: aud,
+      conversionService: FixedConversionService(rates: [:]),
+      asOfDate: date(0)
+    )
+    try #require(results.count == 1)
+    #expect(results[0].totalInvested == 4010)
+  }
+
+  /// FX fee leg on a buy: `accumulateInvested` must convert the fee on
+  /// `transaction.date`, not `Date()`. Two rate entries straddle the
+  /// trade date so a wrong-date implementation picks the 2.0 rate at
+  /// `nextDay` and the assertion fails (wall-clock today > `nextDay`
+  /// because the `date(_)` helper bases on 2024-01-01).
+  @Test
+  func buyWithFXFeeConvertsAtTransactionDate() async throws {
+    let bhp = stockInstrument("BHP")
+    let usd = Instrument.fiat(code: "USD")
+    let accountId = UUID()
+    let tradeDate = date(0)
+    let nextDay = date(1)
+    let service = DateBasedFixedConversionService(rates: [
+      tradeDate: ["USD": dec("1.5")],
+      nextDay: ["USD": Decimal(2)],
+    ])
+    let buyTx = LegTransaction(
+      date: tradeDate,
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: -4000, type: .trade,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: usd, quantity: -10, type: .expense,
+          categoryId: nil, earmarkId: nil),
+      ])
+    let results = try await ProfitLossCalculator.compute(
+      transactions: [buyTx],
+      profileCurrency: aud,
+      conversionService: service,
+      asOfDate: nextDay
+    )
+    try #require(results.count == 1)
+    // -10 USD * 1.5 = -15 AUD fee → +15 cost contribution. 4000 + 15 = 4015.
+    #expect(results[0].totalInvested == 4015)
+  }
+
   // MARK: - Helpers
 
   private func stockInstrument(_ name: String) -> Instrument {

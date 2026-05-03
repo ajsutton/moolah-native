@@ -1,8 +1,8 @@
 import Foundation
 
-/// One step in the FIFO cost-basis machine. Shape unchanged from the previous
-/// implementation; consumers (CapitalGainsCalculator, InvestmentStore cost
-/// basis snapshot, PositionsHistoryBuilder) read these structurally.
+/// One step in the FIFO cost-basis machine. Consumers
+/// (`CapitalGainsCalculator`, `InvestmentStore` cost-basis snapshot,
+/// `PositionsHistoryBuilder`) read these structurally.
 struct TradeBuyEvent: Sendable, Equatable {
   let instrument: Instrument
   let quantity: Decimal
@@ -67,28 +67,13 @@ enum TradeEventClassifier {
     }
     let capitalIndices = nonFiatIndices.isEmpty ? Array(tradeLegs.indices) : nonFiatIndices
 
-    // Sum attached fee legs in hostCurrency. Same-instrument fast path is
-    // enforced here at the call site, not delegated to the conversion
-    // service — that keeps the host-currency case off the async hop and
-    // is directly testable (see hostCurrencyFeeNeedsNoConversionLookup).
-    var totalFeeHost: Decimal = 0
-    for feeLeg in legs where feeLeg.type == .expense {
-      if feeLeg.instrument == hostCurrency {
-        totalFeeHost += feeLeg.quantity
-      } else {
-        totalFeeHost += try await conversionService.convert(
-          feeLeg.quantity, from: feeLeg.instrument, to: hostCurrency, on: date)
-      }
-    }
-    // Negate: fee-leg quantity is negative by convention (cost paid out).
-    // Negating turns the sum into a positive cost contribution. A positive
-    // .expense leg (a refund attached to a trade) becomes a negative
-    // contribution, correctly reducing cost. Sign-preserving on purpose;
-    // never abs().
-    let feeContribution = -totalFeeHost
-    // feePerEvent is a per-event total in hostCurrency (NOT yet per-unit).
-    // The per-unit division happens inside the loop below.
-    let feePerEvent = feeContribution / Decimal(capitalIndices.count)
+    let feePerEvent =
+      try await feeContribution(
+        from: legs,
+        hostCurrency: hostCurrency,
+        on: date,
+        using: conversionService)
+      / Decimal(capitalIndices.count)
 
     var buys: [TradeBuyEvent] = []
     var sells: [TradeSellEvent] = []
@@ -123,5 +108,36 @@ enum TradeEventClassifier {
       }
     }
     return TradeEventClassification(buys: buys, sells: sells)
+  }
+
+  /// Sum attached `.expense` legs converted to `hostCurrency` on `date`,
+  /// then negate so a normal-sign (negative-quantity) fee yields a
+  /// positive cost contribution. A positive `.expense` quantity (refund
+  /// attached to a trade) yields a negative contribution and reduces
+  /// cost. Sign-preserving on purpose; never `abs()`.
+  ///
+  /// Same-instrument fast path is enforced here at the call site, not
+  /// delegated to the conversion service — that keeps the host-currency
+  /// case off the async hop and is directly testable (see
+  /// `hostCurrencyFeeNeedsNoConversionLookup`).
+  ///
+  /// Also called by `ProfitLossCalculator.accumulateInvested` so
+  /// `totalInvested` stays consistent with the FIFO `remainingCostBasis`.
+  static func feeContribution(
+    from legs: [TransactionLeg],
+    hostCurrency: Instrument,
+    on date: Date,
+    using conversionService: any InstrumentConversionService
+  ) async throws -> Decimal {
+    var totalFeeHost: Decimal = 0
+    for feeLeg in legs where feeLeg.type == .expense {
+      if feeLeg.instrument == hostCurrency {
+        totalFeeHost += feeLeg.quantity
+      } else {
+        totalFeeHost += try await conversionService.convert(
+          feeLeg.quantity, from: feeLeg.instrument, to: hostCurrency, on: date)
+      }
+    }
+    return -totalFeeHost
   }
 }
