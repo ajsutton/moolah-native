@@ -28,9 +28,14 @@ struct TradeFormDriver {
     // ui-test-review: allow single-resolver — on macOS, SwiftUI Pickers open
     // a native NSMenu whose items attach to the application's menu hierarchy
     // at runtime. `.accessibilityIdentifier(_:)` on the inline `Text(…)`
-    // inside the ForEach does not propagate to the NSMenuItem, so querying by
-    // label via `menuItems["Trade"]` is the only viable resolution path here.
-    let tradeItem = app.application.menuItems["Trade"]
+    // inside the ForEach does not propagate to the NSMenuItem, so querying
+    // by label is the only viable resolution path here.
+    //
+    // The same label ("Trade") also appears as a static entry under the
+    // menu bar's `Transaction > Type ▸` submenu, so the bare query
+    // `menuItems["Trade"]` matches multiple elements. The popup's "Trade"
+    // is the only hittable match while the menu bar is collapsed; pick it.
+    let tradeItem = firstHittableMenuItem(labelled: "Trade")
     if !tradeItem.waitForExistence(timeout: 3) {
       Trace.recordFailure("'Trade' menu item did not appear after opening type picker")
       XCTFail("'Trade' menu item did not appear within 3s of opening the Type picker")
@@ -168,6 +173,20 @@ struct TradeFormDriver {
   }
 
   // MARK: - Private helpers
+
+  /// Returns the first hittable menu item with the given label. Used to
+  /// pick a SwiftUI Picker's popup item when a static menu-bar entry
+  /// shares the same label — the menu bar's copy stays unhittable while
+  /// the bar is collapsed, so hittability cleanly picks the popup.
+  private func firstHittableMenuItem(labelled label: String) -> XCUIElement {
+    let predicate = NSPredicate(format: "label == %@", label)
+    let matches = app.application.menuItems.matching(predicate)
+    for index in 0..<matches.count {
+      let candidate = matches.element(boundBy: index)
+      if candidate.isHittable { return candidate }
+    }
+    return matches.firstMatch
+  }
 
   /// Clears any existing text in `identifier` and types `text`. Returns once
   /// the field's `value` contains `text`.
