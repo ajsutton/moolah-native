@@ -328,7 +328,7 @@ extension SidebarView {
 
 @MainActor
 private func seedSidebarPreview(
-  backend: CloudKitBackend,
+  backend: any BackendProvider,
   accountStore: AccountStore,
   earmarkStore: EarmarkStore
 ) async {

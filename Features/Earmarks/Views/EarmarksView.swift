@@ -280,7 +280,7 @@ struct EarmarksView: View {
 }
 
 @MainActor
-private func seedEarmarksPreview(backend: CloudKitBackend, earmarkStore: EarmarkStore) async {
+private func seedEarmarksPreview(backend: any BackendProvider, earmarkStore: EarmarkStore) async {
   _ = try? await backend.earmarks.create(
     Earmark(
       name: "Holiday Fund",

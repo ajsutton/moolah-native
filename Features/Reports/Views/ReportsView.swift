@@ -156,7 +156,7 @@ private struct ReportsPreviewIds {
 
 @MainActor
 private func seedReportsPreview(
-  backend: CloudKitBackend,
+  backend: any BackendProvider,
   account: Account,
   ids: ReportsPreviewIds
 ) async {

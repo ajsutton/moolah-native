@@ -276,7 +276,7 @@ struct InvestmentAccountView: View {
 
 @MainActor
 private func seedLegacyValuations(
-  backend: CloudKitBackend, account: Account, store: InvestmentStore
+  backend: any BackendProvider, account: Account, store: InvestmentStore
 ) async {
   _ = try? await backend.accounts.create(
     account, openingBalance: InstrumentAmount(quantity: 10_000, instrument: .AUD))
@@ -291,7 +291,7 @@ private func seedLegacyValuations(
 }
 
 @MainActor
-private func seedPositionValuations(backend: CloudKitBackend, account: Account) async {
+private func seedPositionValuations(backend: any BackendProvider, account: Account) async {
   let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
   _ = try? await backend.accounts.create(
     account, openingBalance: InstrumentAmount(quantity: 0, instrument: .AUD))

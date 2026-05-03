@@ -281,7 +281,7 @@ struct TransactionListView: View {
 
 @MainActor
 private func seedTransactionListPreview(
-  backend: CloudKitBackend,
+  backend: any BackendProvider,
   accountId: UUID,
   savingsId: UUID,
   store: TransactionStore
