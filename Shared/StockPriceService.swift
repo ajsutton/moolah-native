@@ -200,16 +200,40 @@ actor StockPriceService {
 
   private func fetchAndMerge(ticker: String, from: Date, to: Date) async throws {
     let response = try await client.fetchDailyPrices(ticker: ticker, from: from, to: to)
-    merge(ticker: ticker, instrument: response.instrument, newPrices: response.prices)
-    try await saveCache(ticker: ticker)
+    // Yahoo Finance (and the chunked extension call sites) legitimately
+    // return an empty payload for weekend / holiday / future probes.
+    // Skip the disk write entirely — there is nothing new to persist.
+    guard !response.prices.isEmpty else { return }
+    let delta = mergeReturningDelta(
+      ticker: ticker, instrument: response.instrument, newPrices: response.prices
+    )
+    // The fetch may also return prices we already have (e.g. an extension
+    // chunk that overlaps the cached range due to rounding). When merge
+    // observes no change there is nothing to write.
+    guard !delta.isEmpty else { return }
+    try await persistDelta(ticker: ticker, deltaRecords: delta)
   }
 
-  private func merge(ticker: String, instrument: Instrument, newPrices: [String: Decimal]) {
-    guard !newPrices.isEmpty else { return }
+  /// Merges `newPrices` into `caches[ticker]` and returns the rows that
+  /// actually changed so the persistence layer can `INSERT OR REPLACE`
+  /// only those (rather than rewriting every cached row for the ticker
+  /// on every fetch).
+  ///
+  /// The comparison is per-date so a fetch that returns the same prices
+  /// already in cache produces an empty delta. This is what lets
+  /// `fetchAndMerge` skip the disk write on a no-op extension probe.
+  private func mergeReturningDelta(
+    ticker: String, instrument: Instrument, newPrices: [String: Decimal]
+  ) -> [StockPriceRecord] {
+    guard !newPrices.isEmpty else { return [] }
     let sortedDates = newPrices.keys.sorted()
-    guard let earliest = sortedDates.first, let latest = sortedDates.last else { return }
+    guard let earliest = sortedDates.first, let latest = sortedDates.last else { return [] }
+
+    var deltaRecords: [StockPriceRecord] = []
+
     if var existing = caches[ticker] {
-      for (dateKey, price) in newPrices {
+      for (dateKey, price) in newPrices where existing.prices[dateKey] != price {
+        deltaRecords.append(priceRecord(ticker: ticker, date: dateKey, price: price))
         existing.prices[dateKey] = price
       }
       if earliest < existing.earliestDate {
@@ -227,7 +251,24 @@ actor StockPriceService {
         latestDate: latest,
         prices: newPrices
       )
+      for (dateKey, price) in newPrices {
+        deltaRecords.append(priceRecord(ticker: ticker, date: dateKey, price: price))
+      }
     }
+
+    return deltaRecords
+  }
+
+  /// Marshalls a `(date, price)` pair into the GRDB record shape.
+  /// `Decimal → Double` round-trips via `NSDecimalNumber` (the same path
+  /// GRDB itself takes), keeping the precision-preservation contract in
+  /// sync with `loadCache`'s decode.
+  private func priceRecord(ticker: String, date: String, price: Decimal) -> StockPriceRecord {
+    StockPriceRecord(
+      ticker: ticker,
+      date: date,
+      price: NSDecimalNumber(decimal: price).doubleValue
+    )
   }
 
   // MARK: - SQL persistence
@@ -270,32 +311,30 @@ actor StockPriceService {
     hydratedTickers.insert(ticker)
   }
 
-  /// Persists `caches[ticker]` to SQLite. Replaces prior rows for this
-  /// ticker in a single transaction and writes the meta row via
-  /// `INSERT OR REPLACE` alongside so the price denomination is never out
-  /// of sync with the prices.
+  /// Persists the rows produced by `mergeReturningDelta` for `ticker`
+  /// plus the latest meta-bounds, all in a single transaction.
   ///
-  /// Multi-statement; covered by a rollback test in
-  /// `StockPriceServiceTests.swift`.
+  /// Each delta row is written `INSERT OR REPLACE` so a re-fetched date
+  /// updates in place; the meta row is `INSERT OR REPLACE`d via
+  /// `StockTickerMetaRecord`'s `.replace` conflict policy. There is no
+  /// `deleteAll` — historic prices never change, and rewriting the whole
+  /// ticker on every fetch saturates the GRDB queue. The rollback
+  /// contract still holds because every statement runs inside one
+  /// `database.write` closure and any failure rolls them back together.
+  ///
+  /// The price denomination in `StockPriceCache` is the API-reported
+  /// fiat currency the ticker trades in (see
+  /// `YahooFinanceClient.parseResponse`). The meta row carries that code
+  /// so `loadCache` can reconstruct via `Instrument.fiat(code:)`.
   ///
   /// Captures `caches[ticker]` before suspending on `database.write`.
-  /// Actor re-entrancy is acceptable here: a concurrent merge will trigger
-  /// its own `saveCache` afterwards, so the disk converges to the latest
-  /// in-memory state. A crash between the two writes leaves the disk at
-  /// an intermediate-but-consistent snapshot — acceptable for a
-  /// best-effort persistent cache.
-  private func saveCache(ticker: String) async throws {
+  /// Actor re-entrancy is acceptable here: a concurrent merge will
+  /// produce its own delta with its own `persistDelta` afterwards, so
+  /// the disk converges to the latest in-memory state. A crash between
+  /// two writes leaves the disk at an intermediate-but-consistent
+  /// snapshot — acceptable for a best-effort persistent cache.
+  private func persistDelta(ticker: String, deltaRecords: [StockPriceRecord]) async throws {
     guard let cache = caches[ticker] else { return }
-    let records: [StockPriceRecord] = cache.prices.map { dateString, price in
-      StockPriceRecord(
-        ticker: ticker,
-        date: dateString,
-        price: NSDecimalNumber(decimal: price).doubleValue
-      )
-    }
-    // The price denomination in `StockPriceCache` is the API-reported fiat
-    // currency the ticker trades in (see `YahooFinanceClient.parseResponse`).
-    // Persist its code; load reconstructs via `Instrument.fiat(code:)`.
     let meta = StockTickerMetaRecord(
       ticker: ticker,
       instrumentId: cache.instrument.id,
@@ -303,10 +342,9 @@ actor StockPriceService {
       latestDate: cache.latestDate
     )
     try await database.write { database in
-      try StockPriceRecord
-        .filter(StockPriceRecord.Columns.ticker == ticker)
-        .deleteAll(database)
-      for record in records { try record.insert(database) }
+      for record in deltaRecords {
+        try record.insert(database, onConflict: .replace)
+      }
       try meta.insert(database)
     }
   }

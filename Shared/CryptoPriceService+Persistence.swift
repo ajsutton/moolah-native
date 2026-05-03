@@ -46,29 +46,25 @@ extension CryptoPriceService {
     hydratedTokenIds.insert(tokenId)
   }
 
-  /// Persists `caches[tokenId]` to SQLite. Replaces prior rows for this
-  /// token in a single transaction and writes the meta row via
-  /// `INSERT OR REPLACE` alongside so the symbol is never out of sync
-  /// with the prices.
+  /// Persists the rows produced by `mergeReturningDelta` for `tokenId`
+  /// plus the latest meta-bounds, all in a single transaction.
   ///
-  /// Multi-statement; covered by a rollback test in
-  /// `CryptoPriceServiceTests.swift`.
+  /// Each delta row is written `INSERT OR REPLACE`; the meta row is
+  /// `INSERT OR REPLACE`d via `CryptoTokenMetaRecord`'s `.replace`
+  /// conflict policy. There is no `deleteAll` — historic prices never
+  /// change, and rewriting the whole token on every fetch saturated the
+  /// GRDB queue. The rollback contract still holds because every
+  /// statement runs inside one `database.write` closure and any failure
+  /// rolls them back together.
   ///
   /// Captures `caches[tokenId]` before suspending on `database.write`.
-  /// Actor re-entrancy is acceptable here: a concurrent merge will trigger
-  /// its own `saveCache` afterwards, so the disk converges to the latest
-  /// in-memory state. A crash between the two writes leaves the disk at an
-  /// intermediate-but-consistent snapshot — acceptable for a best-effort
-  /// persistent cache.
-  func saveCache(tokenId: String) async throws {
+  /// Actor re-entrancy is acceptable here: a concurrent merge will
+  /// produce its own delta with its own `persistDelta` afterwards, so
+  /// the disk converges to the latest in-memory state. A crash between
+  /// two writes leaves the disk at an intermediate-but-consistent
+  /// snapshot — acceptable for a best-effort persistent cache.
+  func persistDelta(tokenId: String, deltaRecords: [CryptoPriceRecord]) async throws {
     guard let cache = caches[tokenId] else { return }
-    let records: [CryptoPriceRecord] = cache.prices.map { dateString, price in
-      CryptoPriceRecord(
-        tokenId: tokenId,
-        date: dateString,
-        priceUsd: NSDecimalNumber(decimal: price).doubleValue
-      )
-    }
     let meta = CryptoTokenMetaRecord(
       tokenId: tokenId,
       symbol: cache.symbol,
@@ -76,10 +72,9 @@ extension CryptoPriceService {
       latestDate: cache.latestDate
     )
     try await database.write { database in
-      try CryptoPriceRecord
-        .filter(CryptoPriceRecord.Columns.tokenId == tokenId)
-        .deleteAll(database)
-      for record in records { try record.insert(database) }
+      for record in deltaRecords {
+        try record.insert(database, onConflict: .replace)
+      }
       try meta.insert(database)
     }
   }

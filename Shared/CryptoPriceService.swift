@@ -10,9 +10,12 @@ actor CryptoPriceService {
   // MARK: - Cross-extension internals
   // `caches`, `hydratedTokenIds`, `database`, and `logger` are accessed
   // by the SQL persistence extension in
-  // `CryptoPriceService+Persistence.swift`. They remain actor-isolated;
-  // the access modifier is internal so the sibling-file extension can
-  // see them.
+  // `CryptoPriceService+Persistence.swift`. The methods
+  // `loadCache(tokenId:)` and `persistDelta(tokenId:deltaRecords:)` are
+  // defined there and called from this file, which is why both they and
+  // these properties are `internal` rather than `private`. They remain
+  // actor-isolated; the access modifier is internal so the sibling-file
+  // extension can see them.
   var caches: [String: CryptoPriceCache] = [:]
   /// Loaded token ids — set on first hydration so we don't re-read SQL when
   /// the cache is genuinely empty.
@@ -123,8 +126,11 @@ actor CryptoPriceService {
       do {
         let fetched = try await client.dailyPrices(for: mapping, in: fetchStart...date)
         if !fetched.isEmpty {
-          merge(tokenId: tokenId, symbol: symbol, newPrices: fetched)
-          try await saveCache(tokenId: tokenId)
+          let delta = mergeReturningDelta(
+            tokenId: tokenId, symbol: symbol, newPrices: fetched)
+          if !delta.isEmpty {
+            try await persistDelta(tokenId: tokenId, deltaRecords: delta)
+          }
           if let price = lookupPrice(tokenId: tokenId, dateString: dateString) {
             return price
           }
@@ -239,14 +245,19 @@ actor CryptoPriceService {
     for (tokenId, price) in prices {
       let registration = registrations.first { $0.id == tokenId }
       let symbol = registration?.instrument.ticker ?? registration?.instrument.name ?? ""
-      merge(tokenId: tokenId, symbol: symbol, newPrices: [dateString: price])
+      let delta = mergeReturningDelta(
+        tokenId: tokenId, symbol: symbol, newPrices: [dateString: price])
+      // Skip the disk write when the latest price is identical to the
+      // already-cached value — periodic "no change" polling would
+      // otherwise rewrite the partition on every tick.
+      guard !delta.isEmpty else { continue }
       do {
-        try await saveCache(tokenId: tokenId)
+        try await persistDelta(tokenId: tokenId, deltaRecords: delta)
       } catch {
         logger.warning(
           // Best-effort: continue the loop so a single bad token doesn't
           // poison the rest of the prefetch.
-          "prefetchLatest: saveCache failed for \(tokenId, privacy: .public): \(error.localizedDescription, privacy: .public)"
+          "prefetchLatest: persistDelta failed for \(tokenId, privacy: .public): \(error.localizedDescription, privacy: .public)"
         )
       }
     }
@@ -291,8 +302,11 @@ extension CryptoPriceService {
       do {
         let fetched = try await client.dailyPrices(for: mapping, in: from...to)
         if !fetched.isEmpty {
-          merge(tokenId: tokenId, symbol: symbol, newPrices: fetched)
-          try await saveCache(tokenId: tokenId)
+          let delta = mergeReturningDelta(
+            tokenId: tokenId, symbol: symbol, newPrices: fetched)
+          if !delta.isEmpty {
+            try await persistDelta(tokenId: tokenId, deltaRecords: delta)
+          }
           return
         }
       } catch {
@@ -303,12 +317,24 @@ extension CryptoPriceService {
     if let error = lastError { throw error }
   }
 
-  private func merge(tokenId: String, symbol: String, newPrices: [String: Decimal]) {
-    guard !newPrices.isEmpty else { return }
+  /// Merges `newPrices` into `caches[tokenId]` and returns the rows that
+  /// actually changed so the persistence layer can `INSERT OR REPLACE`
+  /// only those (rather than rewriting every cached row for the token
+  /// on every fetch). The comparison is per-date so a fetch returning
+  /// the same prices already in cache produces an empty delta — which
+  /// the call sites use to skip the disk write entirely.
+  func mergeReturningDelta(
+    tokenId: String, symbol: String, newPrices: [String: Decimal]
+  ) -> [CryptoPriceRecord] {
+    guard !newPrices.isEmpty else { return [] }
     let sortedDates = newPrices.keys.sorted()
-    guard let earliest = sortedDates.first, let latest = sortedDates.last else { return }
+    guard let earliest = sortedDates.first, let latest = sortedDates.last else { return [] }
+
+    var deltaRecords: [CryptoPriceRecord] = []
+
     if var existing = caches[tokenId] {
-      for (dateKey, price) in newPrices {
+      for (dateKey, price) in newPrices where existing.prices[dateKey] != price {
+        deltaRecords.append(priceRecord(tokenId: tokenId, date: dateKey, price: price))
         existing.prices[dateKey] = price
       }
       if earliest < existing.earliestDate {
@@ -326,7 +352,24 @@ extension CryptoPriceService {
         latestDate: latest,
         prices: newPrices
       )
+      for (dateKey, price) in newPrices {
+        deltaRecords.append(priceRecord(tokenId: tokenId, date: dateKey, price: price))
+      }
     }
+
+    return deltaRecords
+  }
+
+  /// Marshalls a `(date, price)` pair into the GRDB record shape.
+  /// `Decimal → Double` round-trips via `NSDecimalNumber` (the same path
+  /// GRDB itself takes), keeping the precision-preservation contract in
+  /// sync with `loadCache`'s decode.
+  private func priceRecord(tokenId: String, date: String, price: Decimal) -> CryptoPriceRecord {
+    CryptoPriceRecord(
+      tokenId: tokenId,
+      date: date,
+      priceUsd: NSDecimalNumber(decimal: price).doubleValue
+    )
   }
 }
 

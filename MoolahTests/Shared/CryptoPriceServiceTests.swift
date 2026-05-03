@@ -262,6 +262,6 @@ struct CryptoPriceServiceTests {
     }
   }
 
-  // Rollback contract for `saveCache` lives in `CryptoPriceServiceTestsMore.swift`
+  // Rollback contract for `persistDelta` lives in `CryptoPriceServiceTestsMore.swift`
   // so this file stays under SwiftLint's `type_body_length` cap.
 }
