@@ -35,6 +35,29 @@ struct TransactionDraftTradeAccessorsTests {
     #expect(draft.receivedLegIndex == 1)
   }
 
+  @Test("received index is nil when there are three or more .trade legs")
+  func receivedLegIndexRejectsExtraTradeLegs() {
+    // Trade-shape invariant: exactly two `.trade` legs. A third indicates a
+    // malformed or custom-mode draft, so the trade UI should not bind to it.
+    var draft = tradeDraft()
+    draft.legDrafts.append(
+      TransactionDraft.LegDraft(
+        type: .trade, accountId: account, amountText: "5",
+        categoryId: nil, categoryText: "", earmarkId: nil, instrument: aud))
+    #expect(draft.receivedLegIndex == nil)
+  }
+
+  @Test("received index is nil when there is only one .trade leg")
+  func receivedLegIndexNilForSingleTrade() {
+    var draft = TransactionDraft(accountId: account, instrument: aud)
+    draft.legDrafts = [
+      TransactionDraft.LegDraft(
+        type: .trade, accountId: account, amountText: "300",
+        categoryId: nil, categoryText: "", earmarkId: nil, instrument: aud)
+    ]
+    #expect(draft.receivedLegIndex == nil)
+  }
+
   @Test("feeIndices returns the .expense legs in order")
   func feeIndices() {
     let fee1 = TransactionDraft.LegDraft(

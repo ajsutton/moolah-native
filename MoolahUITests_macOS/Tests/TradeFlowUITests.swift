@@ -23,9 +23,12 @@ final class TradeFlowUITests: MoolahUITestCase {
     app.transactionList.createTransaction()
 
     app.tradeForm.switchToTradeMode()
-    // Buy: cash leg negative (paid out), position leg positive (received).
-    // `.trade` legs preserve user-entered signs literally.
-    app.tradeForm.setPaid(amount: "-300", instrumentId: "AUD")
+    // Buy: user types positive amounts in both Paid and Received. The Paid
+    // field flips the sign for storage so the cash leg quantity is `-300`,
+    // matching the user's mental model ("I paid $300, balance goes down").
+    // Received stores `+20` directly. Fees are entered in the Expense leg's
+    // own sign convention (negative = outflow).
+    app.tradeForm.setPaid(amount: "300", instrumentId: "AUD")
     app.tradeForm.setReceived(
       amount: "20", instrumentId: UITestFixtures.TradeReady.vgsaxInstrumentId)
     app.tradeForm.addFee(
