@@ -10,10 +10,22 @@ extension TransactionDraft {
   }
 
   /// Index of the second `.trade` leg (the "Received" side). `nil` when
-  /// the draft does not have two `.trade` legs.
+  /// the draft does not have *exactly* two `.trade` legs — three or more
+  /// indicates a malformed or custom-mode draft, not a trade shape, so the
+  /// trade UI should not bind to it.
   var receivedLegIndex: Int? {
-    let trade = legDrafts.enumerated().filter { $0.element.type == .trade }
-    return trade.count == 2 ? trade[1].offset : nil
+    var first: Int?
+    var second: Int?
+    for (offset, leg) in legDrafts.enumerated() where leg.type == .trade {
+      if first == nil {
+        first = offset
+      } else if second == nil {
+        second = offset
+      } else {
+        return nil
+      }
+    }
+    return second
   }
 
   /// Indices of all `.expense` fee legs, in storage order.
