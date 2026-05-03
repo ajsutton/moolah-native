@@ -67,7 +67,7 @@ extension ImportStore {
 
   /// Rewrite placeholder-instrument legs (cash legs from parsers) to the
   /// routed account's actual instrument. Explicit instrument legs (e.g.
-  /// SelfWealth's `ASX:BHP` position leg) are left alone. The flag is set
+  /// SelfWealth's `ASX:BHP.AX` position leg) are left alone. The flag is set
   /// by the parser at the leg's point-of-origin, replacing the earlier
   /// fragile "is it AUD?" heuristic.
   func resolveParsedLeg(
