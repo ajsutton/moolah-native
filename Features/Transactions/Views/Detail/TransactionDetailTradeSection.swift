@@ -1,12 +1,23 @@
 import SwiftUI
 
 // Sign-handling note:
-// `TransactionDraft.displaysNegated(.trade) == false`, so the user enters
-// signed quantities directly into Paid and Received and the storage matches
-// 1:1. Trade reversals legitimately have unconventional signs, so the editor
-// preserves whatever the user types — see CLAUDE.md "Monetary Sign
+// At the draft-model layer `TransactionDraft.displaysNegated(.trade) ==
+// false`, so the stored leg `amountText` matches the leg's signed quantity
+// 1:1. Trade reversals legitimately have unconventional signs, so the
+// model preserves whatever the user enters — see CLAUDE.md "Monetary Sign
 // Convention" and `feedback_no_abs_on_trade_legs.md` (no abs, no sign-by-
 // position).
+//
+// The Paid field is the one exception, applied here in the *view layer*:
+// users expect "I paid $10" to decrease their balance, so the Paid binding
+// flips the sign for display via
+// `TransactionDraft.flipTradePaidDisplaySign(_:)`. Storage still reflects
+// the underlying signed leg quantity (a normal buy stores `-300`); the
+// flip is bidirectional, so a refund booked against the Paid leg is
+// entered as a negative number in the field, which the view-side flip
+// turns into a positive stored quantity. The Received field is unaffected:
+// positive entry, positive stored quantity.
+
 /// Trade-mode primary section. Mirrors the structure of
 /// `TransactionDetailDetailsSection` + `TransactionDetailAccountSection` for
 /// transfers, but with a single shared account picker and dual amount
@@ -65,23 +76,11 @@ struct TransactionDetailTradeSection: View {
   }
 
   private var paidRow: some View {
-    legAmountRow(
-      label: "Paid",
-      indexAccessor: { draft.paidLegIndex },
-      focus: .tradePaidAmount,
-      identifier: UITestIdentifiers.Detail.tradePaidAmount,
-      instrumentIdentifier: UITestIdentifiers.Detail.tradePaidInstrument
-    )
+    legAmountRow(.paid)
   }
 
   private var receivedRow: some View {
-    legAmountRow(
-      label: "Received",
-      indexAccessor: { draft.receivedLegIndex },
-      focus: .tradeReceivedAmount,
-      identifier: UITestIdentifiers.Detail.tradeReceivedAmount,
-      instrumentIdentifier: UITestIdentifiers.Detail.tradeReceivedInstrument
-    )
+    legAmountRow(.received)
   }
 
   private func defaultInstrument(forLegAt idx: Int) -> Instrument {
@@ -89,37 +88,39 @@ struct TransactionDetailTradeSection: View {
   }
 
   @ViewBuilder
-  private func legAmountRow(
-    label: LocalizedStringKey,
-    indexAccessor: () -> Int?,
-    focus: TransactionDetailFocus,
-    identifier: String,
-    instrumentIdentifier: String
-  ) -> some View {
-    if let idx = indexAccessor() {
+  private func legAmountRow(_ side: TradeLegSide) -> some View {
+    if let idx = side.legIndex(in: draft) {
       let amountBinding = Binding(
-        get: { draft.legDrafts[idx].amountText },
-        set: { draft.legDrafts[idx].amountText = $0 })
+        get: {
+          let stored = draft.legDrafts[idx].amountText
+          return side.negateForDisplay
+            ? TransactionDraft.flipTradePaidDisplaySign(stored) : stored
+        },
+        set: { newValue in
+          draft.legDrafts[idx].amountText =
+            side.negateForDisplay
+            ? TransactionDraft.flipTradePaidDisplaySign(newValue) : newValue
+        })
       let instrumentBinding = Binding<Instrument>(
         get: { draft.legDrafts[idx].instrument ?? defaultInstrument(forLegAt: idx) },
         set: { draft.legDrafts[idx].instrument = $0 })
 
       LabeledContent {
         HStack(spacing: 8) {
-          TextField(label, text: amountBinding)
+          TextField(side.label, text: amountBinding)
             .labelsHidden()
             .multilineTextAlignment(.trailing)
             .monospacedDigit()
             #if os(iOS)
               .keyboardType(.decimalPad)
             #endif
-            .focused($focusedField, equals: focus)
-            .accessibilityIdentifier(identifier)
+            .focused($focusedField, equals: side.focus)
+            .accessibilityIdentifier(side.identifier)
           CompactInstrumentPickerButton(selection: instrumentBinding)
-            .accessibilityIdentifier(instrumentIdentifier)
+            .accessibilityIdentifier(side.instrumentIdentifier)
         }
       } label: {
-        Text(label)
+        Text(side.label)
       }
     }
   }
@@ -141,11 +142,72 @@ struct TransactionDetailTradeSection: View {
         from: received.amountText, decimals: receivedInst.decimals),
       paidQty != 0, receivedQty != 0
     else { return nil }
-    // `abs()` here applies to derived display ratios only; stored leg
+    // `abs()` here applies to the derived display ratio only; stored leg
     // quantities keep their signs untouched per the project sign convention.
+    // The Paid quantity is normally negative for a buy (and positive for a
+    // refund-shaped reversal), so the magnitude must be used either way to
+    // produce a positive exchange-rate caption.
     let rate = abs(paidQty / receivedQty)
     let rateFormatted = rate.formatted(
       .number.precision(.significantDigits(2...4)).grouping(.never))
     return "≈ 1 \(receivedInst.shortCode) = \(rateFormatted) \(paidInst.shortCode)"
+  }
+}
+
+// MARK: - TradeLegSide
+
+/// Identifies which leg of a trade a row is rendering, bundling the per-side
+/// configuration (label, focus identity, accessibility ids, leg-index lookup,
+/// and the display-sign convention) that
+/// `TransactionDetailTradeSection.legAmountRow(_:)` consumes. File-private so
+/// the section's call sites stay readable (`legAmountRow(.paid)`) without
+/// nesting the enum inside the `View` (which would trigger SwiftLint's
+/// `nesting` rule for types declared one level deep in another type).
+private enum TradeLegSide {
+  case paid, received
+
+  var label: LocalizedStringKey {
+    switch self {
+    case .paid: "Paid"
+    case .received: "Received"
+    }
+  }
+
+  var focus: TransactionDetailFocus {
+    switch self {
+    case .paid: .tradePaidAmount
+    case .received: .tradeReceivedAmount
+    }
+  }
+
+  var identifier: String {
+    switch self {
+    case .paid: UITestIdentifiers.Detail.tradePaidAmount
+    case .received: UITestIdentifiers.Detail.tradeReceivedAmount
+    }
+  }
+
+  var instrumentIdentifier: String {
+    switch self {
+    case .paid: UITestIdentifiers.Detail.tradePaidInstrument
+    case .received: UITestIdentifiers.Detail.tradeReceivedInstrument
+    }
+  }
+
+  /// `true` when the field should display the user's natural-sign value
+  /// while storage keeps the leg's signed quantity. Only the Paid leg
+  /// negates; see the file-header sign-handling note.
+  var negateForDisplay: Bool {
+    switch self {
+    case .paid: true
+    case .received: false
+    }
+  }
+
+  func legIndex(in draft: TransactionDraft) -> Int? {
+    switch self {
+    case .paid: draft.paidLegIndex
+    case .received: draft.receivedLegIndex
+    }
   }
 }

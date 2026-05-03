@@ -208,6 +208,41 @@ extension TransactionDraft {
   }
 }
 
+// MARK: - Trade Paid Display Negation
+
+extension TransactionDraft {
+  /// View-side bijection between the trade Paid leg's stored `amountText`
+  /// (the signed leg quantity, e.g. `-300`) and what the user types into the
+  /// Paid field (the natural-sign value, e.g. `300` for "I paid $300, balance
+  /// goes down by $300"). The Received leg is unaffected — users enter
+  /// positive amounts and the leg quantity is positive, matching expectation.
+  ///
+  /// Operates at the character level rather than parse-and-format so partial
+  /// input (`""`, `"-"`, `"0."`, `"-0."`) survives mid-keystroke without the
+  /// formatter dropping a trailing dot or collapsing a transient `-0` into
+  /// `0`. The function is idempotent under composition — `flip(flip(x)) == x`
+  /// — so the SwiftUI `Binding`'s get/set round-trip is stable.
+  static func flipTradePaidDisplaySign(_ text: String) -> String {
+    if text.isEmpty { return text }
+    if text == "-" { return text }
+
+    if text.hasPrefix("-") {
+      let rest = String(text.dropFirst())
+      // Preserve the leading minus when the remainder is a zero-magnitude
+      // partial value so `-`, `-0`, `-0.` round-trip cleanly while the user
+      // is typing toward `-0.5` (a refund booked against the Paid leg).
+      if rest == "0" || rest == "0." { return text }
+      return rest
+    }
+
+    // Canonical zero stays positive — a fresh blank Paid leg has stored
+    // `amountText == "0"`; rendering it as `-0` would be jarring.
+    if text == "0" || text == "0." { return text }
+
+    return "-" + text
+  }
+}
+
 // MARK: - Type Conversion Helpers
 
 extension TransactionDraft {
