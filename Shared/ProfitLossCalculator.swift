@@ -33,22 +33,15 @@ enum ProfitLossCalculator {
 
   /// Process all transactions to compute total invested.
   ///
-  /// Fiat legs can span multiple currencies (e.g. a USD payment plus an
-  /// AUD fee). We convert each outflow leg to `profileCurrency` on the
-  /// transaction's date before summing so `totalInvested` is expressed
-  /// in a single currency. See guides/INSTRUMENT_CONVERSION_GUIDE.md
-  /// Rules 1 and 5.
-  /// Process all transactions to compute total invested.
-  ///
-  /// Only `.trade` legs contribute to cost basis, consistent with
-  /// `TradeEventClassifier`. Fiat legs of other types (e.g. `.expense`
-  /// brokerage fees) are intentionally excluded.
-  ///
-  /// Fiat `.trade` legs can span multiple currencies (e.g. a USD payment
-  /// in a cross-currency buy). We convert each fiat outflow leg to
-  /// `profileCurrency` on the transaction's date before summing so
-  /// `totalInvested` is expressed in a single currency. See
-  /// guides/INSTRUMENT_CONVERSION_GUIDE.md Rules 1 and 5.
+  /// `totalInvested` is the lifetime fiat input attributed to each
+  /// non-fiat acquisition: every fiat `.trade` outflow plus every
+  /// `.expense` fee leg attached to the same transaction, all converted
+  /// to `profileCurrency` on the transaction's date. Mirrors
+  /// `TradeEventClassifier`'s fee fold-in (#558) so `totalInvested`
+  /// stays consistent with `remainingCostBasis` from the FIFO engine —
+  /// otherwise `returnPercentage` (computed against `totalInvested`)
+  /// would over-state returns by ignoring transaction costs.
+  /// See guides/INSTRUMENT_CONVERSION_GUIDE.md Rules 1, 5, and 8.
   private static func accumulateInvested(
     into instrumentData: inout [String: InstrumentData],
     transactions: [LegTransaction],
@@ -67,6 +60,24 @@ enum ProfitLossCalculator {
           abs(leg.quantity), from: leg.instrument, to: profileCurrency, on: transaction.date
         )
         fiatOutflow += converted
+      }
+      // Fold attached `.expense` fee legs in. Same-instrument fast path
+      // matches the classifier (host-currency fees skip the conversion
+      // hop). Negate so a normal negative-quantity fee becomes a positive
+      // cost contribution; a positive-quantity refund correctly reduces
+      // the contribution. Sign-preserving; never abs().
+      for feeLeg in transaction.legs where feeLeg.type == .expense {
+        let convertedFee: Decimal
+        if feeLeg.instrument == profileCurrency {
+          convertedFee = feeLeg.quantity
+        } else {
+          convertedFee = try await conversionService.convert(
+            feeLeg.quantity,
+            from: feeLeg.instrument,
+            to: profileCurrency,
+            on: transaction.date)
+        }
+        fiatOutflow += -convertedFee
       }
 
       for leg in nonFiatLegs where leg.quantity > 0 {

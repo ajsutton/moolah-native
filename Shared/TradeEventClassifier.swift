@@ -22,13 +22,20 @@ struct TradeEventClassification: Sendable, Equatable {
 
 /// Classifies a transaction's `.trade` legs into FIFO buy / sell events.
 ///
-/// Per design §2, the classifier filters by `type == .trade` and ignores
-/// every other leg. For each `.trade` leg, the per-unit value is derived
-/// from the *other* `.trade` leg's value converted to `hostCurrency` on
-/// the transaction date. Fee legs (`.expense`) are not part of cost basis
-/// in this iteration; that decision moves with the
-/// `SelfWealthMovementsParser` brokerage-attach work tracked in
-/// https://github.com/ajsutton/moolah-native/issues/558.
+/// Per design §2, the classifier filters by `type == .trade` to identify
+/// capital legs. For each one, the per-unit value is derived from the
+/// *other* `.trade` leg's value converted to `hostCurrency` on the
+/// transaction date.
+///
+/// Attached `.expense` legs are folded into per-unit cost: each fee leg
+/// is converted to `hostCurrency` on the trade date (or summed directly
+/// when already in `hostCurrency`), summed, and split *evenly* across
+/// the capital events. Even split is deterministic and avoids the extra
+/// conversion call value-weighting would require; for the typical
+/// two-leg fair-value swap the result is the same to within rounding.
+/// Buy events have the per-unit fee added to `costPerUnit`; Sell events
+/// have it subtracted from `proceedsPerUnit`. Transfers (`In` / `Out`)
+/// do not enter the classifier and are unaffected.
 ///
 /// Only non-fiat legs emit capital events. In a fiat+non-fiat pair the
 /// fiat leg is the price carrier; in a non-fiat swap both legs emit events.
@@ -60,6 +67,29 @@ enum TradeEventClassifier {
     }
     let capitalIndices = nonFiatIndices.isEmpty ? Array(tradeLegs.indices) : nonFiatIndices
 
+    // Sum attached fee legs in hostCurrency. Same-instrument fast path is
+    // enforced here at the call site, not delegated to the conversion
+    // service — that keeps the host-currency case off the async hop and
+    // is directly testable (see hostCurrencyFeeNeedsNoConversionLookup).
+    var totalFeeHost: Decimal = 0
+    for feeLeg in legs where feeLeg.type == .expense {
+      if feeLeg.instrument == hostCurrency {
+        totalFeeHost += feeLeg.quantity
+      } else {
+        totalFeeHost += try await conversionService.convert(
+          feeLeg.quantity, from: feeLeg.instrument, to: hostCurrency, on: date)
+      }
+    }
+    // Negate: fee-leg quantity is negative by convention (cost paid out).
+    // Negating turns the sum into a positive cost contribution. A positive
+    // .expense leg (a refund attached to a trade) becomes a negative
+    // contribution, correctly reducing cost. Sign-preserving on purpose;
+    // never abs().
+    let feeContribution = -totalFeeHost
+    // feePerEvent is a per-event total in hostCurrency (NOT yet per-unit).
+    // The per-unit division happens inside the loop below.
+    let feePerEvent = feeContribution / Decimal(capitalIndices.count)
+
     var buys: [TradeBuyEvent] = []
     var sells: [TradeSellEvent] = []
     for index in capitalIndices {
@@ -69,20 +99,27 @@ enum TradeEventClassifier {
       let pairValue = try await conversionService.convert(
         pair.quantity, from: pair.instrument, to: hostCurrency, on: date)
       // pair.quantity has the *opposite* sign by convention (paid vs received),
-      // so |pairValue / leg.quantity| is the per-unit cost or proceed.
+      // so |pairValue / leg.quantity| is the per-unit cost or proceed. abs()
+      // here gives the magnitude of the exchange rate, NOT a monetary amount;
+      // the buy-vs-sell sign is carried by `leg.quantity > 0` below.
       let perUnit = abs(pairValue / leg.quantity)
+      // The Sell formula uses subtraction so a positive feePerUnit (the
+      // normal-fee case) reduces proceeds, and a negative feePerUnit
+      // (the refund case) increases them. Buy is the mirror — addition
+      // gives cost-up for fees, cost-down for refunds.
+      let feePerUnit = feePerEvent / leg.quantity.magnitude
       if leg.quantity > 0 {
         buys.append(
           TradeBuyEvent(
             instrument: leg.instrument,
             quantity: leg.quantity,
-            costPerUnit: perUnit))
+            costPerUnit: perUnit + feePerUnit))
       } else {
         sells.append(
           TradeSellEvent(
             instrument: leg.instrument,
             quantity: -leg.quantity,
-            proceedsPerUnit: perUnit))
+            proceedsPerUnit: perUnit - feePerUnit))
       }
     }
     return TradeEventClassification(buys: buys, sells: sells)

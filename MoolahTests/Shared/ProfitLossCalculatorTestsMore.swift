@@ -99,11 +99,10 @@ struct ProfitLossCalculatorTestsMore {
   }
 
   /// A multi-currency purchase (USD 2000 + AUD 100 brokerage fee) where
-  /// the fee is modelled as an `.expense` leg (as per the current design).
-  /// The classifier sees only the two `.trade` legs (USD outflow → BHP) and
-  /// derives cost basis from those. The AUD 100 fee is excluded from cost
-  /// basis per the design documented at
-  /// https://github.com/ajsutton/moolah-native/issues/558.
+  /// the fee is modelled as an `.expense` leg. The classifier converts
+  /// the USD trade leg to AUD on the trade date and folds the AUD 100
+  /// fee in via the host-currency fast path, giving total invested =
+  /// AUD 3100.
   @Test
   func mixedFiatLegs_totalInvestedConvertsEachLegToProfileCurrency() async throws {
     let bhp = stockInstrument("BHP")
@@ -137,12 +136,12 @@ struct ProfitLossCalculatorTestsMore {
     )
 
     #expect(results.count == 1)
-    // totalInvested: USD 2000×1.5 = AUD 3000 (fee leg excluded from cost basis).
+    // totalInvested: USD 2000×1.5 + AUD 100 fee = AUD 3100.
     // currentValue: 100 × AUD 50 = AUD 5000.
-    // unrealizedGain: 5000 − 3000 = 2000.
-    #expect(results[0].totalInvested == 3000)
+    // unrealizedGain: 5000 − 3100 = 1900.
+    #expect(results[0].totalInvested == 3100)
     #expect(results[0].currentValue == 5000)
-    #expect(results[0].unrealizedGain == 2000)
+    #expect(results[0].unrealizedGain == 1900)
   }
 
   // MARK: - Date-sensitive routing
