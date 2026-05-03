@@ -301,4 +301,37 @@ struct ExchangeRateServiceTests {
     #expect(rate == dec("0.6400"))
   }
 
+  // MARK: - In-range short-circuit
+
+  /// Requests for a date strictly inside `[earliestDate, latestDate]` whose
+  /// exact (date, quote) tuple is missing must be served from cache via
+  /// `fallbackRate` — they must NOT trigger a network fetch. This is the
+  /// hot path for chart rendering: every weekend / holiday day in the
+  /// visible range falls into this case, and going to the network on each
+  /// one saturates the GRDB write queue with `saveCache` rewrites.
+  @Test
+  func inRangeMissUsesFallbackWithoutFetching() async throws {
+    let inner = FixedRateClient(rates: [
+      "2025-01-17": ["USD": dec("0.6500")],  // Friday
+      "2025-01-20": ["USD": dec("0.6510")],  // Monday
+    ])
+    let client = CountingRateClient(inner)
+    let database = try ProfileDatabase.openInMemory()
+    let service = ExchangeRateService(client: client, database: database)
+
+    // Prime cache with both Friday and Monday so the cached range spans
+    // the weekend.
+    _ = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-17"))
+    _ = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-20"))
+    let primedFetches = client.fetchCount
+
+    // Saturday Jan 18 is in `[2025-01-17, 2025-01-20]`. The exact tuple is
+    // missing (Frankfurter posts no weekend rates) but `fallbackRate`
+    // resolves it from Friday.
+    let saturdayRate = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-18"))
+
+    #expect(saturdayRate == dec("0.6500"))
+    #expect(client.fetchCount == primedFetches)
+  }
+
 }

@@ -55,11 +55,26 @@ actor ExchangeRateService {
       return cached
     }
 
-    // Determine what to fetch to cover the requested date.
-    // Frankfurter 404s for weekends, public holidays, and dates past its
-    // last-posted rate, so we always fetch a surrounding range and fall
-    // back to the most-recent prior cached rate when the exact date is
-    // missing.
+    // In-range short-circuit: if the requested date is within the cached
+    // `[earliestDate, latestDate]` window, the exact miss is a weekend /
+    // holiday / Frankfurter-not-yet-posted gap. `fallbackRate` resolves it
+    // from the most-recent prior cached rate without going to the network.
+    // Skipping the fetch here is what keeps repeat chart renders cheap —
+    // see `guides/INSTRUMENT_CONVERSION_GUIDE.md` and the perf rationale
+    // in `Shared/ExchangeRateService+Persistence.swift`.
+    if let cache = caches[base],
+      dateString >= cache.earliestDate, dateString <= cache.latestDate
+    {
+      if let fallback = fallbackRate(base: base, quote: quote, dateString: dateString) {
+        return fallback
+      }
+      // In-range with no fallback only happens when this quote currency
+      // has never been seen for this base — surface as missing rather
+      // than triggering a fetch + full cache rewrite.
+      throw ExchangeRateError.noRateAvailable(base: base, quote: quote, date: dateString)
+    }
+
+    // Out of cached range — extend toward the requested date.
     await fetchToCoverDate(base: base, date: date, dateString: dateString)
 
     // Exact hit after fetch?
@@ -75,8 +90,12 @@ actor ExchangeRateService {
     throw ExchangeRateError.noRateAvailable(base: base, quote: quote, date: dateString)
   }
 
-  /// Attempts to fetch exchange rates covering the requested date.
-  /// Errors are swallowed — callers fall back to cached rates when the fetch fails.
+  /// Extends the cached range toward `date`, fetching only the gap between
+  /// the requested date and the existing `[earliestDate, latestDate]`
+  /// window. `rate()` short-circuits in-range requests before calling
+  /// this, so we only ever extend the boundary — never refetch dates we
+  /// already cover. Errors are swallowed; callers fall back to cached
+  /// rates when the fetch fails.
   private func fetchToCoverDate(base: String, date: Date, dateString: String) async {
     let calendar = Calendar(identifier: .gregorian)
     do {
@@ -91,10 +110,6 @@ actor ExchangeRateService {
           let fetchEnd = calendar.date(byAdding: .day, value: -1, to: earliestDate)
         {
           try await fetchInChunks(base: base, from: date, to: fetchEnd)
-        } else {
-          // Requested date is inside the cached range but the specific quote
-          // is missing — attempt to fetch that single date.
-          try await fetchInChunks(base: base, from: date, to: date)
         }
       } else if let fetchStart = calendar.date(byAdding: .day, value: -30, to: date) {
         // Cold cache: fetch a month-wide surrounding range so we pick up
@@ -263,16 +278,42 @@ actor ExchangeRateService {
 
   private func fetchAndMerge(base: String, from: Date, to: Date) async throws {
     let fetched = try await client.fetchRates(base: base, from: from, to: to)
-    merge(base: base, newRates: fetched)
-    try await saveCache(base: base)
+    // Frankfurter (and the chunked extension call sites in this service)
+    // legitimately return an empty payload for weekend / holiday / future
+    // single-day probes. Skip the disk write entirely — there is nothing
+    // new to persist.
+    guard !fetched.isEmpty else { return }
+    let delta = mergeReturningDelta(base: base, newRates: fetched)
+    // The fetch may also return rates we already have (e.g. an extension
+    // chunk that overlaps the cached range due to rounding). When merge
+    // observes no change we have nothing to write.
+    guard !delta.isEmpty else { return }
+    try await persistDelta(base: base, deltaRecords: delta)
   }
 
-  private func merge(base: String, newRates: [String: [String: Decimal]]) {
-    guard !newRates.isEmpty else { return }
+  /// Merges `newRates` into `caches[base]` and returns the rows that
+  /// actually changed so the persistence layer can `INSERT OR REPLACE`
+  /// only those (rather than rewriting every cached row for the base on
+  /// every fetch).
+  ///
+  /// The comparison is per-(date, quote) so a fetch that returns the
+  /// same rates already in cache produces an empty delta. This is what
+  /// lets `fetchAndMerge` skip the disk write on a no-op extension probe.
+  private func mergeReturningDelta(
+    base: String, newRates: [String: [String: Decimal]]
+  ) -> [ExchangeRateRecord] {
+    guard !newRates.isEmpty else { return [] }
     let sortedDates = newRates.keys.sorted()
-    guard let earliest = sortedDates.first, let latest = sortedDates.last else { return }
+    guard let earliest = sortedDates.first, let latest = sortedDates.last else { return [] }
+
+    var deltaRecords: [ExchangeRateRecord] = []
+
     if var existing = caches[base] {
       for (dateKey, dayRates) in newRates {
+        let existingDayRates = existing.rates[dateKey] ?? [:]
+        for (quote, rate) in dayRates where existingDayRates[quote] != rate {
+          deltaRecords.append(rateRecord(base: base, quote: quote, date: dateKey, rate: rate))
+        }
         existing.rates[dateKey] = dayRates
       }
       if earliest < existing.earliestDate {
@@ -289,10 +330,32 @@ actor ExchangeRateService {
         latestDate: latest,
         rates: newRates
       )
+      for (dateKey, dayRates) in newRates {
+        for (quote, rate) in dayRates {
+          deltaRecords.append(rateRecord(base: base, quote: quote, date: dateKey, rate: rate))
+        }
+      }
     }
+
+    return deltaRecords
   }
 
-  // SQL persistence (`loadCache` / `saveCache`) lives in
+  /// Marshalls a `(date, quote, rate)` triple into the GRDB record shape.
+  /// `Decimal → Double` round-trips via `NSDecimalNumber` (the same path
+  /// GRDB itself takes), keeping the precision-preservation contract in
+  /// sync with `loadCache`'s decode.
+  private func rateRecord(
+    base: String, quote: String, date: String, rate: Decimal
+  ) -> ExchangeRateRecord {
+    ExchangeRateRecord(
+      base: base,
+      quote: quote,
+      date: date,
+      rate: NSDecimalNumber(decimal: rate).doubleValue
+    )
+  }
+
+  // SQL persistence (`loadCache` / `persistDelta`) lives in
   // `ExchangeRateService+Persistence.swift` so this file stays under
   // SwiftLint's `type_body_length` and `file_length` thresholds.
 }
