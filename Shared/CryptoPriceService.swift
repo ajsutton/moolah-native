@@ -10,12 +10,14 @@ actor CryptoPriceService {
   // MARK: - Cross-extension internals
   // `caches`, `hydratedTokenIds`, `database`, and `logger` are accessed
   // by the SQL persistence extension in
-  // `CryptoPriceService+Persistence.swift`. The methods
-  // `loadCache(tokenId:)` and `persistDelta(tokenId:deltaRecords:)` are
-  // defined there and called from this file, which is why both they and
-  // these properties are `internal` rather than `private`. They remain
-  // actor-isolated; the access modifier is internal so the sibling-file
-  // extension can see them.
+  // `CryptoPriceService+Persistence.swift` and the merge extension in
+  // `CryptoPriceService+Merge.swift`. The methods
+  // `loadCache(tokenId:)` / `persistDelta(tokenId:deltaRecords:)`
+  // (persistence) and `mergeReturningDelta(tokenId:symbol:newPrices:)`
+  // (merge) are defined there and called from this file, which is why
+  // both they and these properties are `internal` rather than `private`.
+  // They remain actor-isolated; the access modifier is internal so the
+  // sibling-file extensions can see them.
   var caches: [String: CryptoPriceCache] = [:]
   /// Loaded token ids — set on first hydration so we don't re-read SQL when
   /// the cache is genuinely empty.
@@ -115,16 +117,21 @@ actor CryptoPriceService {
       return cached
     }
 
+    if let inRange = try inRangeFallback(tokenId: tokenId, dateString: dateString) {
+      return inRange
+    }
+
+    // Out of cached range — extend toward the requested date and try
+    // each provider in order. Continues past providers that return
+    // empty so a fallback chain (CoinGecko → CryptoCompare → Binance)
+    // can collectively fill in the dates one of them has.
     let symbol = instrument.ticker ?? instrument.name
-    // Cold cache: fetch a month-wide surrounding window so a request on a
-    // day the provider has not (yet) published can still fall back to a
-    // recent prior price. Mirrors ExchangeRateService.fetchToCoverDate.
-    let calendar = Calendar(identifier: .gregorian)
-    let fetchStart = calendar.date(byAdding: .day, value: -30, to: date) ?? date
+    let fetchInterval = extensionWindow(
+      for: tokenId, requestedDate: date, dateString: dateString)
     var lastError: (any Error)?
     for client in clients {
       do {
-        let fetched = try await client.dailyPrices(for: mapping, in: fetchStart...date)
+        let fetched = try await client.dailyPrices(for: mapping, in: fetchInterval)
         if !fetched.isEmpty {
           let delta = mergeReturningDelta(
             tokenId: tokenId, symbol: symbol, newPrices: fetched)
@@ -146,6 +153,67 @@ actor CryptoPriceService {
     }
 
     throw lastError ?? CryptoPriceError.noPriceAvailable(tokenId: tokenId, date: dateString)
+  }
+
+  /// Resolves the request from the in-memory cache when the requested
+  /// date sits inside the `[earliestDate, latestDate]` window. Returns
+  /// the prior-trading-day fallback price if available and `nil` if the
+  /// date is out of range (the caller then triggers an extension fetch).
+  ///
+  /// Throws `noPriceAvailable` for the rare in-range case where the
+  /// cache has bounds set but no row on or before the requested date —
+  /// surfacing as missing rather than re-fetching is intentional.
+  /// Without this short-circuit every weekend / non-trading-day in a
+  /// chart's visible range dispatched a network probe and a `saveCache`
+  /// rewrite, saturating the GRDB queue. Mirrors
+  /// `ExchangeRateService.rate(...)`'s in-range branch.
+  private func inRangeFallback(tokenId: String, dateString: String) throws -> Decimal? {
+    guard let cache = caches[tokenId],
+      dateString >= cache.earliestDate, dateString <= cache.latestDate
+    else { return nil }
+    if let fallback = fallbackPrice(tokenId: tokenId, dateString: dateString) {
+      return fallback
+    }
+    throw CryptoPriceError.noPriceAvailable(tokenId: tokenId, date: dateString)
+  }
+
+  /// Returns the date range a fetch should cover when the cache cannot
+  /// satisfy the request directly. Mirrors the extension shape used by
+  /// `StockPriceService.fetchToCoverDate` and `ExchangeRateService`:
+  ///
+  /// - **Cache exists, requested date past `latestDate`:** forward
+  ///   extension from the day after `latestDate` to the requested date.
+  /// - **Cache exists, requested date before `earliestDate`:** backward
+  ///   extension from the requested date to the day before
+  ///   `earliestDate`.
+  /// - **Cold cache (no entry for token):** 30-day surrounding window so
+  ///   a first-ever request on a non-trading day can still fall back
+  ///   to a recent prior price.
+  ///
+  /// The in-range case is unreachable here — `price(...)` short-circuits
+  /// before calling this — but a defensive single-day window is returned
+  /// just in case.
+  private func extensionWindow(
+    for tokenId: String, requestedDate: Date, dateString: String
+  ) -> ClosedRange<Date> {
+    let calendar = Calendar(identifier: .gregorian)
+    if let cache = caches[tokenId] {
+      if dateString > cache.latestDate,
+        let latestDate = dateFormatter.date(from: cache.latestDate),
+        let fetchStart = calendar.date(byAdding: .day, value: 1, to: latestDate)
+      {
+        return fetchStart...requestedDate
+      }
+      if dateString < cache.earliestDate,
+        let earliestDate = dateFormatter.date(from: cache.earliestDate),
+        let fetchEnd = calendar.date(byAdding: .day, value: -1, to: earliestDate)
+      {
+        return requestedDate...fetchEnd
+      }
+      return requestedDate...requestedDate
+    }
+    let fetchStart = calendar.date(byAdding: .day, value: -30, to: requestedDate) ?? requestedDate
+    return fetchStart...requestedDate
   }
 
   // MARK: - Date range
@@ -317,60 +385,9 @@ extension CryptoPriceService {
     if let error = lastError { throw error }
   }
 
-  /// Merges `newPrices` into `caches[tokenId]` and returns the rows that
-  /// actually changed so the persistence layer can `INSERT OR REPLACE`
-  /// only those (rather than rewriting every cached row for the token
-  /// on every fetch). The comparison is per-date so a fetch returning
-  /// the same prices already in cache produces an empty delta — which
-  /// the call sites use to skip the disk write entirely.
-  func mergeReturningDelta(
-    tokenId: String, symbol: String, newPrices: [String: Decimal]
-  ) -> [CryptoPriceRecord] {
-    guard !newPrices.isEmpty else { return [] }
-    let sortedDates = newPrices.keys.sorted()
-    guard let earliest = sortedDates.first, let latest = sortedDates.last else { return [] }
-
-    var deltaRecords: [CryptoPriceRecord] = []
-
-    if var existing = caches[tokenId] {
-      for (dateKey, price) in newPrices where existing.prices[dateKey] != price {
-        deltaRecords.append(priceRecord(tokenId: tokenId, date: dateKey, price: price))
-        existing.prices[dateKey] = price
-      }
-      if earliest < existing.earliestDate {
-        existing.earliestDate = earliest
-      }
-      if latest > existing.latestDate {
-        existing.latestDate = latest
-      }
-      caches[tokenId] = existing
-    } else {
-      caches[tokenId] = CryptoPriceCache(
-        tokenId: tokenId,
-        symbol: symbol,
-        earliestDate: earliest,
-        latestDate: latest,
-        prices: newPrices
-      )
-      for (dateKey, price) in newPrices {
-        deltaRecords.append(priceRecord(tokenId: tokenId, date: dateKey, price: price))
-      }
-    }
-
-    return deltaRecords
-  }
-
-  /// Marshalls a `(date, price)` pair into the GRDB record shape.
-  /// `Decimal → Double` round-trips via `NSDecimalNumber` (the same path
-  /// GRDB itself takes), keeping the precision-preservation contract in
-  /// sync with `loadCache`'s decode.
-  private func priceRecord(tokenId: String, date: String, price: Decimal) -> CryptoPriceRecord {
-    CryptoPriceRecord(
-      tokenId: tokenId,
-      date: date,
-      priceUsd: NSDecimalNumber(decimal: price).doubleValue
-    )
-  }
+  // `mergeReturningDelta` lives in `CryptoPriceService+Merge.swift` so
+  // the main actor body stays under SwiftLint's `type_body_length` and
+  // `file_length` thresholds.
 }
 
 /// Fallback when no resolution client is configured. Returns empty results.
