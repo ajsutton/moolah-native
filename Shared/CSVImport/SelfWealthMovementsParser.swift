@@ -148,8 +148,7 @@ struct SelfWealthMovementsParser: CSVParser, Sendable {
         row: context.row)
     }
     let brokerage = SelfWealthCSVParsing.parseDecimal(brokerageField) ?? 0
-    let stockInstrument = Instrument.stock(
-      ticker: context.code, exchange: "ASX", name: context.code)
+    let stockInstrument = Self.instrument(forASXCode: context.code)
     let cashAmount = isBuy ? -consideration : consideration
 
     var legs = [
@@ -175,13 +174,20 @@ struct SelfWealthMovementsParser: CSVParser, Sendable {
         bankReference: context.reference.isEmpty ? nil : context.reference))
   }
 
+  /// SelfWealth's CSV stores the bare ASX code (e.g. `BHP`); the rest of
+  /// the app uses the Yahoo-Finance-style `BHP.AX` ticker so imported legs
+  /// share an `Instrument.id` with anything registered through the picker.
+  private static func instrument(forASXCode code: String) -> Instrument {
+    Instrument.stock(ticker: "\(code).AX", exchange: "ASX", name: code)
+  }
+
   private func makeTransferRecord(
     context: RowContext, isInbound: Bool
   ) -> ParsedRecord {
     let signedUnits = isInbound ? context.units : -context.units
     let leg = ParsedLeg(
       accountId: nil,
-      instrument: Instrument.stock(ticker: context.code, exchange: "ASX", name: context.code),
+      instrument: Self.instrument(forASXCode: context.code),
       quantity: signedUnits,
       type: isInbound ? .income : .expense,
       isInstrumentPlaceholder: false)

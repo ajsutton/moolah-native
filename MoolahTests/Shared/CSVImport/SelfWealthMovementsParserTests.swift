@@ -37,7 +37,8 @@ struct SelfWealthMovementsParserTests {
       $0.instrument == .AUD && $0.type == .trade && $0.quantity == Decimal(string: "-5000.00")
     })
     #expect(cashLeg != nil)
-    let positionLeg = try #require(buy.legs.first(where: { $0.instrument.id == "ASX:WXYZ" }))
+    let positionLeg = try #require(buy.legs.first(where: { $0.instrument.id == "ASX:WXYZ.AX" }))
+    #expect(positionLeg.instrument.ticker == "WXYZ.AX")
     #expect(positionLeg.quantity == 100)
     #expect(positionLeg.type == .trade)
     #expect(positionLeg.instrument.kind == .stock)
@@ -65,7 +66,7 @@ struct SelfWealthMovementsParserTests {
         $0.instrument == .AUD && $0.type == .trade
       }))
     #expect(cashLeg.quantity == Decimal(string: "4000.00"))
-    let positionLeg = try #require(sell.legs.first(where: { $0.instrument.id == "ASX:ABCD" }))
+    let positionLeg = try #require(sell.legs.first(where: { $0.instrument.id == "ASX:ABCD.AX" }))
     #expect(positionLeg.quantity == -50)
     #expect(positionLeg.type == .trade)
     let brokerageLeg = try #require(
@@ -85,7 +86,7 @@ struct SelfWealthMovementsParserTests {
         $0.rawDescription.contains("In") && $0.rawDescription.contains("WXYZ")
       }))
     #expect(drp.legs.count == 1)
-    #expect(drp.legs[0].instrument.id == "ASX:WXYZ")
+    #expect(drp.legs[0].instrument.id == "ASX:WXYZ.AX")
     #expect(drp.legs[0].quantity == 3)
     #expect(drp.legs[0].type == .income)
     #expect(drp.legs[0].isInstrumentPlaceholder == false)
@@ -101,7 +102,7 @@ struct SelfWealthMovementsParserTests {
         $0.bankReference == "9000000000000001"
       }))
     #expect(offMarket.legs.count == 1)
-    #expect(offMarket.legs[0].instrument.id == "ASX:MNOP")
+    #expect(offMarket.legs[0].instrument.id == "ASX:MNOP.AX")
     #expect(offMarket.legs[0].quantity == 250)
     #expect(offMarket.legs[0].type == .income)
   }
@@ -116,7 +117,7 @@ struct SelfWealthMovementsParserTests {
         $0.rawDescription.contains("Out") && $0.rawDescription.contains("ABCD")
       }))
     #expect(out.legs.count == 1)
-    #expect(out.legs[0].instrument.id == "ASX:ABCD")
+    #expect(out.legs[0].instrument.id == "ASX:ABCD.AX")
     #expect(out.legs[0].quantity == -10)
     #expect(out.legs[0].type == .expense)
   }

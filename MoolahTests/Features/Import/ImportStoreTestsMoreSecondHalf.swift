@@ -163,7 +163,7 @@ struct ImportStoreTestsMoreSecondHalf {
       $0.instrument == .AUD && $0.quantity == Decimal(string: "-5000.00")
     })
     #expect(cashLeg?.type == .trade)
-    let positionLeg = buy.legs.first(where: { $0.instrument.id == "ASX:WXYZ" })
+    let positionLeg = buy.legs.first(where: { $0.instrument.id == "ASX:WXYZ.AX" })
     #expect(positionLeg?.quantity == 100)
     #expect(positionLeg?.type == .trade)
     let brokerageLeg = buy.legs.first(where: {
@@ -179,12 +179,12 @@ struct ImportStoreTestsMoreSecondHalf {
       $0.importOrigin?.rawDescription.contains("Sell") == true
         && $0.importOrigin?.rawDescription.contains("ABCD") == true
     })
-    let sellPosition = sell?.legs.first(where: { $0.instrument.id == "ASX:ABCD" })
+    let sellPosition = sell?.legs.first(where: { $0.instrument.id == "ASX:ABCD.AX" })
     #expect(sellPosition?.quantity == -50)
     // In row: one-leg position income, no cash counterpart. User reclassifies
     // in-app if it's actually a transfer rather than DRP.
     let drp = imported.first(where: {
-      $0.legs.count == 1 && $0.legs.first?.instrument.id == "ASX:WXYZ"
+      $0.legs.count == 1 && $0.legs.first?.instrument.id == "ASX:WXYZ.AX"
     })
     #expect(drp?.legs.first?.type == .income)
   }
