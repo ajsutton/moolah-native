@@ -76,14 +76,13 @@ struct CapitalGainsCalculatorTestsMore {
   /// Cross-currency buy with a fee in the profile currency: 100 BHP paid
   /// for with USD 2000 plus an AUD 100 brokerage fee. Profile currency =
   /// AUD at 1 USD = 1.5 AUD. The two `.trade` legs price the position
-  /// (USD outflow → BHP) and the AUD fee leg is `.expense` so it does
-  /// **not** participate in cost basis under the current design.
+  /// (USD outflow → BHP) and the AUD fee leg folds into cost basis at
+  /// the host-currency fast path.
   ///
-  /// Cost basis is therefore the converted USD outflow only (AUD 3000),
-  /// proceeds AUD 4000, gain AUD 1000. Folding the fee into cost basis
-  /// is tracked in https://github.com/ajsutton/moolah-native/issues/558.
+  /// Cost basis: USD 2000 × 1.5 = AUD 3000, plus AUD 100 fee = AUD 3100.
+  /// Proceeds AUD 4000. Gain = AUD 900.
   @Test
-  func crossCurrencyBuyWithFeeExcludesFeeFromCostBasis() async throws {
+  func crossCurrencyBuyWithFeeFoldsFeeIntoCostBasis() async throws {
     let bhp = stockInstrument("BHP")
     let usd = Instrument.fiat(code: "USD")
     let accountId = UUID()
@@ -120,10 +119,10 @@ struct CapitalGainsCalculatorTestsMore {
       conversionService: service
     )
 
-    // Cost basis AUD 3000 (USD 2000 × 1.5; fee leg ignored),
-    // proceeds AUD 4000. Gain 1000.
+    // Cost basis AUD 3100 (USD 2000 × 1.5 + AUD 100 fee),
+    // proceeds AUD 4000. Gain 900.
     #expect(result.events.count == 1)
-    #expect(result.events[0].gain == 1000)
+    #expect(result.events[0].gain == 900)
   }
 
   /// Mixed-fiat sell: 100 BHP sold for USD 3000 with AUD 50 fee,
@@ -181,9 +180,7 @@ struct CapitalGainsCalculatorTestsMore {
   // `tx.date` for `Date()` or another date; this test uses
   // `DateBasedFixedConversionService` to make that observable.
 
-  /// Crypto-to-crypto swap: both legs are valued via the conversion
-  /// service. The rate schedule below has a different rate effective at
-  /// the swap date than would be returned for "today" (`Date()`), so a
-  /// regression that misrouted the lookup date would yield a different
-  /// gain than the assertion permits.
+  // Crypto-to-crypto swap test placeholder — described above but not
+  // implemented. Tracking issue not filed; dead documentation kept as
+  // a `//` block so it isn't picked up by DocC.
 }
