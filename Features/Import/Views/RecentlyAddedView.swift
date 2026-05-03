@@ -13,6 +13,7 @@ struct RecentlyAddedView: View {
   @State private var createRuleFromTransaction: Transaction?
   @State private var showingCreateRuleFromSearch: Bool = false
   @State private var transactionForDetail: Transaction?
+  @State private var transactionPendingDelete: Transaction?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -56,6 +57,24 @@ struct RecentlyAddedView: View {
     }
     .sheet(item: $transactionForDetail) { transaction in
       RecentlyAddedDetailSheet(transaction: transaction)
+    }
+    .confirmationDialog(
+      "Delete this transaction?",
+      isPresented: Binding(
+        get: { transactionPendingDelete != nil },
+        set: { if !$0 { transactionPendingDelete = nil } }
+      ),
+      titleVisibility: .visible
+    ) {
+      Button("Delete Transaction", role: .destructive) {
+        if let transaction = transactionPendingDelete {
+          Task { await deleteTransaction(transaction) }
+        }
+        transactionPendingDelete = nil
+      }
+      Button("Cancel", role: .cancel) { transactionPendingDelete = nil }
+    } message: {
+      Text("This action cannot be undone.")
     }
     // `.task(id:)` fires on first appearance and re-fires (auto-cancelling
     // any in-flight load) whenever any of the tracked values change. We
@@ -107,7 +126,7 @@ struct RecentlyAddedView: View {
                   createRuleFromTransaction = transaction
                 }
                 Button("Delete", role: .destructive) {
-                  Task { await deleteTransaction(transaction) }
+                  transactionPendingDelete = transaction
                 }
               }
           }

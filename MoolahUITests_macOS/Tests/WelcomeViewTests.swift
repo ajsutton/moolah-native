@@ -29,14 +29,7 @@ final class WelcomeViewTests: MoolahUITestCase {
   func testFirstLaunchWithOneCloudProfile_autoOpens() {
     let app = launch(seed: .welcomeSingleCloudProfile)
 
-    let hero = app.application.buttons["Get started"]
-    let expectation = XCTNSPredicateExpectation(
-      predicate: NSPredicate(format: "exists == false"),
-      object: hero
-    )
-    if XCTWaiter().wait(for: [expectation], timeout: 5) != .completed {
-      XCTFail("Welcome hero appeared despite a single cloud profile being seeded")
-    }
+    app.welcome.expectHeroAbsent()
   }
 
   /// Two cloud profiles → the picker (state 5) is shown with both

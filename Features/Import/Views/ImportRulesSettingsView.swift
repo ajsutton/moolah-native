@@ -8,11 +8,13 @@ struct ImportRulesSettingsView: View {
   @Environment(ProfileSession.self) private var session
   @State private var editingRule: ImportRule?
   @State private var showingAddSheet = false
+  @State private var selectedRuleId: ImportRule.ID?
 
   var body: some View {
-    List {
+    List(selection: $selectedRuleId) {
       ForEach(ruleStore.rules) { rule in
-        RuleRow(rule: rule) { editingRule = rule }
+        RuleRow(rule: rule)
+          .tag(rule.id)
       }
       .onMove { source, destination in
         var ids = ruleStore.rules.map(\.id)
@@ -24,6 +26,17 @@ struct ImportRulesSettingsView: View {
         for id in ids {
           Task { await ruleStore.delete(id: id) }
         }
+      }
+    }
+    // List selection + primaryAction wires Return / double-click to
+    // open the editor — the same keyboard path the sidebar uses.
+    .contextMenu(forSelectionType: ImportRule.ID.self) { _ in
+      // Empty context menu items — primary action handles the open.
+      // Returning no buttons keeps the right-click menu absent rather
+      // than showing a stub item.
+    } primaryAction: { ids in
+      if let id = ids.first, let rule = ruleStore.rules.first(where: { $0.id == id }) {
+        editingRule = rule
       }
     }
     .overlay {
@@ -80,7 +93,6 @@ struct ImportRulesSettingsView: View {
 
 private struct RuleRow: View {
   let rule: ImportRule
-  let onEdit: () -> Void
   @Environment(ImportRuleStore.self) private var ruleStore
 
   var body: some View {
@@ -112,17 +124,11 @@ private struct RuleRow: View {
         }
       }
       Spacer()
-      // Tab-reachable keyboard path for macOS users; redundant with the
-      // whole-row tap on mouse/touch.
-      Button("Edit") { onEdit() }
-        .buttonStyle(.borderless)
     }
-    // Whole-row click target: a bare `.onTapGesture` on the VStack only
-    // responded to taps on the label text, which left most of the row
-    // dead. `.contentShape(Rectangle())` + row-level tap routes every
-    // click — including on the trailing `Spacer()` — to the editor.
+    // Make the full row a hit target so a click anywhere in the row
+    // updates the List's selection (the editor opens via Return /
+    // double-click via `contextMenu(forSelectionType:primaryAction:)`).
     .contentShape(Rectangle())
-    .onTapGesture { onEdit() }
   }
 
   private func statsCaption(_ stats: ImportRuleStore.RuleMatchStats) -> String {

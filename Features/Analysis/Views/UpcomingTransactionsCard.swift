@@ -247,7 +247,7 @@ private struct SimpleTransactionRow: View {
 }
 
 @MainActor
-private func seedUpcomingPreview(backend: CloudKitBackend, store: TransactionStore) async {
+private func seedUpcomingPreview(backend: any BackendProvider, store: TransactionStore) async {
   let account = Account(id: UUID(), name: "Test Account", type: .bank, instrument: .AUD)
   _ = try? await backend.accounts.create(
     account,

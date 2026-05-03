@@ -192,7 +192,7 @@ struct ForecastPicker: View {
 
 @MainActor
 private func seedAnalysisPreview(
-  backend: CloudKitBackend,
+  backend: any BackendProvider,
   categoryStore: CategoryStore
 ) async {
   let account = Account(id: UUID(), name: "Checking", type: .bank, instrument: .AUD)

@@ -15,10 +15,26 @@ struct WelcomeScreen {
   /// auto-activating.
   func waitForHero(timeout: TimeInterval = 5) {
     Trace.record()
-    let button = app.application.buttons["Get started"]
+    let button = app.element(for: UITestIdentifiers.Welcome.heroGetStartedButton)
     if !button.waitForExistence(timeout: timeout) {
       Trace.recordFailure("hero 'Get started' button did not appear")
       XCTFail("Welcome hero did not appear within \(timeout)s")
+    }
+  }
+
+  /// Post-condition for auto-open paths (single cloud profile, etc.)
+  /// where the hero must never appear. Waits up to `timeout` for the
+  /// hero CTA to be absent and fails if it ever shows up.
+  func expectHeroAbsent(timeout: TimeInterval = 5) {
+    Trace.record()
+    let hero = app.element(for: UITestIdentifiers.Welcome.heroGetStartedButton)
+    let expectation = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "exists == false"),
+      object: hero
+    )
+    if XCTWaiter().wait(for: [expectation], timeout: timeout) != .completed {
+      Trace.recordFailure("hero 'Get started' button appeared unexpectedly")
+      XCTFail("Welcome hero appeared within \(timeout)s when it should have stayed hidden")
     }
   }
 
@@ -45,7 +61,7 @@ struct WelcomeScreen {
   /// appear.
   func tapGetStarted() {
     Trace.record()
-    app.application.buttons["Get started"].click()
+    app.element(for: UITestIdentifiers.Welcome.heroGetStartedButton).click()
     let nameField = app.element(for: UITestIdentifiers.Welcome.nameField)
     if !nameField.waitForExistence(timeout: 3) {
       Trace.recordFailure("name field did not appear after tapGetStarted")
@@ -66,14 +82,6 @@ struct WelcomeScreen {
   func tapCreateProfile() {
     Trace.record()
     app.element(for: UITestIdentifiers.Welcome.createProfileButton).click()
-    let hero = app.application.buttons["Get started"]
-    let expectation = XCTNSPredicateExpectation(
-      predicate: NSPredicate(format: "exists == false"),
-      object: hero
-    )
-    if XCTWaiter().wait(for: [expectation], timeout: 5) != .completed {
-      Trace.recordFailure("hero still visible after tapping Create Profile")
-      XCTFail("Welcome hero remained visible after Create Profile")
-    }
+    expectHeroAbsent()
   }
 }

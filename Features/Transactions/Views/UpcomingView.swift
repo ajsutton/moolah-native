@@ -216,7 +216,7 @@ struct UpcomingView: View {
 
 @MainActor
 private func previewSeedTransactions(
-  backend: CloudKitBackend,
+  backend: any BackendProvider,
   accountId: UUID,
   categoryId: UUID,
   store: TransactionStore

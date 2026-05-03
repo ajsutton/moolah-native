@@ -31,7 +31,9 @@ struct NetWorthGraphCard: View {
   let balances: [DailyBalance]
 
   @State private var selectedDate: Date?
-  @State private var visibleSeries: Set<ChartSeries> = Set(
+  // Internal so the chart-content builders in `+Marks.swift` can read
+  // it without the file going over `type_body_length`.
+  @State var visibleSeries: Set<ChartSeries> = Set(
     ChartSeries.allCases.filter(\.enabledByDefault))
 
   var body: some View {
@@ -110,7 +112,26 @@ struct NetWorthGraphCard: View {
     }
     .chartXSelection(value: $selectedDate)
     .frame(height: 300)
-    .accessibilityLabel("Net worth graph showing financial data over time")
+    .accessibilityLabel(chartAccessibilityLabel)
+  }
+
+  /// Summarises the chart's range and current net worth so VoiceOver
+  /// gives a useful financial snapshot rather than "Net worth graph".
+  /// Empty state is handled by `emptyState` (the chart isn't built when
+  /// `balances` is empty), so we can read first / last unconditionally.
+  private var chartAccessibilityLabel: String {
+    guard let first = actualBalances.first, let last = actualBalances.last else {
+      return "Net worth graph"
+    }
+    let dateFormat: Date.FormatStyle = .dateTime.month(.abbreviated).day().year()
+    let rangeText: String
+    if first.date == last.date {
+      rangeText = first.date.formatted(dateFormat)
+    } else {
+      rangeText = "\(first.date.formatted(dateFormat)) to \(last.date.formatted(dateFormat))"
+    }
+    let currentNet = last.netWorth.formatted
+    return "Net worth graph from \(rangeText). Current net worth \(currentNet)."
   }
 
   private var seriesToggles: some View {
@@ -138,7 +159,9 @@ struct NetWorthGraphCard: View {
                 .foregroundStyle(visibleSeries.contains(series) ? .primary : .tertiary)
             }
           }
-          .buttonStyle(.plain)
+          // `.borderless` (vs `.plain`) preserves keyboard activation
+          // on macOS — Space toggles the series instead of being eaten.
+          .buttonStyle(.borderless)
           .accessibilityLabel("\(series.rawValue) series")
           .accessibilityAddTraits(visibleSeries.contains(series) ? .isSelected : [])
           .accessibilityHint("Double tap to toggle visibility")
@@ -148,124 +171,7 @@ struct NetWorthGraphCard: View {
     .font(.caption)
   }
 
-  @ChartContentBuilder private var availableFundsMarks: some ChartContent {
-    if visibleSeries.contains(.availableFunds) {
-      ForEach(actualBalances) { balance in
-        LineMark(
-          x: .value("Date", balance.date),
-          y: .value("Amount", balance.availableFunds.doubleValue),
-          series: .value("Series", "Available Funds")
-        )
-        .foregroundStyle(.green)
-        .lineStyle(StrokeStyle(lineWidth: 2))
-        .interpolationMethod(.stepEnd)
-      }
-      ForEach(forecastBalances) { balance in
-        LineMark(
-          x: .value("Date", balance.date),
-          y: .value("Amount", balance.availableFunds.doubleValue),
-          series: .value("Series", "Available Funds Forecast")
-        )
-        .foregroundStyle(.green.opacity(0.5))
-        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-        .interpolationMethod(.stepEnd)
-      }
-    }
-  }
-
-  @ChartContentBuilder private var currentFundsMarks: some ChartContent {
-    if visibleSeries.contains(.currentFunds) {
-      ForEach(actualBalances) { balance in
-        LineMark(
-          x: .value("Date", balance.date),
-          y: .value("Amount", balance.balance.doubleValue),
-          series: .value("Series", "Current Funds")
-        )
-        .foregroundStyle(.orange)
-        .lineStyle(StrokeStyle(lineWidth: 2))
-        .interpolationMethod(.stepEnd)
-      }
-      ForEach(forecastBalances) { balance in
-        LineMark(
-          x: .value("Date", balance.date),
-          y: .value("Amount", balance.balance.doubleValue),
-          series: .value("Series", "Current Funds Forecast")
-        )
-        .foregroundStyle(.orange.opacity(0.5))
-        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-        .interpolationMethod(.stepEnd)
-      }
-    }
-  }
-
-  @ChartContentBuilder private var investedAmountMarks: some ChartContent {
-    if visibleSeries.contains(.investedAmount) {
-      ForEach(actualBalances) { balance in
-        LineMark(
-          x: .value("Date", balance.date),
-          y: .value("Amount", balance.investments.doubleValue),
-          series: .value("Series", "Invested Amount")
-        )
-        .foregroundStyle(.purple)
-        .lineStyle(StrokeStyle(lineWidth: 2))
-        .interpolationMethod(.stepEnd)
-      }
-    }
-  }
-
-  @ChartContentBuilder private var investmentValueMarks: some ChartContent {
-    if visibleSeries.contains(.investmentValue) {
-      ForEach(actualBalances.filter { $0.investmentValue != nil }) { balance in
-        LineMark(
-          x: .value("Date", balance.date),
-          y: .value("Amount", (balance.investmentValue?.doubleValue) ?? 0),
-          series: .value("Series", "Investment Value")
-        )
-        .foregroundStyle(.indigo)
-        .lineStyle(StrokeStyle(lineWidth: 2))
-        .interpolationMethod(.stepEnd)
-      }
-    }
-  }
-
-  @ChartContentBuilder private var netWorthMarks: some ChartContent {
-    if visibleSeries.contains(.netWorth) {
-      ForEach(actualBalances) { balance in
-        LineMark(
-          x: .value("Date", balance.date),
-          y: .value("Amount", balance.netWorth.doubleValue),
-          series: .value("Series", "Net Worth")
-        )
-        .foregroundStyle(.blue)
-        .lineStyle(StrokeStyle(lineWidth: 2))
-        .interpolationMethod(.stepEnd)
-      }
-      ForEach(forecastBalances) { balance in
-        LineMark(
-          x: .value("Date", balance.date),
-          y: .value("Amount", balance.netWorth.doubleValue),
-          series: .value("Series", "Net Worth Forecast")
-        )
-        .foregroundStyle(.blue.opacity(0.5))
-        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-        .interpolationMethod(.stepEnd)
-      }
-    }
-  }
-
-  @ChartContentBuilder private var bestFitMarks: some ChartContent {
-    if visibleSeries.contains(.bestFit) {
-      ForEach(actualBalances.filter { $0.bestFit != nil }) { balance in
-        LineMark(
-          x: .value("Date", balance.date),
-          y: .value("Amount", (balance.bestFit?.doubleValue) ?? 0),
-          series: .value("Series", "Best Fit")
-        )
-        .foregroundStyle(.gray)
-        .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
-      }
-    }
-  }
+  // Per-series chart-content builders live in `NetWorthGraphCard+Marks.swift`.
 
   private var availableSeries: [ChartSeries] {
     var series: [ChartSeries] = [.availableFunds, .currentFunds, .netWorth]
@@ -285,11 +191,12 @@ struct NetWorthGraphCard: View {
     return series
   }
 
-  private var actualBalances: [DailyBalance] {
+  // Internal so the per-series builders in `+Marks.swift` can read them.
+  var actualBalances: [DailyBalance] {
     balances.filter { !$0.isForecast }
   }
 
-  private var forecastBalances: [DailyBalance] {
+  var forecastBalances: [DailyBalance] {
     balances.filter { $0.isForecast }
   }
 }

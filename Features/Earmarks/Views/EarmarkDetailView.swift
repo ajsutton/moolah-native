@@ -120,6 +120,7 @@ struct EarmarkDetailView: View {
       balance.isPositive
       ? Double(truncating: (balance.quantity / goal.quantity) as NSDecimalNumber)
       : 0.0
+    let percentComplete = Int(min(progress, 1.0) * 100)
     return VStack(spacing: 4) {
       ProgressView(value: min(progress, 1.0)) {
         HStack {
@@ -131,8 +132,13 @@ struct EarmarkDetailView: View {
         }
       }
       .tint(progress >= 1.0 ? .green : .blue)
+      .accessibilityLabel(
+        "Savings goal: \(balance.formatted) of \(goal.formatted), "
+          + "\(percentComplete)% complete"
+      )
       savingsDateRow
     }
+    .accessibilityElement(children: .combine)
   }
 
   private func summaryItem(label: String, amount: InstrumentAmount) -> some View {
@@ -203,7 +209,7 @@ struct EarmarkDetailView: View {
 
 @MainActor
 private func seedEarmarkDetailPreview(
-  backend: CloudKitBackend,
+  backend: any BackendProvider,
   earmark: Earmark,
   earmarkStore: EarmarkStore,
   store: TransactionStore
