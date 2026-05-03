@@ -16,7 +16,7 @@
 
 - **Modify:** `Shared/TradeEventClassifier.swift` — algorithm extension + doc-comment rewrite. ~25 lines added inside `classify(...)`, ~10 lines of doc-comment replaced.
 - **Modify:** `MoolahTests/Shared/TradeEventClassifierTests.swift` — delete one test (`feeIgnored`), add seven new tests.
-- **Create:** `MoolahTests/Support/RecordingConversionService.swift` — small test double (single file, ~30 lines) that records every `convert(...)` call so the host-currency fast-path test can assert "no call was made for the AUD fee leg". Lives next to existing test doubles in `MoolahTests/Support/`.
+- **Create:** `MoolahTests/Support/RecordingConversionService.swift` — small test double (single file, ~35 lines) that records every `convert(...)` call so the host-currency fast-path test can assert "no call was made for the AUD fee leg". Lives next to existing test doubles in `MoolahTests/Support/`. Defines a top-level `RecordingConversionServiceCall` struct (kept top-level rather than nested to avoid the SwiftLint `nesting: type_level: 1` warning).
 
 No project.yml change needed — both target dirs (`Shared/` and `MoolahTests/`) are already glob-included. No CloudKit schema change. No public API change to `classify(...)`.
 
@@ -37,31 +37,38 @@ import os
 
 @testable import Moolah
 
+/// One recorded call to `RecordingConversionService.convert(...)`. Top-level
+/// (not nested in the service) so the SwiftLint `nesting: type_level` rule
+/// stays at 0 — adding a nested type would cross the warn threshold and
+/// cannot be appeased without growing the baseline.
+struct RecordingConversionServiceCall: Sendable, Equatable {
+  let quantity: Decimal
+  let fromId: String
+  let toId: String
+  let date: Date
+}
+
 /// Test conversion service that records every `convert(_:from:to:on:)` call
 /// so tests can assert which conversions the caller actually performed.
 /// Returns `quantity` unchanged (1:1 fallback) on every call — this double
 /// is for *call-site* assertions, not rate behaviour.
 ///
 /// Backed by `OSAllocatedUnfairLock` so it is async-safe and `Sendable` and
-/// usable from any isolation domain (matching the pattern in
-/// `ThrowingCountingConversionService`).
+/// usable from any isolation domain (same lock-around-mutable-state pattern
+/// as `FailureLog` in `ThrowingCountingConversionService.swift`).
 final class RecordingConversionService: InstrumentConversionService, Sendable {
-  struct Call: Sendable, Equatable {
-    let quantity: Decimal
-    let fromId: String
-    let toId: String
-    let date: Date
-  }
+  private let recorded = OSAllocatedUnfairLock<[RecordingConversionServiceCall]>(
+    initialState: [])
 
-  private let recorded = OSAllocatedUnfairLock<[Call]>(initialState: [])
-
-  var calls: [Call] { recorded.withLock { $0 } }
+  var calls: [RecordingConversionServiceCall] { recorded.withLock { $0 } }
 
   func convert(
     _ quantity: Decimal, from: Instrument, to: Instrument, on date: Date
   ) async throws -> Decimal {
     recorded.withLock {
-      $0.append(Call(quantity: quantity, fromId: from.id, toId: to.id, date: date))
+      $0.append(
+        RecordingConversionServiceCall(
+          quantity: quantity, fromId: from.id, toId: to.id, date: date))
     }
     return quantity
   }
@@ -120,13 +127,25 @@ Open `MoolahTests/Shared/TradeEventClassifierTests.swift`. Make the following ed
 
 **(a) Delete the `feeIgnored` test** (lines 69–77 in the current file — the test function plus its preceding `@Test("fee legs are ignored")` attribute and the blank line that follows). Its assertion `costPerUnit == 40` contradicts the new policy (`40.10`); we replace it below with `buyFoldsAUDFee`.
 
-**(b) Add a date helper** above the test functions (right after the `account` field at the top of the suite):
+**(b) Add a USD instrument field** above the test functions (right after the `account` field at the top of the suite):
 
 ```swift
-  private let usd = Instrument.fiatCurrency(code: "USD", name: "US Dollar")
+  let usd = Instrument.USD
 ```
 
-Add `usd` next to `aud` so the FX-fee test has a foreign currency available. If `Instrument.fiatCurrency(code:name:)` is not the right factory, use whatever the existing codebase uses to construct USD — search the test suite (`grep -rn "USD" MoolahTests/Support MoolahTests/Shared`) for a precedent before improvising.
+`Instrument.USD` is a static convenience constant defined at
+`Domain/Models/Instrument.swift:92` — it expands to `Instrument.fiat(code: "USD")`.
+Used by `buyFoldsFXFee` to provide a foreign-currency fee leg.
+
+Also confirm the existing `date` field in this suite is a past date —
+the existing `let date = Date(timeIntervalSince1970: 1_700_000_000)` is
+November 2023, which is in the past. This is a precondition for the
+`buyFoldsFXFee` test's wrong-date detection to work: the test relies on
+`Date()` (today, at test-run time) being strictly *later* than `date +
+1 day` so that a buggy implementation passing `Date()` instead of `date`
+would pick the 2.0 rate (later entry) and fail the assertion. If the
+existing fixture is ever changed to a future date, that test loses its
+bite.
 
 **(c) Append the seven new test functions** at the end of the suite (immediately before the closing brace):
 
@@ -226,10 +245,14 @@ Add `usd` next to `aud` so the FX-fee test has a foreign currency available. If 
 
   @Test("buy: host-currency fee skips the conversion service")
   func hostCurrencyFeeNeedsNoConversionLookup() async throws {
-    // RecordingConversionService records every convert() call. For a
-    // host-currency fee leg the classifier MUST short-circuit at the
-    // call site so the recorder sees only the pair-leg conversion,
-    // never the fee-leg one.
+    // RecordingConversionService records every convert() call without a
+    // same-instrument short-circuit. The pair-leg conversion (AUD→AUD,
+    // for the BHP capital leg) goes through the service unconditionally
+    // — the classifier does not fast-path the *pair* leg today — so the
+    // recorder sees that one call. The fee leg (also AUD on AUD-host)
+    // MUST be fast-pathed inside the classifier so the recorder sees
+    // exactly one call total. If the fast path is missing, the recorder
+    // sees two calls and `count == 1` catches it.
     let service = RecordingConversionService()
     let legs = [tradeLeg(aud, -4_000), tradeLeg(bhp, 100), feeLeg(aud, -10)]
     let result = try await TradeEventClassifier.classify(
@@ -237,8 +260,7 @@ Add `usd` next to `aud` so the FX-fee test has a foreign currency available. If 
     try #require(result.buys.count == 1)
     #expect(result.buys[0].costPerUnit == Decimal(40) + Decimal(10) / Decimal(100))
     // RecordingConversionService returns input unchanged (1:1), so the
-    // pair-leg conversion still produces -4 000. The assertion below
-    // proves the fee leg was *not* sent to the service.
+    // pair-leg conversion still produces -4 000.
     #expect(service.calls.count == 1)
     #expect(service.calls.first?.quantity == -4_000)
   }
@@ -262,16 +284,23 @@ Specifically expect:
 - `swapSplitsFeeEvenlyAcrossEvents`: actual BTC 60 000 / ETH 3 000, expected 60 250 / 2 987.5. FAIL.
 - `hostCurrencyFeeNeedsNoConversionLookup`: actual cost 40, expected `40.10`. FAIL on the cost assertion. Call-count assertion may PASS today (no fee call is made because fee is ignored entirely) — that's fine, Task 3 must keep that property.
 
-Confirm by `grep -E "Test [\"]?(buy|sell|swap|fee|host)" .agent-tmp/red.txt`. Six failures expected.
+Confirm by `grep -E "buyFolds|sellReduces|swapSplits|feeContrib|hostCurrency" .agent-tmp/red.txt` — function names are stable in xcodebuild output. Six failures expected.
 
 If you see anything other than this pattern, debug before proceeding. Do **not** start Task 3 if a pre-existing test failed (that's a regression already, before any production change).
 
 Clean up: `rm .agent-tmp/red.txt`
 
-- [ ] **Step 3: Commit the failing tests**
+- [ ] **Step 3: Format, verify, and commit the failing tests**
 
 ```bash
 just format
+just format-check 2>&1 | tail -10
+```
+
+Expected: `format-check` exits 0. If it complains, fix the underlying
+code — never edit `.swiftlint-baseline.yml`.
+
+```bash
 git -C $(pwd) add MoolahTests/Shared/TradeEventClassifierTests.swift
 git -C $(pwd) commit -m "$(cat <<'EOF'
 test(trade): add fee-folding tests; delete feeIgnored
@@ -385,7 +414,9 @@ enum TradeEventClassifier {
       let pairValue = try await conversionService.convert(
         pair.quantity, from: pair.instrument, to: hostCurrency, on: date)
       // pair.quantity has the *opposite* sign by convention (paid vs received),
-      // so |pairValue / leg.quantity| is the per-unit cost or proceed.
+      // so |pairValue / leg.quantity| is the per-unit cost or proceed. abs()
+      // here gives the magnitude of the exchange rate, NOT a monetary amount;
+      // the buy-vs-sell sign is carried by `leg.quantity > 0` below.
       let perUnit = abs(pairValue / leg.quantity)
       // The Sell formula uses subtraction so a positive feePerUnit (the
       // normal-fee case) reduces proceeds, and a negative feePerUnit
@@ -413,7 +444,7 @@ enum TradeEventClassifier {
 
 Two notes on details:
 
-1. `Decimal` does not have a `.magnitude` property in the Swift standard library the same way `Int` does — `Decimal` conforms to `SignedNumeric` so `.magnitude` is available there. Verify the build picks it up; if not, replace `leg.quantity.magnitude` with `abs(leg.quantity)`. Same semantics, definitely available on `Decimal`.
+1. `.magnitude` is available on `Decimal` via `SignedNumeric` conformance — no fallback should be needed. If a future compiler revision changes that, `abs(leg.quantity)` is a drop-in equivalent.
 
 2. The fee-leg loop reads from `legs` (the original parameter), not `tradeLegs` — correct, because `tradeLegs` was filtered down to `.trade` only and would never contain `.expense` legs.
 
