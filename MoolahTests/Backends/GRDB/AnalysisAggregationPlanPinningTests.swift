@@ -137,6 +137,14 @@ struct AnalysisAggregationPlanPinningTests {
       detail.contains("leg_by_earmark")
       || detail.contains("leg_analysis_by_earmark_type")
     #expect(usesAcceptableIndex)
+    // Pin the covering composite specifically: the SELECT touches only
+    // `(earmark_id, type, instrument_id, transaction_id, quantity)`,
+    // which is exactly `leg_analysis_by_earmark_type`'s column list, so
+    // the planner is expected to pick it and emit `USING COVERING INDEX`.
+    // Mirrors the `fetchDailyBalancesEarmarkDimensionUsesEarmarkIndex`
+    // pin in `DailyBalancesPlanPinningTests`.
+    #expect(detail.contains("leg_analysis_by_earmark_type"))
+    #expect(detail.contains("USING COVERING INDEX"))
     // SQLite emits `SCAN <alias>` for aliased FROM clauses — here
     // `transaction_leg AS leg`. Pin against the alias.
     #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))

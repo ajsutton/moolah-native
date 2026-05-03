@@ -61,7 +61,7 @@ struct NetWorthGraphCard: View {
     }
     .padding()
     .background(.background)
-    .cornerRadius(12)
+    .clipShape(.rect(cornerRadius: 12))
   }
 
   private var emptyState: some View {

@@ -22,6 +22,8 @@ struct RateQueryPlanTests {
   func exchangeRateLoadCacheUsesPrimaryKey() async throws {
     let database = try ProfileDatabase.openInMemory()
     try await database.read { database in
+      // `SELECT *` here is wrapped in `EXPLAIN QUERY PLAN`; the planner
+      // never expands the column list, so the star is fine.
       let plan = try Row.fetchAll(
         database,
         sql: """
@@ -39,6 +41,8 @@ struct RateQueryPlanTests {
   func stockPriceLoadCacheUsesPrimaryKey() async throws {
     let database = try ProfileDatabase.openInMemory()
     try await database.read { database in
+      // `SELECT *` here is wrapped in `EXPLAIN QUERY PLAN`; the planner
+      // never expands the column list, so the star is fine.
       let plan = try Row.fetchAll(
         database,
         sql: """
@@ -56,11 +60,70 @@ struct RateQueryPlanTests {
   func cryptoPriceLoadCacheUsesPrimaryKey() async throws {
     let database = try ProfileDatabase.openInMemory()
     try await database.read { database in
+      // `SELECT *` here is wrapped in `EXPLAIN QUERY PLAN`; the planner
+      // never expands the column list, so the star is fine.
       let plan = try Row.fetchAll(
         database,
         sql: """
           EXPLAIN QUERY PLAN
           SELECT * FROM crypto_price WHERE token_id = ?
+          """,
+        arguments: ["1:native"]
+      ).map { String(describing: $0["detail"] ?? "") }
+      #expect(plan.contains { $0.contains("SEARCH") && $0.contains("PRIMARY KEY") })
+      #expect(!plan.contains { $0.contains("SCAN") })
+    }
+  }
+
+  @Test
+  func exchangeRateMetaLoadUsesPrimaryKey() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    try await database.read { database in
+      // `SELECT *` here is wrapped in `EXPLAIN QUERY PLAN`; the planner
+      // never expands the column list, so the star is fine.
+      let plan = try Row.fetchAll(
+        database,
+        sql: """
+          EXPLAIN QUERY PLAN
+          SELECT * FROM exchange_rate_meta WHERE base = ?
+          """,
+        arguments: ["AUD"]
+      ).map { String(describing: $0["detail"] ?? "") }
+      #expect(plan.contains { $0.contains("SEARCH") && $0.contains("PRIMARY KEY") })
+      #expect(!plan.contains { $0.contains("SCAN") })
+    }
+  }
+
+  @Test
+  func stockTickerMetaLoadUsesPrimaryKey() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    try await database.read { database in
+      // `SELECT *` here is wrapped in `EXPLAIN QUERY PLAN`; the planner
+      // never expands the column list, so the star is fine.
+      let plan = try Row.fetchAll(
+        database,
+        sql: """
+          EXPLAIN QUERY PLAN
+          SELECT * FROM stock_ticker_meta WHERE ticker = ?
+          """,
+        arguments: ["BHP.AX"]
+      ).map { String(describing: $0["detail"] ?? "") }
+      #expect(plan.contains { $0.contains("SEARCH") && $0.contains("PRIMARY KEY") })
+      #expect(!plan.contains { $0.contains("SCAN") })
+    }
+  }
+
+  @Test
+  func cryptoTokenMetaLoadUsesPrimaryKey() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    try await database.read { database in
+      // `SELECT *` here is wrapped in `EXPLAIN QUERY PLAN`; the planner
+      // never expands the column list, so the star is fine.
+      let plan = try Row.fetchAll(
+        database,
+        sql: """
+          EXPLAIN QUERY PLAN
+          SELECT * FROM crypto_token_meta WHERE token_id = ?
           """,
         arguments: ["1:native"]
       ).map { String(describing: $0["detail"] ?? "") }

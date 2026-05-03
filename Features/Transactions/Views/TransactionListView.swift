@@ -1,3 +1,6 @@
+// Reason: SwiftUI declarative chains (List, ForEach, modifier groups) wrap
+// arguments across multiple lines for readability; enforcing the rule would
+// fight the formatter and the SwiftUI idiom without improving clarity.
 // swiftlint:disable multiline_arguments
 
 import SwiftData

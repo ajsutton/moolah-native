@@ -28,12 +28,9 @@ struct SidebarScreen {
   let app: MoolahApp
 
   /// Switches the centre column to the transactions of the given account.
-  /// Returns once the account's row exists and has been clicked. The
-  /// downstream driver call (typically `transactionList.openTransaction`)
-  /// waits on the transaction row appearing, which is the real
-  /// user-visible post-condition; verifying SwiftUI's
-  /// `List(selection:)+NavigationLink` selection state directly is
-  /// unreliable through the accessibility tree.
+  /// Returns once the transaction list container is hittable for the
+  /// new selection — the user-visible "list re-rendered" post-condition
+  /// cited as the example for invariant 1 in `guides/UI_TEST_GUIDE.md`.
   func switchToAccount(_ account: SidebarAccount) {
     Trace.record(detail: "account=\(account)")
     let identifier = UITestIdentifiers.Sidebar.account(account.id)
@@ -44,5 +41,17 @@ struct SidebarScreen {
       return
     }
     row.click()
+
+    let listContainer = app.element(for: UITestIdentifiers.TransactionList.container)
+    let deadline = Date().addingTimeInterval(3)
+    while Date() < deadline {
+      if listContainer.isHittable { return }
+      RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+    Trace.recordFailure(
+      "transaction list container '\(UITestIdentifiers.TransactionList.container)' "
+        + "did not become hittable after switching to \(account)")
+    XCTFail(
+      "Transaction list did not render within 3s of switching to account \(account)")
   }
 }

@@ -50,11 +50,14 @@ struct WelcomeScreen {
   }
 
   /// Number of profile rows visible in the picker. Rows are identified
-  /// by the `welcome.picker.row.` prefix followed by a UUID.
+  /// by the `welcome.picker.row.` prefix followed by a UUID. Counting
+  /// requires a prefix match across an unbounded UUID set, so this
+  /// driver routes through `MoolahApp.buttons(matching:)` — the
+  /// documented escape hatch from `element(for:)` for prefix scans.
   func pickerRowCount() -> Int {
-    let prefix = "welcome.picker.row."
-    let predicate = NSPredicate(format: "identifier BEGINSWITH %@", prefix)
-    return app.application.buttons.matching(predicate).count
+    let predicate = NSPredicate(
+      format: "identifier BEGINSWITH %@", UITestIdentifiers.Welcome.pickerRowPrefix)
+    return app.buttons(matching: predicate).count
   }
 
   /// Taps "Get started" and waits for the create-profile Name field to
@@ -70,11 +73,22 @@ struct WelcomeScreen {
   }
 
   /// Types `name` into the Name field after giving it keyboard focus.
+  /// Returns once the field's reported value equals `name` — the same
+  /// post-condition pattern as `AutocompleteFieldDriver.type(_:)` so a
+  /// downstream `tapCreateProfile` cannot race ahead of the binding.
   func typeName(_ name: String) {
     Trace.record(detail: "name=\(name)")
     let field = app.element(for: UITestIdentifiers.Welcome.nameField)
     field.click()
     field.typeText(name)
+
+    let deadline = Date().addingTimeInterval(3)
+    while Date() < deadline {
+      if let value = field.value as? String, value == name { return }
+      RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+    Trace.recordFailure("name field value did not propagate after typing")
+    XCTFail("Welcome name field did not contain '\(name)' within 3s")
   }
 
   /// Taps "Create Profile" and waits for the hero to disappear — the

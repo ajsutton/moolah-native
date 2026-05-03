@@ -169,7 +169,7 @@ struct TransactionDraftAccountTests {
     let usdAccount = support.makeAccount(id: UUID(), instrument: usd)
     let accounts = support.makeAccounts([audAccount1, audAccount2, usdAccount])
 
-    let eligible = TransactionDraftHelpers.eligibleToAccounts(from: accounts, currency: aud)
+    let eligible = TransactionDraft.eligibleToAccounts(from: accounts, currency: aud)
     let eligibleIds = eligible.map(\.id)
     #expect(eligibleIds.contains(support.accountA))
     #expect(eligibleIds.contains(support.accountB))

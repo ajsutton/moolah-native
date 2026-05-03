@@ -132,7 +132,6 @@ struct AnalysisView: View {
         showActualValues: $store.showActualValues
       )
     }
-    .padding()
   }
 
   @ViewBuilder

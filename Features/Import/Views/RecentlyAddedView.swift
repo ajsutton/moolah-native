@@ -155,7 +155,12 @@ struct RecentlyAddedView: View {
   }
 
   private func sessionHeader(_ session: RecentlyAddedViewModel.SessionGroup) -> some View {
-    HStack {
+    let dateText = session.importedAt.formatted(
+      .dateTime.day().month().year().hour().minute())
+    let counts = "\(session.transactions.count) imported"
+    let needs =
+      session.needsReviewCount > 0 ? " · \(session.needsReviewCount) need review" : ""
+    return HStack {
       Text(session.importedAt, format: .dateTime.day().month().year().hour().minute())
         .font(.subheadline)
         .monospacedDigit()
@@ -166,15 +171,13 @@ struct RecentlyAddedView: View {
           .foregroundStyle(.secondary)
           .lineLimit(1)
       }
-      let counts = "\(session.transactions.count) imported"
-      let needs =
-        session.needsReviewCount > 0 ? " · \(session.needsReviewCount) need review" : ""
       Text(counts + needs)
         .font(.caption)
         .foregroundStyle(.secondary)
         .monospacedDigit()
     }
     .accessibilityElement(children: .combine)
+    .accessibilityLabel("Imported \(dateText), \(counts)\(needs)")
   }
 
   private func reload() async {
@@ -256,18 +259,12 @@ struct RecentlyAddedView: View {
 }
 
 /// Row for one imported transaction. Shows date, description, amount, and a
-/// left-edge accent stripe when the row needs review (all legs uncategorised).
+/// "Needs review" badge when all legs are uncategorised.
 private struct RecentlyAddedRow: View {
   let transaction: Transaction
 
   var body: some View {
     HStack(spacing: 12) {
-      Rectangle()
-        .fill(needsReview ? Color.orange : Color.clear)
-        .frame(width: 3)
-        // Purely decorative — the "Needs review" badge carries the
-        // screen-reader signal.
-        .accessibilityHidden(true)
       VStack(alignment: .leading, spacing: 2) {
         Text(transaction.payee ?? transaction.importOrigin?.rawDescription ?? "")
           .lineLimit(1)

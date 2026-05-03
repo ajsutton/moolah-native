@@ -36,6 +36,12 @@ public enum UITestIdentifiers {
   }
 
   public enum TransactionList {
+    /// Root container of the transaction list (centre column). Used as a
+    /// stable post-condition sentinel after sidebar selection — the row
+    /// for any specific transaction is data-dependent, but the container
+    /// renders for every account.
+    public static let container = "transactionlist.container"
+
     /// Centre-column row for a specific transaction. `id` is the
     /// transaction's UUID, lowercased.
     public static func transaction(_ id: UUID) -> String {
@@ -130,10 +136,14 @@ public enum UITestIdentifiers {
     public static let nameField = "welcome.create.nameField"
     /// "Create Profile" submit button in the create-profile form.
     public static let createProfileButton = "welcome.create.createButton"
+    /// Identifier prefix shared by all multi-profile picker rows
+    /// (`welcome.picker.row.<uuid>`). Use with predicate-based matching
+    /// when the test needs to count rows without enumerating UUIDs.
+    public static let pickerRowPrefix = "welcome.picker.row."
     /// Profile row in the multi-profile picker. Suffix is the profile UUID,
     /// lowercased.
     public static func pickerRow(_ id: UUID) -> String {
-      "welcome.picker.row.\(id.uuidString.lowercased())"
+      "\(pickerRowPrefix)\(id.uuidString.lowercased())"
     }
     /// "+ Create a new profile" footer row in the multi-profile picker.
     public static let pickerCreateNewRow = "welcome.picker.createNew"

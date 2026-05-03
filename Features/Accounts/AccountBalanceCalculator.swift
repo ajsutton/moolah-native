@@ -92,11 +92,20 @@ struct AccountBalanceCalculator {
     let date = Date()
     for account in accounts {
       if let investmentValues, let externalValue = investmentValues.value(for: account.id) {
-        total += try await conversionService.convertAmount(externalValue, to: target, on: date)
+        if externalValue.instrument == target {
+          total += externalValue
+        } else {
+          total += try await conversionService.convertAmount(externalValue, to: target, on: date)
+        }
         continue
       }
       for position in account.positions {
-        total += try await conversionService.convertAmount(position.amount, to: target, on: date)
+        if position.amount.instrument == target {
+          total += position.amount
+        } else {
+          total += try await conversionService.convertAmount(
+            position.amount, to: target, on: date)
+        }
       }
     }
     return total
@@ -114,8 +123,12 @@ struct AccountBalanceCalculator {
     var total = InstrumentAmount.zero(instrument: account.instrument)
     let date = Date()
     for position in account.positions {
-      total += try await conversionService.convertAmount(
-        position.amount, to: account.instrument, on: date)
+      if position.amount.instrument == account.instrument {
+        total += position.amount
+      } else {
+        total += try await conversionService.convertAmount(
+          position.amount, to: account.instrument, on: date)
+      }
     }
     return total
   }

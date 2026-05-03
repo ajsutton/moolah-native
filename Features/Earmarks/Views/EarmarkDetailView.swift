@@ -108,8 +108,10 @@ struct EarmarkDetailView: View {
       Divider().frame(maxHeight: 32)
       summaryItem(
         label: "Spent",
-        amount: earmarkStore.convertedSpent(for: earmark.id)
-          ?? .zero(instrument: earmark.instrument))
+        amount:
+          -(earmarkStore.convertedSpent(for: earmark.id)
+          ?? .zero(instrument: earmark.instrument)),
+        colorOverride: .primary)
     }
   }
 
@@ -141,12 +143,14 @@ struct EarmarkDetailView: View {
     .accessibilityElement(children: .combine)
   }
 
-  private func summaryItem(label: String, amount: InstrumentAmount) -> some View {
+  private func summaryItem(
+    label: String, amount: InstrumentAmount, colorOverride: Color? = nil
+  ) -> some View {
     VStack(spacing: 2) {
       Text(label)
         .font(.caption)
         .foregroundStyle(.secondary)
-      InstrumentAmountView(amount: amount)
+      InstrumentAmountView(amount: amount, colorOverride: colorOverride)
         .font(.headline)
     }
     .frame(maxWidth: .infinity)

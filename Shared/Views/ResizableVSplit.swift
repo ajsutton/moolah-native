@@ -22,6 +22,10 @@ import SwiftUI
   ///     first display, before any autosaved frame exists.
   ///   - minTopHeight: Minimum height of the top pane when dragging.
   ///   - minBottomHeight: Minimum height of the bottom pane.
+  ///   - defaults: `UserDefaults` instance probed for an existing
+  ///     autosaved divider position. Defaults to `.standard`; tests can
+  ///     inject an isolated suite to avoid leaking saved frames between
+  ///     runs.
   ///   - top: The top pane content.
   ///   - bottom: The bottom pane content.
   struct ResizableVSplit<Top: View, Bottom: View>: NSViewRepresentable {
@@ -29,6 +33,7 @@ import SwiftUI
     let initialTopHeight: CGFloat
     let minTopHeight: CGFloat
     let minBottomHeight: CGFloat
+    let defaults: UserDefaults
     let top: () -> Top
     let bottom: () -> Bottom
 
@@ -37,6 +42,7 @@ import SwiftUI
       initialTopHeight: CGFloat,
       minTopHeight: CGFloat = 80,
       minBottomHeight: CGFloat = 200,
+      defaults: UserDefaults = .standard,
       @ViewBuilder top: @escaping () -> Top,
       @ViewBuilder bottom: @escaping () -> Bottom
     ) {
@@ -44,6 +50,7 @@ import SwiftUI
       self.initialTopHeight = initialTopHeight
       self.minTopHeight = minTopHeight
       self.minBottomHeight = minBottomHeight
+      self.defaults = defaults
       self.top = top
       self.bottom = bottom
     }
@@ -75,7 +82,7 @@ import SwiftUI
       // Order matters: autosaveName triggers a restore attempt, so we
       // only apply the initial height when no saved frame exists yet.
       let hasSavedFrames =
-        UserDefaults.standard.object(
+        defaults.object(
           forKey: "NSSplitView Subview Frames \(autosaveName)") != nil
       split.autosaveName = autosaveName
 

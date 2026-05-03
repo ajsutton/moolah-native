@@ -1,3 +1,7 @@
+// Reason: SwiftUI sidebar layout mixes Section / Label / NavigationLink calls
+// whose argument lists span multiple lines for readability; the rule's
+// first-arg-on-opening-line convention fights the SwiftUI declarative idiom
+// without improving clarity.
 // swiftlint:disable multiline_arguments
 
 import SwiftUI

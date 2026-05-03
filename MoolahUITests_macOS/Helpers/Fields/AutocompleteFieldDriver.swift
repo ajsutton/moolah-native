@@ -79,8 +79,8 @@ struct AutocompleteFieldDriver {
       return
     }
     field.click()
-    app.application.typeKey("a", modifierFlags: .command)
-    app.application.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
+    app.pressKeyboardShortcut("a", modifiers: .command)
+    app.pressKeyboardShortcut(XCUIKeyboardKey.delete.rawValue)
 
     let deadline = Date().addingTimeInterval(3)
     while Date() < deadline {

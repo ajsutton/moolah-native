@@ -1,3 +1,6 @@
+// Reason: convenience initialisers pass multi-field LegDraft / TransactionLeg
+// values inline; pinning each field to its own line trades readability for a
+// rule conformance that adds nothing here.
 // swiftlint:disable multiline_arguments
 
 import Foundation

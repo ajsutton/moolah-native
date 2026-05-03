@@ -15,6 +15,10 @@ struct IncomeExpenseTableCard: View {
   @State private var includeEarmarks = false
   @State private var visibleCount = IncomeExpenseTableCard.initialVisibleCount
 
+  @ScaledMetric private var monthColumnMinWidth: CGFloat = 120
+  @ScaledMetric private var amountColumnMinWidth: CGFloat = 100
+  @ScaledMetric private var totalColumnMinWidth: CGFloat = 110
+
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       VStack(alignment: .leading, spacing: 8) {
@@ -36,7 +40,7 @@ struct IncomeExpenseTableCard: View {
     }
     .padding()
     .background(.background)
-    .cornerRadius(12)
+    .clipShape(.rect(cornerRadius: 12))
     .onChange(of: data.count) { _, _ in
       visibleCount = Self.initialVisibleCount
     }
@@ -67,11 +71,11 @@ struct IncomeExpenseTableCard: View {
 
   private var headerRow: some View {
     HStack(spacing: 12) {
-      Text("Month").frame(minWidth: 120, alignment: .leading)
-      Text("Income").frame(minWidth: 100, alignment: .trailing)
-      Text("Expense").frame(minWidth: 100, alignment: .trailing)
-      Text("Savings").frame(minWidth: 100, alignment: .trailing)
-      Text("Total Savings").frame(minWidth: 110, alignment: .trailing)
+      Text("Month").frame(minWidth: monthColumnMinWidth, alignment: .leading)
+      Text("Income").frame(minWidth: amountColumnMinWidth, alignment: .trailing)
+      Text("Expense").frame(minWidth: amountColumnMinWidth, alignment: .trailing)
+      Text("Savings").frame(minWidth: amountColumnMinWidth, alignment: .trailing)
+      Text("Total Savings").frame(minWidth: totalColumnMinWidth, alignment: .trailing)
     }
     .font(.caption)
     .foregroundStyle(.secondary)
@@ -100,15 +104,15 @@ struct IncomeExpenseTableCard: View {
             .foregroundStyle(.secondary)
             .monospacedDigit()
         }
-        .frame(minWidth: 120, alignment: .leading)
+        .frame(minWidth: monthColumnMinWidth, alignment: .leading)
         InstrumentAmountView(amount: income(for: item))
-          .frame(minWidth: 100, alignment: .trailing)
+          .frame(minWidth: amountColumnMinWidth, alignment: .trailing)
         InstrumentAmountView(amount: expense(for: item))
-          .frame(minWidth: 100, alignment: .trailing)
+          .frame(minWidth: amountColumnMinWidth, alignment: .trailing)
         InstrumentAmountView(amount: profit(for: item))
-          .frame(minWidth: 100, alignment: .trailing)
+          .frame(minWidth: amountColumnMinWidth, alignment: .trailing)
         InstrumentAmountView(amount: cumulativeSavings(upTo: item))
-          .frame(minWidth: 110, alignment: .trailing)
+          .frame(minWidth: totalColumnMinWidth, alignment: .trailing)
       }
       .padding(.horizontal, 12)
       .padding(.vertical, 8)

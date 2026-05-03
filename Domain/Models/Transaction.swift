@@ -226,6 +226,11 @@ struct TransactionPage: Sendable {
     }
     if sources.isEmpty { return PrefetchedRates(rates: [:], failures: [:]) }
 
+    // Carve-out per INSTRUMENT_CONVERSION_GUIDE.md Rule 5: the running balance
+    // must tie out to the live account balance, so every leg in the page
+    // converts on the same `Date()` rather than its transaction date. The
+    // per-leg display amount is still historic — only the running-balance
+    // accumulation uses today's rate. See issue #530.
     let asOf = Date()
     return await withTaskGroup(of: (Instrument, RatePrefetch).self) { group in
       for instrument in sources {

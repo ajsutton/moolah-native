@@ -159,14 +159,17 @@ struct TradeFormDriver {
   /// `marker` to appear, up to `timeout` seconds. Trade rows combine
   /// children so the accessibility label is `"Trade, <title>, <amount>,
   /// <date>"` — the trade-title sentence is in the middle, not at the
-  /// start, hence `CONTAINS` rather than `BEGINSWITH`.
+  /// start, hence `CONTAINS` rather than `BEGINSWITH`. Routes through
+  /// `MoolahApp.staticTexts(matching:)` / `cells(matching:)` — the
+  /// documented escape hatch from `element(for:)` for label-substring
+  /// scans where no stable per-row identifier exists.
   func waitForTradeRow(containing marker: String, timeout: TimeInterval = 10) {
     Trace.record(#function, detail: "marker=\(marker)")
+    let predicate = NSPredicate(format: "label CONTAINS %@", marker)
     let deadline = Date().addingTimeInterval(timeout)
     while Date() < deadline {
-      let predicate = NSPredicate(format: "label CONTAINS %@", marker)
-      if app.application.staticTexts.matching(predicate).firstMatch.exists { return }
-      if app.application.cells.matching(predicate).firstMatch.exists { return }
+      if !app.staticTexts(matching: predicate).isEmpty { return }
+      if !app.cells(matching: predicate).isEmpty { return }
       RunLoop.current.run(until: Date().addingTimeInterval(0.1))
     }
     Trace.recordFailure("no row containing '\(marker)' after \(timeout)s")
@@ -185,15 +188,20 @@ struct TradeFormDriver {
       return
     }
     field.click()
-    app.application.typeKey("a", modifierFlags: .command)
+    app.pressKeyboardShortcut("a", modifiers: .command)
     field.typeText(text)
 
-    // Post-condition: field reports the typed value.
+    // Post-condition: field reports the typed value. Failure to converge
+    // within 3 s is a real driver/product bug — fail loudly so the trace
+    // points at the right action, mirroring `AutocompleteFieldDriver.type(_:)`.
     let deadline = Date().addingTimeInterval(3)
     while Date() < deadline {
       if let value = field.value as? String, value.contains(text) { return }
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     }
+    Trace.recordFailure(
+      "amount field '\(identifier)' did not contain '\(text)' within 3s")
+    XCTFail("Amount field '\(identifier)' did not contain '\(text)' within 3s")
   }
 
   /// Opens the `InstrumentPickerSheet` by clicking either `containerIdentifier`

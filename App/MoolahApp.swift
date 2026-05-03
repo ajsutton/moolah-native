@@ -163,13 +163,17 @@ struct MoolahApp: App {
               profiles: profileStore.profiles,
               containerManager: containerManager
             )
-            Timer.scheduledTimer(withTimeInterval: 86400, repeats: true) { _ in
-              Task { @MainActor in
-                backupManager.performDailyBackup(
-                  profiles: profileStore.profiles,
-                  containerManager: containerManager
-                )
-              }
+            // Cancellation-aware loop instead of `Timer.scheduledTimer`,
+            // which would outlive the `.task` body and leak when the
+            // window goes away. SwiftUI cancels this `.task` on view
+            // disappearance, so the sleep throws and the loop exits.
+            while !Task.isCancelled {
+              try? await Task.sleep(for: .seconds(86400))
+              guard !Task.isCancelled else { break }
+              backupManager.performDailyBackup(
+                profiles: profileStore.profiles,
+                containerManager: containerManager
+              )
             }
           }
       }

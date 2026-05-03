@@ -49,6 +49,9 @@ final class SyncCoordinator {
   /// CloudKit, but we only transfer ownership one-way (prepare-thread → main
   /// actor) with no concurrent readers, so the Task.value happens-before edge
   /// makes it safe. Keep this struct to value types only.
+  ///
+  /// Authorized carve-out: see `guides/CONCURRENCY_GUIDE.md` §2 "False
+  /// Positives to Avoid", Carve-out 2 (one-way ownership transfer).
   struct PreparedEngine: @unchecked Sendable {
     let engine: CKSyncEngine
     let isFirstLaunch: Bool

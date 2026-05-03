@@ -156,7 +156,6 @@ struct CSVImportSetupView: View {
           get: { store.filenamePattern },
           set: { store.filenamePattern = $0 })
       )
-      .textFieldStyle(.roundedBorder)
       Toggle(
         "Delete CSV after import",
         isOn: Binding(

@@ -72,6 +72,7 @@ extension CryptoPriceService {
       latestDate: cache.latestDate
     )
     try await database.write { database in
+      // GRDB caches the insert statement internally; no explicit cachedStatement needed.
       for record in deltaRecords {
         try record.insert(database, onConflict: .replace)
       }

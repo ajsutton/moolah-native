@@ -24,7 +24,9 @@ struct EarmarkBudgetSectionView: View {
         ContentUnavailableView(
           "No Budget",
           systemImage: "bookmark",
-          description: Text("Add budget allocations to categories")
+          description: Text(
+            PlatformActionVerb.emptyStatePrompt(
+              buttonLabel: "+", suffix: "to add your first budget allocation."))
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
