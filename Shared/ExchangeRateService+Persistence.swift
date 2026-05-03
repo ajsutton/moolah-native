@@ -48,42 +48,32 @@ extension ExchangeRateService {
     hydratedBases.insert(base)
   }
 
-  /// Persists `caches[base]` to SQLite. Replaces the prior rows for this
-  /// base in a single transaction (delete-and-rewrite) and writes the meta
-  /// row via `INSERT OR REPLACE` alongside, so the meta is never out of
-  /// sync with the rates.
+  /// Persists the rows produced by `mergeReturningDelta` for `base` plus
+  /// the latest meta-bounds, all in a single transaction.
   ///
-  /// Multi-statement; covered by a rollback test in
-  /// `ExchangeRateServicePersistenceTests.swift`.
+  /// Each delta row is written `INSERT OR REPLACE` so a re-fetched date
+  /// updates in place; the meta row uses `ExchangeRateMetaRecord`'s
+  /// `.replace` conflict policy. Critically there is no `deleteAll` here
+  /// — historic rates never change, and rewriting the entire base on
+  /// every fetch saturated the GRDB queue during chart renders. The
+  /// rollback contract remains intact because the whole batch runs in
+  /// one transaction and any failure rolls every statement back.
   ///
   /// Captures `caches[base]` before suspending on `database.write`. Actor
-  /// re-entrancy is acceptable here: a concurrent merge will trigger its
-  /// own `saveCache` afterwards, so the disk converges to the latest
-  /// in-memory state. A crash between the two writes leaves the disk at
-  /// an intermediate-but-consistent snapshot — acceptable for a
-  /// best-effort persistent cache.
-  func saveCache(base: String) async throws {
+  /// re-entrancy is acceptable here: a concurrent merge will produce its
+  /// own delta with its own `persistDelta` afterwards, so the disk
+  /// converges to the latest in-memory state. A crash between two writes
+  /// leaves the disk at an intermediate-but-consistent snapshot —
+  /// acceptable for a best-effort persistent cache.
+  func persistDelta(base: String, deltaRecords: [ExchangeRateRecord]) async throws {
     guard let cache = caches[base] else { return }
-    // `Decimal` lacks a direct `Double` accessor; round-trip via
-    // `NSDecimalNumber` (`doubleValue`) — same path GRDB would take.
-    let records: [ExchangeRateRecord] = cache.rates.flatMap { dateString, quotes in
-      quotes.map { quote, rate in
-        ExchangeRateRecord(
-          base: base,
-          quote: quote,
-          date: dateString,
-          rate: NSDecimalNumber(decimal: rate).doubleValue
-        )
-      }
-    }
     let meta = ExchangeRateMetaRecord(
       base: base, earliestDate: cache.earliestDate, latestDate: cache.latestDate
     )
     try await database.write { database in
-      try ExchangeRateRecord
-        .filter(ExchangeRateRecord.Columns.base == base)
-        .deleteAll(database)
-      for record in records { try record.insert(database) }
+      for record in deltaRecords {
+        try record.insert(database, onConflict: .replace)
+      }
       try meta.insert(database)
     }
   }
