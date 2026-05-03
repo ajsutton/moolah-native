@@ -91,6 +91,7 @@ struct MoolahDomainCommands: Commands {
   @FocusedValue(\.goBackAction) private var goBackAction
   @FocusedValue(\.goForwardAction) private var goForwardAction
   @FocusedValue(\.findInListAction) private var findInListAction
+  @FocusedValue(\.setTransactionTypeAction) private var setTransactionTypeAction
   @Environment(\.openWindow) private var openWindow
   @Environment(\.openURL) private var openURL
 
@@ -105,6 +106,11 @@ struct MoolahDomainCommands: Commands {
       .disabled(selectedTransaction?.wrappedValue == nil)
 
       Button("Duplicate Transaction") {}.disabled(true)
+
+      Menu("Type") {
+        transactionTypeMenuItems
+      }
+      .disabled(setTransactionTypeAction == nil)
 
       Button("Pay Scheduled Transaction") {
         NotificationCenter.default.post(
@@ -228,6 +234,24 @@ struct MoolahDomainCommands: Commands {
         if let url = URL(string: "https://moolah.app/terms") { openURL(url) }
       }
     }
+  }
+
+  @ViewBuilder private var transactionTypeMenuItems: some View {
+    Button("Income") { setTransactionTypeAction?(.income) }
+      .keyboardShortcut("1", modifiers: [.option, .command])
+      .disabled(setTransactionTypeAction == nil)
+    Button("Expense") { setTransactionTypeAction?(.expense) }
+      .keyboardShortcut("2", modifiers: [.option, .command])
+      .disabled(setTransactionTypeAction == nil)
+    Button("Transfer") { setTransactionTypeAction?(.transfer) }
+      .keyboardShortcut("3", modifiers: [.option, .command])
+      .disabled(setTransactionTypeAction == nil)
+    Button("Trade") { setTransactionTypeAction?(.trade) }
+      .keyboardShortcut("4", modifiers: [.option, .command])
+      .disabled(setTransactionTypeAction == nil)
+    Button("Custom") { setTransactionTypeAction?(.custom) }
+      .keyboardShortcut("5", modifiers: [.option, .command])
+      .disabled(setTransactionTypeAction == nil)
   }
 
   @ViewBuilder private var goMenuItems: some View {

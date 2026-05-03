@@ -315,7 +315,8 @@ extension TransactionDetailView {
     TransactionDetailModeSection(
       transaction: transaction,
       draft: $draft,
-      accounts: accounts
+      accounts: accounts,
+      focusedField: $focusedField
     )
   }
 
