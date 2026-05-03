@@ -27,18 +27,19 @@ struct TradeFormDriver {
 
     // ui-test-review: allow single-resolver — on macOS, SwiftUI Pickers open
     // a native NSMenu whose items attach to the application's menu hierarchy
-    // at runtime. `.accessibilityIdentifier(_:)` on the inline `Text(…)`
-    // inside the ForEach does not propagate to the NSMenuItem, so querying
-    // by label is the only viable resolution path here.
-    //
-    // The same label ("Trade") also appears as a static entry under the
-    // menu bar's `Transaction > Type ▸` submenu, so the bare query
-    // `menuItems["Trade"]` matches multiple elements. The popup's "Trade"
-    // is the only hittable match while the menu bar is collapsed; pick it.
-    let tradeItem = firstHittableMenuItem(labelled: "Trade")
+    // at runtime as descendants of the popUpButton. Their AX labels are
+    // empty (the inline `Text(…)` inside the ForEach doesn't propagate to
+    // the NSMenuItem), so label-based lookup is unavailable; positional
+    // indexing scoped to the picker is the only stable handle. The
+    // production picker is built from
+    // `[.income, .expense, .transfer, .trade, .custom]`, so Trade is at
+    // index 3. Scoping to `picker.menuItems` excludes the static
+    // `Transaction > Type ▸ Trade` menu-bar entry, which descends from the
+    // app's menu bar, not the popUpButton.
+    let tradeItem = picker.menuItems.element(boundBy: 3)
     if !tradeItem.waitForExistence(timeout: 3) {
-      Trace.recordFailure("'Trade' menu item did not appear after opening type picker")
-      XCTFail("'Trade' menu item did not appear within 3s of opening the Type picker")
+      Trace.recordFailure("popup menu item at index 3 did not appear after opening type picker")
+      XCTFail("Picker popup item at index 3 (Trade) did not appear within 3s of opening")
       return
     }
     tradeItem.click()
@@ -173,20 +174,6 @@ struct TradeFormDriver {
   }
 
   // MARK: - Private helpers
-
-  /// Returns the first hittable menu item with the given label. Used to
-  /// pick a SwiftUI Picker's popup item when a static menu-bar entry
-  /// shares the same label — the menu bar's copy stays unhittable while
-  /// the bar is collapsed, so hittability cleanly picks the popup.
-  private func firstHittableMenuItem(labelled label: String) -> XCUIElement {
-    let predicate = NSPredicate(format: "label == %@", label)
-    let matches = app.application.menuItems.matching(predicate)
-    for index in 0..<matches.count {
-      let candidate = matches.element(boundBy: index)
-      if candidate.isHittable { return candidate }
-    }
-    return matches.firstMatch
-  }
 
   /// Clears any existing text in `identifier` and types `text`. Returns once
   /// the field's `value` contains `text`.
