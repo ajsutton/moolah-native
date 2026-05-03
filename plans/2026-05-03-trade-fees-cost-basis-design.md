@@ -170,7 +170,7 @@ Plus four additional behavioural tests:
 | Test name | Fixture | Expectation |
 |---|---|---|
 | `sellReducesProceedsByFee` | Sell 50 BHP for +2 500 AUD, fee −10 AUD | `proceedsPerUnit == 50 - 10/50` (i.e. 49.80) |
-| `swapSplitsFeeEvenlyAcrossEvents` | −2 ETH ↔ +0.1 BTC priced via host-currency conversion (`FixedConversionService`, rates ETH=3 000, BTC=60 000); fee −50 AUD | BTC `costPerUnit == 60_000 + 25/Decimal(string: "0.1")` (i.e. 60_250); ETH `proceedsPerUnit == 3_000 - Decimal(25)/2` (i.e. 2_987.5) |
+| `swapSplitsFeeEvenlyAcrossEvents` | −2 ETH ↔ +0.1 BTC; `FixedConversionService` with 1 ETH = 3 000 AUD and 1 BTC = 60 000 AUD (used by the classifier for pair-value conversion only); fee −50 AUD (host-currency fast-pathed, no conversion call) | BTC `costPerUnit == 60_000 + 25/Decimal(string: "0.1")` (i.e. 60_250); ETH `proceedsPerUnit == 3_000 - Decimal(25)/2` (i.e. 2_987.5) |
 | `feeContributionsCancelToZero` | Buy 100 BHP for −4 000 AUD; fees −10 AUD and +10 AUD (a fee debit fully offset by a refund credit) | `costPerUnit == 40` (proves the sum-to-zero path produces the same result as the empty-fee-list path) |
 | `hostCurrencyFeeNeedsNoConversionLookup` | Buy 100 BHP for −4 000 AUD, fee −10 AUD; conversion service is a `RecordingConversionService` test double that fails (or records a call) on every `convert(...)` invocation | `costPerUnit == 40.10` AND no call was made to `convert` for the AUD fee leg (proves the classifier's fast path, not the production service's identity short-circuit) |
 
