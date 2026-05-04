@@ -112,13 +112,14 @@ struct AccountBalanceCalculator {
   }
 
   /// The display balance for an account in its own instrument. Investment
-  /// accounts with an externally-provided value return that; otherwise the
-  /// method sums every position converted via the conversion service.
+  /// accounts in `recordedValue` mode return the externally-provided
+  /// snapshot (or zero when absent); all other accounts sum every position
+  /// converted via the conversion service.
   func displayBalance(
     for account: Account, investmentValue: InstrumentAmount?
   ) async throws -> InstrumentAmount {
-    if account.type == .investment, let investmentValue {
-      return investmentValue
+    if account.type == .investment, account.valuationMode == .recordedValue {
+      return investmentValue ?? .zero(instrument: account.instrument)
     }
     var total = InstrumentAmount.zero(instrument: account.instrument)
     let date = Date()

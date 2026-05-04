@@ -126,8 +126,12 @@ struct TransactionStoreTransferTests {
   ) async throws -> ThreeAccountTransferSeed {
     let checking = TransactionStoreTestSupport.acct(id: accountId, name: "Checking", balance: 900)
     let savings = TransactionStoreTestSupport.acct(id: savingsId, name: "Savings", balance: 1100)
+    // Investment account is `calculatedFromTrades` so its balance reflects
+    // position-derived legs from the transfer (per Phase 3: recordedValue
+    // accounts ignore positions for displayBalance).
     let investment = TransactionStoreTestSupport.acct(
-      id: investmentId, name: "Investment", type: .investment, balance: 500)
+      id: investmentId, name: "Investment", type: .investment, balance: 500,
+      valuationMode: .calculatedFromTrades)
     let transfer = Transaction(
       date: try TransactionStoreTestSupport.makeDate("2024-01-15"),
       payee: "",

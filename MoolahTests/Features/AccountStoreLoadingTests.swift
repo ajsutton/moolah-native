@@ -50,8 +50,11 @@ struct AccountStoreLoadingTests {
       name: "Asset", type: .asset, balance: Decimal(500000) / 100, in: database)
     _ = AccountStoreTestSupport.seedAccount(
       name: "Credit Card", type: .creditCard, balance: Decimal(-50000) / 100, in: database)
+    // Use `calculatedFromTrades` so position-derived balance contributes to
+    // the investment total (per Phase 3: recordedValue + no snapshot → 0).
     _ = AccountStoreTestSupport.seedAccount(
-      name: "Investment", type: .investment, balance: Decimal(2_000_000) / 100, in: database)
+      name: "Investment", type: .investment, balance: Decimal(2_000_000) / 100,
+      valuationMode: .calculatedFromTrades, in: database)
     _ = AccountStoreTestSupport.seedAccount(
       name: "Hidden", type: .asset, balance: Decimal(100_000_000) / 100, isHidden: true,
       in: database)
