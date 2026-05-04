@@ -238,4 +238,62 @@ struct CapitalGainsCalculatorTests {
           categoryId: nil, earmarkId: nil),
       ])
   }
+
+  // MARK: - Date-sensitive conversion regression guard
+
+  /// Pins the contract that `computeWithConversion` looks up FX rates at
+  /// each transaction's date — not at `Date()`. Uses
+  /// `DateBasedFixedConversionService` with two rate entries straddling
+  /// the buy and sell dates so a wrong-date regression (e.g. passing
+  /// `Date()` instead of `transaction.date` into `TradeEventClassifier`)
+  /// converts both legs at the same rate and produces a zero gain — the
+  /// assertion below fails. Mirrors the `TradeEventClassifierTests.buyFoldsFXFee`
+  /// pattern, extended end-to-end through the calculator.
+  @Test
+  func usdBuyAudSell_usesTradeDateForFXLookup() async throws {
+    let usd = Instrument.fiat(code: "USD")
+    let bhp = stockInstrument("BHP")
+    let accountId = UUID()
+    let buyDate = date(0)
+    let sellDate = date(400)
+
+    // 1.5 AUD/USD at buy, 2.0 AUD/USD at sell. Different rates ⇒ a real
+    // (non-zero) gain only when each leg converts at its own date.
+    let conversion = DateBasedFixedConversionService(rates: [
+      buyDate: ["USD": dec("1.5")],
+      sellDate: ["USD": Decimal(2)],
+    ])
+
+    let buyTx = LegTransaction(
+      date: buyDate,
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: usd, quantity: -1_500, type: .trade,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
+          categoryId: nil, earmarkId: nil),
+      ])
+    let sellTx = LegTransaction(
+      date: sellDate,
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: -100, type: .trade,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: usd, quantity: 1_500, type: .trade,
+          categoryId: nil, earmarkId: nil),
+      ])
+
+    let result = try await CapitalGainsCalculator.computeWithConversion(
+      transactions: [buyTx, sellTx],
+      profileCurrency: aud,
+      conversionService: conversion)
+
+    // Cost basis: 1500 USD * 1.5 = 2250 AUD ⇒ 22.5 AUD/unit
+    // Proceeds:   1500 USD * 2.0 = 3000 AUD ⇒ 30 AUD/unit
+    // Gain on 100 units = (30 - 22.5) * 100 = 750 AUD
+    #expect(result.events.count == 1)
+    #expect(result.events[0].gain == Decimal(750))
+  }
 }
