@@ -10,6 +10,16 @@ import Testing
 /// Split out of `AnalysisPlanPinningTests` so each file stays under the
 /// SwiftLint `type_body_length` budget. Same `EXPLAIN QUERY PLAN`
 /// methodology as the parent suite (see its file header).
+///
+/// **Temp B-tree GROUP/ORDER lines are accepted across this whole
+/// file.** Aggregations group and order by `day = DATE(t.date)` — a
+/// derived expression with no index keying, so SQLite has no choice
+/// but to materialise the groups and the sort in temp B-trees.
+/// Trying to forbid `USE TEMP B-TREE FOR GROUP BY` /
+/// `USE TEMP B-TREE FOR ORDER BY` would force the planner away from
+/// the covering index entirely. The perf-critical signals are the
+/// bare-SCAN rejection (`planHasFullTableScanOf`) and the
+/// `USING COVERING INDEX` assertion where applicable.
 @Suite("Analysis aggregation plan-pinning")
 struct AnalysisAggregationPlanPinningTests {
   /// `makeDatabase` and `planDetail` are shared with
@@ -100,18 +110,11 @@ struct AnalysisAggregationPlanPinningTests {
     // table (here `transaction_leg leg`); pin against the alias rather
     // than the bare table name to avoid a false-negative assertion.
     #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
-    // SQLite's plan is permitted to (and does) include both
-    // `USE TEMP B-TREE FOR GROUP BY` and `USE TEMP B-TREE FOR ORDER BY`.
-    // We do NOT reject those lines because the GROUP BY and ORDER BY
-    // both key on `day = DATE(t.date)` — a derived expression with no
-    // index keying. SQLite has no choice but to materialise the groups
-    // and the sort in temp B-trees; trying to forbid them would force
-    // the planner away from the covering index entirely. The
-    // covering-index property captured by the positive
-    // `USING COVERING INDEX` assertion is the perf-critical signal —
-    // it's what flips when the leg-side composite loses a column or
-    // the WHERE clause grows a predicate the partial index doesn't
-    // cover (e.g. a re-introduced `account_id IS NOT NULL`).
+    // Temp B-tree GROUP/ORDER lines accepted — see file-header rationale.
+    // The covering-index property captured by `USING COVERING INDEX`
+    // above is the perf-critical signal: it flips when the leg-side
+    // composite loses a column or the WHERE clause grows a predicate
+    // the partial index doesn't cover.
   }
 
   @Test("computeEarmarkPositions JOIN+GROUP BY avoids a transaction_leg SCAN")

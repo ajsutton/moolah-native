@@ -5,6 +5,17 @@ import OSLog
 import Observation
 import SwiftData
 
+/// **`Shared/` location is justified.** `DATABASE_CODE_GUIDE.md` §2 scopes
+/// `DatabaseQueue` ownership to `Backends/GRDB/`, `ProfileSession`, and
+/// test targets — `Shared/` is outside that scope. `ProfileContainerManager`
+/// is an exception because it sits *upstream* of `ProfileSession`:
+/// `MoolahApp` constructs the manager once at launch, then every
+/// `ProfileSession` borrows queues from it. Moving the manager under
+/// `App/` would still leave the `@Environment(ProfileContainerManager.self)`
+/// dependency reach into the App layer from every feature view that
+/// resolves it, which is a worse coupling than the queue-cache exception
+/// here. The cache itself is keyed by profile UUID and never vends raw
+/// queues to feature code — only `ProfileSession.init` reads from it.
 @Observable
 @MainActor
 final class ProfileContainerManager {
