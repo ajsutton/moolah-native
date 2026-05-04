@@ -13,7 +13,6 @@ import Foundation
 // the requested conversion date (normalized to start-of-day) is in
 // `failingDates`. Same-instrument conversions always succeed. Otherwise
 // behaves like `DateBasedFixedConversionService`.
-// internal (was fileprivate) so sibling test files can use this helper
 struct DateFailingConversionService: InstrumentConversionService {
   let rates: [Date: [String: Decimal]]
   /// Entries must be `Calendar.current.startOfDay`-normalised so
@@ -67,7 +66,6 @@ struct DateFailingConversionService: InstrumentConversionService {
   }
 }
 
-// internal (was fileprivate) so sibling test files can use this helper
 enum DateFailingConversionError: Error, Equatable {
   case unavailable(date: Date)
 }
