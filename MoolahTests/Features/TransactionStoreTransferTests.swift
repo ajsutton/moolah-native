@@ -127,8 +127,8 @@ struct TransactionStoreTransferTests {
     let checking = TransactionStoreTestSupport.acct(id: accountId, name: "Checking", balance: 900)
     let savings = TransactionStoreTestSupport.acct(id: savingsId, name: "Savings", balance: 1100)
     // Investment account is `calculatedFromTrades` so its balance reflects
-    // position-derived legs from the transfer (per Phase 3: recordedValue
-    // accounts ignore positions for displayBalance).
+    // position-derived legs from the transfer (recordedValue accounts
+    // ignore positions for displayBalance).
     let investment = TransactionStoreTestSupport.acct(
       id: investmentId, name: "Investment", type: .investment, balance: 500,
       valuationMode: .calculatedFromTrades)

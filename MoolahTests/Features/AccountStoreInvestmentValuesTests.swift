@@ -46,8 +46,8 @@ struct AccountStoreInvestmentValuesTests {
     #expect(store.convertedBalances[acctId]?.quantity == Decimal(250000) / 100)
   }
 
-  @Test("load leaves investmentValues empty when no values exist")
-  func loadOmitsInvestmentValueWhenRepositoryEmpty() async throws {
+  @Test("load with recordedValue and no snapshot yields zero balance")
+  func loadRecordedValueWithoutSnapshotYieldsZero() async throws {
     let acctId = UUID()
     let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(

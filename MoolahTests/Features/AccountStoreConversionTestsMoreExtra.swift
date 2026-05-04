@@ -13,8 +13,8 @@ struct AccountStoreConversionTestsMoreExtra {
     let usd = Instrument.USD
     let eur = Instrument.fiat(code: "EUR")
     let accountId = UUID()
-    // Use `calculatedFromTrades` so position-derived totals contribute (per
-    // Phase 3: recordedValue + no snapshot → 0).
+    // Use `calculatedFromTrades` so position-derived totals contribute
+    // (recordedValue + no snapshot → 0).
     let account = Account(
       id: accountId, name: "Portfolio", type: .investment, instrument: aud,
       valuationMode: .calculatedFromTrades)

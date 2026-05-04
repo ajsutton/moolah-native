@@ -4,9 +4,9 @@ import Testing
 @testable import Moolah
 
 @Suite("AccountBalanceCalculator + ValuationMode")
+@MainActor
 struct BalanceCalculatorValuationModeTests {
   @Test("recordedValue + snapshot → balance = snapshot")
-  @MainActor
   func recordedWithSnapshot() async throws {
     let calculator = AccountBalanceCalculator(
       conversionService: FixedConversionService(), targetInstrument: .AUD)
@@ -20,7 +20,6 @@ struct BalanceCalculatorValuationModeTests {
   }
 
   @Test("recordedValue + missing snapshot → balance = zero (NOT positions sum)")
-  @MainActor
   func recordedWithoutSnapshotIsZero() async throws {
     let calculator = AccountBalanceCalculator(
       conversionService: FixedConversionService(), targetInstrument: .AUD)
@@ -34,7 +33,6 @@ struct BalanceCalculatorValuationModeTests {
   }
 
   @Test("calculatedFromTrades → positions sum (snapshot ignored)")
-  @MainActor
   func calculatedSumsPositionsIgnoringSnapshot() async throws {
     let calculator = AccountBalanceCalculator(
       conversionService: FixedConversionService(), targetInstrument: .AUD)
@@ -49,7 +47,6 @@ struct BalanceCalculatorValuationModeTests {
   }
 
   @Test("non-investment account ignores valuationMode")
-  @MainActor
   func nonInvestmentIgnoresMode() async throws {
     let calculator = AccountBalanceCalculator(
       conversionService: FixedConversionService(), targetInstrument: .AUD)
@@ -64,7 +61,6 @@ struct BalanceCalculatorValuationModeTests {
   }
 
   @Test("totalConverted: recordedValue investment uses cache value")
-  @MainActor
   func totalConvertedRecordedMode() async throws {
     let calculator = AccountBalanceCalculator(
       conversionService: FixedConversionService(), targetInstrument: .AUD)
@@ -87,7 +83,6 @@ struct BalanceCalculatorValuationModeTests {
   }
 
   @Test("totalConverted: calculatedFromTrades sums positions, ignores cache")
-  @MainActor
   func totalConvertedTradesMode() async throws {
     let calculator = AccountBalanceCalculator(
       conversionService: FixedConversionService(), targetInstrument: .AUD)

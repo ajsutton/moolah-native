@@ -291,6 +291,13 @@ final class AccountStore {
       accounts = Accounts(from: accounts.ordered.map { $0.id == updated.id ? updated : $0 })
       logger.debug("Updated account: \(updated.name)")
 
+      // Preload picks up snapshots for accounts whose mode changed to
+      // `recordedValue`: without this, a flip from `calculatedFromTrades`
+      // would leave `displayBalance` returning zero until CloudKit sync
+      // delivered an unrelated refresh.
+      await preloadInvestmentValues()
+      await recomputeConvertedTotals()
+
       isLoading = false
       return updated
     } catch {

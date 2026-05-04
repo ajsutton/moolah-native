@@ -42,12 +42,20 @@ struct AccountBalanceCalculator {
     var anyFailed = false
     var newBalances: [UUID: InstrumentAmount] = [:]
 
+    // Capture once so every conversion in this pass uses the same `date`.
+    // Without this, a pass that crosses midnight would convert some
+    // accounts at the previous day's rate and others at the next day's,
+    // producing an aggregate that doesn't tie out to any single day.
+    let date = Date()
+
     // Phase 1: per-account display balance in the account's own instrument.
     // Iterate all accounts so per-account display works regardless of showHidden.
     for account in allAccounts {
       do {
         let balance = try await displayBalance(
-          for: account, investmentValue: investmentValues.value(for: account.id))
+          for: account,
+          investmentValue: investmentValues.value(for: account.id),
+          date: date)
         guard !Task.isCancelled else { return cancelledSnapshot() }
         newBalances[account.id] = balance
       } catch {
@@ -57,11 +65,13 @@ struct AccountBalanceCalculator {
       }
     }
 
+    guard !Task.isCancelled else { return cancelledSnapshot() }
+
     // Phase 2: aggregate totals — only valid when every contributing account
     // converted successfully *and* the per-account → target conversion works.
-    let date = Date()
     let (currentTotal, currentValid) = await sumConverted(
       accounts: currentAccounts, balances: newBalances, on: date)
+    guard !Task.isCancelled else { return cancelledSnapshot() }
     let (investmentTotal, investmentValid) = await sumConverted(
       accounts: investmentAccounts, balances: newBalances, on: date)
 
@@ -101,6 +111,7 @@ struct AccountBalanceCalculator {
           total += try await conversionService.convertAmount(
             snapshot, to: target, on: date)
         }
+        try Task.checkCancellation()
         continue
       }
       for position in account.positions {
@@ -110,6 +121,7 @@ struct AccountBalanceCalculator {
           total += try await conversionService.convertAmount(
             position.amount, to: target, on: date)
         }
+        try Task.checkCancellation()
       }
     }
     return total
@@ -119,14 +131,16 @@ struct AccountBalanceCalculator {
   /// accounts in `recordedValue` mode return the externally-provided
   /// snapshot (or zero when absent); all other accounts sum every position
   /// converted via the conversion service.
+  ///
+  /// Pass `date` to share a conversion timestamp across a multi-account
+  /// pass; defaults to `Date()` for one-shot callers.
   func displayBalance(
-    for account: Account, investmentValue: InstrumentAmount?
+    for account: Account, investmentValue: InstrumentAmount?, date: Date = Date()
   ) async throws -> InstrumentAmount {
     if account.type == .investment, account.valuationMode == .recordedValue {
       return investmentValue ?? .zero(instrument: account.instrument)
     }
     var total = InstrumentAmount.zero(instrument: account.instrument)
-    let date = Date()
     for position in account.positions {
       if position.amount.instrument == account.instrument {
         total += position.amount
@@ -134,36 +148,37 @@ struct AccountBalanceCalculator {
         total += try await conversionService.convertAmount(
           position.amount, to: account.instrument, on: date)
       }
+      try Task.checkCancellation()
     }
     return total
   }
 
   /// Sums the per-account balances converted to `targetInstrument`. Returns
   /// `(total, valid)`; `valid` is false if any account is missing from
-  /// `balances` or if its target conversion throws.
+  /// `balances` or if its target conversion throws. Bails out on the first
+  /// failure so we don't keep issuing conversion calls whose results would
+  /// be discarded.
   private func sumConverted(
     accounts list: [Account],
     balances: [UUID: InstrumentAmount],
     on date: Date
   ) async -> (InstrumentAmount, Bool) {
     var total = InstrumentAmount.zero(instrument: targetInstrument)
-    var valid = true
     for account in list {
       guard let balance = balances[account.id] else {
-        valid = false
-        continue
+        return (.zero(instrument: targetInstrument), false)
       }
       do {
         let converted = try await conversionService.convertAmount(
           balance, to: targetInstrument, on: date)
-        if valid { total += converted }
+        total += converted
       } catch {
-        valid = false
         logger.warning(
           "Aggregate conversion failed for \(account.name): \(error.localizedDescription)")
+        return (.zero(instrument: targetInstrument), false)
       }
     }
-    return (total, valid)
+    return (total, true)
   }
 
   private func cancelledSnapshot() -> Snapshot {
