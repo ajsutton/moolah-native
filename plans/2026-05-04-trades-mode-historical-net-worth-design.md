@@ -250,31 +250,51 @@ positions on every following day.
       same pattern as `applyDailyDeltas` so storage-unit semantics
       stay pinned in one place.
    3. `positions[row.accountId, default: [:]][instrument, default: 0] += quantity`.
-3. **Build a sorted cursor over post rows.** Decode each `postRow` into
-   an internal `(dayKey: Date, accountId: UUID, instrument: Instrument,
-   quantity: Decimal)` tuple, where
-   `dayKey = Calendar.current.startOfDay(for: row.sampleDate)`. Sort
-   the array by `dayKey` ascending. This is the new fold's equivalent
-   of `applyInvestmentValues`'s sorted `[InvestmentValueSnapshot]` — a
-   pre-built, instrument-resolved, dayKey-keyed cursor that the walk
-   advances through. Grouping by the SQL `\.day` UTC string is
-   intentionally avoided here: the new fold's outer iteration is over
-   local `Date` keys, and matching UTC day-strings to local-startOfDay
-   keys would re-introduce the Rule 10 timezone bug. Building the
-   cursor at `dayKey` granularity directly removes the mismatch.
+3. **Build a sorted cursor over post rows.** Decode each `postRow`
+   into a file-private struct (four fields exceeds SwiftLint's
+   `large_tuple` error threshold of 3, so a tuple is not viable):
+
+   ```swift
+   private struct TradesModePositionEntry {
+     let dayKey: Date
+     let accountId: UUID
+     let instrument: Instrument
+     let quantity: Decimal
+   }
+   ```
+
+   `dayKey = Calendar.current.startOfDay(for: row.sampleDate)`;
+   `instrument = resolveInstrument(row.instrumentId, in: context.instrumentMap)`;
+   `quantity = InstrumentAmount(storageValue: row.qty, instrument: instrument).quantity`.
+   Sort the resulting `[TradesModePositionEntry]` by `dayKey`
+   ascending — `entries.sort { $0.dayKey < $1.dayKey }` reads more
+   clearly than the equivalent tuple-positional sort. This is the new
+   fold's equivalent of `applyInvestmentValues`'s sorted
+   `[InvestmentValueSnapshot]` — a pre-built, instrument-resolved,
+   dayKey-keyed cursor that the walk advances through. Grouping by
+   the SQL `\.day` UTC string is intentionally avoided here: the new
+   fold's outer iteration is over local `Date` keys, and matching
+   UTC day-strings to local-startOfDay keys would re-introduce the
+   Rule 10 timezone bug. Building the cursor at `dayKey` granularity
+   directly removes the mismatch.
 4. **Walk `dailyBalances.keys.sorted()`** in date order. Maintain a
-   cursor index `valueIndex` over the sorted post-row tuples. For each
+   cursor index `valueIndex` over the sorted entries array. For each
    `dayKey`:
-   1. **Advance the cursor:** while `valueIndex < tuples.count` and
-      `tuples[valueIndex].dayKey <= dayKey`, apply
-      `positions[t.accountId, default: [:]][t.instrument, default: 0] += t.quantity`
-      and `valueIndex += 1`. This applies *every* trades-mode row
+   1. **Advance the cursor:** while `valueIndex < entries.count` and
+      `entries[valueIndex].dayKey <= dayKey`, apply
+      `positions[entry.accountId, default: [:]][entry.instrument, default: 0] += entry.quantity`
+      and `valueIndex += 1`. This applies *every* trades-mode entry
       whose `dayKey` is on-or-before the current outer `dayKey`,
-      including rows for days that are not themselves in
+      including entries for days that are not themselves in
       `dailyBalances` (the carry-forward correctness fix).
-   2. Skip the rest of this iteration if `positions` is empty (no
-      trades-mode account has ever held anything yet) — leaves the
-      day's `DailyBalance` untouched.
+   2. Skip the rest of this iteration if `positions` is empty — i.e.
+      no priors have been seeded *and* no entries have been advanced
+      yet (`priorRows` was empty for this profile, and no post entry
+      has `dayKey ≤ current dayKey`). Once any quantity has been
+      added, the per-instrument inner dict retains the key even when
+      a same-day BUY+SELL drives that instrument's quantity to zero,
+      so this guard primarily skips early days before the profile's
+      first trade.
    3. Inside the explicit two-catch block from §10, call
       `sumTradesModePositions(positions:on:profileInstrument:conversionService:)`
       to obtain the day's `InstrumentAmount` total in the profile
@@ -294,7 +314,7 @@ positions on every following day.
       `dailyBalances.removeValue(forKey: dayKey)`. The chart shows a
       gap on that day, matching `walkDays`'s existing per-day-failure
       contract.
-5. **After the outer walk completes**, any tail tuples whose `dayKey`
+5. **After the outer walk completes**, any tail entries whose `dayKey`
    exceeds every `dailyBalances` key are intentionally not visited.
    They cannot affect any output because no `dailyBalances` entry on
    or after them exists. (The bestFit / forecast steps run on the
@@ -385,16 +405,18 @@ try await applyTradesModePositionValuations(
   handlers: handlers)
 ```
 
-**`applyInvestmentValues` is updated in this PR** so its per-day error
-branch matches the new fold (and `walkDays`). Concretely:
+**`applyInvestmentValues` is updated in this PR** in two coordinated
+ways: (a) the per-day error branch matches the new fold (and
+`walkDays`); (b) the `sumInvestmentValues` return-type cleanup from §5
+ripples into the caller's optional-bind. Concretely:
 
 - The existing two-catch block at lines 130–135 of
   `+DailyBalancesInvestmentValues.swift` already has the right shape
   (`catch let cancel as CancellationError { throw cancel } catch
   { ... }`); the only diff is in the second catch's body.
-- **Before:** the second catch was
+- **Catch-branch — Before:**
   `handlers.handleInvestmentValueFailure(error, date); continue`.
-- **After:**
+- **Catch-branch — After:**
   ```swift
   catch {
     handlers.handleInvestmentValueFailure(error, date)
@@ -402,9 +424,39 @@ branch matches the new fold (and `walkDays`). Concretely:
     continue
   }
   ```
-- The success-path guard `guard let totalValue, let balance =
-  dailyBalances[date] else { continue }` (line 136) is unchanged —
-  not affected by this fix.
+- **Return-type cleanup — Before** (lines 122–136):
+  ```swift
+  let totalValue: InstrumentAmount?
+  do {
+    totalValue = try await sumInvestmentValues(...)
+  } catch let cancel as CancellationError {
+    throw cancel
+  } catch {
+    handlers.handleInvestmentValueFailure(error, date)
+    continue
+  }
+  guard let totalValue, let balance = dailyBalances[date] else { continue }
+  ```
+- **Return-type cleanup — After** (the `?` on `sumInvestmentValues`'s
+  return type is dropped per §5; `totalValue` becomes non-optional and
+  the guard simplifies):
+  ```swift
+  let totalValue: InstrumentAmount
+  do {
+    totalValue = try await sumInvestmentValues(...)
+  } catch let cancel as CancellationError {
+    throw cancel
+  } catch {
+    handlers.handleInvestmentValueFailure(error, date)
+    dailyBalances.removeValue(forKey: date)  // Rule 11
+    continue
+  }
+  guard let balance = dailyBalances[date] else { continue }
+  ```
+
+The implementer must apply both diffs together — the catch-branch
+addition alone leaves a partial fix; the return-type alone does not
+satisfy Rule 11.
 
 Before this change, a snapshot-fold conversion failure left the day's
 `DailyBalance` untouched — the chart line at that day reflected only
@@ -562,7 +614,10 @@ Add to
    `DateFailingConversionService` that throws only on day D drops day
    D from `dailyBalances`, leaves day D-1 and D+1 intact, and fires
    `handleInvestmentValueFailure` exactly once with `(error, dayKey:
-   D)`.
+   D)`. Call counts and arguments are captured via a closure-captured
+   `var failures: [(Error, Date)] = []` hoisted before the
+   `DailyBalancesHandlers` construction (same pattern as
+   `GRDBDailyBalancesAssembleTests`'s `FailureLog`).
 5. **Rule 11 per-day failure scoping** for the snapshot fold (new
    behaviour) — a snapshot-conversion failure on day D drops day D
    from `dailyBalances`, leaves siblings intact. Pinned by the same
@@ -578,7 +633,10 @@ Add to
    no-op; `investmentValue` reflects only the snapshot fold; pinning
    tests for the existing path stay green.
 9. **Empty `dailyBalances` ⇒ no-op** — nothing to fold over; no
-   logger output.
+   `handleInvestmentValueFailure` callback fires (verified via the
+   closure-captured counter pattern used by sibling tests in
+   `GRDBDailyBalancesAssembleTests` — a local `var failures = 0`
+   hoisted before the `DailyBalancesHandlers` construction).
 10. **CSV-imported trade with a `.transfer` cash leg + a `.trade`
     position leg.** A profile-instrument cash transfer of `C` and a
     same-day trade buying `N` shares of an instrument priced `P` on
