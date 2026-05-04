@@ -14,12 +14,6 @@ import Testing
 /// missing snapshot.
 @Suite("fetchInvestmentAccountIds filters by mode")
 struct InvestmentAccountIdsModeFilterTests {
-  /// Encode a `UUID` as a 16-byte BLOB, matching how the production
-  /// `account.id` BLOB column is populated.
-  private static func uuidBlob(_ id: UUID) -> Data {
-    withUnsafeBytes(of: id.uuid) { Data($0) }
-  }
-
   @Test("only recordedValue investment accounts are returned")
   func filtersByMode() throws {
     let queue = try DatabaseQueue()
@@ -40,10 +34,7 @@ struct InvestmentAccountIdsModeFilterTests {
                is_hidden, valuation_mode)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-          arguments: [
-            Self.uuidBlob(id), "AccountRecord|\(id)", "n",
-            type, "AUD", 0, 0, mode,
-          ])
+          arguments: [id, "AccountRecord|\(id)", "n", type, "AUD", 0, 0, mode])
       }
     }
     let ids = try queue.read { database in

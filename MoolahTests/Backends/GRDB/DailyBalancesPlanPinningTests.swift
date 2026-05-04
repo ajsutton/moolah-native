@@ -210,7 +210,7 @@ struct DailyBalancesPlanPinningTests {
         SELECT id FROM account
         WHERE type = 'investment' AND valuation_mode = 'recordedValue'
         """)
-    #expect(detail.contains("account_by_type"))
+    #expect(detail.contains("SEARCH account USING INDEX account_by_type"))
     #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "account"))
   }
 
