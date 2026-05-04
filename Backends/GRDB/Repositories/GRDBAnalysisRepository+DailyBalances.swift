@@ -5,7 +5,9 @@ import GRDB
 /// Companion files split the workload further:
 /// - `+DailyBalancesAggregation.swift` holds the four SQL fetches.
 /// - `+DailyBalancesInvestmentValues.swift` holds the per-day
-///   investment-value fold-in.
+///   recorded-value snapshot fold-in.
+/// - `+DailyBalancesTradesMode.swift` holds the per-day trades-mode
+///   position-valuation fold-in (sister of the snapshot fold).
 /// - `+DailyBalancesForecast.swift` holds the forecast extrapolation.
 ///
 /// Mirrors the `+ExpenseBreakdown.swift`, `+CategoryBalances.swift`,
@@ -207,6 +209,13 @@ extension GRDBAnalysisRepository {
       context: context,
       handlers: handlers)
 
+    try await applyTradesModePositionValuations(
+      priorRows: aggregation.priorTradesModeAccountRows,
+      postRows: aggregation.tradesModeAccountRows,
+      to: &dailyBalances,
+      context: context,
+      handlers: handlers)
+
     var actualBalances = dailyBalances.values.sorted { $0.date < $1.date }
     applyBestFit(to: &actualBalances, instrument: profileInstrument)
 
@@ -290,8 +299,18 @@ extension GRDBAnalysisRepository {
     let accountByDay = Dictionary(grouping: accountRows, by: \.day)
     let earmarkByDay = Dictionary(grouping: earmarkRows, by: \.day)
     let allDayStrings = Set(accountByDay.keys).union(earmarkByDay.keys).sorted()
+    // Trades-mode accounts contribute to investmentValue via
+    // applyTradesModePositionValuations, not to bankTotal. Including
+    // them in BalanceContext.investmentAccountIds excludes them from
+    // PositionBook.dailyBalance's `for ... where !investmentAccountIds`
+    // sum (no double-count) without changing accountsFromTransfers
+    // membership (which seedPriorBook / applyDailyDeltas gate on the
+    // recorded-value-only set, so the .investmentTransfersOnly read
+    // continues to see only recorded-value transfer cash).
+    let allInvestmentIds =
+      context.investmentAccountIds.union(context.tradesModeInvestmentAccountIds)
     let balanceContext = PositionBook.BalanceContext(
-      investmentAccountIds: context.investmentAccountIds,
+      investmentAccountIds: allInvestmentIds,
       profileInstrument: context.profileInstrument,
       rule: .investmentTransfersOnly,
       conversionService: context.conversionService)
