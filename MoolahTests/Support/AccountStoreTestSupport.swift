@@ -65,4 +65,23 @@ final class FailingAccountRepository: AccountRepository, @unchecked Sendable {
     if shouldFail { throw BackendError.networkUnavailable }
     accounts.removeAll { $0.id == id }
   }
+
+  /// In-memory equivalent of the GRDB single-SQL backfill: flips every
+  /// investment account in the local array to `.calculatedFromTrades`.
+  /// The fake doesn't model investment-value snapshots, so "no
+  /// snapshots" is implicit — every investment account in this fake
+  /// represents the migration's positive case. No tests on this fake
+  /// currently exercise the migration; the conformance is here to
+  /// satisfy the protocol.
+  func backfillValuationModeForUnsnapshotInvestmentAccounts() async throws -> Int {
+    if shouldFail { throw BackendError.networkUnavailable }
+    var changed = 0
+    for index in accounts.indices where accounts[index].type == .investment {
+      if accounts[index].valuationMode != .calculatedFromTrades {
+        accounts[index].valuationMode = .calculatedFromTrades
+        changed += 1
+      }
+    }
+    return changed
+  }
 }

@@ -48,9 +48,16 @@ extension MoolahApp {
         // SwiftData → GRDB migration flags, the second launch's
         // migrator would skip and the seeded SwiftData rows would
         // never reach GRDB — sidebar / accounts queries return empty
-        // and downstream UI assertions time out. Production code
+        // and downstream UI assertions time out. The same reasoning
+        // applies to `ValuationModeMigration`'s per-profile gate
+        // flags: the first launch's profile UUID is dead by the
+        // second launch, but its key would persist and short-circuit
+        // any newer profile that happens to reuse the same UUID
+        // (rare) and — more importantly — leaves stale state visible
+        // to tests that read `UserDefaults.standard`. Production code
         // paths never enter this branch.
         SwiftDataToGRDBMigrator.resetMigrationFlags()
+        ValuationModeMigration.resetGateFlags(in: .standard)
         let manager = try ProfileContainerManager.forTesting()
         let profile = try UITestSeedHydrator.hydrate(seed, into: manager)
         return ContainerSetup(manager: manager, uiTestingProfileId: profile?.id)

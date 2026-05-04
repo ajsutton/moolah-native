@@ -12,31 +12,47 @@ import OSLog
 struct ValuationModeMigration {
   let profileId: UUID
   let accountRepository: any AccountRepository
-  let investmentRepository: any InvestmentRepository
   let userDefaults: UserDefaults
 
-  private var gateKey: String { "didMigrateValuationMode_\(profileId)" }
-
-  private var logger: Logger {
-    Logger(subsystem: "com.moolah.app", category: "ValuationModeMigration")
+  /// Stable symbol exposed so the UI-test reset path
+  /// (`SwiftDataToGRDBMigrator.resetMigrationFlags`) can clear the
+  /// per-profile gate flag without duplicating the format string.
+  static func gateKey(for profileId: UUID) -> String {
+    "didMigrateValuationMode_\(profileId)"
   }
+
+  /// Common prefix shared by every per-profile gate key. Used by
+  /// `resetGateFlags(in:)` to enumerate all keys this migration owns
+  /// in `UserDefaults` without needing each profile id up front.
+  static let gateKeyPrefix = "didMigrateValuationMode_"
+
+  /// Wipes every per-profile gate key under `gateKeyPrefix` from the
+  /// passed-in `UserDefaults`. Intended for `--ui-testing` launches
+  /// only — each UI test launches a fresh in-memory profile container
+  /// with new ids, so leftover keys from prior launches must not
+  /// short-circuit the migration. No production code path should
+  /// invoke this.
+  static func resetGateFlags(in defaults: UserDefaults) {
+    for key in defaults.dictionaryRepresentation().keys
+    where key.hasPrefix(gateKeyPrefix) {
+      defaults.removeObject(forKey: key)
+    }
+  }
+
+  private static let logger = Logger(
+    subsystem: "com.moolah.app", category: "ValuationModeMigration")
+
+  private var gateKey: String { Self.gateKey(for: profileId) }
 
   func run() async throws {
     if userDefaults.bool(forKey: gateKey) { return }
-
-    let accounts = try await accountRepository.fetchAll()
-    for account in accounts where account.type == .investment {
-      let page = try await investmentRepository.fetchValues(
-        accountId: account.id, page: 0, pageSize: 1)
-      if page.values.isEmpty {
-        var updated = account
-        updated.valuationMode = .calculatedFromTrades
-        _ = try await accountRepository.update(updated)
-        logger.info(
-          "Migrated account \(account.name, privacy: .public) → calculatedFromTrades")
-      }
-      // else: snapshot exists → leave at .recordedValue (no-op write).
-    }
+    guard !Task.isCancelled else { return }
+    let count =
+      try await accountRepository
+      .backfillValuationModeForUnsnapshotInvestmentAccounts()
+    Self.logger.info(
+      "Migrated \(count, privacy: .public) account(s) → calculatedFromTrades")
+    guard !Task.isCancelled else { return }
     userDefaults.set(true, forKey: gateKey)
   }
 }

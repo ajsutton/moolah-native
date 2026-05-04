@@ -25,10 +25,13 @@ struct ValuationModeMigrationTests {
     let migration = ValuationModeMigration(
       profileId: profileId,
       accountRepository: backend.accounts,
-      investmentRepository: backend.investments,
       userDefaults: defaults)
     return Fixture(backend: backend, defaults: defaults, migration: migration)
   }
+
+  /// Fixed snapshot date; tests don't read it, but anchoring it removes
+  /// any incidental dependency on the wall clock.
+  private static let fixedSnapshotDate = Date(timeIntervalSince1970: 1_700_000_000)
 
   @Test("investment account with snapshot stays at recordedValue")
   func snapshotAccountUntouched() async throws {
@@ -36,7 +39,7 @@ struct ValuationModeMigrationTests {
     let saved = try await fixture.backend.accounts.create(
       Account(name: "Brokerage", type: .investment, instrument: .AUD))
     try await fixture.backend.investments.setValue(
-      accountId: saved.id, date: Date(),
+      accountId: saved.id, date: Self.fixedSnapshotDate,
       value: InstrumentAmount(quantity: 100, instrument: .AUD))
 
     try await fixture.migration.run()
@@ -72,6 +75,27 @@ struct ValuationModeMigrationTests {
     #expect(after.valuationMode == .recordedValue)
   }
 
+  @Test("mixed accounts: only empty ones flip, snapshot accounts stay")
+  func mixedAccountsMigration() async throws {
+    let fixture = try makeFixture()
+    let withSnapshot = try await fixture.backend.accounts.create(
+      Account(name: "Brokerage", type: .investment, instrument: .AUD))
+    try await fixture.backend.investments.setValue(
+      accountId: withSnapshot.id,
+      date: Self.fixedSnapshotDate,
+      value: InstrumentAmount(quantity: 100, instrument: .AUD))
+    let withoutSnapshot = try await fixture.backend.accounts.create(
+      Account(name: "Crypto", type: .investment, instrument: .AUD))
+
+    try await fixture.migration.run()
+
+    let all = try await fixture.backend.accounts.fetchAll()
+    let afterWith = try #require(all.first { $0.id == withSnapshot.id })
+    let afterWithout = try #require(all.first { $0.id == withoutSnapshot.id })
+    #expect(afterWith.valuationMode == .recordedValue)
+    #expect(afterWithout.valuationMode == .calculatedFromTrades)
+  }
+
   @Test("re-running with the gate flag set is a no-op")
   func gateFlagShortCircuits() async throws {
     let fixture = try makeFixture()
@@ -80,7 +104,7 @@ struct ValuationModeMigrationTests {
     try await fixture.migration.run()
     #expect(
       fixture.defaults.bool(
-        forKey: "didMigrateValuationMode_\(fixture.migration.profileId)"))
+        forKey: ValuationModeMigration.gateKey(for: fixture.migration.profileId)))
 
     // Pre-flip an account to recordedValue; re-running must not flip it back.
     let allAccounts = try await fixture.backend.accounts.fetchAll()
@@ -100,15 +124,32 @@ struct ValuationModeMigrationTests {
     let migrationB = ValuationModeMigration(
       profileId: UUID(),
       accountRepository: migrationA.accountRepository,
-      investmentRepository: migrationA.investmentRepository,
       userDefaults: fixture.defaults)
 
     try await migrationA.run()
     #expect(
       fixture.defaults.bool(
-        forKey: "didMigrateValuationMode_\(migrationA.profileId)"))
+        forKey: ValuationModeMigration.gateKey(for: migrationA.profileId)))
     #expect(
       !fixture.defaults.bool(
-        forKey: "didMigrateValuationMode_\(migrationB.profileId)"))
+        forKey: ValuationModeMigration.gateKey(for: migrationB.profileId)))
+  }
+
+  @Test("resetGateFlags wipes every per-profile gate key")
+  func resetGateFlagsClearsAll() async throws {
+    let suiteName = "test-\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defaults.removePersistentDomain(forName: suiteName)
+    defaults.set(true, forKey: ValuationModeMigration.gateKey(for: UUID()))
+    defaults.set(true, forKey: ValuationModeMigration.gateKey(for: UUID()))
+    // An unrelated key must be left alone.
+    defaults.set("untouched", forKey: "some.other.key")
+
+    ValuationModeMigration.resetGateFlags(in: defaults)
+
+    let remaining = defaults.dictionaryRepresentation().keys
+      .filter { $0.hasPrefix(ValuationModeMigration.gateKeyPrefix) }
+    #expect(remaining.isEmpty)
+    #expect(defaults.string(forKey: "some.other.key") == "untouched")
   }
 }

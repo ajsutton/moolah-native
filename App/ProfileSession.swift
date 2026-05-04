@@ -330,22 +330,25 @@ final class ProfileSession: Identifiable {
       modelContainer: modelContainer, database: database)
   }
 
-  /// Runs the SwiftData → GRDB migration off `@MainActor` and reloads
-  /// the affected stores. Idempotent: subsequent calls return the same
+  /// Runs the bootstrap migrations off `@MainActor` and reloads the
+  /// affected stores. Idempotent: subsequent calls return the same
   /// task so callers can `await session.setUp()` from multiple sites
   /// (UI test seed setup, `SessionManager.session(for:)`, etc.) without
-  /// re-running the migration.
+  /// re-running anything.
   ///
-  /// Throws whatever the migrator throws — the caller (typically
-  /// `SessionManager`) is responsible for surfacing the error to the
-  /// user. A failed setUp leaves the migration's `UserDefaults` flags
-  /// unset, so the next launch retries.
+  /// Phase 1 — SwiftData → GRDB migration.
+  /// Throws whatever the migrator throws (the caller, typically
+  /// `SessionManager`, surfaces the error to the user). A throw leaves
+  /// the migration's `UserDefaults` flags unset so the next launch
+  /// retries.
   ///
-  /// After the SwiftData → GRDB migration completes, runs the one-shot
-  /// `ValuationModeMigration` so each existing investment account's
-  /// `valuationMode` reflects whether it has any snapshot rows. The
-  /// migration is non-fatal: a failure is logged and the app continues
-  /// because read sites still auto-detect at this rollout stage.
+  /// Phase 2 — `ValuationModeMigration`.
+  /// Runs after Phase 1 commits so the GRDB-backed repositories see
+  /// every account / `InvestmentValue` row. Non-fatal: errors are
+  /// logged but do not propagate, because read sites still auto-detect
+  /// at this rollout stage and the next launch will retry. Both phases
+  /// share the same `setUpTask` so the per-session idempotency guard
+  /// covers the whole bootstrap, not just Phase 1.
   func setUp() async throws {
     if let existing = setUpTask {
       return try await existing.value
@@ -358,10 +361,10 @@ final class ProfileSession: Identifiable {
         profileId: profileId,
         containerManager: containerManager,
         database: database)
+      await self.runValuationModeMigration()
     }
     setUpTask = task
     try await task.value
-    await runValuationModeMigration()
   }
 
   /// Runs `ValuationModeMigration` for this profile. Non-fatal: any
@@ -374,7 +377,6 @@ final class ProfileSession: Identifiable {
     let migration = ValuationModeMigration(
       profileId: profile.id,
       accountRepository: backend.accounts,
-      investmentRepository: backend.investments,
       userDefaults: .standard)
     do {
       try await migration.run()
