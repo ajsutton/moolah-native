@@ -30,8 +30,10 @@
     /// Tasks spawned by the FSEvents callback — tracked so `stop()` can
     /// cancel any in-flight `handleEvents` before the service is torn
     /// down, avoiding orphan ingests after the watch was explicitly
-    /// stopped.
-    private var inFlightTasks: [Task<Void, Never>] = []
+    /// stopped. Keyed by a fresh UUID per event burst so each task can
+    /// remove itself from the dictionary on completion, keeping the
+    /// dictionary bounded between bursts.
+    private var inFlightTasks: [UUID: Task<Void, Never>] = [:]
 
     init(
       importStore: ImportStore,
@@ -113,17 +115,21 @@
           }
         }
         // `FSEventStreamSetDispatchQueue(newStream, .main)` (in `start()`)
-        // means this callback fires on the main queue — but it's a C
-        // function pointer with no actor isolation, so we still need the
-        // explicit `Task { @MainActor in }` hop. Tracking the task lets
-        // `stop()` cancel it if the watch is torn down mid-ingest.
-        let task: Task<Void, Never> = Task { @MainActor in
-          await service.handleEvents(paths: paths)
-        }
-        Task { @MainActor in
-          service.inFlightTasks.append(task)
-          await task.value
-          service.inFlightTasks.removeAll { $0.isCancelled }
+        // means this callback runs on the main thread, which is
+        // `@MainActor`'s executor. `MainActor.assumeIsolated` enters
+        // that isolation domain synchronously so we can mutate
+        // `inFlightTasks` from this C callback without an extra
+        // `Task { @MainActor in }` hop (which would itself be untracked).
+        // The work task is appended before it starts and removes itself
+        // on completion; `stop()` cancels everything still in flight.
+        MainActor.assumeIsolated {
+          let id = UUID()
+          let task = Task { @MainActor [weak service] in
+            guard let service else { return }
+            defer { service.inFlightTasks[id] = nil }
+            await service.handleEvents(paths: paths)
+          }
+          service.inFlightTasks[id] = task
         }
       }
     }
@@ -143,7 +149,7 @@
       contextPointer = nil
       // Cancel any in-flight handle-events tasks so no ingest kicks off
       // after the watch has been torn down.
-      for task in inFlightTasks { task.cancel() }
+      for task in inFlightTasks.values { task.cancel() }
       inFlightTasks.removeAll()
       if didStartAccess, let watchedURL {
         watchedURL.stopAccessingSecurityScopedResource()

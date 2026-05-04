@@ -14,7 +14,12 @@ extension MoolahApp {
       flushPendingChanges()
       runPragmaOptimizeOnAllSessions()
     case .active:
-      Task { await fetchRemoteChanges() }
+      // Tracked + cancellable via SyncCoordinator. Rapid scene-phase
+      // cycling (e.g. dragging a window across Spaces) can call this
+      // repeatedly; the coordinator cancels the prior task before
+      // launching a new one so concurrent fetches don't stack.
+      logger.info("Fetching remote changes on foreground entry")
+      syncCoordinator.scheduleFetchChanges()
     default:
       break
     }
@@ -77,11 +82,6 @@ extension MoolahApp {
         await syncCoordinator.sendChanges()
       }
     #endif
-  }
-
-  func fetchRemoteChanges() async {
-    logger.info("Fetching remote changes on foreground entry")
-    await syncCoordinator.fetchChanges()
   }
 
   // MARK: - URL Handling

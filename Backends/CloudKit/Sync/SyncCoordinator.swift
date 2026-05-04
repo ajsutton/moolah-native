@@ -331,6 +331,9 @@ final class SyncCoordinator {
   /// `completeStart`. Held so `stop()` can cancel it.
   var availabilityProbeTask: Task<Void, Never>?
 
+  /// Scene-active fetch handle. `scheduleFetchChanges` cancels-and-replaces; `stop()` clears it.
+  var fetchChangesTask: Task<Void, Never>?
+
   /// Number of consecutive re-fetch attempts scheduled after a save failure.
   /// Reset to zero whenever a fetched-record-zone-changes batch applies successfully.
   /// Exposed for testing.

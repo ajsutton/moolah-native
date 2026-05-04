@@ -222,6 +222,8 @@ extension SyncCoordinator {
     zoneSetupTask = nil
     availabilityProbeTask?.cancel()
     availabilityProbeTask = nil
+    fetchChangesTask?.cancel()
+    fetchChangesTask = nil
     cancelRefetchTasks()
     for (_, task) in zoneCreationTasks {
       task.cancel()
