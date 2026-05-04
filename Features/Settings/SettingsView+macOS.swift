@@ -245,11 +245,15 @@
         profileDetailView(for: profile)
           .id(selectedID)
       } else {
+        // Without `maxHeight: .infinity` the `HSplitView` collapses both
+        // columns to the intrinsic height of `ContentUnavailableView`, so
+        // the sidebar fill stops short of the window's bottom edge.
         ContentUnavailableView(
           "No Profile Selected",
           systemImage: "person.crop.circle",
           description: Text("Select a profile to view its settings.")
         )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
     }
   }
