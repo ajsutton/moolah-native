@@ -14,7 +14,7 @@ final class WelcomeViewTests: MoolahUITestCase {
   /// First-launch with an empty index container → user sees the
   /// branded hero, taps "Get started", fills in a name, and tapping
   /// "Create Profile" dismisses the hero (session window takes over).
-  func testFirstLaunchNoCloudProfiles_showsHeroAndSetsUpProfile() {
+  func testFirstLaunchWithNoCloudProfilesShowsHeroAndCreatesProfile() {
     let app = launch(seed: .welcomeEmpty)
 
     app.welcome.waitForHero()

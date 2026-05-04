@@ -1,5 +1,16 @@
 import Foundation
 
+/// Parses a UUID literal used in a deterministic test seed. Crashes with a
+/// clear message if the literal is malformed; never substitutes a random
+/// UUID (which would make failure artefacts non-diffable). Preferred over
+/// force-unwrap so each literal does not add a SwiftLint baseline entry.
+private func uuidLiteral(_ string: String) -> UUID {
+  guard let uuid = UUID(uuidString: string) else {
+    fatalError("Malformed UUID literal in test seed: \(string)")
+  }
+  return uuid
+}
+
 /// Named deterministic data sets that the app hydrates from when launched
 /// with the `--ui-testing` argument and `UI_TESTING_SEED` set to the seed's
 /// raw value.
@@ -75,14 +86,9 @@ public enum UITestSeed: String, CaseIterable, Sendable {
 /// Fixtures for the first-run Welcome seeds. Defined here so both the
 /// app (hydration) and UI-test drivers reference the same UUIDs.
 public enum UITestWelcomeFixtures {
-  // Constant UUIDs — `??` fallback keeps SwiftLint's `force_unwrapping`
-  // happy; the literal strings above parse successfully so the fallback
-  // never fires in practice.
-  public static let householdProfileId =
-    UUID(uuidString: "B0000000-0000-0000-0000-000000000001") ?? UUID()
+  public static let householdProfileId = uuidLiteral("B0000000-0000-0000-0000-000000000001")
   public static let householdProfileLabel = "Household"
-  public static let sideBusinessProfileId =
-    UUID(uuidString: "B0000000-0000-0000-0000-000000000002") ?? UUID()
+  public static let sideBusinessProfileId = uuidLiteral("B0000000-0000-0000-0000-000000000002")
   public static let sideBusinessProfileLabel = "Side business"
   public static let profileCurrencyCode = "AUD"
 }
@@ -268,13 +274,11 @@ public enum UITestFixtures {
   ///     in `InstrumentPickerField`.
   ///   - Category `brokerage` — "Brokerage", so the fee leg can select it.
   public enum TradeReady {
-    public static let profileId =
-      UUID(uuidString: "A3000000-0000-0000-0000-000000000001") ?? UUID()
+    public static let profileId = uuidLiteral("A3000000-0000-0000-0000-000000000001")
     public static let profileLabel = "Personal"
     public static let profileCurrencyCode = "AUD"
 
-    public static let brokerageAccountId =
-      UUID(uuidString: "A3000000-0000-0000-0000-000000000010") ?? UUID()
+    public static let brokerageAccountId = uuidLiteral("A3000000-0000-0000-0000-000000000010")
     public static let brokerageAccountName = "Brokerage"
 
     public static let vgsaxInstrumentId = "ASX:VGS.AX"
@@ -282,20 +286,16 @@ public enum UITestFixtures {
     public static let vgsaxExchange = "ASX"
     public static let vgsaxName = "VGS"
 
-    public static let brokerageCategoryId =
-      UUID(uuidString: "A3000000-0000-0000-0000-000000000040") ?? UUID()
+    public static let brokerageCategoryId = uuidLiteral("A3000000-0000-0000-0000-000000000040")
     public static let brokerageCategoryName = "Brokerage"
 
     // MARK: - Trade transactions
 
     /// 14-Apr-26 buy: −$300 AUD → +20 VGS.AX, $10 brokerage fee.
-    public static let trade1Id =
-      UUID(uuidString: "A3000000-0000-0000-0000-000000000020") ?? UUID()
+    public static let trade1Id = uuidLiteral("A3000000-0000-0000-0000-000000000020")
     /// 21-Apr-26 buy: −$160 AUD → +10 VGS.AX, no fee.
-    public static let trade2Id =
-      UUID(uuidString: "A3000000-0000-0000-0000-000000000021") ?? UUID()
+    public static let trade2Id = uuidLiteral("A3000000-0000-0000-0000-000000000021")
     /// 28-Apr-26 sell: +$425 AUD → −10 VGS.AX, $5 brokerage fee.
-    public static let trade3Id =
-      UUID(uuidString: "A3000000-0000-0000-0000-000000000022") ?? UUID()
+    public static let trade3Id = uuidLiteral("A3000000-0000-0000-0000-000000000022")
   }
 }
