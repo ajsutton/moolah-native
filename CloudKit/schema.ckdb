@@ -12,6 +12,7 @@ DEFINE SCHEMA
         name            STRING QUERYABLE SEARCHABLE SORTABLE,
         position        INT64 QUERYABLE SORTABLE,
         type            STRING QUERYABLE SEARCHABLE SORTABLE,
+        valuationMode   STRING QUERYABLE SORTABLE,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud",
         GRANT READ TO "_world"

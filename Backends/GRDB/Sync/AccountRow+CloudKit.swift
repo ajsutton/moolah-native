@@ -20,7 +20,8 @@ extension AccountRow: CloudKitRecordConvertible {
       isHidden: isHidden ? 1 : 0,
       name: name,
       position: Int64(position),
-      type: type
+      type: type,
+      valuationMode: valuationMode
     ).write(to: record)
     return record
   }
@@ -39,9 +40,7 @@ extension AccountRow: CloudKitRecordConvertible {
       // Stamped by applyGRDBBatchSave after upsert; never read from the
       // CKRecord itself.
       encodedSystemFields: nil,
-      // Wire-level default until valuation mode is part of the CloudKit
-      // schema (handled in a later task).
-      valuationMode: ValuationMode.recordedValue.rawValue
+      valuationMode: fields.valuationMode ?? "recordedValue"
     )
   }
 }
