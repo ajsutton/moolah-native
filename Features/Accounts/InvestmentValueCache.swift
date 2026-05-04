@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// Caches the latest externally-set value for each investment account and
 /// knows how to hydrate itself from the investment repository.
@@ -14,6 +15,12 @@ import Foundation
 /// The cache is not `@Observable`: the observable surface is `AccountStore`'s
 /// `convertedBalances` / `convertedInvestmentTotal`, which the store
 /// recomputes whenever cache contents change.
+/// `Logger` is `Sendable`; declared at file scope so the per-account
+/// `withTaskGroup` body (a non-isolated context) can warn on fetch
+/// failures without a MainActor hop.
+private let preloadLogger = Logger(
+  subsystem: "com.moolah.app", category: "InvestmentValueCache")
+
 @MainActor
 final class InvestmentValueCache {
   /// The current cache contents. Kept `private(set)` so callers can read for
@@ -59,6 +66,13 @@ final class InvestmentValueCache {
               accountId: accountId, page: 0, pageSize: 1)
             return (accountId, page.values.first?.value)
           } catch {
+            // nil-fallback is the intended degradation (callers fall back
+            // to position sum), but the failure must be logged so prod
+            // diagnostics can distinguish "no value set" from "fetch
+            // raised an error". Per INSTRUMENT_CONVERSION_GUIDE.md Rule 11.
+            preloadLogger.warning(
+              "preload: fetch failed for \(accountId, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
             return (accountId, nil)
           }
         }
