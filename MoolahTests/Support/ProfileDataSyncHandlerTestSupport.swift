@@ -138,7 +138,8 @@ enum ProfileDataSyncHandlerTestSupport {
       instrumentId: record.instrumentId,
       position: record.position,
       isHidden: record.isHidden,
-      encodedSystemFields: record.encodedSystemFields)
+      encodedSystemFields: record.encodedSystemFields,
+      valuationMode: ValuationMode.recordedValue.rawValue)
   }
 
   private static func earmarkRow(from record: EarmarkRecord) -> EarmarkRow {

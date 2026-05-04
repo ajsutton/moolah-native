@@ -23,6 +23,7 @@ struct AccountRow {
     case position
     case isHidden = "is_hidden"
     case encodedSystemFields = "encoded_system_fields"
+    case valuationMode = "valuation_mode"
   }
 
   enum CodingKeys: String, CodingKey {
@@ -34,6 +35,7 @@ struct AccountRow {
     case position
     case isHidden = "is_hidden"
     case encodedSystemFields = "encoded_system_fields"
+    case valuationMode = "valuation_mode"
   }
 
   var id: UUID
@@ -46,6 +48,10 @@ struct AccountRow {
   var position: Int
   var isHidden: Bool
   var encodedSystemFields: Data?
+  /// Raw value of `ValuationMode` (`"recordedValue"` /
+  /// `"calculatedFromTrades"`). Decoded with a `recordedValue` fallback
+  /// to tolerate forward-incompatible schema migrations.
+  var valuationMode: String
 }
 
 extension AccountRow: Codable {}

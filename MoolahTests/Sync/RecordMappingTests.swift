@@ -61,7 +61,8 @@ struct RecordMappingTests {
       instrumentId: "USD",
       position: 2,
       isHidden: true,
-      encodedSystemFields: nil
+      encodedSystemFields: nil,
+      valuationMode: ValuationMode.recordedValue.rawValue
     )
 
     let ckRecord = row.toCKRecord(in: zoneID)

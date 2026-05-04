@@ -90,7 +90,8 @@ struct RecordNameCollisionTests {
       instrumentId: "AUD",
       position: 0,
       isHidden: false,
-      encodedSystemFields: nil)
+      encodedSystemFields: nil,
+      valuationMode: ValuationMode.recordedValue.rawValue)
 
     let built = handler.buildCKRecord(from: row, encodedSystemFields: nil)
     #expect(
@@ -126,7 +127,8 @@ struct RecordNameCollisionTests {
       instrumentId: "AUD",
       position: 0,
       isHidden: false,
-      encodedSystemFields: legacySystemFields)
+      encodedSystemFields: legacySystemFields,
+      valuationMode: ValuationMode.recordedValue.rawValue)
 
     let built = handler.buildCKRecord(from: row, encodedSystemFields: legacySystemFields)
     #expect(
