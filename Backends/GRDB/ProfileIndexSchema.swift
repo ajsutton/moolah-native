@@ -10,6 +10,13 @@ import GRDB
 /// activated. Independent of any per-profile `data.sqlite` — no FKs in
 /// or out.
 ///
+/// A separate file (rather than a table inside `data.sqlite`) is
+/// justified because the index has a materially different lifetime than
+/// per-profile data: it must be readable before any profile is
+/// activated, it survives every profile delete, and its access pattern
+/// (one read at launch, occasional writes when profiles change) does
+/// not benefit from sharing the per-profile WAL.
+///
 /// Migration history:
 /// `v1_initial` — the `profile` table.
 ///

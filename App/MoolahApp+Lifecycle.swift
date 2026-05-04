@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import SwiftUI
 
 // Scene-phase sync flushing and URL-scheme routing extracted from the main
@@ -24,12 +25,31 @@ extension MoolahApp {
   /// hour while active". This handler covers the resign-active half by
   /// asking each open session to schedule its own tracked optimize task —
   /// the session stores the handle and cancels it on teardown, so this
-  /// loop never leaks fire-and-forget Tasks. The hourly-while-active half
-  /// is owned by `ProfileSession.startPeriodicPragmaOptimize(interval:)`,
-  /// which is started from the session initialiser.
+  /// loop never leaks fire-and-forget Tasks. It also runs `PRAGMA optimize`
+  /// on the app-scoped `profile-index.sqlite` queue (which has no owning
+  /// session). The hourly-while-active half is owned by
+  /// `ProfileSession.startPeriodicPragmaOptimize(interval:)`, which is
+  /// started from the session initialiser.
   func runPragmaOptimizeOnAllSessions() {
     for session in sessionManager.openProfiles {
       session.schedulePragmaOptimize()
+    }
+    optimizeProfileIndexQueue()
+  }
+
+  /// Best-effort synchronous `PRAGMA optimize` on the app-scoped
+  /// `profile-index.sqlite` queue. Synchronous because we only run on
+  /// resign-active (the OS may suspend us shortly) and `PRAGMA optimize`
+  /// completes in milliseconds.
+  private func optimizeProfileIndexQueue() {
+    do {
+      try containerManager.profileIndexDatabase.write { database in
+        try database.execute(sql: "PRAGMA optimize")
+      }
+    } catch {
+      logger.warning(
+        "PRAGMA optimize failed for profile-index: \(error.localizedDescription, privacy: .public)"
+      )
     }
   }
 

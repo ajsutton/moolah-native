@@ -5,6 +5,14 @@ import Foundation
 /// Bump `version` whenever the on-disk shape changes; the catalogue
 /// implementation drops and recreates the file rather than running a
 /// migration.
+///
+/// Retention: this is a derived cache of the public CoinGecko catalogue.
+/// The whole table contents are replaced atomically on every successful
+/// refresh (bounded by `maxAge` = 24 h in `SQLiteCoinGeckoCatalog`), and
+/// on a schema-version mismatch the entire SQLite file is dropped and
+/// recreated clean. The source of truth is the live CoinGecko API, so
+/// no per-row TTL or scheduled purge migration is needed —
+/// `replaceAll` and the drop-and-recreate path together bound staleness.
 enum CoinGeckoCatalogSchema {
   static let version: Int = 1
 
