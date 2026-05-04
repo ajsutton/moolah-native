@@ -20,7 +20,7 @@ extension GRDBAnalysisRepository {
   ///   way;
   /// - the scheduled `[Transaction]` for forecast extrapolation;
   /// - the accounts table (so we know which accounts are
-  ///   investments);
+  ///   investments — split into recorded-value and trades-mode);
   /// - every `investment_value` row (the cursor walk needs the
   ///   pre-window snapshots so it can carry the most-recent value
   ///   forward into the first in-window day);
@@ -55,6 +55,8 @@ extension GRDBAnalysisRepository {
       database: database, after: after)
     let investmentAccountIds = try Self.fetchInvestmentAccountIds(
       database: database)
+    let tradesModeInvestmentAccountIds =
+      try Self.fetchTradesModeInvestmentAccountIds(database: database)
     // Fetch `instrumentMap` before the investment-value snapshots so
     // `fetchInvestmentValueSnapshots` can resolve each row's instrument
     // to its registered `Instrument` (with the right `kind` for stock /
@@ -67,6 +69,16 @@ extension GRDBAnalysisRepository {
     let scheduled =
       forecastUntil != nil
       ? try Self.fetchScheduledTransactions(database: database) : []
+    // Pre-filter trades-mode rows out of the already-fetched arrays.
+    // Doing the filter inside the read closure (not later) keeps every
+    // input the assembly walk needs inside one MVCC snapshot and saves
+    // re-checking membership inside the per-day fold.
+    let priorTradesModeAccountRows = priorAccountRows.filter {
+      tradesModeInvestmentAccountIds.contains($0.accountId)
+    }
+    let tradesModeAccountRows = accountRows.filter {
+      tradesModeInvestmentAccountIds.contains($0.accountId)
+    }
     return DailyBalancesAggregation(
       priorAccountRows: priorAccountRows,
       priorEarmarkRows: priorEarmarkRows,
@@ -74,9 +86,9 @@ extension GRDBAnalysisRepository {
       earmarkRows: earmarkRows,
       investmentValues: investmentValues,
       investmentAccountIds: investmentAccountIds,
-      tradesModeInvestmentAccountIds: [],  // populated in Task 3
-      priorTradesModeAccountRows: [],  // populated in Task 3
-      tradesModeAccountRows: [],  // populated in Task 3
+      tradesModeInvestmentAccountIds: tradesModeInvestmentAccountIds,
+      priorTradesModeAccountRows: priorTradesModeAccountRows,
+      tradesModeAccountRows: tradesModeAccountRows,
       scheduled: scheduled,
       instrumentMap: instrumentMap,
       forecastUntil: forecastUntil)
