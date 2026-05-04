@@ -78,11 +78,11 @@ struct AccountBalanceCalculator {
     )
   }
 
-  /// Sum all positions across `accounts`, converted to `target`. When
-  /// `investmentValues` is provided and the account has an externally-set
-  /// value, that amount is used verbatim (converted once) — avoiding the
-  /// double-conversion a naive `positions → account instrument → target`
-  /// implementation would incur on investment aggregates.
+  /// Sum every account's contribution converted to `target`. Investment
+  /// accounts in `recordedValue` mode contribute their cached snapshot (or
+  /// zero when none is set); every other account sums positions directly to
+  /// `target` in one pass — avoiding the double-conversion a naive
+  /// `positions → account instrument → target` implementation would incur.
   func totalConverted(
     for accounts: [Account],
     to target: Instrument,
@@ -91,11 +91,15 @@ struct AccountBalanceCalculator {
     var total = InstrumentAmount.zero(instrument: target)
     let date = Date()
     for account in accounts {
-      if let investmentValues, let externalValue = investmentValues.value(for: account.id) {
-        if externalValue.instrument == target {
-          total += externalValue
+      if account.type == .investment, account.valuationMode == .recordedValue {
+        let snapshot =
+          investmentValues?.value(for: account.id)
+          ?? .zero(instrument: account.instrument)
+        if snapshot.instrument == target {
+          total += snapshot
         } else {
-          total += try await conversionService.convertAmount(externalValue, to: target, on: date)
+          total += try await conversionService.convertAmount(
+            snapshot, to: target, on: date)
         }
         continue
       }

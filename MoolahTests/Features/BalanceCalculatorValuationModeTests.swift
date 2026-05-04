@@ -62,4 +62,43 @@ struct BalanceCalculatorValuationModeTests {
       for: account, investmentValue: snapshot)
     #expect(balance == InstrumentAmount(quantity: 42, instrument: .AUD))
   }
+
+  @Test("totalConverted: recordedValue investment uses cache value")
+  @MainActor
+  func totalConvertedRecordedMode() async throws {
+    let calculator = AccountBalanceCalculator(
+      conversionService: FixedConversionService(), targetInstrument: .AUD)
+    var withSnapshot = Account(
+      name: "A", type: .investment, instrument: .AUD,
+      valuationMode: .recordedValue)
+    withSnapshot.positions = [Position(instrument: .AUD, quantity: 999)]
+    var withoutSnapshot = Account(
+      name: "B", type: .investment, instrument: .AUD,
+      valuationMode: .recordedValue)
+    withoutSnapshot.positions = [Position(instrument: .AUD, quantity: 999)]
+
+    let cache = InvestmentValueCache(repository: nil)
+    cache.set(InstrumentAmount(quantity: 100, instrument: .AUD), for: withSnapshot.id)
+    // withoutSnapshot has no cache entry.
+
+    let total = try await calculator.totalConverted(
+      for: [withSnapshot, withoutSnapshot], to: .AUD, using: cache)
+    #expect(total == InstrumentAmount(quantity: 100, instrument: .AUD))
+  }
+
+  @Test("totalConverted: calculatedFromTrades sums positions, ignores cache")
+  @MainActor
+  func totalConvertedTradesMode() async throws {
+    let calculator = AccountBalanceCalculator(
+      conversionService: FixedConversionService(), targetInstrument: .AUD)
+    var account = Account(
+      name: "A", type: .investment, instrument: .AUD,
+      valuationMode: .calculatedFromTrades)
+    account.positions = [Position(instrument: .AUD, quantity: 500)]
+    let cache = InvestmentValueCache(repository: nil)
+    cache.set(InstrumentAmount(quantity: 99, instrument: .AUD), for: account.id)
+    let total = try await calculator.totalConverted(
+      for: [account], to: .AUD, using: cache)
+    #expect(total == InstrumentAmount(quantity: 500, instrument: .AUD))
+  }
 }
