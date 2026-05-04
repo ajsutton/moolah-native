@@ -12,6 +12,22 @@ import Foundation
 extension InvestmentStore {
   // MARK: - PositionsView Input
 
+  /// Coordinates the two-step "load then build positions input" sequence
+  /// that the `InvestmentAccountView` runs from its `.task` and
+  /// `.refreshable` modifiers. Hoisted out of the view so the view bodies
+  /// stay free of multi-step async coordination.
+  ///
+  /// Errors from `positionsViewInput` propagate; `loadAllData` swallows
+  /// its own errors into `self.error` so it never throws here.
+  func loadAndBuildPositionsInput(
+    account: Account,
+    profileCurrency: Instrument,
+    range: PositionsTimeRange
+  ) async throws -> PositionsViewInput {
+    await loadAllData(account: account, profileCurrency: profileCurrency)
+    return try await positionsViewInput(title: account.name, range: range)
+  }
+
   /// Builds the `PositionsViewInput` for the unified positions UI. Reads
   /// from the already-loaded `valuedPositions` for the row data, replays
   /// trade transactions through the shared `TradeEventClassifier` +
