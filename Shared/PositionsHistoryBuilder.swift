@@ -35,6 +35,7 @@ struct PositionsHistoryBuilder: Sendable {
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "PositionsHistoryBuilder")
 
+  @concurrent
   func build(
     transactions: [Transaction],
     accountId: UUID,

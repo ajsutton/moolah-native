@@ -26,6 +26,26 @@ enum AnalysisTestHelpers {
       calendar.date(from: DateComponents(year: year, month: month, day: day)))
   }
 
+  /// Build a local-calendar `Date` at a specific `hour:` on the given
+  /// day. Uses `Calendar.current` (not the fixed-Gregorian `calendar`
+  /// used by the parameterless-hour `date(year:month:day:)` overload)
+  /// so the resulting `Date`'s `startOfDay` agrees with the
+  /// production fold's `Calendar.current.startOfDay(for:
+  /// row.sampleDate)` math — required by Rule 10
+  /// same-`startOfDay` normalization tests.
+  ///
+  /// Renamed from the `date(...)` overload to make the calendar
+  /// asymmetry explicit at the call site: the prefix-shared
+  /// `date(year:month:day:)` is fixed-Gregorian; this is local.
+  static func localDate(
+    year: Int, month: Int, day: Int, hour: Int
+  ) throws -> Date {
+    try #require(
+      currentCalendar.date(
+        from: DateComponents(
+          year: year, month: month, day: day, hour: hour)))
+  }
+
   /// Build a UTC-anchored Date from year/month/day components.
   ///
   /// SQL `DATE(t.date)` extracts the UTC calendar day, and

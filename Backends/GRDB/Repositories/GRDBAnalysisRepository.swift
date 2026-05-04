@@ -66,7 +66,16 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
   // plus its private cursor helpers (`advanceInvestmentCursor`,
   // `sumInvestmentValues`); also owns the SQL fetches that produce
   // its inputs (`fetchInvestmentAccountIds`,
-  // `fetchInvestmentValueSnapshots`).
+  // `fetchInvestmentValueSnapshots`,
+  // `fetchTradesModeInvestmentAccountIds`).
+  //
+  // `+DailyBalancesTradesMode.swift` — `applyTradesModePositionValuations`
+  // fold + private helpers (`seedTradesModePriorPositions`,
+  // `buildTradesModeEntries`, `mergeTradesModeTotal`,
+  // `sumTradesModePositions`, `TradesModePositionEntry`).
+  // Pre-filtered trades-mode rows arrive via the aggregation; the fold
+  // computes per-day position valuations and adds them onto
+  // `DailyBalance.investmentValue`.
   //
   // `+DailyBalancesForecast.swift` — `generateForecast` plus its
   // private helpers (`preConvertForecastInstances`,

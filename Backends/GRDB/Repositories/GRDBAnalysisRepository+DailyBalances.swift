@@ -5,7 +5,9 @@ import GRDB
 /// Companion files split the workload further:
 /// - `+DailyBalancesAggregation.swift` holds the four SQL fetches.
 /// - `+DailyBalancesInvestmentValues.swift` holds the per-day
-///   investment-value fold-in.
+///   recorded-value snapshot fold-in.
+/// - `+DailyBalancesTradesMode.swift` holds the per-day trades-mode
+///   position-valuation fold-in (sister of the snapshot fold).
 /// - `+DailyBalancesForecast.swift` holds the forecast extrapolation.
 ///
 /// Mirrors the `+ExpenseBreakdown.swift`, `+CategoryBalances.swift`,
@@ -89,6 +91,17 @@ extension GRDBAnalysisRepository {
     let earmarkRows: [DailyBalanceEarmarkRow]
     let investmentValues: [InvestmentValueSnapshot]
     let investmentAccountIds: Set<UUID>
+    /// Account ids of trades-mode investment accounts. Drives the new
+    /// per-day position-valuation fold; recorded-value accounts are
+    /// carried in `investmentAccountIds` and drive the snapshot fold.
+    let tradesModeInvestmentAccountIds: Set<UUID>
+    /// Pre-cutoff `transaction_leg` SUM rows filtered to trades-mode
+    /// investment accounts only. Pre-fold seed for the new fold's
+    /// cumulative position dict.
+    let priorTradesModeAccountRows: [DailyBalanceAccountRow]
+    /// Post-cutoff `transaction_leg` SUM rows filtered to trades-mode
+    /// investment accounts only.
+    let tradesModeAccountRows: [DailyBalanceAccountRow]
     let scheduled: [Transaction]
     let instrumentMap: [String: Instrument]
     let forecastUntil: Date?
@@ -124,6 +137,12 @@ extension GRDBAnalysisRepository {
   /// each function fits SwiftLint's `function_parameter_count` budget.
   struct DailyBalancesAssemblyContext: Sendable {
     let investmentAccountIds: Set<UUID>
+    /// Account ids of trades-mode investment accounts — read by
+    /// `applyTradesModePositionValuations` to early-exit when the
+    /// profile has none. None of the seed/walk helpers consult this
+    /// field; trades-mode accounts contribute through the new fold,
+    /// not through `accountsFromTransfers`.
+    let tradesModeInvestmentAccountIds: Set<UUID>
     let instrumentMap: [String: Instrument]
     let profileInstrument: Instrument
     let conversionService: any InstrumentConversionService
@@ -168,6 +187,7 @@ extension GRDBAnalysisRepository {
   ) async throws -> [DailyBalance] {
     let context = DailyBalancesAssemblyContext(
       investmentAccountIds: aggregation.investmentAccountIds,
+      tradesModeInvestmentAccountIds: aggregation.tradesModeInvestmentAccountIds,
       instrumentMap: aggregation.instrumentMap,
       profileInstrument: profileInstrument,
       conversionService: conversionService)
@@ -185,6 +205,13 @@ extension GRDBAnalysisRepository {
 
     try await applyInvestmentValues(
       aggregation.investmentValues,
+      to: &dailyBalances,
+      context: context,
+      handlers: handlers)
+
+    try await applyTradesModePositionValuations(
+      priorRows: aggregation.priorTradesModeAccountRows,
+      postRows: aggregation.tradesModeAccountRows,
       to: &dailyBalances,
       context: context,
       handlers: handlers)
@@ -272,8 +299,18 @@ extension GRDBAnalysisRepository {
     let accountByDay = Dictionary(grouping: accountRows, by: \.day)
     let earmarkByDay = Dictionary(grouping: earmarkRows, by: \.day)
     let allDayStrings = Set(accountByDay.keys).union(earmarkByDay.keys).sorted()
+    // Trades-mode accounts contribute to investmentValue via
+    // applyTradesModePositionValuations, not to bankTotal. Including
+    // them in BalanceContext.investmentAccountIds excludes them from
+    // PositionBook.dailyBalance's `for ... where !investmentAccountIds`
+    // sum (no double-count) without changing accountsFromTransfers
+    // membership (which seedPriorBook / applyDailyDeltas gate on the
+    // recorded-value-only set, so the .investmentTransfersOnly read
+    // continues to see only recorded-value transfer cash).
+    let allInvestmentIds =
+      context.investmentAccountIds.union(context.tradesModeInvestmentAccountIds)
     let balanceContext = PositionBook.BalanceContext(
-      investmentAccountIds: context.investmentAccountIds,
+      investmentAccountIds: allInvestmentIds,
       profileInstrument: context.profileInstrument,
       rule: .investmentTransfersOnly,
       conversionService: context.conversionService)
@@ -351,8 +388,9 @@ extension GRDBAnalysisRepository {
   /// Reconstruct an `Instrument` value from the row's `instrument_id`
   /// string, falling back to ambient fiat when the registry has no
   /// stored row for the id. Mirrors the same lookup used by the other
-  /// SQL aggregations.
-  private static func resolveInstrument(
+  /// SQL aggregations. Internal so sibling `+DailyBalances*.swift`
+  /// extensions can share one decoding helper.
+  static func resolveInstrument(
     _ id: String, in map: [String: Instrument]
   ) -> Instrument {
     map[id] ?? Instrument.fiat(code: id)

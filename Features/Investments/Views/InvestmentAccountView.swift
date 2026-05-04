@@ -169,11 +169,11 @@ struct InvestmentAccountView: View {
       initialLoadComplete = false
       isLoadingPositions = true
       defer { isLoadingPositions = false }
-      await investmentStore.loadAllData(
-        account: account, profileCurrency: profileCurrencyInstrument)
       do {
-        positionsInput = try await investmentStore.positionsViewInput(
-          title: account.name, range: positionsRange)
+        positionsInput = try await investmentStore.loadAndBuildPositionsInput(
+          account: account,
+          profileCurrency: profileCurrencyInstrument,
+          range: positionsRange)
       } catch is CancellationError {
         return
       } catch {
@@ -202,11 +202,11 @@ struct InvestmentAccountView: View {
     .refreshable {
       isLoadingPositions = true
       defer { isLoadingPositions = false }
-      await investmentStore.loadAllData(
-        account: account, profileCurrency: profileCurrencyInstrument)
       do {
-        positionsInput = try await investmentStore.positionsViewInput(
-          title: account.name, range: positionsRange)
+        positionsInput = try await investmentStore.loadAndBuildPositionsInput(
+          account: account,
+          profileCurrency: profileCurrencyInstrument,
+          range: positionsRange)
       } catch is CancellationError {
         return
       } catch {

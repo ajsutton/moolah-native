@@ -116,4 +116,41 @@ struct InvestmentStorePositionsInputTests {
     #expect(ethRow.costBasis == InstrumentAmount(quantity: 6_000, instrument: aud))
     #expect(btcRow.costBasis == InstrumentAmount(quantity: 6_000, instrument: aud))
   }
+
+  @Test("loadAndBuildPositionsInput loads store state and returns built input")
+  func loadAndBuildPositionsInputCoordinatesBothSteps() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = InvestmentStore(
+      repository: backend.investments,
+      transactionRepository: backend.transactions,
+      conversionService: backend.conversionService
+    )
+    let account = Account(
+      name: "Brokerage", type: .investment, instrument: aud,
+      valuationMode: .calculatedFromTrades)
+    _ = try await backend.accounts.create(
+      account, openingBalance: InstrumentAmount(quantity: 0, instrument: aud))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: Date(),
+        legs: [
+          TransactionLeg(accountId: account.id, instrument: bhp, quantity: 100, type: .trade),
+          TransactionLeg(accountId: account.id, instrument: aud, quantity: -4_000, type: .trade),
+        ]
+      )
+    )
+
+    let input = try await store.loadAndBuildPositionsInput(
+      account: account, profileCurrency: aud, range: .threeMonths)
+
+    // Result reflects the second-step output, with the account name as title.
+    #expect(input.title == "Brokerage")
+    #expect(input.hostCurrency == aud)
+    #expect(input.positions.contains(where: { $0.instrument == bhp }))
+
+    // Store state was populated by the first-step `loadAllData` call.
+    #expect(store.loadedAccountId == account.id)
+    #expect(store.loadedHostCurrency == aud)
+    #expect(store.positions.contains(where: { $0.instrument == bhp }))
+  }
 }

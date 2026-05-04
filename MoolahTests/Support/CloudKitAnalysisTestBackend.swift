@@ -65,3 +65,21 @@ struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable {
     self.importRules = backend.importRules
   }
 }
+
+extension CloudKitAnalysisTestBackend {
+  /// Test-only entry point that exposes `fetchDailyBalancesAggregation`
+  /// for aggregation-layer integration tests. Production callers go
+  /// through `analysis.fetchDailyBalances(...)`; this shim lets tests
+  /// pin the aggregation contract without re-running the full
+  /// per-day walk. Reads from the backend's already-public
+  /// `DatabaseQueue` — no peek into `GRDBAnalysisRepository`'s
+  /// private storage.
+  func fetchAggregationForTesting(
+    after: Date?, forecastUntil: Date?
+  ) async throws -> GRDBAnalysisRepository.DailyBalancesAggregation {
+    try await GRDBAnalysisRepository.fetchDailyBalancesAggregation(
+      database: self.database,
+      after: after,
+      forecastUntil: forecastUntil)
+  }
+}

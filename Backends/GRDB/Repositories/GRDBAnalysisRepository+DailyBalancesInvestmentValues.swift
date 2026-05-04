@@ -41,6 +41,34 @@ extension GRDBAnalysisRepository {
     return ids
   }
 
+  /// Loads every account id whose `type = 'investment'` AND whose
+  /// `valuation_mode = 'calculatedFromTrades'`. The trades-mode fold
+  /// (`applyTradesModePositionValuations`) walks per-day position
+  /// deltas for these accounts and valuates the cumulative positions
+  /// against the conversion service on the day's date. Recorded-value
+  /// investment accounts are intentionally excluded — they contribute
+  /// via the snapshot fold instead. Reading the column directly off
+  /// the `account` table avoids carrying the full account row across
+  /// the position-row boundary.
+  static func fetchTradesModeInvestmentAccountIds(
+    database: Database
+  ) throws -> Set<UUID> {
+    let rows = try Row.fetchAll(
+      database,
+      sql: """
+        SELECT id FROM account
+        WHERE type = 'investment' AND valuation_mode = 'calculatedFromTrades'
+        """)
+    var ids = Set<UUID>()
+    ids.reserveCapacity(rows.count)
+    for row in rows {
+      if let id: UUID = row["id"] {
+        ids.insert(id)
+      }
+    }
+    return ids
+  }
+
   /// Loads the per-account latest-as-of-day investment values pinned
   /// by
   /// `DailyBalancesPlanPinningTests.fetchDailyBalancesInvestmentValuesUseAccountDateIndex`.
@@ -99,11 +127,22 @@ extension GRDBAnalysisRepository {
   }
 
   // MARK: - Per-day fold-in
-  /// Fold the investment-value snapshots into the per-day balances by
-  /// walking the days in order and tracking the latest value per
-  /// account. Same per-day error contract as the historic walk: a
-  /// failed conversion logs and drops just that day's investment
-  /// override; the rest of the days continue.
+  /// Per-day investment-value override: for each recorded-value
+  /// investment account, carries the latest snapshot forward to each
+  /// day and replaces the bank-balance-derived `investmentValue`
+  /// with the converted total.
+  ///
+  /// Rule 11 contract (same as `walkDays`): a conversion failure on a
+  /// single day drops that day from `dailyBalances` via
+  /// `removeValue(forKey:)` so the chart shows a gap rather than an
+  /// incorrect partial total. Sibling days are unaffected.
+  /// `CancellationError` rethrows immediately and is never routed
+  /// through the failure callback.
+  ///
+  /// `Task.checkCancellation()` at the top of the per-day loop covers
+  /// the all-fast-path case (every snapshot already in the profile
+  /// instrument): no `await` would otherwise occur, so the runtime
+  /// would never get a chance to surface cancellation.
   static func applyInvestmentValues(
     _ investmentValues: [InvestmentValueSnapshot],
     to dailyBalances: inout [Date: DailyBalance],
@@ -114,13 +153,18 @@ extension GRDBAnalysisRepository {
     var latestByAccount: [UUID: InstrumentAmount] = [:]
     var valueIndex = 0
     for date in dailyBalances.keys.sorted() {
+      // The Rule 8 fast path can let the loop run synchronously when
+      // every snapshot is in the profile instrument; an explicit
+      // cancellation check ensures the outer task can be torn down
+      // promptly even in that case.
+      try Task.checkCancellation()
       valueIndex = advanceInvestmentCursor(
         values: investmentValues,
         latestByAccount: &latestByAccount,
         from: valueIndex,
         upTo: date)
       if latestByAccount.isEmpty { continue }
-      let totalValue: InstrumentAmount?
+      let totalValue: InstrumentAmount
       do {
         totalValue = try await sumInvestmentValues(
           latestByAccount: latestByAccount,
@@ -130,10 +174,14 @@ extension GRDBAnalysisRepository {
       } catch let cancel as CancellationError {
         throw cancel
       } catch {
+        // Rule 11: drop the day from dailyBalances so the chart shows
+        // a gap rather than rendering a partial total. Matches the
+        // walkDays per-day error contract.
         handlers.handleInvestmentValueFailure(error, date)
+        dailyBalances.removeValue(forKey: date)
         continue
       }
-      guard let totalValue, let balance = dailyBalances[date] else { continue }
+      guard let balance = dailyBalances[date] else { continue }
       dailyBalances[date] = DailyBalance(
         date: balance.date,
         balance: balance.balance,
@@ -171,16 +219,16 @@ extension GRDBAnalysisRepository {
   }
 
   /// Sum the per-account investment values, converting foreign
-  /// instruments to the profile instrument on `date`. Returns `nil`
-  /// when any conversion fails so the caller can drop just this day's
-  /// override without folding the failure into the historic-walk
-  /// error path.
+  /// instruments to the profile instrument on `date`. Throws on any
+  /// conversion failure so the caller can drop the day from the
+  /// `dailyBalances` dict per Rule 11. The return is non-optional —
+  /// the function either throws or returns the converted total.
   private static func sumInvestmentValues(
     latestByAccount: [UUID: InstrumentAmount],
     on date: Date,
     profileInstrument: Instrument,
     conversionService: any InstrumentConversionService
-  ) async throws -> InstrumentAmount? {
+  ) async throws -> InstrumentAmount {
     var total: Decimal = 0
     for value in latestByAccount.values {
       if value.instrument.id == profileInstrument.id {
