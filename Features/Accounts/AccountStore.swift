@@ -104,8 +104,11 @@ final class AccountStore {
   /// transaction sum until the user opens an investment account. See
   /// `InvestmentValueCache.preload(for:)` for the failure-tolerant details.
   private func preloadInvestmentValues() async {
+    // Only `recordedValue` investment accounts read from the snapshot cache;
+    // `calculatedFromTrades` accounts derive their value from positions, so
+    // their snapshot fetch would be a wasted round-trip.
     let investmentAccountIds = accounts.ordered
-      .filter { $0.type == .investment }
+      .filter { $0.type == .investment && $0.valuationMode == .recordedValue }
       .map(\.id)
     await investmentValueCache.preload(for: investmentAccountIds)
   }
