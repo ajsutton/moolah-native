@@ -121,6 +121,7 @@ final class InvestmentStore {
     switch account.valuationMode {
     case .recordedValue:
       await loadValues(accountId: account.id)
+      guard !Task.isCancelled else { return }
       await loadDailyBalances(accountId: account.id, hostCurrency: profileCurrency)
       guard !Task.isCancelled else { return }
       accountPerformance = AccountPerformanceCalculator.computeLegacy(
@@ -129,7 +130,9 @@ final class InvestmentStore {
         instrument: profileCurrency)
     case .calculatedFromTrades:
       await loadPositions(accountId: account.id)
+      guard !Task.isCancelled else { return }
       await valuatePositions(profileCurrency: profileCurrency, on: Date())
+      guard !Task.isCancelled else { return }
       await refreshPositionTrackedPerformance(
         accountId: account.id, profileCurrency: profileCurrency)
     }
@@ -191,7 +194,9 @@ final class InvestmentStore {
   func reloadPositionsIfNeeded(account: Account, profileCurrency: Instrument) async {
     guard account.valuationMode == .calculatedFromTrades else { return }
     await loadPositions(accountId: account.id)
+    guard !Task.isCancelled else { return }
     await valuatePositions(profileCurrency: profileCurrency, on: Date())
+    guard !Task.isCancelled else { return }
     await refreshPositionTrackedPerformance(
       accountId: account.id, profileCurrency: profileCurrency)
   }
@@ -306,6 +311,13 @@ final class InvestmentStore {
     }
   }
 
+}
+
+// MARK: - Position Valuation Helper
+
+// Hoisted into an extension so the class body stays under
+// `type_body_length`. Same-file private access still works.
+extension InvestmentStore {
   private enum ValuationOutcome {
     case success(Decimal)
     case failure(Error)
@@ -351,7 +363,6 @@ final class InvestmentStore {
       return (entry, .failure(error))
     }
   }
-
 }
 
 // MARK: - Computed Properties

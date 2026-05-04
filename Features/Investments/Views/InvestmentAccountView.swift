@@ -1,8 +1,21 @@
+import OSLog
 import SwiftUI
 
 /// Combined investment account view showing summary panels, chart with valuations list,
 /// and an embedded transaction list.
 struct InvestmentAccountView: View {
+  /// Composite identity used to drive `.task(id:)`. Re-fires when either the
+  /// account changes (navigation) or the valuation mode changes (sync push
+  /// from another device, or the user-facing Picker once it ships) so
+  /// `loadAllData` always runs against the active mode.
+  private struct LoadKey: Equatable {
+    let id: UUID
+    let mode: ValuationMode
+  }
+
+  private static let logger = Logger(
+    subsystem: "com.moolah.app", category: "InvestmentAccountView")
+
   let account: Account
   let accounts: Accounts
   let categories: Categories
@@ -26,13 +39,6 @@ struct InvestmentAccountView: View {
   /// crashes Release builds on accounts that have legacy investment values
   /// (e.g. Test Profile → Crypto).
   @State private var initialLoadComplete = false
-  /// Flipped to `true` for one render pass whenever `account.valuationMode`
-  /// changes (sync delivery from another device, or the user-facing Picker
-  /// once it ships). Forces a `ProgressView` placeholder in that pass so
-  /// `TransactionListView`'s toolbar tears down cleanly before the new
-  /// layout re-mounts it — same toolbar-stability invariant as
-  /// `initialLoadComplete`, but for mid-session mode flips.
-  @State private var pendingLayoutSwitch = false
 
   /// The profile's reporting currency — used for valuing positions and the
   /// chart series. NOT the account's own instrument: an investment account
@@ -131,23 +137,19 @@ struct InvestmentAccountView: View {
 
   var body: some View {
     Group {
-      if !initialLoadComplete || pendingLayoutSwitch {
+      if !initialLoadComplete {
         ProgressView()
           .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .accessibilityLabel("Loading account data")
       } else {
         switch account.valuationMode {
         case .recordedValue:
           legacyValuationsLayout
+            .id(ValuationMode.recordedValue)
         case .calculatedFromTrades:
           positionTrackedLayout
+            .id(ValuationMode.calculatedFromTrades)
         }
-      }
-    }
-    .onChange(of: account.valuationMode) { _, _ in
-      pendingLayoutSwitch = true
-      Task {
-        await Task.yield()
-        pendingLayoutSwitch = false
       }
     }
     .transactionInspector(
@@ -163,7 +165,7 @@ struct InvestmentAccountView: View {
       AddInvestmentValueView(
         accountId: account.id, instrument: account.instrument, store: investmentStore)
     }
-    .task(id: account.id) {
+    .task(id: LoadKey(id: account.id, mode: account.valuationMode)) {
       initialLoadComplete = false
       isLoadingPositions = true
       defer { isLoadingPositions = false }
@@ -175,15 +177,16 @@ struct InvestmentAccountView: View {
       } catch is CancellationError {
         return
       } catch {
-        // positionsViewInput is documented to only throw CancellationError;
-        // any other error here is unexpected.
+        Self.logger.error(
+          "Unexpected error from positionsViewInput: \(error.localizedDescription, privacy: .public)"
+        )
       }
       initialLoadComplete = true
     }
     .task(id: positionsRange) {
-      // Skip until loadAllData has populated the store; the .task(id: account.id)
-      // block runs the first build. We only fire re-builds for subsequent
-      // range changes.
+      // Skip until loadAllData has populated the store; the .task(id:) keyed
+      // on (account.id, valuationMode) runs the first build. We only fire
+      // re-builds for subsequent range changes.
       guard investmentStore.loadedAccountId != nil else { return }
       do {
         positionsInput = try await investmentStore.positionsViewInput(
@@ -191,8 +194,9 @@ struct InvestmentAccountView: View {
       } catch is CancellationError {
         return
       } catch {
-        // positionsViewInput is documented to only throw CancellationError;
-        // any other error here is unexpected.
+        Self.logger.error(
+          "Unexpected error from positionsViewInput: \(error.localizedDescription, privacy: .public)"
+        )
       }
     }
     .refreshable {
@@ -206,8 +210,9 @@ struct InvestmentAccountView: View {
       } catch is CancellationError {
         return
       } catch {
-        // positionsViewInput is documented to only throw CancellationError;
-        // any other error here is unexpected.
+        Self.logger.error(
+          "Unexpected error from positionsViewInput: \(error.localizedDescription, privacy: .public)"
+        )
       }
     }
   }
@@ -365,7 +370,11 @@ private func seedPositionValuations(backend: any BackendProvider, account: Accou
   // GRDB queue with no disk access. A trap here is acceptable in #Preview.
   // swiftlint:disable:next force_try
   let session = try! ProfileSession.preview()
-  let account = Account(name: "Brokerage", type: .investment, instrument: .AUD)
+  let account = Account(
+    name: "Brokerage",
+    type: .investment,
+    instrument: .AUD,
+    valuationMode: .calculatedFromTrades)
   return NavigationStack {
     InvestmentAccountView(
       account: account,
