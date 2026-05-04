@@ -127,7 +127,7 @@ struct InvestmentAccountView: View {
       if !initialLoadComplete {
         ProgressView()
           .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else if investmentStore.hasLegacyValuations {
+      } else if account.valuationMode == .recordedValue {
         legacyValuationsLayout
       } else {
         positionTrackedLayout
@@ -151,7 +151,7 @@ struct InvestmentAccountView: View {
       isLoadingPositions = true
       defer { isLoadingPositions = false }
       await investmentStore.loadAllData(
-        accountId: account.id, profileCurrency: profileCurrencyInstrument)
+        account: account, profileCurrency: profileCurrencyInstrument)
       do {
         positionsInput = try await investmentStore.positionsViewInput(
           title: account.name, range: positionsRange)
@@ -182,7 +182,7 @@ struct InvestmentAccountView: View {
       isLoadingPositions = true
       defer { isLoadingPositions = false }
       await investmentStore.loadAllData(
-        accountId: account.id, profileCurrency: profileCurrencyInstrument)
+        account: account, profileCurrency: profileCurrencyInstrument)
       do {
         positionsInput = try await investmentStore.positionsViewInput(
           title: account.name, range: positionsRange)

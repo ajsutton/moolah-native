@@ -113,25 +113,25 @@ final class InvestmentStore {
   // `InvestmentStore+DailyBalanceAggregation.swift`.
 
   /// Loads the full dataset required by `InvestmentAccountView`, branching on
-  /// whether the account uses legacy manual valuations or position tracking.
-  /// Keeps the branching logic out of the view so `.task`/`.refreshable`
-  /// blocks stay one-liners.
-  func loadAllData(accountId: UUID, profileCurrency: Instrument) async {
+  /// the account's `valuationMode`. Keeps the branching logic out of the view
+  /// so `.task`/`.refreshable` blocks stay one-liners.
+  func loadAllData(account: Account, profileCurrency: Instrument) async {
     loadedHostCurrency = profileCurrency
     accountPerformance = nil  // clear stale data immediately
-    await loadValues(accountId: accountId)
-    if hasLegacyValuations {
-      await loadDailyBalances(accountId: accountId, hostCurrency: profileCurrency)
+    switch account.valuationMode {
+    case .recordedValue:
+      await loadValues(accountId: account.id)
+      await loadDailyBalances(accountId: account.id, hostCurrency: profileCurrency)
       guard !Task.isCancelled else { return }
       accountPerformance = AccountPerformanceCalculator.computeLegacy(
         dailyBalances: dailyBalances,
         values: values,
         instrument: profileCurrency)
-    } else {
-      await loadPositions(accountId: accountId)
+    case .calculatedFromTrades:
+      await loadPositions(accountId: account.id)
       await valuatePositions(profileCurrency: profileCurrency, on: Date())
       await refreshPositionTrackedPerformance(
-        accountId: accountId, profileCurrency: profileCurrency)
+        accountId: account.id, profileCurrency: profileCurrency)
     }
   }
 
@@ -188,12 +188,12 @@ final class InvestmentStore {
 
   /// Refreshes position data after a trade is recorded. Used from
   /// `.onChange` where we only care about position-tracked accounts.
-  func reloadPositionsIfNeeded(accountId: UUID, profileCurrency: Instrument) async {
-    guard !hasLegacyValuations else { return }
-    await loadPositions(accountId: accountId)
+  func reloadPositionsIfNeeded(account: Account, profileCurrency: Instrument) async {
+    guard account.valuationMode == .calculatedFromTrades else { return }
+    await loadPositions(accountId: account.id)
     await valuatePositions(profileCurrency: profileCurrency, on: Date())
     await refreshPositionTrackedPerformance(
-      accountId: accountId, profileCurrency: profileCurrency)
+      accountId: account.id, profileCurrency: profileCurrency)
   }
 
   func setValue(accountId: UUID, date: Date, value: InstrumentAmount) async {
@@ -225,11 +225,6 @@ final class InvestmentStore {
       self.error = error
     }
   }
-
-  /// Whether the account has legacy manual valuations (InvestmentValueRecords).
-  /// When true, the UI shows the legacy chart + valuations list.
-  /// When false, the UI shows position tracking from transaction legs.
-  var hasLegacyValuations: Bool { !values.isEmpty }
 
   // MARK: - Position Tracking
 
