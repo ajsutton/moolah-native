@@ -21,7 +21,8 @@ final class AccountRecord {
     type: String,
     instrumentId: String = "AUD",
     position: Int = 0,
-    isHidden: Bool = false
+    isHidden: Bool = false,
+    valuationMode: String = "recordedValue"
   ) {
     self.id = id
     self.name = name
@@ -29,6 +30,7 @@ final class AccountRecord {
     self.instrumentId = instrumentId
     self.position = position
     self.isHidden = isHidden
+    self.valuationMode = valuationMode
   }
 
   /// Throws `BackendError.dataCorrupted` when `type` carries a raw value
@@ -52,15 +54,14 @@ final class AccountRecord {
   }
 
   static func from(_ account: Account) -> AccountRecord {
-    let record = AccountRecord(
+    AccountRecord(
       id: account.id,
       name: account.name,
       type: account.type.rawValue,
       instrumentId: account.instrument.id,
       position: account.position,
-      isHidden: account.isHidden
+      isHidden: account.isHidden,
+      valuationMode: account.valuationMode.rawValue
     )
-    record.valuationMode = account.valuationMode.rawValue
-    return record
   }
 }

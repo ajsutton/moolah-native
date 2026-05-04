@@ -1,5 +1,3 @@
-import Foundation
-
 /// Selects how an investment account's "current value" is computed for
 /// balance display, totals, and reports.
 ///

@@ -41,8 +41,8 @@ struct AccountValuationModeMigrationTests {
     }
   }
 
-  @Test("default value backfills legacy rows when ALTER runs")
-  func defaultBackfills() throws {
+  @Test("INSERT omitting valuation_mode column receives DEFAULT recordedValue")
+  func newRowWithoutValuationModeGetsDefault() throws {
     let queue = try DatabaseQueue()
     try ProfileSchema.migrator.migrate(queue)
     try queue.write { database in

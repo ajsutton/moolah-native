@@ -3,7 +3,7 @@ import Testing
 
 @testable import Moolah
 
-@Suite("Account ValuationMode Contract")
+@Suite("AccountRepository Contract — valuationMode")
 struct AccountValuationModeContractTests {
 
   @Test("valuationMode round-trips through create + fetchAll + update")
@@ -25,8 +25,8 @@ struct AccountValuationModeContractTests {
     let resaved = try await backend.accounts.update(updated)
     #expect(resaved.valuationMode == .recordedValue)
 
-    let final = try await backend.accounts.fetchAll()
-    let refetched = try #require(final.first { $0.id == saved.id })
+    let refetchedAll = try await backend.accounts.fetchAll()
+    let refetched = try #require(refetchedAll.first { $0.id == saved.id })
     #expect(refetched.valuationMode == .recordedValue)
   }
 }

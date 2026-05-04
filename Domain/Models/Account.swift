@@ -66,6 +66,8 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     name = try container.decode(String.self, forKey: .name)
     type = try container.decode(AccountType.self, forKey: .type)
     instrument = try container.decodeIfPresent(Instrument.self, forKey: .instrument) ?? .AUD
+    // positions are not persisted via Codable — they are computed by the
+    // repository layer from transaction legs and injected at fetch time.
     positions = []
     position = try container.decode(Int.self, forKey: .position)
     isHidden = try container.decode(Bool.self, forKey: .isHidden)
