@@ -10,6 +10,15 @@
 - Tags are never deleted once pushed. Abandoned RCs and final releases stay as historical record.
 - Channel signals carry the RC vs final distinction (TestFlight badge, GitHub "Pre-release" label). The binary itself is identical.
 
+## Distribution channels
+
+The two platforms ship through deliberately different distribution paths. Do not "fix" them to match.
+
+- **iOS** — App Store. `project.yml` builds the iOS Release configuration with App Store provisioning, and the release workflow uploads to App Store Connect.
+- **macOS** — Direct notarised zip via `Developer ID Application` codesigning. `project.yml` macOS Release sets `CODE_SIGN_IDENTITY: Developer ID Application`, and `fastlane mac zip` exports with `export_method: "developer-id"`. The notarised zip is attached to the GitHub Release.
+
+Consequence: macOS is **not** submitted to the Mac App Store. Mac App Store Review Guidelines (sandboxing, In-App Purchase, etc.) do not apply to macOS builds — they're enforced for iOS only. Notarisation gates macOS instead. If we ever want to dual-distribute the Mac build through the Mac App Store, that's a separate sandboxing / entitlements project, not a config tweak.
+
 ## Prerequisites
 
 Before cutting any release, confirm these are in place. They are one-time setup items.
