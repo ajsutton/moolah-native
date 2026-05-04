@@ -17,7 +17,9 @@ struct InvestmentStorePositionsInputTests {
       transactionRepository: backend.transactions,
       conversionService: backend.conversionService
     )
-    let account = Account(name: "Brokerage", type: .investment, instrument: aud)
+    let account = Account(
+      name: "Brokerage", type: .investment, instrument: aud,
+      valuationMode: .calculatedFromTrades)
     _ = try await backend.accounts.create(
       account, openingBalance: InstrumentAmount(quantity: 0, instrument: aud))
     _ = try await backend.transactions.create(
@@ -29,7 +31,7 @@ struct InvestmentStorePositionsInputTests {
         ]
       )
     )
-    await store.loadAllData(accountId: account.id, profileCurrency: aud)
+    await store.loadAllData(account: account, profileCurrency: aud)
 
     let input = try await store.positionsViewInput(
       title: account.name, range: .threeMonths)
@@ -74,7 +76,9 @@ struct InvestmentStorePositionsInputTests {
       transactionRepository: backend.transactions,
       conversionService: conversionService
     )
-    let account = Account(name: "Crypto", type: .investment, instrument: aud)
+    let account = Account(
+      name: "Crypto", type: .investment, instrument: aud,
+      valuationMode: .calculatedFromTrades)
     _ = try await backend.accounts.create(
       account, openingBalance: InstrumentAmount(quantity: 0, instrument: aud))
 
@@ -104,7 +108,7 @@ struct InvestmentStorePositionsInputTests {
       )
     )
 
-    await store.loadAllData(accountId: account.id, profileCurrency: aud)
+    await store.loadAllData(account: account, profileCurrency: aud)
     let input = try await store.positionsViewInput(title: account.name, range: .threeMonths)
 
     let ethRow = try #require(input.positions.first(where: { $0.instrument == eth }))

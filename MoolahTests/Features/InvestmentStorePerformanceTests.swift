@@ -16,11 +16,13 @@ struct InvestmentStorePerformanceTests {
       transactionRepository: backend.transactions,
       conversionService: backend.conversionService)
 
-    let account = Account(name: "Brokerage", type: .investment, instrument: aud)
+    let account = Account(
+      name: "Brokerage", type: .investment, instrument: aud,
+      valuationMode: .calculatedFromTrades)
     _ = try await backend.accounts.create(
       account, openingBalance: InstrumentAmount(quantity: 10_000, instrument: aud))
 
-    await store.loadAllData(accountId: account.id, profileCurrency: aud)
+    await store.loadAllData(account: account, profileCurrency: aud)
 
     let perf = try #require(store.accountPerformance)
     #expect(perf.instrument == aud)
@@ -29,7 +31,9 @@ struct InvestmentStorePerformanceTests {
 
   @Test("loadAllData populates accountPerformance for a legacy-valuation account")
   func loadAllDataLegacyPerformance() async throws {
-    let accountId = UUID()
+    let account = Account(
+      name: "Brokerage", type: .investment, instrument: .AUD,
+      valuationMode: .recordedValue)
     let aud = Instrument.AUD
     let calendar = Calendar.current
     let earlierDate = try #require(
@@ -39,7 +43,7 @@ struct InvestmentStorePerformanceTests {
     let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       investmentValues: [
-        accountId: [
+        account.id: [
           InvestmentValue(
             date: earlierDate,
             value: InstrumentAmount(quantity: 10_000, instrument: aud)),
@@ -55,7 +59,7 @@ struct InvestmentStorePerformanceTests {
       transactionRepository: backend.transactions,
       conversionService: backend.conversionService)
 
-    await store.loadAllData(accountId: accountId, profileCurrency: aud)
+    await store.loadAllData(account: account, profileCurrency: aud)
 
     let perf = try #require(store.accountPerformance)
     #expect(perf.currentValue == InstrumentAmount(quantity: 11_000, instrument: aud))
@@ -65,19 +69,20 @@ struct InvestmentStorePerformanceTests {
   func loadAllDataNilTransactionRepositoryLeavesPerformanceNil() async throws {
     let aud = Instrument.AUD
     let (backend, _) = try TestBackend.create()
-    // No transaction repository → position-tracked compute can't run; the
-    // legacy branch isn't taken either because no investment values were
-    // seeded. accountPerformance must stay nil.
+    // No transaction repository → position-tracked compute can't run.
+    // accountPerformance must stay nil for a calculatedFromTrades account.
     let store = InvestmentStore(
       repository: backend.investments,
       transactionRepository: nil,
       conversionService: backend.conversionService)
 
-    let account = Account(name: "Brokerage", type: .investment, instrument: aud)
+    let account = Account(
+      name: "Brokerage", type: .investment, instrument: aud,
+      valuationMode: .calculatedFromTrades)
     _ = try await backend.accounts.create(
       account, openingBalance: InstrumentAmount(quantity: 1_000, instrument: aud))
 
-    await store.loadAllData(accountId: account.id, profileCurrency: aud)
+    await store.loadAllData(account: account, profileCurrency: aud)
 
     #expect(store.accountPerformance == nil)
   }
@@ -95,7 +100,9 @@ struct InvestmentStorePerformanceTests {
       transactionRepository: backend.transactions,
       conversionService: conversion)
 
-    let account = Account(name: "Brokerage", type: .investment, instrument: aud)
+    let account = Account(
+      name: "Brokerage", type: .investment, instrument: aud,
+      valuationMode: .calculatedFromTrades)
     _ = try await backend.accounts.create(
       account, openingBalance: InstrumentAmount(quantity: 0, instrument: aud))
 
@@ -115,7 +122,7 @@ struct InvestmentStorePerformanceTests {
       )
     )
 
-    await store.loadAllData(accountId: account.id, profileCurrency: aud)
+    await store.loadAllData(account: account, profileCurrency: aud)
 
     #expect(store.accountPerformance == nil)
     #expect(store.error != nil)
@@ -123,7 +130,9 @@ struct InvestmentStorePerformanceTests {
 
   @Test("setValue refreshes accountPerformance on the legacy path")
   func setValueRefreshesPerformance() async throws {
-    let accountId = UUID()
+    let account = Account(
+      name: "Brokerage", type: .investment, instrument: .AUD,
+      valuationMode: .recordedValue)
     let aud = Instrument.AUD
     let calendar = Calendar.current
     let earlierDate = try #require(
@@ -133,7 +142,7 @@ struct InvestmentStorePerformanceTests {
     let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       investmentValues: [
-        accountId: [
+        account.id: [
           InvestmentValue(
             date: earlierDate,
             value: InstrumentAmount(quantity: 10_000, instrument: aud))
@@ -145,10 +154,10 @@ struct InvestmentStorePerformanceTests {
       repository: backend.investments,
       transactionRepository: backend.transactions,
       conversionService: backend.conversionService)
-    await store.loadAllData(accountId: accountId, profileCurrency: aud)
+    await store.loadAllData(account: account, profileCurrency: aud)
 
     await store.setValue(
-      accountId: accountId, date: laterDate,
+      accountId: account.id, date: laterDate,
       value: InstrumentAmount(quantity: 12_000, instrument: aud))
 
     let perf = try #require(store.accountPerformance)
@@ -157,7 +166,9 @@ struct InvestmentStorePerformanceTests {
 
   @Test("removeValue refreshes accountPerformance on the legacy path")
   func removeValueRefreshesPerformance() async throws {
-    let accountId = UUID()
+    let account = Account(
+      name: "Brokerage", type: .investment, instrument: .AUD,
+      valuationMode: .recordedValue)
     let aud = Instrument.AUD
     let calendar = Calendar.current
     let earlierDate = try #require(
@@ -167,7 +178,7 @@ struct InvestmentStorePerformanceTests {
     let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       investmentValues: [
-        accountId: [
+        account.id: [
           InvestmentValue(
             date: earlierDate,
             value: InstrumentAmount(quantity: 10_000, instrument: aud)),
@@ -182,9 +193,9 @@ struct InvestmentStorePerformanceTests {
       repository: backend.investments,
       transactionRepository: backend.transactions,
       conversionService: backend.conversionService)
-    await store.loadAllData(accountId: accountId, profileCurrency: aud)
+    await store.loadAllData(account: account, profileCurrency: aud)
 
-    await store.removeValue(accountId: accountId, date: laterDate)
+    await store.removeValue(accountId: account.id, date: laterDate)
 
     let perf = try #require(store.accountPerformance)
     #expect(perf.currentValue == InstrumentAmount(quantity: 10_000, instrument: aud))
@@ -211,10 +222,12 @@ struct InvestmentStorePerformanceTests {
       repository: backend.investments,
       transactionRepository: backend.transactions,
       conversionService: backend.conversionService)
-    let account = Account(name: "Brokerage", type: .investment, instrument: aud)
+    let account = Account(
+      name: "Brokerage", type: .investment, instrument: aud,
+      valuationMode: .calculatedFromTrades)
     _ = try await backend.accounts.create(
       account, openingBalance: InstrumentAmount(quantity: 5_000, instrument: aud))
-    await store.loadAllData(accountId: account.id, profileCurrency: aud)
+    await store.loadAllData(account: account, profileCurrency: aud)
 
     // Intra-account USD ↔ AUD trade: per the §2 rule, no boundary crossed
     // → no flow → totalContributions stays at the opening-balance $5,000.
@@ -229,7 +242,7 @@ struct InvestmentStorePerformanceTests {
         ]
       )
     )
-    await store.reloadPositionsIfNeeded(accountId: account.id, profileCurrency: aud)
+    await store.reloadPositionsIfNeeded(account: account, profileCurrency: aud)
 
     let perf = try #require(store.accountPerformance)
     #expect(perf.totalContributions == InstrumentAmount(quantity: 5_000, instrument: aud))
