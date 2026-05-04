@@ -37,6 +37,9 @@ spec:
   - Update `assembleDailyBalances` to pass the new field through the
     context construction and call the new fold after
     `applyInvestmentValues`.
+  - Widen `resolveInstrument` from `private static` to `static` (drop
+    `private`) so the new fold in
+    `+DailyBalancesInvestmentValues.swift` can call it.
 - `Backends/GRDB/Repositories/GRDBAnalysisRepository+DailyBalancesAggregation.swift`
   - Call `fetchTradesModeInvestmentAccountIds` inside
     `readDailyBalancesAggregation`.
@@ -50,21 +53,35 @@ spec:
   - Update `applyInvestmentValues` to drop the day from `dailyBalances`
     on per-day conversion failure (Rule 11) and update its
     `sumInvestmentValues` call site to the non-optional return.
+  - Add `try Task.checkCancellation()` to the outer per-day loops in
+    both folds so cancellation surfaces promptly even when every
+    position takes the Rule 8 fast path (no `await`).
 
 **Tests (create / modify):**
 
+- `MoolahTests/Support/ThrowingCountingConversionService.swift`
+  - Add a sibling `Sendable` collector class
+    `InvestmentValueFailureLog` for `(Error, Date)` tuples (mirrors
+    the existing `FailureLog` pattern). Used by every test that
+    asserts the `handleInvestmentValueFailure` callback.
+- `MoolahTests/Support/AnalysisTestHelpers.swift`
+  - Add a `date(year:month:day:hour:)` overload that uses
+    `Calendar.current` (so the test's day-key math agrees with the
+    production fold's `Calendar.current.startOfDay(for:)`). The
+    existing `date(year:month:day:)` and `utcDate(year:month:day:hour:)`
+    are not changed.
 - `MoolahTests/Backends/GRDB/DailyBalancesPlanPinningTests.swift`
   - Add `fetchTradesModeInvestmentAccountIdsUsesAccountByType`.
+- `MoolahTests/Backends/GRDB/GRDBDailyBalancesAssembleTests.swift`
+  - **Modify** the existing `makeAggregation()` helper to pass the
+    three new struct fields (compile fix for Task 2) and add a Rule
+    11 test for the snapshot-fold tightening (case 5).
 - `MoolahTests/Backends/GRDB/GRDBDailyBalancesAggregateTests.swift`
-  - Add tests covering the three new fields populated by
-    `fetchDailyBalancesAggregation`. (If the file does not exist, create
-    it; otherwise extend.)
+  - **New file.** Aggregation-layer integration tests for the three
+    new fields populated by `fetchDailyBalancesAggregation`.
 - `MoolahTests/Backends/GRDB/GRDBDailyBalancesTradesModeTests.swift`
   - **New file.** Holds the 12 fold-contract tests from the spec
     (§9.3).
-- `MoolahTests/Backends/GRDB/GRDBDailyBalancesAssembleTests.swift`
-  - Add a Rule 11 test for the snapshot-fold tightening (case 5 from
-    spec §9.3).
 - `MoolahTests/Domain/AnalysisRule11ScopingTests.swift`
   - No-op (existing per-day-drop test stays green; the snapshot-fold
     tightening makes it consistent — verify nothing regresses).
@@ -88,6 +105,98 @@ spec:
 | Build the macOS app | `just build-mac` |
 
 `mkdir -p .agent-tmp` before piping output to `.agent-tmp/`.
+
+---
+
+## Task 0: Add test-support helpers (`InvestmentValueFailureLog`, local-calendar `date(...)` overload)
+
+**Files:**
+- Modify: `MoolahTests/Support/ThrowingCountingConversionService.swift`
+- Modify: `MoolahTests/Support/AnalysisTestHelpers.swift`
+
+These helpers are dependencies of Tasks 5 and 7. They are tiny, mechanical
+additions and have no production-code coupling — landing them first keeps
+each subsequent task self-contained.
+
+- [ ] **Step 1: Add `InvestmentValueFailureLog` to `ThrowingCountingConversionService.swift`**
+
+Open `MoolahTests/Support/ThrowingCountingConversionService.swift`. At
+the bottom of the file, after the existing `FailureLog` class, add:
+
+```swift
+/// Async-safe collector for `(Error, Date)` failure tuples emitted by
+/// `DailyBalancesHandlers.handleInvestmentValueFailure`. Used by tests
+/// that need to assert which day surfaced through the per-day error
+/// callback (and how many times). Backed by `OSAllocatedUnfairLock`
+/// for the same `@Sendable`-closure-mutation reason as `FailureLog`.
+final class InvestmentValueFailureLog: Sendable {
+  private let entries = OSAllocatedUnfairLock<[(Error, Date)]>(initialState: [])
+
+  func append(_ error: Error, _ date: Date) {
+    entries.withLock { $0.append((error, date)) }
+  }
+
+  func snapshot() -> [(Error, Date)] {
+    entries.withLock { $0 }
+  }
+
+  var count: Int {
+    entries.withLock { $0.count }
+  }
+
+  var dates: [Date] {
+    entries.withLock { $0.map(\.1) }
+  }
+}
+```
+
+- [ ] **Step 2: Add a local-calendar `date(...)` overload to `AnalysisTestHelpers.swift`**
+
+Open `MoolahTests/Support/AnalysisTestHelpers.swift`. Locate the existing
+`static func date(year: Int, month: Int, day: Int) throws -> Date`
+(around line 24). Add a new overload directly after it:
+
+```swift
+  /// Build a local-calendar `Date` at a specific `hour:` on the given
+  /// day. Uses `Calendar.current` so the resulting `Date`'s
+  /// `startOfDay` agrees with the production fold's
+  /// `Calendar.current.startOfDay(for: row.sampleDate)` math —
+  /// required by Rule 10 same-`startOfDay` normalization tests.
+  static func date(
+    year: Int, month: Int, day: Int, hour: Int
+  ) throws -> Date {
+    var components = DateComponents()
+    components.year = year
+    components.month = month
+    components.day = day
+    components.hour = hour
+    components.calendar = currentCalendar
+    guard let date = currentCalendar.date(from: components) else {
+      throw TestError.invalidDate(components)
+    }
+    return date
+  }
+```
+
+(The existing `enum TestError` and `currentCalendar` are already in
+the file — no new types or imports.)
+
+- [ ] **Step 3: Build to confirm support-file additions compile**
+
+```bash
+mkdir -p .agent-tmp
+just build-mac 2>&1 | tee .agent-tmp/build.txt
+grep -i "error:\|warning:" .agent-tmp/build.txt | grep -v "Preview"
+```
+
+Expected: clean.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git -C . add MoolahTests/Support/ThrowingCountingConversionService.swift MoolahTests/Support/AnalysisTestHelpers.swift
+git -C . commit -m "test(support): add InvestmentValueFailureLog + local-calendar date helper"
+```
 
 ---
 
@@ -127,16 +236,22 @@ func fetchTradesModeInvestmentAccountIdsUsesAccountByType() throws {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it passes already (no production change yet)**
+- [ ] **Step 2: Run the test (it is a pure EXPLAIN over a literal SQL string — passes before the helper exists)**
+
+The plan-pinning test asserts the SQLite query plan for the literal
+SQL string; it does not call the new Swift helper, so it passes on
+first run. The "verify it fails" leg of TDD doesn't apply for
+plan-pinning tests in this file (consistent with the sibling
+`fetchInvestmentAccountIdsUsesAccountByType`).
 
 ```bash
 mkdir -p .agent-tmp
 just test-mac DailyBalancesPlanPinningTests/fetchTradesModeInvestmentAccountIdsUsesAccountByType 2>&1 | tee .agent-tmp/test.txt
 ```
 
-Expected: PASS — the SQL string is a literal and the planner emits the
-same shape as the snapshot-mode predicate. The test pins the plan
-shape; the production helper is added in Step 3.
+Expected: PASS — the SQL string is a literal and the planner emits
+the same shape as the snapshot-mode predicate. The production helper
+is added in Step 3.
 
 - [ ] **Step 3: Add the production fetch helper**
 
@@ -202,15 +317,18 @@ git -C . commit -m "feat(grdb): add fetchTradesModeInvestmentAccountIds + plan-p
 
 ---
 
-## Task 2: Extend `DailyBalancesAggregation` and `DailyBalancesAssemblyContext`
+## Task 2: Extend `DailyBalancesAggregation`, `DailyBalancesAssemblyContext`, widen `resolveInstrument`, and update existing `makeAggregation()`
 
 **Files:**
 - Modify: `Backends/GRDB/Repositories/GRDBAnalysisRepository+DailyBalances.swift`
+- Modify: `MoolahTests/Backends/GRDB/GRDBDailyBalancesAssembleTests.swift`
 
-This task only adds fields and updates the construction site; the
-fields are wired by Task 3 and consumed by Task 5. Builds cleanly on
-its own because the fields default to empty values everywhere they're
-read until Task 5 lands.
+This task adds the new struct fields, widens
+`resolveInstrument`'s access from `private` to `internal`, and
+updates the *existing* `makeAggregation()` test helper so the
+project still compiles after the struct gains required fields.
+Without that update the working tree is non-compiling between
+Task 2 and Task 3.
 
 - [ ] **Step 1: Add new fields to `DailyBalancesAggregation`**
 
@@ -277,18 +395,74 @@ Locate `assembleDailyBalances` (around line 162). Update the
       conversionService: conversionService)
 ```
 
-- [ ] **Step 4: Build to make sure existing call sites still compile**
+- [ ] **Step 4: Widen `resolveInstrument` from `private static` to `static`**
 
-`DailyBalancesAggregation` has only one constructing call site
-(`readDailyBalancesAggregation` in `+DailyBalancesAggregation.swift`).
-The build will fail until that call site is updated; Task 3 fixes it.
-Skip the build step here and continue to Task 3.
+Same file. Locate `resolveInstrument` (around line 355). Drop the
+`private` access modifier (Swift `private` scopes to the file, and
+the new fold in `+DailyBalancesInvestmentValues.swift` needs to call
+it):
 
-- [ ] **Step 5: Commit**
+```swift
+  /// Reconstruct an `Instrument` value from the row's `instrument_id`
+  /// string, falling back to ambient fiat when the registry has no
+  /// stored row for the id. Mirrors the same lookup used by the other
+  /// SQL aggregations. Internal so sibling `+DailyBalances*.swift`
+  /// extensions can share one decoding helper.
+  static func resolveInstrument(
+    _ id: String, in map: [String: Instrument]
+  ) -> Instrument {
+    map[id] ?? Instrument.fiat(code: id)
+  }
+```
+
+- [ ] **Step 5: Update the existing `makeAggregation()` helper to pass the new fields**
+
+Open `MoolahTests/Backends/GRDB/GRDBDailyBalancesAssembleTests.swift`.
+Locate `makeAggregation()` (around line 37). Update the
+`DailyBalancesAggregation(...)` literal to include the three new
+fields with empty defaults:
+
+```swift
+    let aggregation = GRDBAnalysisRepository.DailyBalancesAggregation(
+      priorAccountRows: [],
+      priorEarmarkRows: [],
+      accountRows: accountRows,
+      earmarkRows: [],
+      investmentValues: [],
+      investmentAccountIds: [],
+      tradesModeInvestmentAccountIds: [],
+      priorTradesModeAccountRows: [],
+      tradesModeAccountRows: [],
+      scheduled: [],
+      instrumentMap: [usd: .fiat(code: usd)],
+      forecastUntil: nil)
+```
+
+(Diff: three new fields between `investmentAccountIds` and
+`scheduled`.)
+
+- [ ] **Step 6: Build to confirm compilation**
+
+`DailyBalancesAggregation`'s other constructing call site
+(`readDailyBalancesAggregation` in `+DailyBalancesAggregation.swift`)
+will still fail; Task 3 fixes it. The Swift compiler will report
+that single call site failing — confirm it's the only failure, then
+proceed to Task 3.
 
 ```bash
-git -C . add Backends/GRDB/Repositories/GRDBAnalysisRepository+DailyBalances.swift
-git -C . commit -m "feat(grdb): add trades-mode fields to DailyBalancesAggregation"
+just build-mac 2>&1 | tee .agent-tmp/build.txt
+grep "error:" .agent-tmp/build.txt | grep -v "Preview"
+```
+
+Expected: only `+DailyBalancesAggregation.swift` errors about missing
+arguments to `DailyBalancesAggregation`. Anything else is unexpected
+— investigate before proceeding.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git -C . add Backends/GRDB/Repositories/GRDBAnalysisRepository+DailyBalances.swift MoolahTests/Backends/GRDB/GRDBDailyBalancesAssembleTests.swift
+git -C . commit -m "feat(grdb): add trades-mode fields to DailyBalancesAggregation; widen resolveInstrument"
 ```
 
 ---
@@ -446,7 +620,6 @@ Create / edit
 
 ```swift
 import Foundation
-import GRDB
 import Testing
 
 @testable import Moolah
@@ -550,16 +723,14 @@ struct GRDBDailyBalancesAggregateTradesModeTests {
 }
 ```
 
-- [ ] **Step 3: Add a `testFetchAggregation` shim to `CloudKitAnalysisTestBackend` if it doesn't exist**
+- [ ] **Step 3: Add a `testFetchAggregation` shim to `CloudKitAnalysisTestBackend`**
 
-Run:
-
-```bash
-grep -n "testFetchAggregation\|fetchDailyBalancesAggregation" MoolahTests/Support/CloudKitAnalysisTestBackend.swift
-```
-
-If `testFetchAggregation` is not defined, add it. Open the file, find
-the `analysis` accessor, and add a new method:
+Open `MoolahTests/Support/CloudKitAnalysisTestBackend.swift`. The
+backend already exposes its `DatabaseQueue` publicly as `let database:
+DatabaseQueue`, so the shim doesn't need to reach into the production
+repository's private storage. Append at the bottom of the file (or
+inside the existing `extension CloudKitAnalysisTestBackend` block, if
+one exists):
 
 ```swift
 extension CloudKitAnalysisTestBackend {
@@ -567,31 +738,22 @@ extension CloudKitAnalysisTestBackend {
   /// for aggregation-layer integration tests. Production callers go
   /// through `analysis.fetchDailyBalances(...)`; this shim lets tests
   /// pin the aggregation contract without re-running the full
-  /// per-day walk.
+  /// per-day walk. Reads from the backend's already-public
+  /// `DatabaseQueue` — no peek into `GRDBAnalysisRepository`'s
+  /// private storage.
   func testFetchAggregation(
     after: Date?, forecastUntil: Date?
   ) async throws -> GRDBAnalysisRepository.DailyBalancesAggregation {
-    let analysis = self.analysis as! GRDBAnalysisRepository
-    return try await GRDBAnalysisRepository.fetchDailyBalancesAggregation(
-      database: analysis.databaseReader,
+    try await GRDBAnalysisRepository.fetchDailyBalancesAggregation(
+      database: self.database,
       after: after,
       forecastUntil: forecastUntil)
   }
 }
 ```
 
-The `as!` cast is acceptable in test support code because the test
-backend is constructed against `GRDBAnalysisRepository` specifically.
-
-If the `databaseReader` property is `private`, expose an internal
-`testDatabaseReader: any DatabaseReader { databaseReader }` on
-`GRDBAnalysisRepository` and use that instead. Check by running:
-
-```bash
-grep -n "databaseReader\|database:.*DatabaseReader" Backends/GRDB/Repositories/GRDBAnalysisRepository.swift
-```
-
-Use whichever access path is already exposed.
+(`DatabaseQueue` conforms to `DatabaseReader`, which is the parameter
+type expected by `fetchDailyBalancesAggregation`. No cast needed.)
 
 - [ ] **Step 4: Run the new tests — they should pass**
 
@@ -635,7 +797,7 @@ Add a new test at the bottom of the existing suite:
   func snapshotFoldDropsDayOnFailure() async throws {
     // Build an aggregation with one investment-value snapshot on day D.
     let day = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
-    let dayKey = AnalysisTestHelpers.calendar.startOfDay(for: day)
+    let dayKey = Calendar.current.startOfDay(for: day)
     let usd = Instrument.fiat(code: "USD")
     let accountId = UUID()
     let aggregation = GRDBAnalysisRepository.DailyBalancesAggregation(
@@ -672,12 +834,12 @@ Add a new test at the bottom of the existing suite:
     ]
     let conversionService = DateFailingConversionService(
       rates: [:], failingDates: [dayKey])
-    var capturedFailures: [(Error, Date)] = []
+    let captured = InvestmentValueFailureLog()
     let handlers = GRDBAnalysisRepository.DailyBalancesHandlers(
       handleUnparseableDay: { _ in },
       handleConversionFailure: { _, _ in },
       handleInvestmentValueFailure: { error, date in
-        capturedFailures.append((error, date))
+        captured.append(error, date)
       })
     let context = GRDBAnalysisRepository.DailyBalancesAssemblyContext(
       investmentAccountIds: aggregation.investmentAccountIds,
@@ -695,8 +857,8 @@ Add a new test at the bottom of the existing suite:
     // Rule 11: a snapshot conversion failure on day D must drop day D
     // from dailyBalances. Sibling days (none here) are unaffected.
     #expect(dailyBalances[dayKey] == nil)
-    #expect(capturedFailures.count == 1)
-    #expect(capturedFailures.first?.1 == dayKey)
+    #expect(captured.count == 1)
+    #expect(captured.dates == [dayKey])
   }
 ```
 
@@ -744,14 +906,19 @@ The function body's `return InstrumentAmount(quantity: total,
 instrument: profileInstrument)` already returns a non-optional — no
 body change required.
 
-- [ ] **Step 4: Update `applyInvestmentValues`'s call to the non-optional shape and tighten the catch branch**
+- [ ] **Step 4: Update `applyInvestmentValues`'s call to the non-optional shape, tighten the catch branch, and add a cancellation check**
 
 Same file. Locate `applyInvestmentValues` (around line 107). Replace
-the body from `let totalValue: InstrumentAmount?` through the
+the body from `for date in dailyBalances.keys.sorted()` through the
 `dailyBalances[date] = DailyBalance(...)` block with:
 
 ```swift
     for date in dailyBalances.keys.sorted() {
+      // The Rule 8 fast path can let the loop run synchronously when
+      // every snapshot is in the profile instrument; an explicit
+      // cancellation check ensures the outer task can be torn down
+      // promptly even in that case.
+      try Task.checkCancellation()
       valueIndex = advanceInvestmentCursor(
         values: investmentValues,
         latestByAccount: &latestByAccount,
@@ -789,7 +956,8 @@ the body from `let totalValue: InstrumentAmount?` through the
     }
 ```
 
-(Diffs from the original: `let totalValue: InstrumentAmount?` →
+(Diffs from the original: new `try Task.checkCancellation()` at the
+top of the loop; `let totalValue: InstrumentAmount?` →
 `let totalValue: InstrumentAmount`; new
 `dailyBalances.removeValue(forKey: date)` line in the catch branch;
 `guard let totalValue, let balance = dailyBalances[date] else { continue }`
@@ -915,6 +1083,11 @@ after `sumInvestmentValues`:
 
     var valueIndex = 0
     for dayKey in dailyBalances.keys.sorted() {
+      // The Rule 8 fast path inside `sumTradesModePositions` can let
+      // the loop run synchronously when every position is in the
+      // profile instrument; an explicit cancellation check ensures
+      // the outer task can be torn down promptly even in that case.
+      try Task.checkCancellation()
       // Advance the cursor: apply every entry on-or-before dayKey,
       // including those for days absent from dailyBalances.
       while valueIndex < entries.count, entries[valueIndex].dayKey <= dayKey {
@@ -966,9 +1139,11 @@ after `sumInvestmentValues`:
   /// conversion service. Rule 8 fast path applies at the leaf level
   /// so an account holding both profile-instrument and foreign-
   /// instrument positions still routes only the foreign positions
-  /// through the service. Cancellation propagates via the service's
-  /// own `await` — no manual `Task.isCancelled` check needed (matches
-  /// `sumInvestmentValues`).
+  /// through the service. When every position is in the profile
+  /// instrument the function returns synchronously — the outer
+  /// `applyTradesModePositionValuations` loop is responsible for the
+  /// `try Task.checkCancellation()` that keeps the all-fast-path case
+  /// promptly cancellable.
   private static func sumTradesModePositions(
     positions: [UUID: [Instrument: Decimal]],
     on date: Date,
@@ -1073,9 +1248,11 @@ import Testing
 @Suite("GRDBAnalysisRepository applyTradesModePositionValuations")
 struct GRDBDailyBalancesTradesModeTests {
 
-  /// Closure-captured failure log shared across cases that need to
-  /// assert per-day callback shape. Same pattern as
-  /// `GRDBDailyBalancesAssembleTests`'s `FailureLog`.
+  /// Build the standard `DailyBalancesHandlers` for these tests.
+  /// The trades-mode fold only ever invokes
+  /// `handleInvestmentValueFailure` — the other two callbacks are
+  /// no-ops. Pass `InvestmentValueFailureLog.append` (or a
+  /// `{ _, _ in }` no-op for cases that don't assert on failures).
   static func makeHandlers(
     failures: @escaping @Sendable (Error, Date) -> Void
   ) -> GRDBAnalysisRepository.DailyBalancesHandlers {
@@ -1121,7 +1298,7 @@ Inside the same `struct GRDBDailyBalancesTradesModeTests` body, append:
   @Test("case 1: single buy on day D values at day D's price")
   func singleBuyOnDay() async throws {
     let day = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
-    let dayKey = AnalysisTestHelpers.calendar.startOfDay(for: day)
+    let dayKey = Calendar.current.startOfDay(for: day)
     let usd = Instrument.fiat(code: "USD")
     let accountId = UUID()
     let row = GRDBAnalysisRepository.DailyBalanceAccountRow(
@@ -1134,7 +1311,7 @@ Inside the same `struct GRDBDailyBalancesTradesModeTests` body, append:
         ]
       ])
     var balances: [Date: DailyBalance] = [
-      dayKey: GRDBDailyBalancesTradesModeTests.placeholderBalance(at: dayKey)
+      dayKey: Self.placeholderBalance(at: dayKey)
     ]
     let context = Self.makeContext(
       tradesIds: [accountId],
@@ -1158,9 +1335,9 @@ Inside the same `struct GRDBDailyBalancesTradesModeTests` body, append:
   @Test("case 8: no trades-mode accounts — fold is a no-op")
   func noTradesModeAccounts() async throws {
     let day = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
-    let dayKey = AnalysisTestHelpers.calendar.startOfDay(for: day)
+    let dayKey = Calendar.current.startOfDay(for: day)
     var balances: [Date: DailyBalance] = [
-      dayKey: GRDBDailyBalancesTradesModeTests.placeholderBalance(at: dayKey)
+      dayKey: Self.placeholderBalance(at: dayKey)
     ]
     let originalBalance = balances[dayKey]
     let conversion = DateBasedFixedConversionService(rates: [:])
@@ -1185,9 +1362,9 @@ Inside the same `struct GRDBDailyBalancesTradesModeTests` body, append:
       tradesIds: [accountId],
       instrumentMap: ["USD": usd],
       conversionService: conversion)
-    var failures: [(Error, Date)] = []
+    let captured = InvestmentValueFailureLog()
     let handlers = Self.makeHandlers { error, date in
-      failures.append((error, date))
+      captured.append(error, date)
     }
 
     try await GRDBAnalysisRepository.applyTradesModePositionValuations(
@@ -1195,7 +1372,7 @@ Inside the same `struct GRDBDailyBalancesTradesModeTests` body, append:
       to: &balances, context: context, handlers: handlers)
 
     #expect(balances.isEmpty)
-    #expect(failures.isEmpty)
+    #expect(captured.count == 0)
   }
 ```
 
@@ -1207,7 +1384,7 @@ Append:
   @Test("case 2: two trades-mode accounts both contribute on day D")
   func twoTradesModeAccountsSameDay() async throws {
     let day = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
-    let dayKey = AnalysisTestHelpers.calendar.startOfDay(for: day)
+    let dayKey = Calendar.current.startOfDay(for: day)
     let usd = Instrument.fiat(code: "USD")
     let aId = UUID()
     let bId = UUID()
@@ -1224,7 +1401,7 @@ Append:
         ]
       ])
     var balances: [Date: DailyBalance] = [
-      dayKey: GRDBDailyBalancesTradesModeTests.placeholderBalance(at: dayKey)
+      dayKey: Self.placeholderBalance(at: dayKey)
     ]
     let context = Self.makeContext(
       tradesIds: [aId, bId],
@@ -1250,7 +1427,7 @@ Append:
   @Test("case 3: trades-mode + recorded-value account totals add into one investmentValue")
   func tradesModePlusRecordedValueSum() async throws {
     let day = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
-    let dayKey = AnalysisTestHelpers.calendar.startOfDay(for: day)
+    let dayKey = Calendar.current.startOfDay(for: day)
     let usd = Instrument.fiat(code: "USD")
     let tradesId = UUID()
     let row = GRDBAnalysisRepository.DailyBalanceAccountRow(
@@ -1306,10 +1483,13 @@ Append:
 ```swift
   @Test("case 4: per-day conversion failure drops day from dailyBalances")
   func ruleEleven_perDayFailureScopedToDay() async throws {
+    // `Calendar.current.startOfDay` is the production fold's day-key
+    // function (Rule 10). Build the test's seed key the same way so a
+    // calendar mismatch can't make the test pass vacuously.
     let dayOne = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
     let dayTwo = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 11, hour: 12)
-    let keyOne = AnalysisTestHelpers.calendar.startOfDay(for: dayOne)
-    let keyTwo = AnalysisTestHelpers.calendar.startOfDay(for: dayTwo)
+    let keyOne = Calendar.current.startOfDay(for: dayOne)
+    let keyTwo = Calendar.current.startOfDay(for: dayTwo)
     let usd = Instrument.fiat(code: "USD")
     let accountId = UUID()
     let rowOne = GRDBAnalysisRepository.DailyBalanceAccountRow(
@@ -1324,16 +1504,16 @@ Append:
       ],
       failingDates: [keyOne])
     var balances: [Date: DailyBalance] = [
-      keyOne: GRDBDailyBalancesTradesModeTests.placeholderBalance(at: keyOne),
-      keyTwo: GRDBDailyBalancesTradesModeTests.placeholderBalance(at: keyTwo),
+      keyOne: Self.placeholderBalance(at: keyOne),
+      keyTwo: Self.placeholderBalance(at: keyTwo),
     ]
     let context = Self.makeContext(
       tradesIds: [accountId],
       instrumentMap: ["USD": usd],
       conversionService: conversion)
-    var failures: [(Error, Date)] = []
+    let captured = InvestmentValueFailureLog()
     let handlers = Self.makeHandlers { error, date in
-      failures.append((error, date))
+      captured.append(error, date)
     }
 
     try await GRDBAnalysisRepository.applyTradesModePositionValuations(
@@ -1345,8 +1525,8 @@ Append:
     #expect(balances[keyOne] == nil)
     let value = try #require(balances[keyTwo]?.investmentValue)
     #expect(value.quantity == try AnalysisTestHelpers.decimal("15"))
-    #expect(failures.count == 1)
-    #expect(failures.first?.1 == keyOne)
+    #expect(captured.count == 1)
+    #expect(captured.dates == [keyOne])
   }
 ```
 
@@ -1362,7 +1542,7 @@ Append:
   @Test("case 6: trades-fold failure on day D after snapshot-fold success drops day")
   func mixedFoldFailureDropsDay() async throws {
     let day = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
-    let dayKey = AnalysisTestHelpers.calendar.startOfDay(for: day)
+    let dayKey = Calendar.current.startOfDay(for: day)
     let usd = Instrument.fiat(code: "USD")
     let accountId = UUID()
     let row = GRDBAnalysisRepository.DailyBalanceAccountRow(
@@ -1392,9 +1572,9 @@ Append:
       tradesIds: [accountId],
       instrumentMap: ["USD": usd],
       conversionService: conversion)
-    var failures: [(Error, Date)] = []
+    let captured = InvestmentValueFailureLog()
     let handlers = Self.makeHandlers { error, date in
-      failures.append((error, date))
+      captured.append(error, date)
     }
 
     try await GRDBAnalysisRepository.applyTradesModePositionValuations(
@@ -1402,7 +1582,8 @@ Append:
       to: &balances, context: context, handlers: handlers)
 
     #expect(balances[dayKey] == nil)
-    #expect(failures.count == 1)
+    #expect(captured.count == 1)
+    #expect(captured.dates == [dayKey])
   }
 ```
 
@@ -1417,13 +1598,13 @@ Append:
 ```swift
   @Test("case 7: startOfDay normalization keys days correctly across local boundary")
   func rule10StartOfDayNormalization() async throws {
-    let cal = AnalysisTestHelpers.calendar
-    // Create two timestamps in the same local day; both must
-    // produce the same dayKey.
+    // Use the local-calendar `date(year:month:day:hour:)` overload
+    // (added by Task 0) so the test agrees with the production
+    // fold's `Calendar.current.startOfDay` math.
     let dayMorning = try AnalysisTestHelpers.date(year: 2025, month: 6, day: 10, hour: 9)
     let dayEvening = try AnalysisTestHelpers.date(year: 2025, month: 6, day: 10, hour: 23)
-    let dayKey = cal.startOfDay(for: dayMorning)
-    #expect(cal.startOfDay(for: dayEvening) == dayKey)
+    let dayKey = Calendar.current.startOfDay(for: dayMorning)
+    #expect(Calendar.current.startOfDay(for: dayEvening) == dayKey)
 
     let usd = Instrument.fiat(code: "USD")
     let accountId = UUID()
@@ -1433,14 +1614,25 @@ Append:
     let rowEvening = GRDBAnalysisRepository.DailyBalanceAccountRow(
       day: "2025-06-10", sampleDate: dayEvening,
       accountId: accountId, instrumentId: "USD", type: "trade", qty: 500)
+    // Two rate buckets that distinguish dayKey from sampleDate:
+    //   - dayKey (00:00 local) → 1.5
+    //   - 06:00 local → 99.99
+    // ratesAsOf walks descending and returns the first bucket with
+    // date <= requested. A request on dayKey (00:00) finds 1.5
+    // because 06:00 is in the future relative to 00:00. A regression
+    // that passed `row.sampleDate` (a 09:00 or 23:00 local instant)
+    // would walk past 06:00 and pick up 99.99 instead, yielding a
+    // far larger total. Both rows would then mis-rate identically,
+    // turning the assertion below into a sharp signal.
+    let midDay = try AnalysisTestHelpers.date(
+      year: 2025, month: 6, day: 10, hour: 6)
     let conversion = DateBasedFixedConversionService(
       rates: [
-        try AnalysisTestHelpers.utcDate(year: 2025, month: 1, day: 1, hour: 0): [
-          "USD": try AnalysisTestHelpers.decimal("1.5")
-        ]
+        dayKey: ["USD": try AnalysisTestHelpers.decimal("1.5")],
+        midDay: ["USD": try AnalysisTestHelpers.decimal("99.99")],
       ])
     var balances: [Date: DailyBalance] = [
-      dayKey: GRDBDailyBalancesTradesModeTests.placeholderBalance(at: dayKey)
+      dayKey: Self.placeholderBalance(at: dayKey)
     ]
     let context = Self.makeContext(
       tradesIds: [accountId],
@@ -1453,6 +1645,10 @@ Append:
       to: &balances, context: context, handlers: handlers)
 
     // Both rows applied on the same dayKey; total = 10 USD * 1.5 = 15.
+    // A regression that passed `row.sampleDate` to the conversion
+    // service would resolve to the 99.99 bucket (since the row
+    // timestamps fall after midDay 06:00) and yield 999. The
+    // assertion catches that.
     let value = try #require(balances[dayKey]?.investmentValue)
     #expect(value.quantity == try AnalysisTestHelpers.decimal("15"))
   }
@@ -1466,7 +1662,7 @@ Append:
   @Test("case 10: CSV-imported transfer cash leg + trade position leg both contribute")
   func csvImportedTransferPlusTrade() async throws {
     let day = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
-    let dayKey = AnalysisTestHelpers.calendar.startOfDay(for: day)
+    let dayKey = Calendar.current.startOfDay(for: day)
     let usd = Instrument.fiat(code: "USD")
     let aud = Instrument.defaultTestInstrument
     let accountId = UUID()
@@ -1485,7 +1681,7 @@ Append:
         ]
       ])
     var balances: [Date: DailyBalance] = [
-      dayKey: GRDBDailyBalancesTradesModeTests.placeholderBalance(at: dayKey)
+      dayKey: Self.placeholderBalance(at: dayKey)
     ]
     let context = Self.makeContext(
       tradesIds: [accountId],
@@ -1505,7 +1701,7 @@ Append:
   @Test("case 11: same-day BUY + SELL netting produces zero contribution")
   func sameDayBuyAndSellNetZero() async throws {
     let day = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
-    let dayKey = AnalysisTestHelpers.calendar.startOfDay(for: day)
+    let dayKey = Calendar.current.startOfDay(for: day)
     let usd = Instrument.fiat(code: "USD")
     let accountId = UUID()
     let buy = GRDBAnalysisRepository.DailyBalanceAccountRow(
@@ -1521,7 +1717,7 @@ Append:
         ]
       ])
     var balances: [Date: DailyBalance] = [
-      dayKey: GRDBDailyBalancesTradesModeTests.placeholderBalance(at: dayKey)
+      dayKey: Self.placeholderBalance(at: dayKey)
     ]
     let context = Self.makeContext(
       tradesIds: [accountId],
@@ -1533,8 +1729,13 @@ Append:
       priorRows: [], postRows: [buy, sell],
       to: &balances, context: context, handlers: handlers)
 
-    // Net position is 0; investmentValue ends up at 0 (zero added to
-    // existing nil → .zero(instrument: AUD)).
+    // After the cursor advance, positions[accountId][USD] = 0 — the
+    // outer dict key is still present, so positions.isEmpty is false
+    // and `sumTradesModePositions` is invoked. The Rule 8 fast path
+    // (USD ≠ AUD profile, so the conversion service is called) plus
+    // the zero quantity yields a 0 contribution. existing.investmentValue
+    // is nil, so `(nil ?? .zero) + .zero == .zero`, and the day's
+    // investmentValue ends up at .zero(instrument: AUD).
     let value = try #require(balances[dayKey]?.investmentValue)
     #expect(value.quantity == 0)
   }
@@ -1549,8 +1750,8 @@ Append:
   func carryForwardAcrossDroppedDay() async throws {
     let dayOne = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
     let dayTwo = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 11, hour: 12)
-    let keyOne = AnalysisTestHelpers.calendar.startOfDay(for: dayOne)
-    let keyTwo = AnalysisTestHelpers.calendar.startOfDay(for: dayTwo)
+    let keyOne = Calendar.current.startOfDay(for: dayOne)
+    let keyTwo = Calendar.current.startOfDay(for: dayTwo)
     let usd = Instrument.fiat(code: "USD")
     let accountId = UUID()
     let rowOne = GRDBAnalysisRepository.DailyBalanceAccountRow(
@@ -1565,7 +1766,7 @@ Append:
     // Simulate a snapshot-fold dropout on day 1: dailyBalances has
     // entries only for day 2 (day 1 was removed by an earlier fold).
     var balances: [Date: DailyBalance] = [
-      keyTwo: GRDBDailyBalancesTradesModeTests.placeholderBalance(at: keyTwo)
+      keyTwo: Self.placeholderBalance(at: keyTwo)
     ]
     let context = Self.makeContext(
       tradesIds: [accountId],
