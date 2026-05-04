@@ -134,32 +134,46 @@ if failingDates.contains(dayKey) {
 }
 ```
 
-Production callers (the existing `applyInvestmentValues` and the
-new `applyTradesModePositionValuations`) already pass a `dayKey`
-produced by `Calendar.current.startOfDay(for: row.sampleDate)`. The
-re-normalisation step is redundant for those callers and silently
-mismatches when the host calendar is non-Gregorian (Rule 10
-inconsistency). Drop the re-normalisation and trust the caller's
-already-normalised date:
+Production callers that route through this service —
+`applyInvestmentValues` and the new
+`applyTradesModePositionValuations` — already pass a
+`Calendar.current.startOfDay`-normalised `dayKey`. Other callers
+that go through `PositionBook.dailyBalance` pass a raw sample-date
+(non-normalised) and never use `failingDates`, so they're
+unaffected. Drop the re-normalisation and document the caller
+contract on the `failingDates` field so future test authors know
+to normalise.
+
+Update the type declaration and `convert(...)` body:
 
 ```swift
-func convert(
-  _ quantity: Decimal, from: Instrument, to: Instrument, on date: Date
-) async throws -> Decimal {
-  if from.id == to.id { return quantity }
-  // The caller is expected to pass a startOfDay-normalized date —
-  // matches the contract every caller in `MoolahTests` honours.
-  // Applying a second calendar's startOfDay here would silently
-  // disagree on non-Gregorian locales (Rule 10) and turn the test
-  // into a false-green.
-  if failingDates.contains(date) {
-    throw DateFailingConversionError.unavailable(date: date)
+struct DateFailingConversionService: InstrumentConversionService {
+  let rates: [Date: [String: Decimal]]
+  /// Entries must be `Calendar.current.startOfDay`-normalised so
+  /// they line up with how production callers compute their
+  /// `dayKey` (`applyInvestmentValues`,
+  /// `applyTradesModePositionValuations`). The service no longer
+  /// re-normalises the `on:` argument inside `convert(...)` — a
+  /// second `startOfDay` call with a non-Gregorian calendar would
+  /// silently disagree with the caller's `Calendar.current`-keyed
+  /// `failingDates`, turning Rule 10 regressions into false-greens.
+  let failingDates: Set<Date>
+  // ... existing private storage / init ...
+
+  func convert(
+    _ quantity: Decimal, from: Instrument, to: Instrument, on date: Date
+  ) async throws -> Decimal {
+    if from.id == to.id { return quantity }
+    if failingDates.contains(date) {
+      throw DateFailingConversionError.unavailable(date: date)
+    }
+    let asOf = ratesAsOf(date)
+    guard let rate = asOf[from.id] else {
+      return quantity
+    }
+    return quantity * rate
   }
-  let asOf = ratesAsOf(date)
-  guard let rate = asOf[from.id] else {
-    return quantity
-  }
-  return quantity * rate
+  // ... existing convertAmount(...) ...
 }
 ```
 
@@ -1232,11 +1246,14 @@ after `sumInvestmentValues`:
   /// conversion service. Rule 8 fast path applies at the leaf level
   /// so an account holding both profile-instrument and foreign-
   /// instrument positions still routes only the foreign positions
-  /// through the service. When every position is in the profile
-  /// instrument the function returns synchronously — the outer
-  /// `applyTradesModePositionValuations` loop is responsible for the
-  /// `try Task.checkCancellation()` that keeps the all-fast-path case
-  /// promptly cancellable.
+  /// through the service. Zero-quantity positions are skipped (a
+  /// lingering instrument key after a same-day BUY+SELL nets out)
+  /// to honour Rule 8's spirit — there is no value in a `0 * rate`
+  /// async hop, and the answer is identically zero. When every
+  /// position is in the profile instrument the function returns
+  /// synchronously — the outer `applyTradesModePositionValuations`
+  /// loop is responsible for the `try Task.checkCancellation()`
+  /// that keeps the all-fast-path case promptly cancellable.
   private static func sumTradesModePositions(
     positions: [UUID: [Instrument: Decimal]],
     on date: Date,
@@ -1246,6 +1263,7 @@ after `sumInvestmentValues`:
     var total: Decimal = 0
     for (_, perInstrument) in positions {
       for (instrument, quantity) in perInstrument {
+        if quantity == 0 { continue }
         if instrument.id == profileInstrument.id {
           total += quantity
           continue
@@ -1282,7 +1300,78 @@ call, add the new fold call:
 (Place the new call before the `var actualBalances = ...` line and
 the subsequent `applyBestFit` / forecast steps.)
 
-- [ ] **Step 3: Format and build**
+- [ ] **Step 3: Exclude trades-mode accounts from `PositionBook.dailyBalance`'s `bankTotal`**
+
+This is the **double-counting fix** flagged in plan review round 3.
+
+Without this change, trades-mode account positions appear twice in
+`netWorth`:
+
+1. `walkDays` constructs `PositionBook.BalanceContext` with only
+   recorded-value accounts in `investmentAccountIds`. Inside
+   `PositionBook.dailyBalance`, the `bankTotal` loop is `for
+   (accountId, positions) in accounts where
+   !investmentAccountIds.contains(accountId)`. Because trades-mode
+   accounts are NOT in the set, their positions (cash + stocks) get
+   converted into the profile instrument and added to `bankTotal`,
+   which becomes the day's `balance`.
+2. `applyTradesModePositionValuations` then converts the same
+   positions and adds them to `investmentValue`.
+3. The fold's `netWorth = existing.balance + combined` would sum
+   them twice.
+
+Fix: pass the **union** of recorded-value and trades-mode account
+ids to `PositionBook.BalanceContext.investmentAccountIds`. This
+excludes trades-mode positions from `bankTotal` while leaving
+`accountsFromTransfers` (and therefore `investmentsTotal`)
+unaffected — `accountsFromTransfers` only ever has recorded-value
+account entries because `seedPriorBook` / `applyDailyDeltas` write
+to it gated on `context.investmentAccountIds`, which we keep
+recorded-value-only.
+
+Open `+DailyBalances.swift`. Locate `walkDays` (around line 265).
+Update the `balanceContext` construction (around line 275):
+
+```swift
+    // Trades-mode accounts contribute to investmentValue via
+    // applyTradesModePositionValuations, not to bankTotal. Including
+    // them in BalanceContext.investmentAccountIds excludes them from
+    // PositionBook.dailyBalance's `for ... where !investmentAccountIds`
+    // sum (no double-count) without changing accountsFromTransfers
+    // membership (which seedPriorBook / applyDailyDeltas gate on the
+    // recorded-value-only set, so the .investmentTransfersOnly read
+    // continues to see only recorded-value transfer cash).
+    let allInvestmentIds =
+      context.investmentAccountIds.union(context.tradesModeInvestmentAccountIds)
+    let balanceContext = PositionBook.BalanceContext(
+      investmentAccountIds: allInvestmentIds,
+      profileInstrument: context.profileInstrument,
+      rule: .investmentTransfersOnly,
+      conversionService: context.conversionService)
+```
+
+Apply the same union in
+`+DailyBalancesForecast.swift`'s `generateForecast` at the
+`PositionBook.BalanceContext` construction (line ~193). The forecast
+must also exclude trades-mode account positions from `bankTotal` —
+forecast days don't get a trades-mode fold contribution
+(out-of-scope), and double-counting in the forecast tail would be
+just as wrong as in the historic span. Update:
+
+```swift
+    let allInvestmentIds =
+      context.investmentAccountIds.union(context.tradesModeInvestmentAccountIds)
+    let balanceContext = PositionBook.BalanceContext(
+      investmentAccountIds: allInvestmentIds,
+      ...
+```
+
+(Leave the second use of `context.investmentAccountIds` —
+`book.apply(instance, investmentAccountIds:)` — alone. That's a
+write-side flag for `accountsFromTransfers` membership, which must
+stay recorded-value-only.)
+
+- [ ] **Step 4: Format and build**
 
 ```bash
 just format
@@ -1292,7 +1381,7 @@ grep -i "error:\|warning:" .agent-tmp/build.txt | grep -v "Preview"
 
 Expected: clean.
 
-- [ ] **Step 4: Run the existing daily-balance suite — no behaviour change for
+- [ ] **Step 5: Run the existing daily-balance suite — no behaviour change for
   profiles without trades-mode accounts**
 
 ```bash
@@ -1302,11 +1391,11 @@ grep -i "failed\|error:" .agent-tmp/test.txt
 
 Expected: no failures.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add Backends/GRDB/Repositories/GRDBAnalysisRepository+DailyBalancesInvestmentValues.swift Backends/GRDB/Repositories/GRDBAnalysisRepository+DailyBalances.swift
-git commit -m "feat(grdb): per-day trades-mode position-valuation fold"
+git add Backends/GRDB/Repositories/GRDBAnalysisRepository+DailyBalancesInvestmentValues.swift Backends/GRDB/Repositories/GRDBAnalysisRepository+DailyBalances.swift Backends/GRDB/Repositories/GRDBAnalysisRepository+DailyBalancesForecast.swift
+git commit -m "feat(grdb): per-day trades-mode position-valuation fold; exclude trades from bankTotal"
 ```
 
 ---
@@ -1825,12 +1914,12 @@ Append:
 
     // After the cursor advance, positions[accountId][USD] = 0 — the
     // outer dict key is still present, so positions.isEmpty is false
-    // and `sumTradesModePositions` is invoked. USD ≠ AUD profile, so
-    // the Rule 8 fast path does NOT apply and the conversion service
-    // is called with quantity 0; `0 * rate = 0` regardless of the
-    // rate. existing.investmentValue is nil, so `(nil ?? .zero(AUD))
-    // + .zero(AUD) == .zero(AUD)`. The day's investmentValue is
-    // .zero(AUD) — non-nil, but quantity == 0.
+    // and `sumTradesModePositions` is invoked. The new
+    // `quantity == 0` guard inside the helper skips the zero
+    // position before the Rule 8 fast-path / convert decision —
+    // total stays 0. existing.investmentValue is nil, so
+    // `(nil ?? .zero(AUD)) + .zero(AUD) == .zero(AUD)`. The day's
+    // investmentValue is .zero(AUD) — non-nil, but quantity == 0.
     let value = try #require(balances[dayKey]?.investmentValue)
     #expect(value.quantity == 0)
   }
@@ -1877,6 +1966,60 @@ Append:
     // even though day 1 itself isn't in dailyBalances.
     let value = try #require(balances[keyTwo]?.investmentValue)
     #expect(value.quantity == try AnalysisTestHelpers.decimal("15"))
+  }
+
+  @Test("case 14: end-to-end pipeline does not double-count trades-mode positions in netWorth")
+  func endToEndNetWorthSingleCount() async throws {
+    // Round-trip through the real fetchDailyBalances pipeline: a
+    // trades-mode account with one trade leg on day D. After
+    // walkDays, `existing.balance` would normally include the trade
+    // position (because trades-mode accounts aren't in the
+    // recorded-value `investmentAccountIds` set used by
+    // PositionBook.dailyBalance). The fix in Task 6 step 3 unions
+    // trades-mode ids into BalanceContext.investmentAccountIds so
+    // those positions are excluded from balance and contribute only
+    // via investmentValue. This test pins that fix.
+    let conversion = DateBasedFixedConversionService(
+      rates: [
+        try AnalysisTestHelpers.utcDate(year: 2025, month: 1, day: 1, hour: 0): [
+          "USD": try AnalysisTestHelpers.decimal("1.5")
+        ]
+      ])
+    let backend = try CloudKitAnalysisTestBackend(conversionService: conversion)
+    let aud = Instrument.defaultTestInstrument
+    let usd = Instrument.fiat(code: "USD")
+    let tradesAccount = Account(
+      id: UUID(), name: "Trades", type: .investment, instrument: aud,
+      valuationMode: .calculatedFromTrades)
+    _ = try await backend.accounts.create(tradesAccount)
+
+    let day = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day, payee: "Buy",
+        legs: [
+          TransactionLeg(
+            accountId: tradesAccount.id, instrument: usd,
+            quantity: 10, type: .trade)
+        ]))
+
+    let balances = try await backend.analysis.fetchDailyBalances(
+      after: nil, forecastUntil: nil)
+
+    let dayKey = Calendar.current.startOfDay(for: day)
+    let dayBalance = try #require(balances.first { $0.date == dayKey })
+
+    // 10 USD * 1.5 = 15 AUD on day D. Critically:
+    // - investmentValue == 15 AUD (from the new fold).
+    // - balance == 0 AUD (the trades-mode account's USD position is
+    //   excluded from bankTotal because it's now in
+    //   BalanceContext.investmentAccountIds — the double-count fix).
+    // - netWorth == 15 AUD (single count, not 30).
+    let expected = try AnalysisTestHelpers.decimal("15")
+    let value = try #require(dayBalance.investmentValue)
+    #expect(value.quantity == expected)
+    #expect(dayBalance.balance.quantity == 0)
+    #expect(dayBalance.netWorth.quantity == expected)
   }
 
   @Test("case 13: priorRows seed contributes to first in-window day")
@@ -1927,7 +2070,7 @@ just test-mac GRDBDailyBalancesTradesModeTests 2>&1 | tee .agent-tmp/test.txt
 grep -i "failed\|error:" .agent-tmp/test.txt
 ```
 
-Expected: 12 tests pass.
+Expected: 13 tests pass (cases 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14 — case 5 lives in `GRDBDailyBalancesAssembleTests`).
 
 - [ ] **Step 11: Run the entire daily-balance test surface to confirm nothing else regresses**
 
