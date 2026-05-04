@@ -10,6 +10,7 @@ struct AccountStoreConversionTestsMore {
   @Test
   func displayBalanceForInvestmentAccountPrefersInvestmentValue() async throws {
     let accountId = UUID()
+    // Default `recordedValue` mode — investment-value snapshot drives the balance.
     let account = Account(
       id: accountId, name: "Portfolio", type: .investment, instrument: .AUD)
     let (backend, database) = try TestBackend.create()
@@ -31,11 +32,11 @@ struct AccountStoreConversionTestsMore {
       targetInstrument: .AUD)
     await store.load()
 
-    // No investment value yet → falls back to converted position sum (USD * 1.5 = 150 AUD)
+    // recordedValue + no snapshot → balance = 0 (positions are NOT a fallback).
     let sumBalance = try await store.displayBalance(for: accountId)
-    #expect(sumBalance.quantity == dec("150.00"))
+    #expect(sumBalance == .zero(instrument: .AUD))
 
-    // Investment value set externally → wins over converted positions
+    // Investment value set externally → recorded mode uses the snapshot verbatim.
     let externalValue = InstrumentAmount(
       quantity: dec("999.00"), instrument: .AUD)
     await store.updateInvestmentValue(accountId: accountId, value: externalValue)

@@ -104,8 +104,11 @@ final class AccountStore {
   /// transaction sum until the user opens an investment account. See
   /// `InvestmentValueCache.preload(for:)` for the failure-tolerant details.
   private func preloadInvestmentValues() async {
+    // Only `recordedValue` investment accounts read from the snapshot cache;
+    // `calculatedFromTrades` accounts derive their value from positions, so
+    // their snapshot fetch would be a wasted round-trip.
     let investmentAccountIds = accounts.ordered
-      .filter { $0.type == .investment }
+      .filter { $0.type == .investment && $0.valuationMode == .recordedValue }
       .map(\.id)
     await investmentValueCache.preload(for: investmentAccountIds)
   }
@@ -287,6 +290,13 @@ final class AccountStore {
       // Replace with server's version (accept server's balance)
       accounts = Accounts(from: accounts.ordered.map { $0.id == updated.id ? updated : $0 })
       logger.debug("Updated account: \(updated.name)")
+
+      // Preload picks up snapshots for accounts whose mode changed to
+      // `recordedValue`: without this, a flip from `calculatedFromTrades`
+      // would leave `displayBalance` returning zero until CloudKit sync
+      // delivered an unrelated refresh.
+      await preloadInvestmentValues()
+      await recomputeConvertedTotals()
 
       isLoading = false
       return updated

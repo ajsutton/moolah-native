@@ -22,10 +22,13 @@ enum TransactionStoreTestSupport {
     id: UUID,
     name: String,
     type: AccountType = .bank,
-    balance: Decimal
+    balance: Decimal,
+    valuationMode: ValuationMode = .recordedValue
   ) -> SeededAccount {
     SeededAccount(
-      account: Account(id: id, name: name, type: type, instrument: .defaultTestInstrument),
+      account: Account(
+        id: id, name: name, type: type, instrument: .defaultTestInstrument,
+        valuationMode: valuationMode),
       openingBalance: InstrumentAmount(quantity: balance, instrument: .defaultTestInstrument)
     )
   }

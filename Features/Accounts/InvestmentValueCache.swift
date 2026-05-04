@@ -48,9 +48,10 @@ final class InvestmentValueCache {
 
   /// Fetches the latest value for each given account ID in parallel and
   /// stores successful results. Per-account failures are silently tolerated
-  /// — absence means "unknown", at which point `displayBalance` falls back
-  /// to summing positions. A single account's fetch failure never blocks
-  /// the rest of the load.
+  /// — absence means the cached value is unknown. For `recordedValue`
+  /// accounts `displayBalance` returns zero when absent; for
+  /// `calculatedFromTrades` accounts it sums positions. A single account's
+  /// fetch failure never blocks the rest of the load.
   func preload(for accountIds: [UUID]) async {
     guard let repository, !accountIds.isEmpty else { return }
 

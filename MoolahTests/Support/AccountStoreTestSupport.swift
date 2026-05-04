@@ -17,11 +17,12 @@ enum AccountStoreTestSupport {
     balance: Decimal = 0,
     position: Int = 0,
     isHidden: Bool = false,
+    valuationMode: ValuationMode = .recordedValue,
     in database: any DatabaseWriter
   ) -> Account {
     let account = Account(
       id: id, name: name, type: type, instrument: instrument, position: position,
-      isHidden: isHidden)
+      isHidden: isHidden, valuationMode: valuationMode)
     let balanceAmount = InstrumentAmount(quantity: balance, instrument: instrument)
     TestBackend.seed(
       accounts: [(account: account, openingBalance: balanceAmount)],

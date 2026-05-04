@@ -46,13 +46,36 @@ struct AccountStoreInvestmentValuesTests {
     #expect(store.convertedBalances[acctId]?.quantity == Decimal(250000) / 100)
   }
 
-  @Test("load leaves investmentValues empty when no values exist")
-  func loadOmitsInvestmentValueWhenRepositoryEmpty() async throws {
+  @Test("load with recordedValue and no snapshot yields zero balance")
+  func loadRecordedValueWithoutSnapshotYieldsZero() async throws {
     let acctId = UUID()
     let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
       id: acctId, name: "Brokerage", type: .investment, balance: Decimal(100000) / 100,
       in: database)
+
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument,
+      investmentRepository: backend.investments)
+
+    await store.load()
+
+    // `recordedValue` (default) + no snapshot → balance = 0. Position sum is
+    // intentionally not used as a fallback; see `displayBalance` in
+    // `AccountBalanceCalculator`.
+    #expect(store.investmentValues[acctId] == nil)
+    #expect(store.convertedBalances[acctId]?.quantity == 0)
+  }
+
+  @Test("load with calculatedFromTrades sums positions when no snapshot exists")
+  func loadCalculatedFromTradesUsesPositionsWhenSnapshotMissing() async throws {
+    let acctId = UUID()
+    let (backend, database) = try TestBackend.create()
+    _ = AccountStoreTestSupport.seedAccount(
+      id: acctId, name: "Brokerage", type: .investment, balance: Decimal(100000) / 100,
+      valuationMode: .calculatedFromTrades, in: database)
 
     let store = AccountStore(
       repository: backend.accounts,
@@ -105,12 +128,11 @@ struct AccountStoreInvestmentValuesTests {
     await store.updateInvestmentValue(accountId: account.id, value: nil)
 
     #expect(store.investmentValues[account.id] == nil)
-    // displayBalance sums positions (converted to account's instrument) when investmentValue is nil
+    // recordedValue (default) + cleared snapshot → balance = 0 (no fallback to
+    // positions). The position sum would be 1000.00 if the account were in
+    // calculatedFromTrades mode; see `loadCalculatedFromTradesUsesPositionsWhenSnapshotMissing`.
     let balance = try await store.displayBalance(for: account.id)
-    #expect(
-      balance
-        == InstrumentAmount(
-          quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
+    #expect(balance == .zero(instrument: .defaultTestInstrument))
   }
 
   @Test

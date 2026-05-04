@@ -13,8 +13,11 @@ struct AccountStoreConversionTestsMoreExtra {
     let usd = Instrument.USD
     let eur = Instrument.fiat(code: "EUR")
     let accountId = UUID()
+    // Use `calculatedFromTrades` so position-derived totals contribute
+    // (recordedValue + no snapshot → 0).
     let account = Account(
-      id: accountId, name: "Portfolio", type: .investment, instrument: aud)
+      id: accountId, name: "Portfolio", type: .investment, instrument: aud,
+      valuationMode: .calculatedFromTrades)
 
     let (backend, database) = try TestBackend.create()
     TestBackend.seed(accounts: [account], in: database)
@@ -88,8 +91,10 @@ struct AccountStoreConversionTestsMoreExtra {
     //   1000 AUD -> USD at 0.67 = 670 USD
     //   total = 770 USD
     // The 0.50 difference is the double-conversion drift.
+    // Use `calculatedFromTrades` so positions are summed for the total.
     let account = Account(
-      id: accountId, name: "Portfolio", type: .investment, instrument: .AUD)
+      id: accountId, name: "Portfolio", type: .investment, instrument: .AUD,
+      valuationMode: .calculatedFromTrades)
     let (backend, database) = try TestBackend.create()
     TestBackend.seed(accounts: [account], in: database)
 
@@ -179,9 +184,11 @@ struct AccountStoreConversionTestsMoreExtra {
     async throws
   {
     let accountId = UUID()
+    // Use `calculatedFromTrades` so positions are summed.
     let account = Account(
       id: accountId, name: "Portfolio", type: .investment,
-      instrument: .defaultTestInstrument)
+      instrument: .defaultTestInstrument,
+      valuationMode: .calculatedFromTrades)
     let (backend, database) = try TestBackend.create()
     TestBackend.seed(accounts: [account], in: database)
 
