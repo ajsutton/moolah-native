@@ -1,7 +1,7 @@
 # Trades-Mode Historical Net-Worth Contribution — Design
 
 **Date:** 2026-05-04
-**Status:** Draft, pending review
+**Status:** Draft — round 2 (post-review revisions)
 **Tracking issue:** [#738](https://github.com/ajsutton/moolah-native/issues/738)
 **Predecessor:**
 [`plans/completed/2026-05-04-per-account-valuation-mode-design.md`](completed/2026-05-04-per-account-valuation-mode-design.md)
@@ -17,6 +17,13 @@ activity, valuate each instrument quantity in the profile instrument using
 the historical price for that day (per
 `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 5), and add the result into the
 day's `DailyBalance.investmentValue` and `netWorth`.
+
+In the same change, tighten the existing snapshot fold
+(`applyInvestmentValues`) to comply with Rule 11: a per-day conversion
+failure removes that day from `dailyBalances` (matches `walkDays`'s
+existing per-day error contract) instead of silently leaving a partial
+total in place. Both folds end up with the same Rule 11 behaviour after
+this PR.
 
 The current value (today's number) is already correct for trades-mode
 accounts via `PositionsValuator`; only the *historical series* is broken.
@@ -41,25 +48,28 @@ inaccurate for any user who:
 Issue #738 calls this out as the natural next step now that the toggle
 itself is shipped and stable.
 
+A first-round review surfaced a Critical Rule 11 finding: the new fold's
+proposed "log + skip override" failure contract would have replicated the
+existing `applyInvestmentValues` deviation, leaving partial totals in
+`investmentValue` / `netWorth` when a day's conversion fails. The revised
+design fixes Rule 11 in **both** folds in this PR — see §6 and §10.
+
 ## Goals
 
 - For every trades-mode investment account, the historical net-worth chart
   reflects the value of its held positions on every historical day with
   activity, using historical prices for that day.
-- Snapshot-mode accounts continue to contribute via the existing
-  `applyInvestmentValues` fold without behavioural change.
+- Snapshot-mode accounts continue to contribute via `applyInvestmentValues`.
 - Mixed-mode profiles (some accounts in each mode) sum both contributions
   cleanly into a single `investmentValue` per day.
-- Per-day Rule 11 contract for the new fold matches the existing
-  `applyInvestmentValues` pattern (log + skip the override on per-day
-  conversion failure; `CancellationError` rethrows immediately). This is a
-  conscious match of the in-tree pattern; tightening Rule 11 compliance
-  for the daily-balance pipeline is a separate concern (see Out-of-Scope).
+- Per-day Rule 11 contract for **both** folds: log + drop the day from
+  `dailyBalances` on conversion failure (matches `walkDays`'s existing
+  contract). `CancellationError` rethrows immediately.
 - All historical conversions go through `InstrumentConversionService` on
-  the day's `Date` (Rule 5 / Rule 10 / Rule 8 fast path).
-- SQL plan-pinning maintained — no new full table scans introduced; the
-  new SELECT mirrors the existing snapshot-mode predicate and uses the
-  same shape.
+  the day's `Date` (Rule 5 / Rule 8 fast path / Rule 10 same-startOfDay
+  normalization).
+- SQL plan-pinning maintained — the new SELECT mirrors the existing
+  snapshot-mode predicate and uses the same `account_by_type` index.
 
 ## Non-Goals
 
@@ -72,30 +82,29 @@ itself is shipped and stable.
 - **No new conversion service.** The fold uses the existing
   `InstrumentConversionService` — same path that
   `PositionsHistoryBuilder` and `PositionsValuator` already use.
-- **No change to `PositionsValuator`.** The current-value path is
-  unchanged.
-- **No change to `applyInvestmentValues`** (the snapshot fold).
+- **No change to `PositionsValuator`** (current-value path).
 - **No change to per-account chart on `InvestmentAccountView`**
   (`PositionsHistoryBuilder` already covers it).
-- **No tightening of `applyInvestmentValues`'s pre-existing Rule 11
-  deviation** (it logs + leaves the day's investmentValue at whatever
-  walkDays produced, rather than dropping the day from the dict). The new
-  fold matches that pattern for consistency; a separate issue can address
-  Rule 11 compliance for the entire daily-balance pipeline.
 - **No new `Position`-history schema or persisted series.** The series is
   computed Swift-side per request from the existing `transaction_leg`
   rows (same source of truth as `walkDays` itself), so there is no new
   persisted state, no new sync surface, and no new migration.
+- **No on-screen "this day's contribution unavailable" affordance.** The
+  chart already gaps days dropped by `walkDays` on conversion failure;
+  this PR makes the snapshot and trades folds consistent with that
+  behaviour. A surfaced retry-now affordance is a separate UI concern.
 
 ## Design
 
 ### 1. New SQL fetch — trades-mode investment account ids
 
-Add a sibling of `fetchInvestmentAccountIds`
+Add a sibling of `fetchInvestmentAccountIds` in the same file
 (`Backends/GRDB/Repositories/GRDBAnalysisRepository+DailyBalancesInvestmentValues.swift`):
 
 ```swift
-static func fetchTradesModeInvestmentAccountIds(database: Database) throws -> Set<UUID> {
+static func fetchTradesModeInvestmentAccountIds(
+  database: Database
+) throws -> Set<UUID> {
   let rows = try Row.fetchAll(
     database,
     sql: """
@@ -106,41 +115,57 @@ static func fetchTradesModeInvestmentAccountIds(database: Database) throws -> Se
 }
 ```
 
-The two SELECTs differ only on the `valuation_mode = '…'` literal — kept
-as a separate function for `guides/DATABASE_CODE_GUIDE.md` §4 (no
-dynamically composed `sql:` arguments). The plan is the same shape as
-`fetchInvestmentAccountIds` (a small-table scan); no new index required.
+Plain string-literal SQL — kept as a separate function (rather than a
+parameterised predicate) for `guides/DATABASE_CODE_GUIDE.md` §4. The query
+shape is identical to the existing snapshot-mode predicate and resolves
+through the same `account_by_type` index — the only difference is the
+`valuation_mode` literal. See §8 for the plan-pinning test.
 
-### 2. Aggregation type carries both account-id sets
+### 2. Aggregation type carries pre-filtered trades-mode rows
 
-Extend `DailyBalancesAggregation`
-(`+DailyBalances.swift`) with one extra field:
+Extend `DailyBalancesAggregation` (`+DailyBalances.swift`) with **two**
+new fields, mirroring the way `applyInvestmentValues` consumes
+`investmentValues: [InvestmentValueSnapshot]` (a purpose-built bundle,
+not the raw row arrays):
 
 ```swift
 struct DailyBalancesAggregation: Sendable {
   // existing fields ...
   let investmentAccountIds: Set<UUID>            // recorded-value (existing)
   let tradesModeInvestmentAccountIds: Set<UUID>  // new
+  /// Pre-cutoff `transaction_leg` SUM rows filtered to trades-mode
+  /// investment accounts only. Pre-fold seed for the new fold's
+  /// cumulative position dict.
+  let priorTradesModeAccountRows: [DailyBalanceAccountRow]  // new
+  /// Post-cutoff `transaction_leg` SUM rows filtered to trades-mode
+  /// investment accounts only.
+  let tradesModeAccountRows: [DailyBalanceAccountRow]       // new
   // ...
 }
 ```
 
-`investmentAccountIds` keeps its current meaning (recorded-value only) so
-that `accountsFromTransfers` continues to be populated only for the
-snapshot mode — exactly as PR #735 designed. The new field is consumed
-only by the new fold (see §4) and the assembly context (see §3).
+Pre-filtering inside `readDailyBalancesAggregation` (the synchronous
+helper that runs inside the existing single `database.read` snapshot, so
+all classifications observe one MVCC state — no need for a separate
+`database.read`) keeps `applyTradesModePositionValuations` focused on
+the cumulative-position fold and avoids duplicating the row-type filter
+across both `walkDays` and the new fold. The cost is one in-memory
+filter pass per aggregation read; row counts are bounded by the existing
+SUM aggregation (one row per `(day, account, instrument, type)`),
+typically O(thousands) for an active profile.
 
-`fetchDailyBalancesAggregation`
-(`+DailyBalancesAggregation.swift`) calls the new fetch alongside
-`fetchInvestmentAccountIds` and threads the result onto the struct.
+`investmentAccountIds` keeps its current meaning (recorded-value only) —
+exactly as PR #735 designed — and continues to drive `accountsFromTransfers`
+membership in the seed and walk steps. The new account-id set has a
+single consumer: the new fold's empty-check.
 
-### 3. Assembly context exposes both sets
+### 3. Assembly context exposes the trades-mode set
 
 Extend `DailyBalancesAssemblyContext` (`+DailyBalances.swift`) with the
 trades-mode set so the new fold can take it from a stable context object
-rather than a free parameter (matches the existing pattern of carrying
+rather than a free parameter — matches the existing pattern of carrying
 `investmentAccountIds`, `instrumentMap`, `profileInstrument`,
-`conversionService` in one struct):
+`conversionService` in one struct:
 
 ```swift
 struct DailyBalancesAssemblyContext: Sendable {
@@ -152,6 +177,18 @@ struct DailyBalancesAssemblyContext: Sendable {
 }
 ```
 
+The construction site in `assembleDailyBalances` is updated to pass the
+new field through:
+
+```swift
+let context = DailyBalancesAssemblyContext(
+  investmentAccountIds: aggregation.investmentAccountIds,
+  tradesModeInvestmentAccountIds: aggregation.tradesModeInvestmentAccountIds,
+  instrumentMap: aggregation.instrumentMap,
+  profileInstrument: profileInstrument,
+  conversionService: conversionService)
+```
+
 `seedPriorBook`, `walkDays`, and `applyDailyDeltas` continue to read only
 `investmentAccountIds` (recorded-value) for `accountsFromTransfers`
 membership — none of those helpers need to know about the trades-mode
@@ -160,13 +197,24 @@ set, because trades-mode accounts contribute via the new fold instead.
 ### 4. New fold — `applyTradesModePositionValuations`
 
 Lives next to `applyInvestmentValues` in
-`+DailyBalancesInvestmentValues.swift` so the two folds share a file (and
-a SwiftLint budget). Public entry point:
+`+DailyBalancesInvestmentValues.swift` so the two folds share a file.
+Public entry point:
 
 ```swift
+/// Per-day position-valuation fold for trades-mode investment accounts.
+/// Sister of `applyInvestmentValues` — same per-day error contract:
+/// `CancellationError` rethrows immediately; any other thrown error
+/// drops the day from `dailyBalances` and logs through
+/// `handleInvestmentValueFailure`.
+///
+/// `priorTradesModeAccountRows` and `tradesModeAccountRows` carry only
+/// rows whose `accountId` belongs to a trades-mode investment account
+/// — pre-filtered in `readDailyBalancesAggregation` so this fold
+/// neither re-checks membership nor walks rows for accounts it doesn't
+/// own.
 static func applyTradesModePositionValuations(
-  priorAccountRows: [DailyBalanceAccountRow],
-  accountRows: [DailyBalanceAccountRow],
+  priorRows: [DailyBalanceAccountRow],
+  postRows: [DailyBalanceAccountRow],
   to dailyBalances: inout [Date: DailyBalance],
   context: DailyBalancesAssemblyContext,
   handlers: DailyBalancesHandlers
@@ -175,51 +223,63 @@ static func applyTradesModePositionValuations(
 
 Algorithm:
 
-1. **Early return** if `context.tradesModeInvestmentAccountIds` is empty
-   or `dailyBalances` is empty.
-2. **Pre-fold priors** (rows with `t.date < :after`) into a per-account,
-   per-instrument cumulative dict
-   `var positions: [UUID: [Instrument: Decimal]] = [:]`. Skip rows whose
-   `accountId` is not in `tradesModeInvestmentAccountIds`. Decoding the
-   raw `Int64` `qty` → `Decimal` matches `applyDailyDeltas` exactly
-   (single `InstrumentAmount(storageValue:instrument:).quantity` step,
-   so the storage-unit semantics are pinned in one place).
-3. **Group post-cutoff rows by local-startOfDay key.** Use
-   `Calendar.current.startOfDay(for: row.sampleDate)` (matching
-   `walkDays`'s `dayKey` math — Rule 10 same-`startOfDay` normalization).
-   Skip rows whose `accountId` is not in
-   `tradesModeInvestmentAccountIds`.
+1. **Early return** if `context.tradesModeInvestmentAccountIds.isEmpty`
+   or `dailyBalances.isEmpty` (matches `applyInvestmentValues`'s guard
+   shape).
+2. **Pre-fold priors** into a per-account, per-instrument cumulative dict
+   `var positions: [UUID: [Instrument: Decimal]] = [:]`. `Instrument`
+   conforms to `Hashable` (`Domain/Models/Instrument.swift:4`); the
+   shape mirrors `PositionBook.accounts`. Decode each row's raw `Int64`
+   `qty` via `InstrumentAmount(storageValue:instrument:).quantity` —
+   same pattern as `applyDailyDeltas` so storage-unit semantics stay
+   pinned in one place.
+3. **Group post rows by UTC day-string**, mirroring `walkDays` exactly:
+   `Dictionary(grouping: postRows, by: \.day)`. The day-string is
+   `DATE(t.date)` from SQL — the indexing key. `walkDays`'s `dayKey`
+   (the local-startOfDay used as the `dailyBalances` key) is derived
+   from the group's first row's `sampleDate` via
+   `Calendar.current.startOfDay(for:)`. We use the same pattern here
+   (Rule 10 same-`startOfDay` normalization) so `dayKey` agrees with
+   the keys `walkDays` produced.
 4. **Walk `dailyBalances.keys.sorted()`** in date order. For each
    `dayKey`:
-   1. Apply the day's grouped trades-mode rows to the cumulative
-      `positions` dict.
+   1. Apply the day's grouped rows (those whose mapped `dayKey`
+      matches) to the cumulative `positions` dict.
    2. Skip the day if `positions` is empty (no trades-mode account has
-      ever held anything yet).
-   3. Convert per-account-per-instrument positions into a single
-      `InstrumentAmount` total via `sumTradesModePositions(...)` — see
-      §5. Conversion runs on `dayKey` (the day's local-startOfDay,
-      Rule 10), via the conversion service, with the Rule 8 fast path
-      for same-instrument positions.
-   4. On `CancellationError`, rethrow (no logging).
-   5. On any other thrown error,
+      ever held anything yet) — leaves the day's `DailyBalance`
+      untouched.
+   3. Inside an explicit two-catch `do { } catch let cancel as
+      CancellationError { throw cancel } catch { ... }` block (matches
+      `applyInvestmentValues`'s shape — see §10 for the literal code
+      sketch), call
+      `sumTradesModePositions(positions:on:profileInstrument:conversionService:)`
+      to obtain the day's `InstrumentAmount` total in the profile
+      instrument.
+   4. **On success:** `let combined = (existing.investmentValue ??
+      .zero(instrument: profileInstrument)) + total`; rebuild the day's
+      `DailyBalance` with `investmentValue = combined` and `netWorth =
+      balance + combined`.
+   5. **On any non-cancellation throw (Rule 11 — failing day must
+      surface as unavailable):** log via
       `handlers.handleInvestmentValueFailure(error, dayKey)` and
-      `continue` — same per-day error contract as
-      `applyInvestmentValues`.
-   6. Otherwise, **add** the converted total to the day's existing
-      `investmentValue` (which is `nil` if no snapshot fold ran for the
-      day, else the snapshot total) and recompute `netWorth = balance +
-      investmentValue`. Build a fresh `DailyBalance` (the type is a
-      struct; mutate via reconstruction).
+      `dailyBalances.removeValue(forKey: dayKey)`. The chart shows a
+      gap on that day, matching `walkDays`'s existing per-day-failure
+      contract.
 
-Per-day error contract is reused from
-`DailyBalancesHandlers.handleInvestmentValueFailure` — the existing
-callback already carries `(Error, Date)`. The new fold logs through the
-same handler; production callers route into the same `os.Logger`
-category that the snapshot fold uses.
+The `priorRows` / `postRows` parameters are deliberately *not* the
+unfiltered `aggregation.priorAccountRows` / `aggregation.accountRows`
+— they're the new pre-filtered fields from §2, named without the
+`accountRows` suffix to avoid suggesting "every account" at the call
+site. The doc comment on the entry point states the filtering contract
+explicitly.
 
 ### 5. Conversion helper — `sumTradesModePositions`
 
-Mirrors `sumInvestmentValues`, file-private:
+Mirrors `sumInvestmentValues`, file-private, **non-optional** return
+type (the `?` on `sumInvestmentValues` is vestigial — the function
+either throws or returns a value; out-of-scope to clean up the
+predecessor in this PR, but the new helper does not perpetuate the
+pattern):
 
 ```swift
 private static func sumTradesModePositions(
@@ -227,24 +287,32 @@ private static func sumTradesModePositions(
   on date: Date,
   profileInstrument: Instrument,
   conversionService: any InstrumentConversionService
-) async throws -> InstrumentAmount?
+) async throws -> InstrumentAmount
 ```
 
 For each `(accountId, [Instrument: Decimal])`, for each
 `(instrument, qty)`:
 
 - If `instrument.id == profileInstrument.id`, add `qty` to the running
-  `Decimal` total (Rule 8 fast path).
+  `Decimal` total (Rule 8 fast path — applied at the leaf level so an
+  account holding both profile-instrument and foreign-instrument
+  positions still routes only the foreign positions through the
+  service).
 - Otherwise call `conversionService.convert(qty, from: instrument, to:
   profileInstrument, on: date)` and add the result.
 
-A failed convert throws to the caller, which routes to
-`handleInvestmentValueFailure` per the per-day contract. Returns
-`InstrumentAmount(quantity: total, instrument: profileInstrument)`. On a
-warm cache the per-day cost is O(distinct instruments held that day),
-which is bounded.
+A failed convert throws to the caller (per-day error contract — see
+§4). Returns `InstrumentAmount(quantity: total, instrument:
+profileInstrument)`. On a warm cache the per-day cost is
+O(distinct instruments held that day), which is bounded.
 
-### 6. Wire the new fold into `assembleDailyBalances`
+The caller passes `dayKey` (the `startOfDay`-normalized key from §4)
+as `on:`. Add a one-line comment at the call site stating "`dayKey` is
+`Calendar.current.startOfDay(for: row.sampleDate)` — same normalization
+as `walkDays` and the conversion-service lookup" so future readers
+don't need to chase the call site to verify Rule 10.
+
+### 6. Wire into `assembleDailyBalances` and tighten the snapshot fold
 
 Inside `assembleDailyBalances` (`+DailyBalances.swift`), after the
 existing `applyInvestmentValues` call:
@@ -257,191 +325,339 @@ try await applyInvestmentValues(
   handlers: handlers)
 
 try await applyTradesModePositionValuations(
-  priorAccountRows: aggregation.priorAccountRows,
-  accountRows: aggregation.accountRows,
+  priorRows: aggregation.priorTradesModeAccountRows,
+  postRows: aggregation.tradesModeAccountRows,
   to: &dailyBalances,
   context: context,
   handlers: handlers)
 ```
 
-Order is significant only in that the second fold *adds* to whatever the
-first fold left in `investmentValue`. Either ordering would produce the
-same arithmetic total since they touch disjoint account sets and addition
-is commutative; running the new fold *after* the snapshot fold keeps the
-log message ordering consistent with the read order (snapshots → trades).
-
-`bestFit` regression runs after both folds (same line as today). The
-forecast extrapolation runs after that, unchanged — see Non-Goals on the
-forecast carve-out.
-
-### 7. Edge cases
-
-- **No trades-mode accounts in the profile.** The new fetch returns an
-  empty set; the new fold early-returns; behaviour is bit-identical to
-  today.
-- **Trades-mode account with only a transfer leg (cash deposited but
-  never traded).** The cash is in the profile instrument (or some other
-  fiat). The fold sums it via the Rule 8 fast path (or via FX
-  conversion). The day's investmentValue picks up the cash. This is
-  correct: the cash on the investment account is part of the account's
-  value.
-- **Trades-mode account with a buy on day D and no other activity.** Day
-  D appears in `dailyBalances` (walkDays sees the trade legs as account
-  rows). The fold valuates the position on day D using day D's price.
-  Days after D with other-account activity carry forward the position
-  via the cumulative dict; their valuations use that day's price.
-- **Stock not yet listed on day D (price-cache miss).** Conversion
-  throws → fold logs via `handleInvestmentValueFailure` → fold leaves
-  the day's existing `investmentValue` (snapshot fold's contribution, or
-  `nil`) untouched. The chart line for that day reflects whatever made
-  it through the snapshot fold; the trades-mode contribution drops just
-  for that day.
-- **Profile instrument changes mid-history.** Out of scope (no profile
-  flow currently allows this), and would require re-running the pipeline
-  with a new profile instrument anyway.
-- **Mixed-mode profile.** Snapshot and trades-mode accounts are
-  partitioned by `valuation_mode`; the snapshot fold reads
-  `recorded-value` accounts only; the trades fold reads
-  `calculated-from-trades` accounts only. Both fold totals add into one
-  `investmentValue` per day.
-- **Mode flip mid-window.** A user flipping an account from snapshot to
-  trades changes the SQL classification; the next pipeline run will
-  classify the account into the new set. The historic chart will
-  re-render under the new mode (snapshot contributions disappear; trades
-  contributions appear). This matches today's mode-flip semantics — same
-  surface, no special handling.
-- **Two-trade same-day (BUY + SELL on the same day).** SQL `SUM` over
-  legs grouped by `(day, account, instrument, type)` already nets these
-  in `accountRows`. The fold applies the netted row exactly once per
-  `(day, account, instrument, type)` group; cumulative state stays
-  consistent.
-
-### 8. SQL plan-pinning test
-
-Add one pinning test next to the existing daily-balance pins
-(`MoolahTests/Backends/GRDB/DailyBalancesPlanPinningTests.swift`):
+**`applyInvestmentValues` is updated in this PR** so its per-day error
+branch matches the new fold (and `walkDays`):
 
 ```swift
-@Test
-func fetchTradesModeInvestmentAccountIdsAvoidsScanWhenSelectiveOrUsesAcceptableScan() throws {
-  // ... assert plan shape matches fetchInvestmentAccountIds — both are
-  // selective small-table reads; the SQL planner typically emits
-  // SCAN account on a tiny table or USING INDEX on the account-type
-  // index if/when one exists. Either is acceptable; this test pins the
-  // plan to whatever the existing snapshot-mode predicate produces so a
-  // future regression that diverges from the established shape is
-  // visible. ...
+} catch let cancel as CancellationError {
+  throw cancel
+} catch {
+  handlers.handleInvestmentValueFailure(error, date)
+  dailyBalances.removeValue(forKey: date)  // Rule 11 — was: continue
+  continue
 }
 ```
 
-The test mirrors the existing `fetchInvestmentAccountIdsAvoidsScan…`
-pattern (or the closest equivalent in
-`DailyBalancesPlanPinningTests`) — same plan-string capture, same
-indexed-vs-scan assertion.
+Before this change, a snapshot-fold conversion failure left the day's
+`DailyBalance` untouched — the chart line at that day reflected only
+the bank-balance + transfers-only investments contribution, with no
+indication that the snapshot couldn't be computed. Per Rule 11, that's
+an incorrect partial total rendered as authoritative. Removing the day
+matches `walkDays`'s existing per-day-failure contract and ends the
+deviation called out in the round-1 instrument-conversion review.
 
-### 9. Repository contract / aggregation contract tests
+Order of the two folds is significant only for log-ordering (snapshots
+log before trades). Both folds drop the day from `dailyBalances` on
+failure; if either fold fails for a day, the day is gone from the
+result regardless of which ran first. Both folds touch disjoint account
+sets, so on the success path the additive `investmentValue` is
+order-independent.
 
-Add tests to the existing
+`applyBestFit` and the forecast tail run after both folds, both already
+iterate `dailyBalances.values` — they automatically skip dropped days.
+
+### 7. Edge cases
+
+- **No trades-mode accounts in the profile.** The pre-filter produces
+  empty arrays; the new fold early-returns; behaviour is bit-identical
+  to today.
+- **Trades-mode account with only a `.transfer` leg (cash deposited but
+  never traded).** The cash sits as a position on the investment
+  account; the fold sums it via the Rule 8 fast path (or via FX
+  conversion if the cash leg is in a non-profile fiat). The day's
+  `investmentValue` picks up the cash. This is correct — cash on an
+  investment account is part of the account's value.
+- **Trades-mode account with a buy on day D and no other activity.**
+  Day D appears in `dailyBalances` (walkDays sees the trade legs as
+  account rows). The fold valuates the position on day D using day D's
+  price. Days after D with other-account activity carry forward the
+  position via the cumulative dict; their valuations use that day's
+  price.
+- **Stock not yet listed on day D (price-cache miss).** Conversion
+  throws → fold logs via `handleInvestmentValueFailure` → fold drops
+  day D from `dailyBalances`. The chart shows a gap on D. Sibling days
+  render normally.
+- **Same-day BUY + SELL of equal quantities.** SQL `SUM` over legs
+  grouped by `(day, account, instrument, type)` does *not* net BUY vs
+  SELL (those are still both `type = 'trade'` but with opposite
+  quantities — they net inside the same group). After the cumulative
+  fold, the per-instrument quantity for the day is zero. The fold
+  sums it (zero contribution via fast path) and adds zero to
+  `investmentValue` — i.e. the day's `investmentValue` stays at
+  whatever the snapshot fold produced (or `.zero(...)` if no snapshot
+  fold ran for the day). This is correct: a day with no net position
+  change should not move `investmentValue`.
+- **Profile instrument changes mid-history.** Out of scope (no profile
+  flow currently allows this), and would require re-running the
+  pipeline with a new profile instrument anyway.
+- **Mixed-mode profile.** Snapshot and trades-mode accounts are
+  partitioned by `valuation_mode`; the snapshot fold reads
+  `recorded-value` accounts only; the trades fold reads
+  `calculated-from-trades` accounts only. Both fold totals add into
+  one `investmentValue` per day. Either fold's failure on day D drops
+  D entirely (per §6).
+- **Mode flip mid-window.** A user flipping an account from snapshot
+  to trades changes the SQL classification; the next pipeline run
+  classifies the account into the new set. The historic chart will
+  re-render under the new mode (snapshot contributions disappear;
+  trades contributions appear). This matches today's mode-flip
+  semantics — same surface, no special handling.
+
+### 8. SQL plan-pinning test
+
+Add one pinning test to `MoolahTests/Backends/GRDB/DailyBalancesPlanPinningTests.swift`,
+named symmetrically to the sibling
+`fetchInvestmentAccountIdsUsesAccountByType`:
+
+```swift
+@Test("fetchTradesModeInvestmentAccountIds uses account_by_type")
+func fetchTradesModeInvestmentAccountIdsUsesAccountByType() throws {
+  let database = try makeDatabase()
+  // Mirrors the per-account id loader driven by
+  // `GRDBAnalysisRepository.fetchTradesModeInvestmentAccountIds`. The
+  // production SQL filters on `type = 'investment'` AND
+  // `valuation_mode = 'calculatedFromTrades'`. The `account_by_type`
+  // index keys on `(type)` and serves the selective `type =
+  // 'investment'` predicate; the `valuation_mode` predicate filters
+  // the candidate rows post-seek. SQLite emits `SEARCH account USING
+  // INDEX account_by_type` for this shape, which is *not* a full
+  // table scan.
+  let detail = try planDetail(
+    database,
+    query: """
+      SELECT id FROM account
+      WHERE type = 'investment' AND valuation_mode = 'calculatedFromTrades'
+      """)
+  #expect(detail.contains("SEARCH account USING INDEX account_by_type"))
+  #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "account"))
+}
+```
+
+The assertion deliberately matches the sibling one-for-one — same
+index name, same scan-rejection — so a regression that diverges the
+two predicates is visible.
+
+### 9. Tests
+
+All new tests use Swift Testing per `guides/TEST_GUIDE.md`. Reuses the
+existing `DateFailingConversionService`
+(`MoolahTests/Support/DateFailingConversionService.swift`) for Rule 11
+scoping, and `DateBasedFixedConversionService` for the per-day rate
+table — no new test doubles.
+
+#### 9.1 Plan-pinning
+
+- §8: `fetchTradesModeInvestmentAccountIdsUsesAccountByType`.
+
+#### 9.2 Aggregation-layer integration
+
+Add to the existing
+`MoolahTests/Backends/GRDB/GRDBDailyBalancesAggregateTests.swift` (or
+its closest sibling):
+
+- **`fetchDailyBalancesAggregation` populates
+  `tradesModeInvestmentAccountIds`** when the profile contains a
+  trades-mode account.
+- **`fetchDailyBalancesAggregation` populates
+  `priorTradesModeAccountRows` and `tradesModeAccountRows`** with
+  *only* trades-mode account rows (sibling recorded-value account
+  rows are excluded from these fields, even though they remain in
+  `priorAccountRows` / `accountRows`).
+- **Empty-mode profile** → both fields are empty arrays.
+
+#### 9.3 Fold contract
+
+Add to
 `MoolahTests/Backends/GRDB/GRDBAnalysisRepositoryDailyBalancesTests.swift`
-(or its closest sibling) covering:
+(or its closest sibling):
 
-1. **Trades-mode account with one buy of N shares at price P on day D.**
-   Day D's `investmentValue` ≈ `N * P`. Day D+1 (if present in
-   `dailyBalances` due to other activity) carries the position forward
-   and revaluates at day D+1's price.
-2. **Two trades-mode accounts, both with positions on day D.**
+1. Trades-mode account with one buy of N shares at price P on day D
+   → day D's `investmentValue` ≈ `N * P`. Day D+1 (if present in
+   `dailyBalances`) carries the position forward and revaluates at
+   day D+1's price.
+2. Two trades-mode accounts, both with positions on day D →
    `investmentValue` sums both contributions.
-3. **One trades-mode + one recorded-value account on day D.** Day D's
+3. One trades-mode + one recorded-value account on day D → Day D's
    `investmentValue` = (recorded snapshot total) + (trades-mode
    valuation). `netWorth` reflects both.
-4. **Rule 11 per-day failure scoping** — a `DateBasedFailingConversion`
-   service that throws only on day D leaves day D's investmentValue at
-   whatever the snapshot fold produced (or `nil` if no snapshot fold)
-   and *does not* affect day D-1 or D+1. The
-   `handleInvestmentValueFailure` callback fires exactly once with
-   `(error, dayKey: D)`.
-5. **Rule 10 same-startOfDay normalization** — a trade transaction at
+4. **Rule 11 per-day failure scoping** for the new fold — a
+   `DateFailingConversionService` that throws only on day D drops day
+   D from `dailyBalances`, leaves day D-1 and D+1 intact, and fires
+   `handleInvestmentValueFailure` exactly once with `(error, dayKey:
+   D)`.
+5. **Rule 11 per-day failure scoping** for the snapshot fold (new
+   behaviour) — a snapshot-conversion failure on day D drops day D
+   from `dailyBalances`, leaves siblings intact. Pinned by the same
+   `DateFailingConversionService` shape as case 4.
+6. **Rule 11 mixed-fold failure** — when both folds run and the trades
+   fold fails on day D (the snapshot fold succeeded on D), day D is
+   dropped, sibling days unaffected.
+7. **Rule 10 same-startOfDay normalization** — a trade transaction at
    23:59:59 local on day D and a trade at 00:00:01 local on day D+1
    apply on the correct days; `Calendar.current.startOfDay`-keyed
    comparisons match `walkDays`'s key.
-6. **No trades-mode accounts ⇒ no behaviour change** — fold is a no-op;
-   `investmentValue` reflects only the snapshot fold; pinning tests for
-   the existing path stay green.
-7. **Empty `dailyBalances` ⇒ no-op** — nothing to fold over; no logger
-   output.
-8. **CSV-imported trade with a `.transfer` cash leg + a `.trade`
-   position leg.** Cumulative position picks up both legs; cash leg adds
-   via Rule 8 fast path (when in profile instrument), or FX otherwise;
-   position leg adds via stock-price conversion.
-9. **Trades-mode account that was previously in recorded mode** — flip
-   captured by next pipeline run; chart flips between contributions.
+8. **No trades-mode accounts ⇒ no behaviour change** — fold is a
+   no-op; `investmentValue` reflects only the snapshot fold; pinning
+   tests for the existing path stay green.
+9. **Empty `dailyBalances` ⇒ no-op** — nothing to fold over; no
+   logger output.
+10. **CSV-imported trade with a `.transfer` cash leg + a `.trade`
+    position leg.** Cumulative position picks up both legs; cash leg
+    adds via Rule 8 fast path (when in profile instrument), or FX
+    otherwise; position leg adds via stock-price conversion.
+11. **Same-day BUY + SELL of equal quantities** → day's net
+    contribution = zero; `investmentValue` unchanged from the
+    snapshot fold.
 
-`DateBasedFixedConversionService` is the canonical test double for
-date-sensitive conversions per
-`guides/INSTRUMENT_CONVERSION_GUIDE.md` §1; we use it (and a
-`DateBasedFailingConversion` extension) here.
+### 10. Two-catch shape (literal sketch)
 
-### 10. Logging
+Both folds use the same explicit two-catch pattern so future readers
+don't have to infer the cancellation contract from prose:
 
-The fold reuses
+```swift
+do {
+  let total = try await sumTradesModePositions(
+    positions: positions,
+    // dayKey is `Calendar.current.startOfDay(for: row.sampleDate)` —
+    // same normalization as walkDays and the conversion-service lookup.
+    on: dayKey,
+    profileInstrument: context.profileInstrument,
+    conversionService: context.conversionService)
+  guard let existing = dailyBalances[dayKey] else { continue }
+  let combined =
+    (existing.investmentValue ?? .zero(instrument: context.profileInstrument)) + total
+  dailyBalances[dayKey] = DailyBalance(
+    date: existing.date,
+    balance: existing.balance,
+    earmarked: existing.earmarked,
+    availableFunds: existing.availableFunds,
+    investments: existing.investments,
+    investmentValue: combined,
+    netWorth: existing.balance + combined,
+    bestFit: existing.bestFit,
+    isForecast: existing.isForecast)
+} catch let cancel as CancellationError {
+  throw cancel
+} catch {
+  handlers.handleInvestmentValueFailure(error, dayKey)
+  dailyBalances.removeValue(forKey: dayKey)
+  continue
+}
+```
+
+`applyInvestmentValues` is updated to match (see §6) — the only
+difference between the two folds is which input drives the per-day
+total (cumulative positions vs. carry-forward snapshots).
+
+### 11. Logging
+
+Both folds reuse
 `DailyBalancesHandlers.handleInvestmentValueFailure: @Sendable (Error,
-Date) -> Void` — same callback the snapshot fold uses. The production
-caller wires this to its existing `Logger`
-(`subsystem: "com.moolah.app", category: "GRDBAnalysisRepository"` or
-the closest existing category). No new logger category required.
+Date) -> Void`. The production caller wires this to the existing
+`Logger` (`subsystem: "com.moolah.app", category:
+"GRDBAnalysisRepository"`). No new logger category required.
 
-### 11. Performance
+`Calendar.current` is used inside the `@concurrent`
+`assembleDailyBalances` for the `startOfDay` math — Foundation's
+`Calendar` is a value type and `Calendar.current` returns a copy, so
+the access is safe in the off-main context. This matches the existing
+`walkDays` and `advanceInvestmentCursor` usage.
 
-Per-day work after the fold:
-- Pre-fold priors: O(N_priors), one-shot, where `N_priors` is the
-  number of trade-relevant pre-cutoff legs (already loaded by the
-  existing prior-rows fetch — no new SQL).
-- Per day: O(M × I) conversion calls, where M = trades-mode account
-  count and I = distinct instruments held. Warm-cache calls are O(1)
-  per (instrument, date) tuple via `StockPriceCache` /
+### 12. Performance
+
+- **Pre-filter inside `readDailyBalancesAggregation`:** O(N_total)
+  one-shot pass over the SUM rows, where `N_total` is the bounded SUM
+  row count.
+- **Pre-fold priors:** O(N_priors_trades_only).
+- **Per day:** O(M × I) conversion calls, where M = trades-mode
+  account count and I = distinct instruments held. Warm-cache calls
+  are O(1) per (instrument, date) tuple via `StockPriceCache` /
   `ExchangeRateCache` / `CryptoPriceCache`. Cold-cache calls pay one
-  round-trip per (instrument, date) — the same cost
+  round-trip per (instrument, date) — same cost
   `PositionsHistoryBuilder` already pays for the per-account chart.
 
 For a typical user (≤5 trades-mode accounts × ≤10 instruments ×
-~365 days = ~18 000 conversion calls per request) this is well within
-the cached-rate budget. We do NOT introduce parallelism (the fold uses
-sequential `await`, matching `applyInvestmentValues` and
-`PositionsHistoryBuilder`); switching to a `TaskGroup` is a
-self-contained change if profiling later shows it's user-visible.
+~365 days = ~18 000 conversion calls per request) this is well
+within the cached-rate budget. Sequential `await` in the day loop
+matches `applyInvestmentValues` and `PositionsHistoryBuilder`;
+switching to a `TaskGroup` is a self-contained change if profiling
+later shows it's user-visible.
 
 The new SQL fetch (`fetchTradesModeInvestmentAccountIds`) adds one
-small-table read inside the existing `database.read` snapshot; cost is
-the same shape as `fetchInvestmentAccountIds`.
+small-table read inside the existing `database.read` snapshot; cost
+is the same shape as `fetchInvestmentAccountIds` (resolves through
+`account_by_type`).
+
+### 13. File-size budget
+
+Current sizes:
+
+- `+DailyBalancesInvestmentValues.swift` — 195 lines.
+- `+DailyBalancesAggregation.swift` — ~330 lines.
+- `+DailyBalances.swift` — ~360 lines.
+
+The new fold (~50 lines including doc comments) plus the new helper
+(~20 lines) plus the new fetch (~15 lines) lands on
+`+DailyBalancesInvestmentValues.swift`, taking it to ~280 lines —
+well under the SwiftLint `file_length` warn threshold (400). The
+aggregation-layer wiring (one extra SQL fetch call site, two extra
+struct fields, one filter pass) lands on `+DailyBalancesAggregation.swift`
+and `+DailyBalances.swift`; both stay under threshold. The
+implementer should run `just format-check` after each commit to
+confirm.
 
 ## Out-of-Scope Followups
 
-- Tightening `applyInvestmentValues`'s pre-existing Rule 11 deviation
-  (logging + skipping the day's override on conversion failure rather
-  than dropping the entire day from `dailyBalances`).
+- Cleaning up the vestigial `?` on `sumInvestmentValues`'s return type
+  (the function effectively always returns non-nil on success; the `?`
+  is dead). The new helper avoids the same shape; the predecessor
+  cleanup is a one-liner suitable for a follow-up.
 - Extending the trades-mode contribution onto the *forecast tail* via
-  `Date()` valuation — would mirror Rule 7's service-level clamp behaviour
-  and could be added without further design.
+  `Date()` valuation — would mirror Rule 7's service-level clamp and
+  could be added without further design.
 - A persisted "valued positions over time" series (e.g. for offline
-  rendering or sync). The current design recomputes from scratch on every
-  request; persistence would only be worthwhile if profiling shows the
-  recompute is the bottleneck.
+  rendering or sync). The current design recomputes from scratch on
+  every request; persistence would only be worthwhile if profiling
+  shows the recompute is the bottleneck.
 - Parallelising the per-day conversion fan-out via `TaskGroup`.
-- Surfacing per-day "this contribution couldn't be computed" markers in
-  the chart UI itself (today the chart silently gaps a missing day; the
-  on-screen affordance is a separate UI concern).
+- A user-facing "this day's contribution couldn't be computed" /
+  "retry" affordance on the chart UI itself (today the chart silently
+  gaps days dropped by the pipeline; an on-screen retry-now indicator
+  is a separate UI concern).
 
 ## Migration & Rollout
 
-Single PR. The change is additive (one new SQL fetch + one new fold) and
-behind no flag. Existing recorded-value behaviour is unchanged.
-Trades-mode accounts gain accurate historical chart contribution
-immediately — there is no observable regression for any existing user
-because the *only* behaviour change is "trades-mode accounts now
-contribute their position-valuation series to the historical chart on
-days they previously contributed zero (or only a transfer leg)."
+Single PR. The change is additive (one new SQL fetch, one new fold,
+two new aggregation fields) plus one tightening (snapshot fold's
+per-day failure now drops the day, matching walkDays). Behind no
+flag.
 
-The rollout matches recent analysis-fold PRs:
+The snapshot-fold tightening is a small behavioural change: a
+recorded-value snapshot whose conversion fails on a given day will
+now cause that day to gap in the chart instead of rendering with a
+stale partial total. This matches `walkDays`'s pre-existing
+per-day-failure contract, brings the daily-balance pipeline into
+Rule 11 compliance, and is the right behaviour given the chart's
+"missing day = visible gap" semantics. No tests rely on the old
+behaviour (`MoolahTests/Backends/GRDB/GRDBDailyBalancesAssembleTests`
+asserts `handleInvestmentValueFailure` is invoked but doesn't
+assert the day is retained); the new tests in §9.3 case 5 pin the
+new behaviour.
+
+Trades-mode accounts gain accurate historical chart contribution
+immediately — there is no observable regression for any existing
+user because the *only* behaviour change for trades-mode is "now
+contribute their position-valuation series to the historical chart
+on days they previously contributed zero (or only a transfer leg)."
+
+Rollout matches recent analysis-fold PRs:
 
 1. Open the PR against `main`.
 2. Run `code-review`, `database-code-review`,
