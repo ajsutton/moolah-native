@@ -18,8 +18,17 @@ struct ValuationModeTests {
     #expect(ValuationMode(rawValue: "unknown") == nil)
   }
 
-  @Test("CaseIterable lists both cases")
+  @Test("Codable round-trips through JSON")
+  func codableRoundTrip() throws {
+    for mode in ValuationMode.allCases {
+      let data = try JSONEncoder().encode(mode)
+      let decoded = try JSONDecoder().decode(ValuationMode.self, from: data)
+      #expect(decoded == mode)
+    }
+  }
+
+  @Test("CaseIterable lists both cases in order")
   func caseIterable() {
-    #expect(Set(ValuationMode.allCases) == [.recordedValue, .calculatedFromTrades])
+    #expect(ValuationMode.allCases == [.recordedValue, .calculatedFromTrades])
   }
 }
