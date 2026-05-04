@@ -150,7 +150,7 @@ private struct RuleRow: View {
       rule.actions.isEmpty
       ? "(no actions)"
       : rule.actions.map(Self.describe).joined(separator: " · ")
-    return "\(conditionSummary) → \(actionSummary)"
+    return "\(conditionSummary) then \(actionSummary)"
   }
 
   private static func describe(_ condition: RuleCondition) -> String {

@@ -106,8 +106,17 @@ struct UpcomingTransactionsCard: View {
     #if os(macOS)
       .frame(minHeight: 200)
     #else
-      .frame(height: 200)
+      // Dynamic frame instead of a fixed 200pt: at larger Dynamic Type
+      // sizes individual rows grow taller and a fixed 200 would clip to
+      // one or two rows. The cap keeps the card from dominating the
+      // screen on very large Dynamic Type settings.
+      .frame(minHeight: 200, maxHeight: 400)
     #endif
+    // Tighter row height for this dense upcoming context — the
+    // analysis dashboard packs several cards onto one screen and the
+    // default 44pt row height eats too much vertical space for a
+    // five- or six-row glance card.
+    .environment(\.defaultMinListRowHeight, 40)
     .accessibilityLabel("List of upcoming and overdue transactions")
   }
 

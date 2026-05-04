@@ -173,6 +173,7 @@ struct EarmarkDetailView: View {
           Image(systemName: "arrow.right")
             .font(.caption2)
             .foregroundStyle(.tertiary)
+            .accessibilityHidden(true)
         }
 
         if let end = earmark.savingsEndDate {

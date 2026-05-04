@@ -104,7 +104,11 @@ struct CategoryBalanceTable: View {
         categorySection(group)
       }
     }
-    .listStyle(.plain)
+    #if os(macOS)
+      .listStyle(.inset)
+    #else
+      .listStyle(.plain)
+    #endif
   }
 
   private func categorySection(_ group: CategoryGroup) -> some View {

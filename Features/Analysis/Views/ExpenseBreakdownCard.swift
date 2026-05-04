@@ -49,7 +49,11 @@ struct ExpenseBreakdownCard: View {
             .font(.caption)
             .fontWeight(.semibold)
             .foregroundStyle(.white)
-            .shadow(color: .primary.opacity(0.4), radius: 1, x: 0, y: 1)
+            // Black-with-opacity shadow rather than `.primary` so the
+            // contrast against pale segments (mint, yellow) holds in
+            // both light and dark mode — `.primary` matches the text
+            // in dark mode and provides no contrast.
+            .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
         }
       }
     }
