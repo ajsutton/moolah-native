@@ -62,7 +62,7 @@ struct UpcomingTransactionsCard: View {
     }
     .padding()
     .background(.background)
-    .cornerRadius(12)
+    .clipShape(.rect(cornerRadius: 12))
     #if os(macOS)
       .frame(maxHeight: .infinity, alignment: .top)
     #endif

@@ -38,6 +38,9 @@ struct RuleEditorView: View {
     NavigationStack {
       form
     }
+    #if os(macOS)
+      .frame(minWidth: 540, minHeight: 520)
+    #endif
   }
 
   private var form: some View {
@@ -67,9 +70,6 @@ struct RuleEditorView: View {
     .task(id: previewKey) {
       await schedulePreview()
     }
-    #if os(macOS)
-      .frame(minWidth: 540, minHeight: 520)
-    #endif
   }
 
   private var ruleSection: some View {

@@ -16,15 +16,20 @@ enum LegacyZoneCleanup {
 
   /// Performs the one-time cleanup if not already done.
   /// Call this at app launch. It's a no-op if cleanup was already performed.
-  static func performIfNeeded() {
-    guard !UserDefaults.standard.bool(forKey: cleanupKey) else { return }
-
-    Task {
-      await deleteLegacyZone()
+  ///
+  /// - Parameter defaults: `UserDefaults` instance used to persist the
+  ///   "cleanup done" flag. Tests can pass an isolated suite to avoid
+  ///   touching the user's standard defaults.
+  @MainActor
+  static func performIfNeeded(defaults: UserDefaults = .standard) {
+    guard !defaults.bool(forKey: cleanupKey) else { return }
+    Task { @MainActor in
+      await deleteLegacyZone(defaults: defaults)
     }
   }
 
-  private static func deleteLegacyZone() async {
+  @MainActor
+  private static func deleteLegacyZone(defaults: UserDefaults) async {
     let database = CloudKitContainer.app.privateCloudDatabase
     let legacyZoneID = CKRecordZone.ID(
       zoneName: legacyZoneName,
@@ -36,14 +41,14 @@ enum LegacyZoneCleanup {
       let zones = try await database.allRecordZones()
       guard zones.contains(where: { $0.zoneID == legacyZoneID }) else {
         logger.info("Legacy zone not found, marking cleanup as done")
-        UserDefaults.standard.set(true, forKey: cleanupKey)
+        defaults.set(true, forKey: cleanupKey)
         return
       }
 
       // Delete the zone (this deletes all records in it)
       try await database.deleteRecordZone(withID: legacyZoneID)
       logger.info("Successfully deleted legacy CloudKit zone")
-      UserDefaults.standard.set(true, forKey: cleanupKey)
+      defaults.set(true, forKey: cleanupKey)
     } catch {
       // Don't mark as done on failure — will retry next launch
       logger.error("Failed to delete legacy zone: \(error, privacy: .public)")

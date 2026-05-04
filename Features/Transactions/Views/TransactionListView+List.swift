@@ -45,6 +45,7 @@ extension TransactionListView {
     #else
       .listStyle(.plain)
     #endif
+    .accessibilityIdentifier(UITestIdentifiers.TransactionList.container)
     .profileNavigationTitle(displayTitle)
     .toolbar {
       ToolbarItem(placement: .automatic) {

@@ -66,6 +66,7 @@ struct AnalysisPlanPinningTests {
         """,
       arguments: ["X"])
     #expect(detail.contains("transaction_by_payee"))
+    #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "\"transaction\""))
   }
 
   @Test("fetchPayeeSuggestions with excludingTransactionId still uses the payee index")

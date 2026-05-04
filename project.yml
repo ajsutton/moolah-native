@@ -34,6 +34,14 @@ settings:
     # CLOUDKIT_CONTAINER_ID_TEST). Refs issue #495.
 
     # ---- Versioning ----
+    # CURRENT_PROJECT_VERSION is a placeholder. Fastlane (`fastlane beta` /
+    # `fastlane release`) auto-increments via `increment_build_number`
+    # against `latest_testflight_build_number` before archiving. Local
+    # Debug builds keep "1" — fine, since local builds are never uploaded.
+    # `scripts/check-release-build-number.sh` is wired as a pre-build phase
+    # on both app targets and fails any Release build that still sees "1",
+    # so a manual `xcodebuild archive` cannot collide with a real
+    # TestFlight build number.
     MARKETING_VERSION: "1.1.0"
     CURRENT_PROJECT_VERSION: "1"
 
@@ -81,6 +89,10 @@ targets:
       - path: Shared
       - path: Automation
       - path: UITestSupport
+    preBuildScripts:
+      - script: "${SRCROOT}/scripts/check-release-build-number.sh"
+        name: Verify Release build number
+        basedOnDependencyAnalysis: false
     dependencies:
       - sdk: AppIntents.framework
       - package: GRDB
@@ -136,6 +148,10 @@ targets:
       - path: Shared
       - path: Automation
       - path: UITestSupport
+    preBuildScripts:
+      - script: "${SRCROOT}/scripts/check-release-build-number.sh"
+        name: Verify Release build number
+        basedOnDependencyAnalysis: false
     dependencies:
       - sdk: AppIntents.framework
       - package: GRDB

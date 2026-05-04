@@ -20,6 +20,8 @@
     <string>$(CURRENT_PROJECT_VERSION)</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
+    <key>NSPrivacyPolicyURL</key>
+    <string>https://moolah.app/privacy</string>
     <key>NSUbiquitousContainers</key>
     <dict>
         <key>iCloud.rocks.moolah.app.v2</key>

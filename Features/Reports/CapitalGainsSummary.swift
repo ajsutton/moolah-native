@@ -27,7 +27,11 @@ struct CapitalGainsSummary: Sendable {
     let shortTerm: InstrumentAmount
     /// Pre-discount gains from assets held > 12 months.
     let longTerm: InstrumentAmount
-    /// Absolute value of net losses (if total is negative).
+    /// Magnitude of net losses, expressed as a non-negative quantity for the
+    /// "Capital losses" `TaxYearAdjustments` field. Built from the negative
+    /// portions of `shortTermGain` / `longTermGain` via unary minus, so the
+    /// monetary sign is preserved through the flip rather than discarded
+    /// with `abs()`.
     let losses: InstrumentAmount
   }
 }
@@ -41,9 +45,12 @@ extension CapitalGainsSummary {
     let longTerm = InstrumentAmount(
       quantity: max(0, longTermGain), instrument: currency
     )
+    // `totalLoss` sums the negative portions only, so it's always ≤ 0.
+    // Flip with unary minus to populate the `losses` field as a non-negative
+    // magnitude — never use `abs()` on a monetary quantity.
     let totalLoss = min(0, shortTermGain) + min(0, longTermGain)
     let losses = InstrumentAmount(
-      quantity: abs(totalLoss), instrument: currency
+      quantity: -totalLoss, instrument: currency
     )
     return TaxAdjustmentValues(shortTerm: shortTerm, longTerm: longTerm, losses: losses)
   }

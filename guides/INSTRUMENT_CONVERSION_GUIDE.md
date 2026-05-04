@@ -90,6 +90,19 @@ let converted = try await conversionService.convertAmount(
   leg.amount, to: targetInstrument, on: transaction.date)
 ```
 
+**Carve-out — transaction-list running balance (issue #530).** A transaction
+list's running-balance column is a current-value figure projected backward
+through history: each row's running balance must tie out to the live account
+balance shown in the sidebar. Using each transaction's own date here would
+make the most-recent row disagree with the sidebar whenever a historic rate
+differs from today's, and would make every prior row drift independently. The
+running-balance pipeline therefore snapshots a single `Date()` per page and
+applies it to every leg conversion in that page (see
+`Transaction.prefetchRates`). The per-leg display amount on each row is still
+historic and uses `transaction.date`; only the running-balance accumulation
+uses `Date()`. This is the only sanctioned departure from Rule 5 — do not
+generalize it to other historic reads.
+
 ### Rule 6: Current-value reads use `Date()`
 
 Reads whose semantics are "what is this worth right now" must convert on today:

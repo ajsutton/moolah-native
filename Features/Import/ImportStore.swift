@@ -244,11 +244,17 @@ final class ImportStore {
         #else
           let options: URL.BookmarkResolutionOptions = []
         #endif
-        return try? URL(
-          resolvingBookmarkData: bookmark,
-          options: options,
-          relativeTo: nil,
-          bookmarkDataIsStale: &isStale)
+        do {
+          return try URL(
+            resolvingBookmarkData: bookmark,
+            options: options,
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale)
+        } catch {
+          logger.error(
+            "bookmark resolution failed: \(error.localizedDescription)")
+          return nil
+        }
       }()
       let bytes = try await staging.data(for: pendingId)
       _ = try await backend.csvImportProfiles.create(profile)

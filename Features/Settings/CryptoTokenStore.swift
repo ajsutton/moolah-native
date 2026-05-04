@@ -71,7 +71,12 @@ final class CryptoTokenStore {
   // MARK: - API Key
 
   var hasApiKey: Bool {
-    (try? apiKeyStore.restoreString()) != nil
+    do {
+      return try apiKeyStore.restoreString() != nil
+    } catch {
+      logger.error("keychain read failed: \(error.localizedDescription)")
+      return false
+    }
   }
 
   func saveApiKey(_ key: String) {

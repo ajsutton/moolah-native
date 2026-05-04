@@ -22,6 +22,8 @@ import GRDB
 /// boundaries without a data race; `@unchecked` only waives Swift's
 /// structural check that `final class` types meet `Sendable`'s
 /// requirements automatically.
+/// See `guides/CONCURRENCY_GUIDE.md` §2 "False Positives to Avoid",
+/// Carve-out 3 (GRDB repositories).
 final class GRDBInvestmentRepository: InvestmentRepository, @unchecked Sendable {
   private let database: any DatabaseWriter
   /// Used as the labelling instrument on `AccountDailyBalance` rows

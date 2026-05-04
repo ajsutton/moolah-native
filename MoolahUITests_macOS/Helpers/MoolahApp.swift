@@ -101,6 +101,40 @@ final class MoolahApp {
     application.toolbars.buttons[label]
   }
 
+  // MARK: - Predicate-based escape hatches
+  //
+  // ui-test-review: allow single-resolver — predicate-based matching is
+  // required when a driver needs to count or scan a *family* of elements
+  // sharing an identifier prefix (e.g. `welcome.picker.row.<uuid>`) or
+  // matching a label substring (e.g. accessibility-combined trade rows).
+  // Routing those lookups through narrow helpers here keeps the driver
+  // layer free of direct `application.<query>` references and preserves
+  // the single-resolver invariant: every identifier touch in a driver
+  // still goes through `MoolahApp`.
+
+  /// Predicate-matched button query. Use when a driver needs to count
+  /// or enumerate buttons sharing an identifier prefix — the only
+  /// supported escape hatch from `element(for:)`. Pass an
+  /// `UITestIdentifiers` prefix constant, never an inline literal.
+  func buttons(matching predicate: NSPredicate) -> [XCUIElement] {
+    application.buttons.matching(predicate).allElementsBoundByIndex
+  }
+
+  /// Predicate-matched static-text query. Use when waiting on a row
+  /// whose accessibility label is composed at render time (e.g. a
+  /// transaction row whose label combines payee + amount + date) and
+  /// no stable identifier exists for it.
+  func staticTexts(matching predicate: NSPredicate) -> [XCUIElement] {
+    application.staticTexts.matching(predicate).allElementsBoundByIndex
+  }
+
+  /// Predicate-matched cell query. Same rationale as `staticTexts`,
+  /// for views that surface as cells in the accessibility tree
+  /// (List rows on iOS / cell-style List items on macOS).
+  func cells(matching predicate: NSPredicate) -> [XCUIElement] {
+    application.cells.matching(predicate).allElementsBoundByIndex
+  }
+
   /// Keyboard shortcut entrypoint for drivers. Drivers must route keyboard
   /// events through this method rather than reaching into `application`
   /// directly — the single seam keeps `MoolahApp` as the only surface the

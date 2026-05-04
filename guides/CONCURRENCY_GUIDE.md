@@ -110,7 +110,24 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
 
 Tests and previews use `CloudKitBackend` backed by an in-memory `ModelContainer` (via `TestBackend.create()` in tests and `PreviewBackend.create()` in previews). This runs the same production code path but with no persistent storage or CloudKit sync. The `CloudKitBackend` uses `@unchecked Sendable` because its repositories store a shared `ModelContainer` reference. This is acceptable because all repository methods use `@MainActor` isolation for SwiftData access.
 
-**Do not use `@unchecked Sendable` in production code.** If you need mutable shared state, use an `actor`.
+### False Positives to Avoid
+
+`@unchecked Sendable` is a sharp knife — every use waives a compiler check, so each occurrence must be justified in writing on the type itself and listed here. The carve-outs below are the only places `@unchecked Sendable` is allowed in this codebase. Anything outside this list must be a real `Sendable` (value type, immutable `final class`, or `actor`).
+
+**Carve-out 1 — `CloudKitBackend` and its SwiftData-backed repositories.** Repositories under `Backends/CloudKit/Repositories/` store a shared `ModelContainer` reference but only read/write SwiftData on `@MainActor`. The container reference itself never mutates after init. Justification documented above.
+
+**Carve-out 2 — `SyncCoordinator.PreparedEngine` (one-way ownership transfer).** `Backends/CloudKit/Sync/SyncCoordinator.swift` defines `PreparedEngine` as a `struct` with `@unchecked Sendable` so a `CKSyncEngine` (which CloudKit does not declare `Sendable`) can be constructed on a background `Task` and handed to `@MainActor` via the task's return value. The constraint is **one-way ownership transfer only — no concurrent readers**: the background task constructs the engine, returns the struct, and never touches it again; the receiving `MainActor` then owns the engine for the rest of its life. The `Task.value` happens-before edge is what makes the transfer safe; the `@unchecked` only waives Swift's structural check that `CKSyncEngine` conforms to `Sendable`. Anything that would let two threads observe the same `PreparedEngine.engine` concurrently invalidates this carve-out — keep the struct internal to the prepare/complete-start handoff.
+
+**Carve-out 3 — GRDB repositories (`final class` with immutable post-init state plus optional `@MainActor`-isolated mutable state).** Every repository under `Backends/GRDB/Repositories/` (`GRDBTransactionRepository`, `GRDBAccountRepository`, `GRDBCategoryRepository`, `GRDBEarmarkRepository`, `GRDBEarmarkBudgetItemRepository`, `GRDBInvestmentRepository`, `GRDBTransactionLegRepository`, `GRDBCSVImportProfileRepository`, `GRDBImportRuleRepository`, `GRDBInstrumentRegistryRepository`) is a `final class` declared `@unchecked Sendable` because:
+
+- All stored properties are `let`, OR
+- Any mutable property is explicitly `@MainActor`-isolated (e.g. `subscribers` on `GRDBInstrumentRegistryRepository`) and only touched from `MainActor`-isolated methods.
+- The shared `database: any DatabaseWriter` is itself `Sendable` per GRDB's protocol guarantee — the queue's serial executor mediates concurrent access.
+- All callback closures are typed `@Sendable` and captured at init.
+
+`@unchecked` waives only Swift's structural check that a `final class` automatically satisfies `Sendable`; it does not introduce shared mutable state. The justification must be repeated as a doc-comment on the class itself, referencing this carve-out by name. New GRDB repositories follow the same pattern; do **not** invent new carve-outs without updating this section.
+
+**Do not use `@unchecked Sendable` in any other production code.** If you need mutable shared state, use an `actor`.
 
 ---
 

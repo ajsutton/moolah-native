@@ -42,6 +42,8 @@ import OSLog
 /// the reference can be shared across actor boundaries without a data
 /// race; `@unchecked` only waives Swift's structural check that
 /// `final class` types meet `Sendable`'s requirements automatically.
+/// See `guides/CONCURRENCY_GUIDE.md` §2 "False Positives to Avoid",
+/// Carve-out 3 (GRDB repositories).
 final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendable {
   let database: any DatabaseWriter
   /// Profile instrument used to label the running balance for global

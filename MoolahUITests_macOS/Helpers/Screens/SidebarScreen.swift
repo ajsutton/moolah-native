@@ -28,12 +28,14 @@ struct SidebarScreen {
   let app: MoolahApp
 
   /// Switches the centre column to the transactions of the given account.
-  /// Returns once the account's row exists and has been clicked. The
-  /// downstream driver call (typically `transactionList.openTransaction`)
-  /// waits on the transaction row appearing, which is the real
-  /// user-visible post-condition; verifying SwiftUI's
-  /// `List(selection:)+NavigationLink` selection state directly is
-  /// unreliable through the accessibility tree.
+  /// Returns once the transaction-list container is in the accessibility
+  /// tree for the new selection — the user-visible "list re-rendered"
+  /// post-condition cited as the example for invariant 1 in
+  /// `guides/UI_TEST_GUIDE.md`. `exists` (not `isHittable`) is the
+  /// correct predicate: on macOS a SwiftUI `List(selection:)` renders as
+  /// an `NSTableView`-backed view whose container element is never
+  /// reported as hittable — only its rows are — so polling on
+  /// `isHittable` would always time out, even when the list has rendered.
   func switchToAccount(_ account: SidebarAccount) {
     Trace.record(detail: "account=\(account)")
     let identifier = UITestIdentifiers.Sidebar.account(account.id)
@@ -44,5 +46,14 @@ struct SidebarScreen {
       return
     }
     row.click()
+
+    let listContainer = app.element(for: UITestIdentifiers.TransactionList.container)
+    if !listContainer.waitForExistence(timeout: 3) {
+      Trace.recordFailure(
+        "transaction list container '\(UITestIdentifiers.TransactionList.container)' "
+          + "did not appear after switching to \(account)")
+      XCTFail(
+        "Transaction list did not render within 3s of switching to account \(account)")
+    }
   }
 }

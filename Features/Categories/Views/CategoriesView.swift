@@ -187,7 +187,9 @@ struct CategoriesView: View {
         ContentUnavailableView(
           "No Categories",
           systemImage: "tag",
-          description: Text("Create a category to start organizing your transactions.")
+          description: Text(
+            PlatformActionVerb.emptyStatePrompt(
+              buttonLabel: "+", suffix: "to add your first category."))
         )
       }
     }
@@ -257,7 +259,7 @@ private struct CreateCategorySheet: View {
       ToolbarItem(placement: .cancellationAction) {
         Button("Cancel") { dismiss() }
       }
-      ToolbarItem(placement: .primaryAction) {
+      ToolbarItem(placement: .confirmationAction) {
         Button("Create") {
           onCreate(Category(name: name, parentId: selectedParentId))
         }
