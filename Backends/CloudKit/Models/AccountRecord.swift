@@ -12,6 +12,7 @@ final class AccountRecord {
   var position: Int = 0
   var instrumentId: String = "AUD"
   var isHidden: Bool = false
+  var valuationMode: String = "recordedValue"  // Raw value of ValuationMode
   var encodedSystemFields: Data?
 
   init(
@@ -45,12 +46,13 @@ final class AccountRecord {
       instrument: instrument,
       positions: positions,
       position: position,
-      isHidden: isHidden
+      isHidden: isHidden,
+      valuationMode: ValuationMode(rawValue: valuationMode) ?? .recordedValue
     )
   }
 
   static func from(_ account: Account) -> AccountRecord {
-    AccountRecord(
+    let record = AccountRecord(
       id: account.id,
       name: account.name,
       type: account.type.rawValue,
@@ -58,5 +60,7 @@ final class AccountRecord {
       position: account.position,
       isHidden: account.isHidden
     )
+    record.valuationMode = account.valuationMode.rawValue
+    return record
   }
 }
