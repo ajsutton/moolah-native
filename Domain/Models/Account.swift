@@ -28,6 +28,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
   var positions: [Position]
   var position: Int
   var isHidden: Bool
+  var valuationMode: ValuationMode
 
   init(
     id: UUID = UUID(),
@@ -36,7 +37,8 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     instrument: Instrument,
     positions: [Position] = [],
     position: Int = 0,
-    isHidden: Bool = false
+    isHidden: Bool = false,
+    valuationMode: ValuationMode = .recordedValue
   ) {
     self.id = id
     self.name = name
@@ -45,6 +47,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     self.positions = positions
     self.position = position
     self.isHidden = isHidden
+    self.valuationMode = valuationMode
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -54,6 +57,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     case instrument
     case position
     case isHidden = "hidden"
+    case valuationMode
   }
 
   init(from decoder: Decoder) throws {
@@ -65,6 +69,8 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     positions = []
     position = try container.decode(Int.self, forKey: .position)
     isHidden = try container.decode(Bool.self, forKey: .isHidden)
+    valuationMode =
+      try container.decodeIfPresent(ValuationMode.self, forKey: .valuationMode) ?? .recordedValue
   }
 
   func encode(to encoder: Encoder) throws {
@@ -75,12 +81,14 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     try container.encode(instrument, forKey: .instrument)
     try container.encode(position, forKey: .position)
     try container.encode(isHidden, forKey: .isHidden)
+    try container.encode(valuationMode, forKey: .valuationMode)
   }
 
   static func == (lhs: Account, rhs: Account) -> Bool {
     lhs.id == rhs.id && lhs.name == rhs.name && lhs.type == rhs.type
       && lhs.instrument == rhs.instrument
       && lhs.position == rhs.position && lhs.isHidden == rhs.isHidden
+      && lhs.valuationMode == rhs.valuationMode
   }
 
   func hash(into hasher: inout Hasher) {
@@ -90,6 +98,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     hasher.combine(instrument)
     hasher.combine(position)
     hasher.combine(isHidden)
+    hasher.combine(valuationMode)
   }
 
   static func < (lhs: Account, rhs: Account) -> Bool {
