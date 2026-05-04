@@ -16,17 +16,22 @@ import OSLog
 /// mutations, and a non-protocol `notifyExternalChange()` method that the
 /// sync layer calls when remote pulls touch instrument rows.
 ///
-/// **`@unchecked Sendable` justification.** All stored properties are
-/// `let` except `subscribers`, which is `@MainActor`-isolated and only
-/// touched from `MainActor`-isolated methods. `database`
-/// (`any DatabaseWriter`) is itself `Sendable` (GRDB protocol guarantee —
-/// the queue's serial executor mediates concurrent access).
-/// `onRecordChanged` and `onRecordDeleted` are `@Sendable` closures
-/// captured at init. Nothing mutates post-init outside the
-/// `MainActor`-confined dictionary, so the reference can be shared
-/// across actor boundaries without a data race; `@unchecked` only waives
-/// Swift's structural check that `final class` types meet `Sendable`'s
-/// requirements automatically.
+/// **`@unchecked Sendable` justification.** Unlike the all-`let`
+/// pattern of the other nine GRDB repositories, this one has a
+/// genuinely mutable stored property: `subscribers`, the
+/// `[UUID: AsyncStream<Void>.Continuation]` map that drives
+/// `observeChanges()`. That property is `@MainActor`-isolated, so
+/// every mutation (`observeChanges()`, the AsyncStream's
+/// `onTermination` callback, `notifyExternalChange()`) runs on the
+/// main actor. Swift can't propagate that property-level isolation
+/// into the enclosing class's `Sendable` check, so we use `@unchecked`
+/// to vouch for the runtime guarantee. The remaining stored
+/// properties are `let`: `database` (`any DatabaseWriter`) is itself
+/// `Sendable` (GRDB queue's serial executor mediates concurrent
+/// access); `onRecordChanged` / `onRecordDeleted` are `@Sendable`
+/// closures captured at init; `logger` is a value type. The
+/// `@MainActor`-confined dictionary plus the otherwise-immutable
+/// surface keeps the type race-free in practice.
 /// See `guides/CONCURRENCY_GUIDE.md` §2 "False Positives to Avoid",
 /// Carve-out 3 (GRDB repositories).
 final class GRDBInstrumentRegistryRepository:
