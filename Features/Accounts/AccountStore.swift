@@ -250,8 +250,18 @@ final class AccountStore {
     isLoading = true
     error = nil
 
+    // User-driven creation defaults investment accounts to
+    // `.calculatedFromTrades`. Migration paths write through
+    // `AccountRepository.update`, not `create`, so existing rows are
+    // unaffected. Callers that want the struct default explicitly pass
+    // `valuationMode: .recordedValue`; that input is preserved.
+    var toCreate = account
+    if toCreate.type == .investment && toCreate.valuationMode == .recordedValue {
+      toCreate.valuationMode = .calculatedFromTrades
+    }
+
     do {
-      let created = try await repository.create(account, openingBalance: openingBalance)
+      let created = try await repository.create(toCreate, openingBalance: openingBalance)
 
       // Optimistically add to local state
       accounts = Accounts(from: accounts.ordered + [created])
