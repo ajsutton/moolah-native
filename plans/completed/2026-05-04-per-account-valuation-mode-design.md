@@ -1,7 +1,7 @@
 # Per-Account Valuation Mode — Design
 
 **Date:** 2026-05-04
-**Status:** Draft, pending review (round 2)
+**Status:** Implemented (PRs #730, #731, #732, #733, #734, #735, #736)
 **Scope:** Replace today's implicit "if any `InvestmentValueRecord` exists for
 this account, render the legacy snapshots view and use the latest snapshot as
 the current value; otherwise render the positions view and sum positions"
