@@ -14,16 +14,23 @@ extension GRDBAnalysisRepository {
 
   // MARK: - SQL fetches
 
-  /// Loads every account id whose `type = 'investment'`. The Swift
-  /// assembly walks per-day deltas and needs to know which accounts
-  /// are investments so it can route transfer legs into
-  /// `accountsFromTransfers`. Reading the column directly off the
-  /// `account` table avoids redundantly carrying the full account row
-  /// across the snapshot boundary.
+  /// Loads every account id whose `type = 'investment'` AND whose
+  /// `valuation_mode = 'recordedValue'`. The Swift assembly walks
+  /// per-day deltas and folds in snapshot values for these accounts;
+  /// trades-mode investment accounts are intentionally excluded
+  /// because their per-day value comes from a different path and they
+  /// have no snapshot fold to apply — including them here would
+  /// overwrite their daily balance with a stale or missing snapshot.
+  /// Reading the column directly off the `account` table avoids
+  /// redundantly carrying the full account row across the snapshot
+  /// boundary.
   static func fetchInvestmentAccountIds(database: Database) throws -> Set<UUID> {
     let rows = try Row.fetchAll(
       database,
-      sql: "SELECT id FROM account WHERE type = 'investment'")
+      sql: """
+        SELECT id FROM account
+        WHERE type = 'investment' AND valuation_mode = 'recordedValue'
+        """)
     var ids = Set<UUID>()
     ids.reserveCapacity(rows.count)
     for row in rows {
