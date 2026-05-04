@@ -30,9 +30,9 @@ struct AddInvestmentValueIntentPolicyTests {
   func writesInTradesMode() async throws {
     let (service, session) = try await makeServiceWithSession()
 
-    // The Phase 6 default makes `store.create` set
-    // `.calculatedFromTrades` on every new investment account, so this
-    // matches the production "user creates a brokerage today" path.
+    // `store.create` promotes every new investment account to
+    // `.calculatedFromTrades`, so this matches the production
+    // "user creates a brokerage today" path.
     let saved = try await session.accountStore.create(
       Account(name: "Brokerage", type: .investment, instrument: session.profile.instrument))
     #expect(saved.valuationMode == .calculatedFromTrades)

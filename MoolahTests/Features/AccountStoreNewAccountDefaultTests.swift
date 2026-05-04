@@ -43,16 +43,15 @@ struct AccountStoreNewAccountDefaultTests {
     #expect(after.valuationMode == .recordedValue)
   }
 
-  @Test("explicit calculatedFromTrades on the input is preserved")
-  func explicitTradesModeRespected() async throws {
+  @Test("explicit recordedValue on investment input is overridden to trades")
+  func explicitRecordedOnInvestmentOverriddenToTrades() async throws {
     let (store, backend) = try makeStore()
     let saved = try await store.create(
       Account(
         name: "B",
         type: .investment,
         instrument: .defaultTestInstrument,
-        valuationMode: .calculatedFromTrades))
-
+        valuationMode: .recordedValue))
     let all = try await backend.accounts.fetchAll()
     let after = try #require(all.first { $0.id == saved.id })
     #expect(after.valuationMode == .calculatedFromTrades)

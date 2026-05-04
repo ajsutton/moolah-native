@@ -250,11 +250,11 @@ final class AccountStore {
     isLoading = true
     error = nil
 
-    // User-driven creation defaults investment accounts to
-    // `.calculatedFromTrades`. Migration paths write through
-    // `AccountRepository.update`, not `create`, so existing rows are
-    // unaffected. Callers that want the struct default explicitly pass
-    // `valuationMode: .recordedValue`; that input is preserved.
+    // User-driven account creation lands in trades mode by default for
+    // investment accounts: any caller-provided `.recordedValue` is silently
+    // promoted to `.calculatedFromTrades`. Migration / sync paths that need
+    // to write `.recordedValue` go through `accountRepository.update(_:)`
+    // directly, not this method.
     var toCreate = account
     if toCreate.type == .investment && toCreate.valuationMode == .recordedValue {
       toCreate.valuationMode = .calculatedFromTrades

@@ -9,9 +9,9 @@ import Testing
 /// avoids spinning up XCUITest infrastructure (no edit-account driver,
 /// no seed, no sheet-open identifier exists today) while still pinning
 /// the behaviour the picker relies on.
-@Suite("EditAccountView/ValuationMode")
+@Suite("AccountStore.update (valuation)")
 @MainActor
-struct EditAccountValuationModeTests {
+struct AccountStoreUpdateValuationTests {
   @Test("changing valuationMode and saving persists via the store")
   func picksAndSavesNewMode() async throws {
     let (backend, database) = try TestBackend.create()

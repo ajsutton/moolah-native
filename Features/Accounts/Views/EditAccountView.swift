@@ -66,6 +66,7 @@ struct EditAccountView: View {
           .disabled(!isValid || isSubmitting)
       }
     }
+    .animation(.easeInOut(duration: 0.2), value: type)
   }
 
   private var detailsSection: some View {
@@ -100,12 +101,17 @@ struct EditAccountView: View {
           Text("Calculated from trades").tag(ValuationMode.calculatedFromTrades)
         }
         .accessibilityIdentifier("editAccount.valuationMode")
+        .accessibilityHint(
+          valuationMode == .recordedValue
+            ? "Balance comes from the value you last recorded"
+            : "Balance is calculated from your trade history and current prices of your holdings"
+        )
       } footer: {
         Text(
           valuationMode == .recordedValue
-            ? "The account's current value comes from the latest valuation snapshot you entered."
-            : "The account's current value is computed from your trade history and current "
-              + "instrument prices.")
+            ? "The balance comes from the value you last recorded manually."
+            : "The balance is calculated from your trade history and the current prices "
+              + "of your holdings.")
       }
     }
   }
