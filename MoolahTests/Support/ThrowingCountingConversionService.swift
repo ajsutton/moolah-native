@@ -72,6 +72,12 @@ final class FailureLog: Sendable {
 /// reason as `FailureLog` — and exposes only `append(_:_:)` and
 /// `snapshot()` so multi-field reads are atomic with respect to a
 /// single lock acquisition (mirrors the `FailureLog` API shape).
+///
+/// `(Error, Date)` is `Sendable` because Swift's `Error` protocol
+/// inherits from `Sendable` (Swift 5.7+), so the existential
+/// `any Error` is `Sendable` and `OSAllocatedUnfairLock<[(Error, Date)]>`
+/// satisfies the conditional `Sendable where State: Sendable`
+/// requirement.
 final class InvestmentValueFailureLog: Sendable {
   private let entries = OSAllocatedUnfairLock<[(Error, Date)]>(initialState: [])
 

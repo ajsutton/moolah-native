@@ -135,11 +135,13 @@ struct GRDBDailyBalancesTradesModeTests {
 
   @Test("case 7: startOfDay normalization keys days correctly across local boundary")
   func rule10StartOfDayNormalization() async throws {
-    // Use the local-calendar `date(year:month:day:hour:)` overload
+    // Use the local-calendar `localDate(year:month:day:hour:)` helper
     // (added by Task 0) so the test agrees with the production
     // fold's `Calendar.current.startOfDay` math.
-    let dayMorning = try AnalysisTestHelpers.date(year: 2025, month: 6, day: 10, hour: 9)
-    let dayEvening = try AnalysisTestHelpers.date(year: 2025, month: 6, day: 10, hour: 23)
+    let dayMorning = try AnalysisTestHelpers.localDate(
+      year: 2025, month: 6, day: 10, hour: 9)
+    let dayEvening = try AnalysisTestHelpers.localDate(
+      year: 2025, month: 6, day: 10, hour: 23)
     let dayKey = Calendar.current.startOfDay(for: dayMorning)
     #expect(Calendar.current.startOfDay(for: dayEvening) == dayKey)
 
@@ -161,7 +163,7 @@ struct GRDBDailyBalancesTradesModeTests {
     // would walk past 06:00 and pick up 99.99 instead, yielding a
     // far larger total. Both rows would then mis-rate identically,
     // turning the assertion below into a sharp signal.
-    let midDay = try AnalysisTestHelpers.date(
+    let midDay = try AnalysisTestHelpers.localDate(
       year: 2025, month: 6, day: 10, hour: 6)
     let conversion = DateBasedFixedConversionService(
       rates: [

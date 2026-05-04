@@ -27,7 +27,7 @@ struct GRDBDailyBalancesAggregationTests {
       valuationMode: .recordedValue)
     _ = try await backend.accounts.create(snapshotAccount)
 
-    let aggregation = try await backend.testFetchAggregation(
+    let aggregation = try await backend.fetchAggregationForTesting(
       after: nil, forecastUntil: nil)
 
     #expect(aggregation.tradesModeInvestmentAccountIds.contains(tradesAccount.id))
@@ -74,7 +74,7 @@ struct GRDBDailyBalancesAggregationTests {
           ]))
     }
 
-    let aggregation = try await backend.testFetchAggregation(
+    let aggregation = try await backend.fetchAggregationForTesting(
       after: cutoff, forecastUntil: nil)
 
     let priorIds = Set(aggregation.priorTradesModeAccountRows.map(\.accountId))
@@ -92,7 +92,7 @@ struct GRDBDailyBalancesAggregationTests {
       valuationMode: .recordedValue)
     _ = try await backend.accounts.create(snapshotAccount)
 
-    let aggregation = try await backend.testFetchAggregation(
+    let aggregation = try await backend.fetchAggregationForTesting(
       after: nil, forecastUntil: nil)
 
     #expect(aggregation.tradesModeInvestmentAccountIds.isEmpty)

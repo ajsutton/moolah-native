@@ -27,11 +27,17 @@ enum AnalysisTestHelpers {
   }
 
   /// Build a local-calendar `Date` at a specific `hour:` on the given
-  /// day. Uses `Calendar.current` so the resulting `Date`'s
-  /// `startOfDay` agrees with the production fold's
-  /// `Calendar.current.startOfDay(for: row.sampleDate)` math —
-  /// required by Rule 10 same-`startOfDay` normalization tests.
-  static func date(
+  /// day. Uses `Calendar.current` (not the fixed-Gregorian `calendar`
+  /// used by the parameterless-hour `date(year:month:day:)` overload)
+  /// so the resulting `Date`'s `startOfDay` agrees with the
+  /// production fold's `Calendar.current.startOfDay(for:
+  /// row.sampleDate)` math — required by Rule 10
+  /// same-`startOfDay` normalization tests.
+  ///
+  /// Renamed from the `date(...)` overload to make the calendar
+  /// asymmetry explicit at the call site: the prefix-shared
+  /// `date(year:month:day:)` is fixed-Gregorian; this is local.
+  static func localDate(
     year: Int, month: Int, day: Int, hour: Int
   ) throws -> Date {
     try #require(

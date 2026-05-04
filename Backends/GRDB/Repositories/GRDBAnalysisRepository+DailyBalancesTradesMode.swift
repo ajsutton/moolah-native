@@ -160,6 +160,9 @@ extension GRDBAnalysisRepository {
     on dayKey: Date,
     profileInstrument: Instrument
   ) {
+    precondition(
+      total.instrument == profileInstrument,
+      "mergeTradesModeTotal: total must be in profileInstrument; got \(total.instrument.id)")
     guard let existing = dailyBalances[dayKey] else { return }
     let combined =
       (existing.investmentValue ?? .zero(instrument: profileInstrument)) + total

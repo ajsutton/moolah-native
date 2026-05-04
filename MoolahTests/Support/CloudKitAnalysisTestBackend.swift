@@ -74,7 +74,7 @@ extension CloudKitAnalysisTestBackend {
   /// per-day walk. Reads from the backend's already-public
   /// `DatabaseQueue` — no peek into `GRDBAnalysisRepository`'s
   /// private storage.
-  func testFetchAggregation(
+  func fetchAggregationForTesting(
     after: Date?, forecastUntil: Date?
   ) async throws -> GRDBAnalysisRepository.DailyBalancesAggregation {
     try await GRDBAnalysisRepository.fetchDailyBalancesAggregation(

@@ -228,4 +228,40 @@ struct GRDBDailyBalancesTradesModeRule11Tests {
     #expect(dayBalance.balance.quantity == 0)
     #expect(dayBalance.netWorth.quantity == expected)
   }
+
+  @Test("CancellationError from Task.checkCancellation rethrows immediately")
+  func cancellationRethrown() async throws {
+    // All-fast-path scenario: a profile-instrument position means
+    // `sumTradesModePositions` never `await`s, so without an explicit
+    // `try Task.checkCancellation()` at the top of the per-day loop
+    // the runtime would never get a chance to surface cancellation.
+    // This test pins that the cancellation check is wired and rethrows
+    // directly (Rule 11 contract: never via the failure callback).
+    let day = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
+    let dayKey = Calendar.current.startOfDay(for: day)
+    let aud = Instrument.defaultTestInstrument
+    let accountId = UUID()
+    // Profile-instrument position — all-fast-path, no service calls.
+    let row = GRDBAnalysisRepository.DailyBalanceAccountRow(
+      day: "2025-06-10", sampleDate: day,
+      accountId: accountId, instrumentId: aud.id, type: "trade",
+      qty: 1_000_000_000)
+    let task = Task {
+      var balances: [Date: DailyBalance] = [
+        dayKey: TradesModeFoldTestSupport.placeholderBalance(at: dayKey)
+      ]
+      let context = TradesModeFoldTestSupport.makeContext(
+        tradesIds: [accountId],
+        instrumentMap: [aud.id: aud],
+        conversionService: DateBasedFixedConversionService(rates: [:]))
+      let handlers = TradesModeFoldTestSupport.makeHandlers { _, _ in }
+      try await GRDBAnalysisRepository.applyTradesModePositionValuations(
+        priorRows: [], postRows: [row],
+        to: &balances, context: context, handlers: handlers)
+    }
+    task.cancel()
+    await #expect(throws: CancellationError.self) {
+      try await task.value
+    }
+  }
 }

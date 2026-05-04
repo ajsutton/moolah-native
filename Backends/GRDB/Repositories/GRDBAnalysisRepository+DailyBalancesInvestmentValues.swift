@@ -127,11 +127,22 @@ extension GRDBAnalysisRepository {
   }
 
   // MARK: - Per-day fold-in
-  /// Fold the investment-value snapshots into the per-day balances by
-  /// walking the days in order and tracking the latest value per
-  /// account. Same per-day error contract as the historic walk: a
-  /// failed conversion logs and drops just that day's investment
-  /// override; the rest of the days continue.
+  /// Per-day investment-value override: for each recorded-value
+  /// investment account, carries the latest snapshot forward to each
+  /// day and replaces the bank-balance-derived `investmentValue`
+  /// with the converted total.
+  ///
+  /// Rule 11 contract (same as `walkDays`): a conversion failure on a
+  /// single day drops that day from `dailyBalances` via
+  /// `removeValue(forKey:)` so the chart shows a gap rather than an
+  /// incorrect partial total. Sibling days are unaffected.
+  /// `CancellationError` rethrows immediately and is never routed
+  /// through the failure callback.
+  ///
+  /// `Task.checkCancellation()` at the top of the per-day loop covers
+  /// the all-fast-path case (every snapshot already in the profile
+  /// instrument): no `await` would otherwise occur, so the runtime
+  /// would never get a chance to surface cancellation.
   static func applyInvestmentValues(
     _ investmentValues: [InvestmentValueSnapshot],
     to dailyBalances: inout [Date: DailyBalance],
