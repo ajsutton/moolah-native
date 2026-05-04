@@ -141,7 +141,8 @@ struct ProfileDataSyncHandlerTests {
       instrumentId: "AUD",
       position: 0,
       isHidden: false,
-      encodedSystemFields: nil)
+      encodedSystemFields: nil,
+      valuationMode: ValuationMode.recordedValue.rawValue)
 
     let ckRecord = handler.buildCKRecord(from: row, encodedSystemFields: nil)
 
@@ -186,7 +187,8 @@ struct ProfileDataSyncHandlerTests {
       instrumentId: "AUD",
       position: 0,
       isHidden: false,
-      encodedSystemFields: foreignSystemFields)
+      encodedSystemFields: foreignSystemFields,
+      valuationMode: ValuationMode.recordedValue.rawValue)
 
     let built = handler.buildCKRecord(from: row, encodedSystemFields: foreignSystemFields)
 
@@ -228,7 +230,8 @@ struct ProfileDataSyncHandlerTests {
       instrumentId: "AUD",
       position: 0,
       isHidden: false,
-      encodedSystemFields: cachedSystemFields)
+      encodedSystemFields: cachedSystemFields,
+      valuationMode: ValuationMode.recordedValue.rawValue)
 
     // Build a CKRecord — should reuse cached system fields, which carry a
     // prefixed recordID by construction. The `buildCKRecord` contract is

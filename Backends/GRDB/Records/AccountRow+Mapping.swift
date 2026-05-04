@@ -23,6 +23,7 @@ extension AccountRow {
     self.position = domain.position
     self.isHidden = domain.isHidden
     self.encodedSystemFields = nil
+    self.valuationMode = domain.valuationMode.rawValue
   }
 
   /// Domain projection. `instruments` is the registry lookup
@@ -45,6 +46,7 @@ extension AccountRow {
       instrument: instrument,
       positions: positions,
       position: position,
-      isHidden: isHidden)
+      isHidden: isHidden,
+      valuationMode: ValuationMode(rawValue: valuationMode) ?? .recordedValue)
   }
 }

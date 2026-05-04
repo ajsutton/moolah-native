@@ -223,7 +223,8 @@ extension SwiftDataToGRDBMigrator {
       instrumentId: source.instrumentId,
       position: source.position,
       isHidden: source.isHidden,
-      encodedSystemFields: source.encodedSystemFields)
+      encodedSystemFields: source.encodedSystemFields,
+      valuationMode: source.valuationMode)
   }
 
 }

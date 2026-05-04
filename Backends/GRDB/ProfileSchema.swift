@@ -24,6 +24,10 @@ import GRDB
 /// core financial graph (`category`, `earmark_budget_item`,
 /// `transaction_leg`, `investment_value`) without any FK clauses.
 /// See `ProfileSchema+DropForeignKeys.swift` for rationale.
+/// `v6_account_valuation_mode` — adds the `valuation_mode` column to
+/// the `account` table (per-account choice between recorded value and
+/// calculated-from-trades). See
+/// `ProfileSchema+AccountValuationMode.swift`.
 ///
 /// **Retention policy for the cache tables.** All six cache tables
 /// created by `v1_initial` (`exchange_rate`, `exchange_rate_meta`,
@@ -44,7 +48,7 @@ enum ProfileSchema {
   /// Bumped each time a migration is added. Surfaced for open-time
   /// integrity checks; not used by `DatabaseMigrator` (which keys on
   /// the stable string IDs of registered migrations).
-  static let version = 5
+  static let version = 6
 
   static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
@@ -62,6 +66,8 @@ enum ProfileSchema {
       "v4_rate_cache_without_rowid", migrate: rebuildRateCacheMetaWithoutRowid)
     migrator.registerMigration(
       "v5_drop_foreign_keys", migrate: dropForeignKeys)
+    migrator.registerMigration(
+      "v6_account_valuation_mode", migrate: addAccountValuationMode)
 
     return migrator
   }

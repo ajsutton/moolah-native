@@ -20,7 +20,8 @@ extension AccountRow: CloudKitRecordConvertible {
       isHidden: isHidden ? 1 : 0,
       name: name,
       position: Int64(position),
-      type: type
+      type: type,
+      valuationMode: valuationMode
     ).write(to: record)
     return record
   }
@@ -38,7 +39,8 @@ extension AccountRow: CloudKitRecordConvertible {
       isHidden: (fields.isHidden ?? 0) != 0,
       // Stamped by applyGRDBBatchSave after upsert; never read from the
       // CKRecord itself.
-      encodedSystemFields: nil
+      encodedSystemFields: nil,
+      valuationMode: fields.valuationMode ?? "recordedValue"
     )
   }
 }

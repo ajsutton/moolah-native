@@ -94,7 +94,8 @@ extension UITestSeedHydrator {
       instrumentId: spec.instrumentId,
       position: spec.position,
       isHidden: false,
-      encodedSystemFields: nil)
+      encodedSystemFields: nil,
+      valuationMode: ValuationMode.recordedValue.rawValue)
     try row.upsert(database)
   }
 

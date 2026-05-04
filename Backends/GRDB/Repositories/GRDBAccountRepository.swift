@@ -196,6 +196,7 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
       existing.instrumentId = account.instrument.id
       existing.position = account.position
       existing.isHidden = account.isHidden
+      existing.valuationMode = account.valuationMode.rawValue
       try existing.update(database)
 
       let instruments = try Self.fetchInstrumentMap(database: database)
