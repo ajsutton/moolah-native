@@ -250,8 +250,18 @@ final class AccountStore {
     isLoading = true
     error = nil
 
+    // User-driven account creation lands in trades mode by default for
+    // investment accounts: any caller-provided `.recordedValue` is silently
+    // promoted to `.calculatedFromTrades`. Migration / sync paths that need
+    // to write `.recordedValue` go through `accountRepository.update(_:)`
+    // directly, not this method.
+    var toCreate = account
+    if toCreate.type == .investment && toCreate.valuationMode == .recordedValue {
+      toCreate.valuationMode = .calculatedFromTrades
+    }
+
     do {
-      let created = try await repository.create(account, openingBalance: openingBalance)
+      let created = try await repository.create(toCreate, openingBalance: openingBalance)
 
       // Optimistically add to local state
       accounts = Accounts(from: accounts.ordered + [created])

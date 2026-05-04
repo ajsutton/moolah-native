@@ -6,6 +6,7 @@ struct EditAccountView: View {
   @State private var type: AccountType
   @State private var currency: Instrument
   @State private var isHidden: Bool
+  @State private var valuationMode: ValuationMode
   @State private var isSubmitting = false
   @State private var errorMessage: String?
   @FocusState private var focusedField: Field?
@@ -24,6 +25,7 @@ struct EditAccountView: View {
     _type = State(initialValue: account.type)
     _currency = State(initialValue: account.instrument)
     _isHidden = State(initialValue: account.isHidden)
+    _valuationMode = State(initialValue: account.valuationMode)
   }
 
   var body: some View {
@@ -38,6 +40,7 @@ struct EditAccountView: View {
   private var form: some View {
     Form {
       detailsSection
+      valuationSection
       if let errorMessage {
         Section {
           Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
@@ -63,6 +66,7 @@ struct EditAccountView: View {
           .disabled(!isValid || isSubmitting)
       }
     }
+    .animation(.easeInOut(duration: 0.2), value: type)
   }
 
   private var detailsSection: some View {
@@ -85,6 +89,33 @@ struct EditAccountView: View {
     }
   }
 
+  /// Visible only for investment accounts. Lets the user choose between the
+  /// snapshot-driven `recordedValue` mode and the position-driven
+  /// `calculatedFromTrades` mode. Footer text describes the active mode so
+  /// the user can predict what the sidebar balance will read.
+  @ViewBuilder private var valuationSection: some View {
+    if type == .investment {
+      Section {
+        Picker("Valuation", selection: $valuationMode) {
+          Text("Recorded value").tag(ValuationMode.recordedValue)
+          Text("Calculated from trades").tag(ValuationMode.calculatedFromTrades)
+        }
+        .accessibilityIdentifier("editAccount.valuationMode")
+        .accessibilityHint(
+          valuationMode == .recordedValue
+            ? "Balance comes from the value you last recorded"
+            : "Balance is calculated from your trade history and current prices of your holdings"
+        )
+      } footer: {
+        Text(
+          valuationMode == .recordedValue
+            ? "The balance comes from the value you last recorded manually."
+            : "The balance is calculated from your trade history and the current prices "
+              + "of your holdings.")
+      }
+    }
+  }
+
   private var isValid: Bool {
     !name.trimmingCharacters(in: .whitespaces).isEmpty
   }
@@ -100,6 +131,7 @@ struct EditAccountView: View {
     updated.type = type
     updated.instrument = currency
     updated.isHidden = isHidden
+    updated.valuationMode = valuationMode
 
     do {
       _ = try await accountStore.update(updated)
@@ -111,7 +143,7 @@ struct EditAccountView: View {
   }
 }
 
-#Preview {
+#Preview("Bank account") {
   let (backend, _) = PreviewBackend.create()
   let accountStore = AccountStore(
     repository: backend.accounts,
@@ -120,5 +152,21 @@ struct EditAccountView: View {
 
   EditAccountView(
     account: Account(name: "Checking", type: .bank, instrument: .AUD),
+    accountStore: accountStore)
+}
+
+#Preview("Investment account") {
+  let (backend, _) = PreviewBackend.create()
+  let accountStore = AccountStore(
+    repository: backend.accounts,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD)
+
+  EditAccountView(
+    account: Account(
+      name: "Brokerage",
+      type: .investment,
+      instrument: .AUD,
+      valuationMode: .calculatedFromTrades),
     accountStore: accountStore)
 }
