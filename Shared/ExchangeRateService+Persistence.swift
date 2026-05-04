@@ -75,7 +75,7 @@ extension ExchangeRateService {
       for record in deltaRecords {
         try record.insert(database, onConflict: .replace)
       }
-      try meta.insert(database)
+      try meta.insert(database, onConflict: .replace)
     }
   }
 }

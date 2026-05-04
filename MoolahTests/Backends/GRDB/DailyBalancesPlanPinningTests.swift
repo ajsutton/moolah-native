@@ -11,6 +11,17 @@ import Testing
 /// `AnalysisAggregationPlanPinningTests` so each file stays under the
 /// SwiftLint `type_body_length` and `file_length` budgets — same
 /// methodology, different aggregation surface.
+///
+/// **Temp B-tree GROUP/ORDER lines are accepted across this whole
+/// file.** Every aggregation here groups and orders by
+/// `day = DATE(t.date)` — a derived expression with no index keying,
+/// so SQLite has no choice but to materialise the groups and the sort
+/// in temp B-trees. Trying to forbid `USE TEMP B-TREE FOR GROUP BY` /
+/// `USE TEMP B-TREE FOR ORDER BY` would force the planner away from
+/// the leg-side / covering index entirely. The perf-critical signals
+/// are the bare-SCAN rejection (`planHasFullTableScanOf`) and the
+/// `USING COVERING INDEX` assertion where applicable. Each `@Test`
+/// references this rationale rather than restating it.
 @Suite("Daily-balance aggregation plan-pinning")
 struct DailyBalancesPlanPinningTests {
   private func makeDatabase() throws -> DatabaseQueue {
@@ -72,17 +83,7 @@ struct DailyBalancesPlanPinningTests {
     // table name (which would silently pass even on a full scan).
     #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
-    // SQLite's plan is permitted to (and does) include both
-    // `USE TEMP B-TREE FOR GROUP BY` and `USE TEMP B-TREE FOR ORDER BY`.
-    // We do NOT reject those lines because the GROUP BY and ORDER BY
-    // both key on `day = DATE(t.date)` — a derived expression with no
-    // index keying. SQLite has no choice but to materialise the groups
-    // and the sort in temp B-trees; trying to forbid them would force
-    // the planner away from the leg-side index entirely. The
-    // bare-SCAN rejection captured by `planHasFullTableScanOf` is the
-    // perf-critical signal — it's what flips when the leg-side index
-    // is dropped or the WHERE clause grows a predicate the partial
-    // index doesn't cover.
+    // Temp B-tree GROUP/ORDER lines accepted — see file-header rationale.
   }
 
   @Test("fetchDailyBalances pre-cutoff account-dimension SUM avoids a SCAN")
@@ -118,15 +119,7 @@ struct DailyBalancesPlanPinningTests {
     #expect(usesAcceptableLegIndex)
     #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
-    // SQLite's plan is permitted to (and does) include both
-    // `USE TEMP B-TREE FOR GROUP BY` and `USE TEMP B-TREE FOR ORDER BY`.
-    // We do NOT reject those lines because the GROUP BY and ORDER BY
-    // both key on `day = DATE(t.date)` — a derived expression with no
-    // index keying. SQLite has no choice but to materialise the groups
-    // and the sort in temp B-trees; trying to forbid them would force
-    // the planner away from the leg-side index entirely. The
-    // bare-SCAN rejection captured by `planHasFullTableScanOf` is the
-    // perf-critical signal.
+    // Temp B-tree GROUP/ORDER lines accepted — see file-header rationale.
   }
 
   @Test("fetchDailyBalances per-day earmark-dimension SUM uses leg_analysis_by_earmark_type")
@@ -161,15 +154,7 @@ struct DailyBalancesPlanPinningTests {
     #expect(detail.contains("USING COVERING INDEX"))
     #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
-    // SQLite's plan is permitted to (and does) include both
-    // `USE TEMP B-TREE FOR GROUP BY` and `USE TEMP B-TREE FOR ORDER BY`.
-    // We do NOT reject those lines because the GROUP BY and ORDER BY
-    // both key on `day = DATE(t.date)` — a derived expression with no
-    // index keying. SQLite has no choice but to materialise the groups
-    // and the sort in temp B-trees; trying to forbid them would force
-    // the planner away from the covering index entirely. The
-    // covering-index property captured by the positive
-    // `USING COVERING INDEX` assertion is the perf-critical signal.
+    // Temp B-tree GROUP/ORDER lines accepted — see file-header rationale.
   }
 
   @Test("fetchDailyBalances pre-cutoff earmark-dimension SUM uses leg_analysis_by_earmark_type")
@@ -203,15 +188,7 @@ struct DailyBalancesPlanPinningTests {
     #expect(detail.contains("USING COVERING INDEX"))
     #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
-    // SQLite's plan is permitted to (and does) include both
-    // `USE TEMP B-TREE FOR GROUP BY` and `USE TEMP B-TREE FOR ORDER BY`.
-    // We do NOT reject those lines because the GROUP BY and ORDER BY
-    // both key on `day = DATE(t.date)` — a derived expression with no
-    // index keying. SQLite has no choice but to materialise the groups
-    // and the sort in temp B-trees; trying to forbid them would force
-    // the planner away from the covering index entirely. The
-    // covering-index property captured by the positive
-    // `USING COVERING INDEX` assertion is the perf-critical signal.
+    // Temp B-tree GROUP/ORDER lines accepted — see file-header rationale.
   }
 
   @Test("fetchDailyBalances investment-value lookup uses iv_by_account_date_value")
