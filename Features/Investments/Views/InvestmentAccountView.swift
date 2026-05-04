@@ -26,6 +26,13 @@ struct InvestmentAccountView: View {
   /// crashes Release builds on accounts that have legacy investment values
   /// (e.g. Test Profile → Crypto).
   @State private var initialLoadComplete = false
+  /// Flipped to `true` for one render pass whenever `account.valuationMode`
+  /// changes (sync delivery from another device, or the user-facing Picker
+  /// once it ships). Forces a `ProgressView` placeholder in that pass so
+  /// `TransactionListView`'s toolbar tears down cleanly before the new
+  /// layout re-mounts it — same toolbar-stability invariant as
+  /// `initialLoadComplete`, but for mid-session mode flips.
+  @State private var pendingLayoutSwitch = false
 
   /// The profile's reporting currency — used for valuing positions and the
   /// chart series. NOT the account's own instrument: an investment account
@@ -124,13 +131,23 @@ struct InvestmentAccountView: View {
 
   var body: some View {
     Group {
-      if !initialLoadComplete {
+      if !initialLoadComplete || pendingLayoutSwitch {
         ProgressView()
           .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else if account.valuationMode == .recordedValue {
-        legacyValuationsLayout
       } else {
-        positionTrackedLayout
+        switch account.valuationMode {
+        case .recordedValue:
+          legacyValuationsLayout
+        case .calculatedFromTrades:
+          positionTrackedLayout
+        }
+      }
+    }
+    .onChange(of: account.valuationMode) { _, _ in
+      pendingLayoutSwitch = true
+      Task {
+        await Task.yield()
+        pendingLayoutSwitch = false
       }
     }
     .transactionInspector(
