@@ -41,6 +41,34 @@ extension GRDBAnalysisRepository {
     return ids
   }
 
+  /// Loads every account id whose `type = 'investment'` AND whose
+  /// `valuation_mode = 'calculatedFromTrades'`. The trades-mode fold
+  /// (`applyTradesModePositionValuations`) walks per-day position
+  /// deltas for these accounts and valuates the cumulative positions
+  /// against the conversion service on the day's date. Recorded-value
+  /// investment accounts are intentionally excluded — they contribute
+  /// via the snapshot fold instead. Reading the column directly off
+  /// the `account` table avoids carrying the full account row across
+  /// the position-row boundary.
+  static func fetchTradesModeInvestmentAccountIds(
+    database: Database
+  ) throws -> Set<UUID> {
+    let rows = try Row.fetchAll(
+      database,
+      sql: """
+        SELECT id FROM account
+        WHERE type = 'investment' AND valuation_mode = 'calculatedFromTrades'
+        """)
+    var ids = Set<UUID>()
+    ids.reserveCapacity(rows.count)
+    for row in rows {
+      if let id: UUID = row["id"] {
+        ids.insert(id)
+      }
+    }
+    return ids
+  }
+
   /// Loads the per-account latest-as-of-day investment values pinned
   /// by
   /// `DailyBalancesPlanPinningTests.fetchDailyBalancesInvestmentValuesUseAccountDateIndex`.
