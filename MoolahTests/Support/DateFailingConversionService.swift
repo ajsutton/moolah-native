@@ -16,6 +16,14 @@ import Foundation
 // internal (was fileprivate) so sibling test files can use this helper
 struct DateFailingConversionService: InstrumentConversionService {
   let rates: [Date: [String: Decimal]]
+  /// Entries must be `Calendar.current.startOfDay`-normalised so
+  /// they line up with how production callers compute their
+  /// `dayKey` (`applyInvestmentValues`,
+  /// `applyTradesModePositionValuations`). The service no longer
+  /// re-normalises the `on:` argument inside `convert(...)` — a
+  /// second `startOfDay` call with a non-Gregorian calendar would
+  /// silently disagree with the caller's `Calendar.current`-keyed
+  /// `failingDates`, turning Rule 10 regressions into false-greens.
   let failingDates: Set<Date>
   private let sortedRateEntries: [(date: Date, rates: [String: Decimal])]
 
@@ -39,9 +47,8 @@ struct DateFailingConversionService: InstrumentConversionService {
     _ quantity: Decimal, from: Instrument, to: Instrument, on date: Date
   ) async throws -> Decimal {
     if from.id == to.id { return quantity }
-    let dayKey = Calendar(identifier: .gregorian).startOfDay(for: date)
-    if failingDates.contains(dayKey) {
-      throw DateFailingConversionError.unavailable(date: dayKey)
+    if failingDates.contains(date) {
+      throw DateFailingConversionError.unavailable(date: date)
     }
     let asOf = ratesAsOf(date)
     guard let rate = asOf[from.id] else {

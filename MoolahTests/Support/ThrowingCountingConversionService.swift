@@ -63,3 +63,23 @@ final class FailureLog: Sendable {
     entries.withLock { $0 }
   }
 }
+
+/// Async-safe collector for `(Error, Date)` failure tuples emitted by
+/// `DailyBalancesHandlers.handleInvestmentValueFailure`. Used by
+/// tests that need to assert which day surfaced through the per-day
+/// error callback (and how many times). Backed by
+/// `OSAllocatedUnfairLock` for the same `@Sendable`-closure-mutation
+/// reason as `FailureLog` — and exposes only `append(_:_:)` and
+/// `snapshot()` so multi-field reads are atomic with respect to a
+/// single lock acquisition (mirrors the `FailureLog` API shape).
+final class InvestmentValueFailureLog: Sendable {
+  private let entries = OSAllocatedUnfairLock<[(Error, Date)]>(initialState: [])
+
+  func append(_ error: Error, _ date: Date) {
+    entries.withLock { $0.append((error, date)) }
+  }
+
+  func snapshot() -> [(Error, Date)] {
+    entries.withLock { $0 }
+  }
+}

@@ -26,6 +26,20 @@ enum AnalysisTestHelpers {
       calendar.date(from: DateComponents(year: year, month: month, day: day)))
   }
 
+  /// Build a local-calendar `Date` at a specific `hour:` on the given
+  /// day. Uses `Calendar.current` so the resulting `Date`'s
+  /// `startOfDay` agrees with the production fold's
+  /// `Calendar.current.startOfDay(for: row.sampleDate)` math —
+  /// required by Rule 10 same-`startOfDay` normalization tests.
+  static func date(
+    year: Int, month: Int, day: Int, hour: Int
+  ) throws -> Date {
+    try #require(
+      currentCalendar.date(
+        from: DateComponents(
+          year: year, month: month, day: day, hour: hour)))
+  }
+
   /// Build a UTC-anchored Date from year/month/day components.
   ///
   /// SQL `DATE(t.date)` extracts the UTC calendar day, and
