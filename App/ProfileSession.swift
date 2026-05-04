@@ -340,6 +340,12 @@ final class ProfileSession: Identifiable {
   /// `SessionManager`) is responsible for surfacing the error to the
   /// user. A failed setUp leaves the migration's `UserDefaults` flags
   /// unset, so the next launch retries.
+  ///
+  /// After the SwiftData → GRDB migration completes, runs the one-shot
+  /// `ValuationModeMigration` so each existing investment account's
+  /// `valuationMode` reflects whether it has any snapshot rows. The
+  /// migration is non-fatal: a failure is logged and the app continues
+  /// because read sites still auto-detect at this rollout stage.
   func setUp() async throws {
     if let existing = setUpTask {
       return try await existing.value
@@ -355,6 +361,27 @@ final class ProfileSession: Identifiable {
     }
     setUpTask = task
     try await task.value
+    await runValuationModeMigration()
+  }
+
+  /// Runs `ValuationModeMigration` for this profile. Non-fatal: any
+  /// thrown error is logged but does not surface to the caller because
+  /// auto-detect read sites are still in place at this rollout stage.
+  /// Called from `setUp()` after the SwiftData → GRDB migration so the
+  /// account / investment-value rows are visible to GRDB-backed
+  /// repositories.
+  private func runValuationModeMigration() async {
+    let migration = ValuationModeMigration(
+      profileId: profile.id,
+      accountRepository: backend.accounts,
+      investmentRepository: backend.investments,
+      userDefaults: .standard)
+    do {
+      try await migration.run()
+    } catch {
+      logger.error(
+        "ValuationModeMigration failed: \(error.localizedDescription, privacy: .public)")
+    }
   }
 
 }
