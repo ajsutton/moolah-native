@@ -40,11 +40,21 @@ spec:
   - Widen `resolveInstrument` from `private static` to `static` (drop
     `private`) so the new fold in
     `+DailyBalancesInvestmentValues.swift` can call it.
+  - In `walkDays`, pass `investmentAccountIds.union(tradesModeInvestmentAccountIds)`
+    to the read-side `PositionBook.BalanceContext.investmentAccountIds`
+    so trades-mode positions are excluded from `bankTotal`
+    (no double-count in `netWorth`).
 - `Backends/GRDB/Repositories/GRDBAnalysisRepository+DailyBalancesAggregation.swift`
   - Call `fetchTradesModeInvestmentAccountIds` inside
     `readDailyBalancesAggregation`.
   - Pre-filter the existing prior/post account-row arrays into the new
     trades-mode-only fields.
+- `Backends/GRDB/Repositories/GRDBAnalysisRepository+DailyBalancesForecast.swift`
+  - Apply the same `investmentAccountIds.union(tradesModeInvestmentAccountIds)`
+    in `generateForecast`'s `BalanceContext` so the forecast tail's
+    `bankTotal` excludes trades-mode positions (forecast days do not
+    receive a trades-fold contribution and would otherwise sum the
+    raw position quantity into `balance`).
 - `Backends/GRDB/Repositories/GRDBAnalysisRepository+DailyBalancesInvestmentValues.swift`
   - Add `fetchTradesModeInvestmentAccountIds`.
   - Add `applyTradesModePositionValuations` and its helpers
@@ -80,8 +90,9 @@ spec:
   - **New file.** Aggregation-layer integration tests for the three
     new fields populated by `fetchDailyBalancesAggregation`.
 - `MoolahTests/Backends/GRDB/GRDBDailyBalancesTradesModeTests.swift`
-  - **New file.** Holds the 12 fold-contract tests from the spec
-    (§9.3).
+  - **New file.** Holds 13 fold-contract tests (cases 1–4, 6–14 from
+    spec §9.3 plus the round-3 additions; case 5 lives in
+    `GRDBDailyBalancesAssembleTests`).
 - `MoolahTests/Domain/AnalysisRule11ScopingTests.swift`
   - No-op (existing per-day-drop test stays green; the snapshot-fold
     tightening makes it consistent — verify nothing regresses).
@@ -1925,9 +1936,9 @@ Append:
   }
 ```
 
-- [ ] **Step 9: Add case 12 (carry-forward across a dropped day)**
+- [ ] **Step 9: Add cases 12, 13, 14 (carry-forward, priorRows seed, end-to-end double-count pin)**
 
-Append:
+Append (in numeric order — case 12, then 13, then 14):
 
 ```swift
   @Test("case 12: carry-forward across a dropped day stays correct")
@@ -1965,6 +1976,45 @@ Append:
     // Day 2 must valuate the cumulative position from day 1's buy
     // even though day 1 itself isn't in dailyBalances.
     let value = try #require(balances[keyTwo]?.investmentValue)
+    #expect(value.quantity == try AnalysisTestHelpers.decimal("15"))
+  }
+
+  @Test("case 13: priorRows seed contributes to first in-window day")
+  func priorRowsSeedSeenOnFirstWindowDay() async throws {
+    // priorRows simulates pre-cutoff legs the user holds going into
+    // the window. The fold's pre-fold seed (§4 step 2) must apply
+    // them so the first in-window dayKey valuates the carried
+    // position.
+    let priorDay = try AnalysisTestHelpers.utcDate(year: 2025, month: 5, day: 1, hour: 12)
+    let windowDay = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
+    let dayKey = Calendar.current.startOfDay(for: windowDay)
+    let usd = Instrument.fiat(code: "USD")
+    let accountId = UUID()
+    let prior = GRDBAnalysisRepository.DailyBalanceAccountRow(
+      day: "2025-05-01", sampleDate: priorDay,
+      accountId: accountId, instrumentId: "USD", type: "trade", qty: 1000)
+    let conversion = DateBasedFixedConversionService(
+      rates: [
+        try AnalysisTestHelpers.utcDate(year: 2025, month: 1, day: 1, hour: 0): [
+          "USD": try AnalysisTestHelpers.decimal("1.5")
+        ]
+      ])
+    var balances: [Date: DailyBalance] = [
+      dayKey: Self.placeholderBalance(at: dayKey)
+    ]
+    let context = Self.makeContext(
+      tradesIds: [accountId],
+      instrumentMap: ["USD": usd],
+      conversionService: conversion)
+    let handlers = Self.makeHandlers { _, _ in }
+
+    try await GRDBAnalysisRepository.applyTradesModePositionValuations(
+      priorRows: [prior], postRows: [],
+      to: &balances, context: context, handlers: handlers)
+
+    // Pre-fold seed applied 1000 storage units = 10 USD; converted
+    // at 1.5 = 15 AUD on `dayKey`.
+    let value = try #require(balances[dayKey]?.investmentValue)
     #expect(value.quantity == try AnalysisTestHelpers.decimal("15"))
   }
 
@@ -2020,45 +2070,6 @@ Append:
     #expect(value.quantity == expected)
     #expect(dayBalance.balance.quantity == 0)
     #expect(dayBalance.netWorth.quantity == expected)
-  }
-
-  @Test("case 13: priorRows seed contributes to first in-window day")
-  func priorRowsSeedSeenOnFirstWindowDay() async throws {
-    // priorRows simulates pre-cutoff legs the user holds going into
-    // the window. The fold's pre-fold seed (§4 step 2) must apply
-    // them so the first in-window dayKey valuates the carried
-    // position.
-    let priorDay = try AnalysisTestHelpers.utcDate(year: 2025, month: 5, day: 1, hour: 12)
-    let windowDay = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
-    let dayKey = Calendar.current.startOfDay(for: windowDay)
-    let usd = Instrument.fiat(code: "USD")
-    let accountId = UUID()
-    let prior = GRDBAnalysisRepository.DailyBalanceAccountRow(
-      day: "2025-05-01", sampleDate: priorDay,
-      accountId: accountId, instrumentId: "USD", type: "trade", qty: 1000)
-    let conversion = DateBasedFixedConversionService(
-      rates: [
-        try AnalysisTestHelpers.utcDate(year: 2025, month: 1, day: 1, hour: 0): [
-          "USD": try AnalysisTestHelpers.decimal("1.5")
-        ]
-      ])
-    var balances: [Date: DailyBalance] = [
-      dayKey: Self.placeholderBalance(at: dayKey)
-    ]
-    let context = Self.makeContext(
-      tradesIds: [accountId],
-      instrumentMap: ["USD": usd],
-      conversionService: conversion)
-    let handlers = Self.makeHandlers { _, _ in }
-
-    try await GRDBAnalysisRepository.applyTradesModePositionValuations(
-      priorRows: [prior], postRows: [],
-      to: &balances, context: context, handlers: handlers)
-
-    // Pre-fold seed applied 1000 storage units = 10 USD; converted
-    // at 1.5 = 15 AUD on `dayKey`.
-    let value = try #require(balances[dayKey]?.investmentValue)
-    #expect(value.quantity == try AnalysisTestHelpers.decimal("15"))
   }
 ```
 
