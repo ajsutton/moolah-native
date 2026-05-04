@@ -13,6 +13,7 @@ struct InstrumentAmountView: View {
       .foregroundStyle(effectiveColor)
       .monospacedDigit()
       .font(font)
+      .accessibilityLabel(Text("Amount"))
       .accessibilityValue(amount.formatted)
   }
 
