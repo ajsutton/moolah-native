@@ -26,7 +26,7 @@ struct AccountValuationModeTests {
         name: "X", type: .investment, instrument: .AUD, valuationMode: mode)
       let data = try JSONEncoder().encode(original)
       let decoded = try JSONDecoder().decode(Account.self, from: data)
-      #expect(decoded.valuationMode == mode)
+      #expect(decoded == original)
     }
   }
 
@@ -55,6 +55,7 @@ struct AccountValuationModeTests {
       valuationMode: .recordedValue)
     var modified = original
     modified.valuationMode = .calculatedFromTrades
+    #expect(original.id == modified.id)
     #expect(original != modified)
   }
 }
