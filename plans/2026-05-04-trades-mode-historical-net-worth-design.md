@@ -633,10 +633,10 @@ Add to
    no-op; `investmentValue` reflects only the snapshot fold; pinning
    tests for the existing path stay green.
 9. **Empty `dailyBalances` ⇒ no-op** — nothing to fold over; no
-   `handleInvestmentValueFailure` callback fires (verified via the
-   closure-captured counter pattern used by sibling tests in
-   `GRDBDailyBalancesAssembleTests` — a local `var failures = 0`
-   hoisted before the `DailyBalancesHandlers` construction).
+   `handleInvestmentValueFailure` callback fires. Asserted via the
+   same closure-captured `var failures: [(Error, Date)] = []`
+   pattern as case 4 (`#expect(failures.isEmpty)`) so the two cases
+   share one mechanism rather than diverging on counter shape.
 10. **CSV-imported trade with a `.transfer` cash leg + a `.trade`
     position leg.** A profile-instrument cash transfer of `C` and a
     same-day trade buying `N` shares of an instrument priced `P` on
