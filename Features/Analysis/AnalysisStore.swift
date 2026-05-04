@@ -5,7 +5,9 @@ import Observation
 @Observable
 @MainActor
 final class AnalysisStore {
-  // State
+
+  // MARK: - State
+
   private(set) var dailyBalances: [DailyBalance] = []
   private(set) var expenseBreakdown: [ExpenseBreakdown] = []
   private(set) var incomeAndExpense: [MonthlyIncomeExpense] = []
@@ -24,7 +26,16 @@ final class AnalysisStore {
   /// becomes inactive returning from a share sheet or system dialog).
   private(set) var lastLoadedAt: Date?
 
-  // Filters (persisted across launches)
+  /// Today's day-of-month, used as the financial month boundary (matching
+  /// the web app). Stored so SwiftUI can observe changes (e.g. date
+  /// rollover triggers reload). Initialised in `init` (via the
+  /// defaulted parameter) and refreshed at the start of each `loadAll()`.
+  /// Tests can inject a fixed value through the init parameter so the
+  /// store doesn't depend on wall-clock at construction time.
+  private(set) var monthEnd: Int
+
+  // MARK: - Filters (persisted across launches)
+
   var historyMonths: Int {
     didSet { defaults.set(historyMonths, forKey: "analysisHistoryMonths") }
   }
@@ -33,13 +44,22 @@ final class AnalysisStore {
   }
   var showActualValues: Bool = false  // false = percentage, true = actual amounts
 
+  // MARK: - Dependencies
+
   let repository: AnalysisRepository
   private let defaults: UserDefaults
   private let logger = Logger(subsystem: "com.moolah.app", category: "AnalysisStore")
 
-  init(repository: AnalysisRepository, defaults: UserDefaults = .standard) {
+  // MARK: - Lifecycle
+
+  init(
+    repository: AnalysisRepository,
+    defaults: UserDefaults = .standard,
+    monthEnd: Int = Calendar.current.component(.day, from: Date())
+  ) {
     self.repository = repository
     self.defaults = defaults
+    self.monthEnd = monthEnd
 
     // Restore last-used values (UserDefaults returns 0 for missing keys)
     let savedHistory = defaults.integer(forKey: "analysisHistoryMonths")
@@ -53,6 +73,8 @@ final class AnalysisStore {
       self.forecastMonths = 1
     }
   }
+
+  // MARK: - Data Loading
 
   func loadAll() async {
     monthEnd = Calendar.current.component(.day, from: Date())
@@ -120,6 +142,8 @@ final class AnalysisStore {
   func overrideLastLoadedAtForTesting(_ date: Date?) {
     lastLoadedAt = date
   }
+
+  // MARK: - Aggregation
 
   /// Extends balance data to fill gaps, matching the web app's extrapolateBalances logic:
   /// 1. Extend actual balances forward to today (so the step chart reaches the present).
@@ -280,17 +304,14 @@ final class AnalysisStore {
     return nil
   }
 
+  // MARK: - Date Utilities
+
   private static func parseMonth(_ month: String) -> Date {
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyyMM"
     formatter.timeZone = TimeZone(identifier: "UTC")
     return formatter.date(from: month) ?? Date.distantPast
   }
-
-  /// Today's day-of-month, used as the financial month boundary (matching the web app).
-  /// Stored so SwiftUI can observe changes (e.g. date rollover triggers reload).
-  /// Updated at the start of each loadAll() call.
-  private(set) var monthEnd: Int = Calendar.current.component(.day, from: Date())
 
   private func afterDate(monthsAgo: Int) -> Date? {
     guard monthsAgo > 0 else { return nil }  // 0 = "All"
