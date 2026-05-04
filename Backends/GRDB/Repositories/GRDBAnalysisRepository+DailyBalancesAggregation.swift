@@ -74,6 +74,9 @@ extension GRDBAnalysisRepository {
       earmarkRows: earmarkRows,
       investmentValues: investmentValues,
       investmentAccountIds: investmentAccountIds,
+      tradesModeInvestmentAccountIds: [],  // populated in Task 3
+      priorTradesModeAccountRows: [],  // populated in Task 3
+      tradesModeAccountRows: [],  // populated in Task 3
       scheduled: scheduled,
       instrumentMap: instrumentMap,
       forecastUntil: forecastUntil)

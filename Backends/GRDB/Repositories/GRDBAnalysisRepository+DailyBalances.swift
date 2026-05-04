@@ -89,6 +89,17 @@ extension GRDBAnalysisRepository {
     let earmarkRows: [DailyBalanceEarmarkRow]
     let investmentValues: [InvestmentValueSnapshot]
     let investmentAccountIds: Set<UUID>
+    /// Account ids of trades-mode investment accounts. Drives the new
+    /// per-day position-valuation fold; recorded-value accounts are
+    /// carried in `investmentAccountIds` and drive the snapshot fold.
+    let tradesModeInvestmentAccountIds: Set<UUID>
+    /// Pre-cutoff `transaction_leg` SUM rows filtered to trades-mode
+    /// investment accounts only. Pre-fold seed for the new fold's
+    /// cumulative position dict.
+    let priorTradesModeAccountRows: [DailyBalanceAccountRow]
+    /// Post-cutoff `transaction_leg` SUM rows filtered to trades-mode
+    /// investment accounts only.
+    let tradesModeAccountRows: [DailyBalanceAccountRow]
     let scheduled: [Transaction]
     let instrumentMap: [String: Instrument]
     let forecastUntil: Date?
@@ -124,6 +135,12 @@ extension GRDBAnalysisRepository {
   /// each function fits SwiftLint's `function_parameter_count` budget.
   struct DailyBalancesAssemblyContext: Sendable {
     let investmentAccountIds: Set<UUID>
+    /// Account ids of trades-mode investment accounts — read by
+    /// `applyTradesModePositionValuations` to early-exit when the
+    /// profile has none. None of the seed/walk helpers consult this
+    /// field; trades-mode accounts contribute through the new fold,
+    /// not through `accountsFromTransfers`.
+    let tradesModeInvestmentAccountIds: Set<UUID>
     let instrumentMap: [String: Instrument]
     let profileInstrument: Instrument
     let conversionService: any InstrumentConversionService
@@ -168,6 +185,7 @@ extension GRDBAnalysisRepository {
   ) async throws -> [DailyBalance] {
     let context = DailyBalancesAssemblyContext(
       investmentAccountIds: aggregation.investmentAccountIds,
+      tradesModeInvestmentAccountIds: aggregation.tradesModeInvestmentAccountIds,
       instrumentMap: aggregation.instrumentMap,
       profileInstrument: profileInstrument,
       conversionService: conversionService)
@@ -351,8 +369,9 @@ extension GRDBAnalysisRepository {
   /// Reconstruct an `Instrument` value from the row's `instrument_id`
   /// string, falling back to ambient fiat when the registry has no
   /// stored row for the id. Mirrors the same lookup used by the other
-  /// SQL aggregations.
-  private static func resolveInstrument(
+  /// SQL aggregations. Internal so sibling `+DailyBalances*.swift`
+  /// extensions can share one decoding helper.
+  static func resolveInstrument(
     _ id: String, in map: [String: Instrument]
   ) -> Instrument {
     map[id] ?? Instrument.fiat(code: id)

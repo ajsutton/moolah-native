@@ -63,6 +63,9 @@ struct GRDBDailyBalancesAssembleTests {
       earmarkRows: [],
       investmentValues: [],
       investmentAccountIds: [],
+      tradesModeInvestmentAccountIds: [],
+      priorTradesModeAccountRows: [],
+      tradesModeAccountRows: [],
       scheduled: [],
       instrumentMap: [usd: .fiat(code: usd)],
       forecastUntil: nil)
