@@ -109,20 +109,20 @@
   <!-- Ground shadow -->
   <ellipse cx="512" cy="906" rx="460" ry="44" fill="url(#groundShadow)"/>
 
-  <!-- LEFT PEAK: BLUE (income) -->
+  <!-- LEFT PEAK: BLUE (income). Cap constrained to silhouette at y=196. -->
   <polygon points="296,176 388,176 388,876 60,876" fill="url(#blueLight)"/>
   <polygon points="388,176 584,876 388,876" fill="url(#blueDark)"/>
-  <polygon points="296,176 388,176 398,196 286,196" fill="url(#blueTop)"/>
-  <polyline points="296,176 60,876" fill="none" stroke="#9DC0E8" stroke-width="4" opacity="0.7"/>
-  <polyline points="388,176 584,876" fill="none" stroke="#01030F" stroke-width="3" opacity="0.85"/>
+  <polygon points="296,176 388,176 394,196 289,196" fill="url(#blueTop)"/>
+  <polyline points="296,176 60,876" fill="none" stroke="#9DC0E8" stroke-width="4" stroke-linecap="butt" opacity="0.7"/>
+  <polyline points="388,176 584,876" fill="none" stroke="#01030F" stroke-width="3" stroke-linecap="butt" opacity="0.85"/>
   <line x1="388" y1="176" x2="388" y2="876" stroke="#0F2870" stroke-width="2" opacity="0.55"/>
 
-  <!-- RIGHT PEAK: RED (expense) -->
+  <!-- RIGHT PEAK: RED (expense). Cap constrained to silhouette at y=196. -->
   <polygon points="636,176 728,176 964,876 636,876" fill="url(#redLight)"/>
   <polygon points="636,176 636,876 440,876" fill="url(#redDark)"/>
-  <polygon points="636,176 728,176 738,196 626,196" fill="url(#redTop)"/>
-  <polyline points="728,176 964,876" fill="none" stroke="#E8B5B0" stroke-width="4" opacity="0.7"/>
-  <polyline points="636,176 440,876" fill="none" stroke="#0F0205" stroke-width="3" opacity="0.85"/>
+  <polygon points="636,176 728,176 735,196 630,196" fill="url(#redTop)"/>
+  <polyline points="728,176 964,876" fill="none" stroke="#E8B5B0" stroke-width="4" stroke-linecap="butt" opacity="0.7"/>
+  <polyline points="636,176 440,876" fill="none" stroke="#0F0205" stroke-width="3" stroke-linecap="butt" opacity="0.85"/>
   <line x1="636" y1="176" x2="636" y2="876" stroke="#5E0A1A" stroke-width="2" opacity="0.6"/>
 
   <!-- Base shadow join between peaks -->

@@ -1,12 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!--
+    Launch-screen variant: derived from the master icon with the square
+    background, starfield and vignette stripped so the artwork blends
+    seamlessly with the solid LaunchBackground colour ($#07102E$). Only
+    the figure (peaks, gem, glow, sparkles, base shadow join) remains.
+    Geometry and gradients are otherwise byte-for-byte the same as the
+    master.
+  -->
   <defs>
-    <radialGradient id="bg" cx="50%" cy="42%" r="80%">
-      <stop offset="0%"  stop-color="#132A66"/>
-      <stop offset="55%" stop-color="#07102E"/>
-      <stop offset="100%" stop-color="#01020A"/>
-    </radialGradient>
-
-    <!-- BLUE (income) peak gradients -->
     <linearGradient id="blueLight" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%"  stop-color="#A9ECFF"/>
       <stop offset="40%" stop-color="#3EA4FF"/>
@@ -21,7 +22,6 @@
       <stop offset="0%"  stop-color="#EAFBFF"/>
       <stop offset="100%" stop-color="#68C4FF"/>
     </linearGradient>
-    <!-- RED (expense) peak gradients -->
     <linearGradient id="redLight" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%"  stop-color="#FFD0C6"/>
       <stop offset="40%" stop-color="#FF5A5F"/>
@@ -36,12 +36,6 @@
       <stop offset="0%"  stop-color="#FFECE8"/>
       <stop offset="100%" stop-color="#FF8A80"/>
     </linearGradient>
-
-    <radialGradient id="gemGlow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%"  stop-color="#FFFFFF" stop-opacity="1"/>
-      <stop offset="35%" stop-color="#9CF3FF" stop-opacity="0.85"/>
-      <stop offset="100%" stop-color="#0EB1FF" stop-opacity="0"/>
-    </radialGradient>
 
     <linearGradient id="gemTopL" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="#F8FDFF"/>
@@ -59,16 +53,10 @@
       <stop offset="0%" stop-color="#FF6A6F"/>
       <stop offset="100%" stop-color="#8A0E24"/>
     </linearGradient>
-    <!-- warm gold glow for balance gem -->
     <radialGradient id="goldGlow" cx="50%" cy="50%" r="50%">
       <stop offset="0%"  stop-color="#FFFFFF" stop-opacity="1"/>
       <stop offset="30%" stop-color="#FFE9A8" stop-opacity="0.85"/>
       <stop offset="100%" stop-color="#FFB347" stop-opacity="0"/>
-    </radialGradient>
-
-    <radialGradient id="groundShadow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%"  stop-color="#000000" stop-opacity="0.55"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
     </radialGradient>
 
     <symbol id="spark" viewBox="-10 -10 20 20">
@@ -76,36 +64,12 @@
     </symbol>
   </defs>
 
-  <!-- Background -->
-  <rect width="1024" height="1024" fill="url(#bg)"/>
-
-  <!-- Starfield -->
-  <g fill="#FFFFFF" opacity="0.35">
-    <circle cx="120"  cy="180" r="1.8"/>
-    <circle cx="220"  cy="90"  r="1.3"/>
-    <circle cx="880"  cy="120" r="1.9"/>
-    <circle cx="940"  cy="260" r="1.3"/>
-    <circle cx="80"   cy="360" r="1.4"/>
-    <circle cx="970"  cy="430" r="1.6"/>
-    <circle cx="760"  cy="80"  r="1.2"/>
-    <circle cx="420"  cy="100" r="1.3"/>
-    <circle cx="600"  cy="70"  r="1.5"/>
-    <circle cx="320"  cy="180" r="1.0"/>
-    <circle cx="720"  cy="180" r="1.0"/>
-  </g>
-  <g fill="#9FE1FF" opacity="0.55">
-    <circle cx="290" cy="240" r="2.4"/>
-    <circle cx="820" cy="210" r="2.6"/>
-    <circle cx="180" cy="140" r="2.0"/>
-    <circle cx="910" cy="140" r="2.2"/>
-  </g>
-
-  <!-- Ground shadow -->
-  <ellipse cx="512" cy="906" rx="460" ry="44" fill="url(#groundShadow)"/>
-
   <!-- LEFT PEAK: BLUE (income).
-       Cap trapezoid is constrained to the peak silhouette at y=196 so it
-       does not poke out beyond the main shape. -->
+       The "cap" trapezoid is constrained to the peak silhouette at y=196
+       so it does not poke out beyond the main shape (the master's cap
+       overhangs by ~3 px on each side, which is invisible against the
+       master's gradient background but reads as ears against the solid
+       launch background). -->
   <polygon points="296,176 388,176 388,876 60,876" fill="url(#blueLight)"/>
   <polygon points="388,176 584,876 388,876" fill="url(#blueDark)"/>
   <polygon points="296,176 388,176 394,196 289,196" fill="url(#blueTop)"/>
@@ -128,25 +92,17 @@
   <!-- Warm balance glow behind gem -->
   <circle cx="512" cy="560" r="230" fill="url(#goldGlow)" opacity="0.85"/>
 
-  <!-- HEXAGONAL BALANCE GEM (split blue/red) -->
+  <!-- HEXAGONAL BALANCE GEM -->
   <g>
     <polygon points="512,420 614,478 614,602 512,660 410,602 410,478" fill="#0A1030"/>
-    <!-- top-left facet (blue) -->
     <polygon points="512,420 410,478 512,536" fill="url(#gemTopL)"/>
-    <!-- top-right facet (red) -->
     <polygon points="512,420 614,478 512,536" fill="url(#gemTopR)"/>
-    <!-- left facet (blue) -->
     <polygon points="410,478 512,536 512,660 410,602" fill="url(#gemL)"/>
-    <!-- right facet (red) -->
     <polygon points="614,478 512,536 512,660 614,602" fill="url(#gemR)"/>
-    <!-- outline -->
     <polygon points="512,420 614,478 614,602 512,660 410,602 410,478" fill="none" stroke="#FFF5D8" stroke-width="3.5" opacity="0.95"/>
-    <!-- the dividing spine (gold) -->
     <line x1="512" y1="420" x2="512" y2="660" stroke="#FFD56B" stroke-width="3" opacity="0.95"/>
-    <!-- facet edges -->
     <line x1="410" y1="478" x2="512" y2="536" stroke="#EAF9FF" stroke-width="2" opacity="0.7"/>
     <line x1="614" y1="478" x2="512" y2="536" stroke="#FFE3DE" stroke-width="2" opacity="0.7"/>
-    <!-- inner shine -->
     <polygon points="440,484 500,454 508,492 458,506" fill="#FFFFFF" opacity="0.5"/>
   </g>
 
@@ -155,11 +111,4 @@
   <use href="#spark" x="650" y="460" width="22" height="22"/>
   <use href="#spark" x="552" y="370" width="18" height="18"/>
   <use href="#spark" x="470" y="700" width="18" height="18"/>
-
-  <!-- Vignette -->
-  <radialGradient id="vignette" cx="50%" cy="50%" r="75%">
-    <stop offset="65%" stop-color="#000000" stop-opacity="0"/>
-    <stop offset="100%" stop-color="#000000" stop-opacity="0.4"/>
-  </radialGradient>
-  <rect width="1024" height="1024" fill="url(#vignette)"/>
 </svg>
