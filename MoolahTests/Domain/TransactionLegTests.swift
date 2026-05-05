@@ -167,4 +167,30 @@ struct TransactionLegTests {
     #expect(leg.amount.instrument == eth)
     #expect(leg.amount.quantity == dec("0.12345678"))
   }
+
+  // MARK: - externalId (per-leg dedup key for wallet imports)
+
+  @Test
+  func externalIdRoundTrips() throws {
+    let leg = TransactionLeg(
+      accountId: UUID(),
+      instrument: .AUD,
+      quantity: 100,
+      type: .income,
+      externalId: "0xabcdef"
+    )
+    let data = try JSONEncoder().encode(leg)
+    let decoded = try JSONDecoder().decode(TransactionLeg.self, from: data)
+    #expect(decoded.externalId == "0xabcdef")
+  }
+
+  @Test
+  func legacyLegWithoutExternalIdDecodesWithNil() throws {
+    let json = Data(
+      """
+      {"accountId":"\(UUID().uuidString)","instrument":{"id":"AUD","kind":"fiatCurrency","name":"AUD","decimals":2},"quantity":100,"type":"income"}
+      """.utf8)
+    let decoded = try JSONDecoder().decode(TransactionLeg.self, from: json)
+    #expect(decoded.externalId == nil)
+  }
 }
