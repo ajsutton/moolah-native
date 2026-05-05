@@ -5,6 +5,11 @@ import XCTest
 enum SidebarAccount {
   case checking
   case brokerage
+  /// `.tradeBaseline`'s second investment account: `.calculatedFromTrades`
+  /// mode with no `InvestmentValue` snapshots. Drives the
+  /// "picker hidden for new trade-driven accounts" branch in
+  /// `EditAccountValuationPickerTests`.
+  case tradesBrokerage
   /// The Brokerage account from the `.tradeReady` seed (different UUID from
   /// `.brokerage`, which uses the `.tradeBaseline` seed fixture).
   case tradeReadyBrokerage
@@ -15,6 +20,7 @@ enum SidebarAccount {
     switch self {
     case .checking: return UITestFixtures.TradeBaseline.checkingAccountId
     case .brokerage: return UITestFixtures.TradeBaseline.brokerageAccountId
+    case .tradesBrokerage: return UITestFixtures.TradeBaseline.tradesBrokerageAccountId
     case .tradeReadyBrokerage: return UITestFixtures.TradeReady.brokerageAccountId
     }
   }

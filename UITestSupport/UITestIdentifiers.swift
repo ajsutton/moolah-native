@@ -216,6 +216,30 @@ public enum UITestIdentifiers {
     }
   }
 
+  public enum EditAccount {
+    /// Root container of the Edit Account dialog. Pinned on the form's
+    /// outermost element. Drivers wait for this to materialise as the
+    /// presence sentinel before any content assertions run, so an
+    /// absent-section assertion can't pass vacuously when the sheet
+    /// failed to open.
+    public static let dialog = "editAccount.dialog"
+
+    /// Valuation-mode picker shown for legacy investment accounts in
+    /// `.recordedValue` mode or `.calculatedFromTrades` accounts that
+    /// still have at least one `InvestmentValue` snapshot. Identifier
+    /// pinned by `EditAccountView.valuationSection`.
+    public static let valuationModePicker = "editAccount.valuationMode"
+
+    /// Cancel toolbar button. Drivers click it to dismiss the dialog
+    /// after assertions run.
+    public static let cancelButton = "editAccount.cancel"
+
+    /// Save toolbar button. Pinned for symmetry with `cancelButton` so
+    /// future tests can exercise the save path through the same
+    /// resolver pattern.
+    public static let saveButton = "editAccount.save"
+  }
+
   public enum Autocomplete {
     /// Container element of the payee autocomplete dropdown.
     public static let payee = "autocomplete.payee"

@@ -90,6 +90,7 @@ struct EditAccountView: View {
     NavigationStack {
       form
     }
+    .accessibilityIdentifier(UITestIdentifiers.EditAccount.dialog)
     #if os(macOS)
       .frame(minWidth: 500, minHeight: 400)
     #endif
@@ -118,10 +119,12 @@ struct EditAccountView: View {
     .toolbar {
       ToolbarItem(placement: .cancellationAction) {
         Button("Cancel") { dismiss() }
+          .accessibilityIdentifier(UITestIdentifiers.EditAccount.cancelButton)
       }
       ToolbarItem(placement: .confirmationAction) {
         Button("Save") { Task { await save() } }
           .disabled(!isValid || isSubmitting)
+          .accessibilityIdentifier(UITestIdentifiers.EditAccount.saveButton)
       }
     }
     .animation(.easeInOut(duration: 0.2), value: type)
@@ -196,7 +199,7 @@ struct EditAccountView: View {
           Text("Recorded value").tag(ValuationMode.recordedValue)
           Text("Calculated from trades").tag(ValuationMode.calculatedFromTrades)
         }
-        .accessibilityIdentifier("editAccount.valuationMode")
+        .accessibilityIdentifier(UITestIdentifiers.EditAccount.valuationModePicker)
         .accessibilityHint(valuationMode.dataSourceHint)
       } footer: {
         VStack(alignment: .leading, spacing: 4) {
@@ -296,7 +299,7 @@ private struct FailOpenValuationPreview: View {
           Text("Recorded value").tag(ValuationMode.recordedValue)
           Text("Calculated from trades").tag(ValuationMode.calculatedFromTrades)
         }
-        .accessibilityIdentifier("editAccount.valuationMode")
+        .accessibilityIdentifier(UITestIdentifiers.EditAccount.valuationModePicker)
         .accessibilityHint(mode.dataSourceHint)
       } footer: {
         VStack(alignment: .leading, spacing: 4) {
