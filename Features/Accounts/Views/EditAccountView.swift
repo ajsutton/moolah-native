@@ -18,7 +18,10 @@ private let editAccountLogger = Logger(
   subsystem: "com.moolah.app", category: "EditAccountView")
 
 struct EditAccountView: View {
+  // MARK: - Environment & state
+
   @Environment(\.dismiss) private var dismiss
+  @Environment(ProfileSession.self) private var session
   @State private var name: String
   @State private var type: AccountType
   @State private var currency: Instrument
@@ -26,6 +29,8 @@ struct EditAccountView: View {
   @State private var valuationMode: ValuationMode
   @State private var isSubmitting = false
   @State private var errorMessage: String?
+  @State private var showValuationPicker: Bool
+  @State private var pickerShownDueToProbeFailure = false
   @FocusState private var focusedField: Field?
 
   let account: Account
@@ -34,6 +39,8 @@ struct EditAccountView: View {
   private enum Field: Hashable {
     case name
   }
+
+  // MARK: - Picker visibility
 
   /// Resolves whether the Valuation picker should be shown for an
   /// investment account currently in `.calculatedFromTrades` mode.
@@ -60,6 +67,8 @@ struct EditAccountView: View {
     }
   }
 
+  // MARK: - Init
+
   init(account: Account, accountStore: AccountStore) {
     self.account = account
     self.accountStore = accountStore
@@ -68,7 +77,14 @@ struct EditAccountView: View {
     _currency = State(initialValue: account.instrument)
     _isHidden = State(initialValue: account.isHidden)
     _valuationMode = State(initialValue: account.valuationMode)
+    // Initial visibility: shown for `.recordedValue` accounts so legacy
+    // users see the picker immediately, hidden for `.calculatedFromTrades`
+    // accounts pending the snapshot probe in `.task`. See design §3.3.
+    _showValuationPicker = State(
+      initialValue: account.valuationMode == .recordedValue)
   }
+
+  // MARK: - Body
 
   var body: some View {
     NavigationStack {
@@ -109,7 +125,43 @@ struct EditAccountView: View {
       }
     }
     .animation(.easeInOut(duration: 0.2), value: type)
+    .task(id: account.id) {
+      // Already shown for `.recordedValue` — skip the probe.
+      guard !showValuationPicker else { return }
+      do {
+        let result = try await Self.resolvePickerVisibility(
+          accountId: account.id,
+          snapshotProbe: {
+            try await !session.backend.investments
+              .fetchValues(accountId: account.id, page: 0, pageSize: 1)
+              .values.isEmpty
+          })
+        switch result {
+        case .hidden:
+          showValuationPicker = false
+          pickerShownDueToProbeFailure = false
+        case .shown:
+          showValuationPicker = true
+          pickerShownDueToProbeFailure = false
+        case .shownAfterFailure:
+          showValuationPicker = true
+          pickerShownDueToProbeFailure = true
+        }
+      } catch is CancellationError {
+        // View is being dismissed or `account.id` changed; leave state
+        // unchanged so SwiftUI's teardown is clean.
+      } catch {
+        // Unreachable: `resolvePickerVisibility` converts every
+        // non-cancellation error into `.shownAfterFailure`. Asserting
+        // here turns any future regression into a debug-build crash
+        // rather than silently swallowing the error.
+        assertionFailure(
+          "resolvePickerVisibility threw unexpected error: \(error)")
+      }
+    }
   }
+
+  // MARK: - Sections
 
   private var detailsSection: some View {
     Section {
@@ -131,32 +183,37 @@ struct EditAccountView: View {
     }
   }
 
-  /// Visible only for investment accounts. Lets the user choose between the
-  /// snapshot-driven `recordedValue` mode and the position-driven
-  /// `calculatedFromTrades` mode. Footer text describes the active mode so
-  /// the user can predict what the sidebar balance will read.
+  /// Visible only for investment accounts that already have legacy
+  /// `InvestmentValue` data (or are currently in `.recordedValue` mode).
+  /// New trade-driven accounts never see this section. Footer text
+  /// describes the active mode so the user can predict what the
+  /// sidebar balance will read; on probe failure, an additional info
+  /// note explains that valuation history couldn't be confirmed.
   @ViewBuilder private var valuationSection: some View {
-    if type == .investment {
+    if type == .investment, showValuationPicker {
       Section {
         Picker("Valuation", selection: $valuationMode) {
           Text("Recorded value").tag(ValuationMode.recordedValue)
           Text("Calculated from trades").tag(ValuationMode.calculatedFromTrades)
         }
         .accessibilityIdentifier("editAccount.valuationMode")
-        .accessibilityHint(
-          valuationMode == .recordedValue
-            ? "Balance comes from the value you last recorded"
-            : "Balance is calculated from your trade history and current prices of your holdings"
-        )
+        .accessibilityHint(valuationMode.dataSourceHint)
       } footer: {
-        Text(
-          valuationMode == .recordedValue
-            ? "The balance comes from the value you last recorded manually."
-            : "The balance is calculated from your trade history and the current prices "
-              + "of your holdings.")
+        VStack(alignment: .leading, spacing: 4) {
+          Text(valuationMode.dataSourceDescription)
+          if pickerShownDueToProbeFailure {
+            Label(
+              "Couldn't confirm your valuation history. Reopen the dialog to check again.",
+              systemImage: "info.circle"
+            )
+            .foregroundStyle(.secondary)
+          }
+        }
       }
     }
   }
+
+  // MARK: - Save
 
   private var isValid: Bool {
     !name.trimmingCharacters(in: .whitespaces).isEmpty
@@ -185,30 +242,83 @@ struct EditAccountView: View {
   }
 }
 
-#Preview("Bank account") {
+// MARK: - Previews
+
+@MainActor
+private func makePreviewView(account: Account) -> some View {
   let (backend, _) = PreviewBackend.create()
   let accountStore = AccountStore(
     repository: backend.accounts,
     conversionService: backend.conversionService,
     targetInstrument: .AUD)
-
-  EditAccountView(
-    account: Account(name: "Checking", type: .bank, instrument: .AUD),
-    accountStore: accountStore)
+  // In-memory preview session can't fail in practice: opens an ephemeral
+  // GRDB queue with no disk access. A trap here is acceptable in #Preview.
+  // swiftlint:disable:next force_try
+  let session = try! ProfileSession.preview()
+  return EditAccountView(account: account, accountStore: accountStore)
+    .environment(session)
 }
 
-#Preview("Investment account") {
-  let (backend, _) = PreviewBackend.create()
-  let accountStore = AccountStore(
-    repository: backend.accounts,
-    conversionService: backend.conversionService,
-    targetInstrument: .AUD)
+#Preview("Bank account") {
+  makePreviewView(
+    account: Account(name: "Checking", type: .bank, instrument: .AUD))
+}
 
-  EditAccountView(
+#Preview("Investment account, recordedValue (picker shown)") {
+  makePreviewView(
     account: Account(
-      name: "Brokerage",
+      name: "Legacy brokerage",
       type: .investment,
       instrument: .AUD,
-      valuationMode: .calculatedFromTrades),
-    accountStore: accountStore)
+      valuationMode: .recordedValue))
+}
+
+#Preview("Investment account, calculatedFromTrades (picker hidden)") {
+  makePreviewView(
+    account: Account(
+      name: "New brokerage",
+      type: .investment,
+      instrument: .AUD,
+      valuationMode: .calculatedFromTrades))
+}
+
+/// Wrapper that imitates the section structure used by
+/// `EditAccountView.valuationSection` so the fail-open footer Label
+/// can render in canvas without forcing a preview-only initialiser
+/// onto the production view. Adding a debug-flagged init would widen
+/// the API surface for a concern the production code never has.
+private struct FailOpenValuationPreview: View {
+  @State private var mode: ValuationMode = .calculatedFromTrades
+  var body: some View {
+    Form {
+      Section {
+        Picker("Valuation", selection: $mode) {
+          Text("Recorded value").tag(ValuationMode.recordedValue)
+          Text("Calculated from trades").tag(ValuationMode.calculatedFromTrades)
+        }
+        .accessibilityIdentifier("editAccount.valuationMode")
+        .accessibilityHint(mode.dataSourceHint)
+      } footer: {
+        VStack(alignment: .leading, spacing: 4) {
+          Text(mode.dataSourceDescription)
+          Label(
+            "Couldn't confirm your valuation history. Reopen the dialog to check again.",
+            systemImage: "info.circle"
+          )
+          .foregroundStyle(.secondary)
+        }
+      }
+    }
+    .formStyle(.grouped)
+    .frame(minWidth: 500, minHeight: 280)
+  }
+}
+
+#Preview("Investment account, fail-open footer") {
+  FailOpenValuationPreview()
+}
+
+#Preview("Investment account, fail-open footer (Accessibility3)") {
+  FailOpenValuationPreview()
+    .dynamicTypeSize(.accessibility3)
 }
