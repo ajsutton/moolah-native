@@ -130,4 +130,12 @@ struct FailingTransactionRepository: TransactionRepository {
   ) async throws -> [String] {
     throw BackendError.networkUnavailable
   }
+
+  func legs(matchingExternalId externalId: String) async throws -> [TransactionLeg] {
+    throw BackendError.networkUnavailable
+  }
+
+  func legExists(accountId: UUID, externalId: String) async throws -> Bool {
+    throw BackendError.networkUnavailable
+  }
 }
