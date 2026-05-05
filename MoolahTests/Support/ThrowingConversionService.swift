@@ -21,4 +21,10 @@ struct ThrowingConversionService: InstrumentConversionService {
   ) async throws -> InstrumentAmount {
     throw Invoked()
   }
+  func convertResult(
+    _ amount: InstrumentAmount, to instrument: Instrument, on date: Date
+  ) async throws -> ConversionResult {
+    throw Invoked()
+  }
+  func invalidateCache(for instrument: Instrument) async {}
 }

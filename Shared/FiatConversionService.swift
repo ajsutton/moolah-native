@@ -39,4 +39,27 @@ actor FiatConversionService: InstrumentConversionService {
     )
     return InstrumentAmount(quantity: converted, instrument: instrument)
   }
+
+  /// Discriminated convert. Fiat has no `.knownZero` concept (every
+  /// `.fiatCurrency` instrument has a real rate), so this always wraps
+  /// the existing `convertAmount` in `.value(...)` and propagates a
+  /// thrown error unchanged. Aggregation callers can use this method
+  /// uniformly across both fiat and crypto-aware services. Per
+  /// `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 11, a thrown error
+  /// is never collapsed to `.knownZero`.
+  func convertResult(
+    _ amount: InstrumentAmount,
+    to instrument: Instrument,
+    on date: Date
+  ) async throws -> ConversionResult {
+    let converted = try await convertAmount(amount, to: instrument, on: date)
+    return .value(converted)
+  }
+
+  /// No-op: the fiat conversion cache lives in `ExchangeRateService` and
+  /// is keyed by date, not by individual instrument. Crypto-specific
+  /// invalidation only matters in `FullConversionService`.
+  func invalidateCache(for instrument: Instrument) async {
+    // Intentionally empty.
+  }
 }

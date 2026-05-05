@@ -32,4 +32,13 @@ actor CountingConversionService: InstrumentConversionService {
     )
     return InstrumentAmount(quantity: converted, instrument: instrument)
   }
+
+  func convertResult(
+    _ amount: InstrumentAmount, to instrument: Instrument, on date: Date
+  ) async throws -> ConversionResult {
+    let converted = try await convertAmount(amount, to: instrument, on: date)
+    return .value(converted)
+  }
+
+  func invalidateCache(for instrument: Instrument) async {}
 }
