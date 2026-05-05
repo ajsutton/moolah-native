@@ -49,4 +49,50 @@ struct ExtractFlowsRefactorTests {
     )
     #expect(perf.firstFlowDate == txn.date)
   }
+
+  /// Locks in conversion-on-`transaction.date` at the calculator
+  /// integration level. The helper already covers this in isolation
+  /// (`AccountCashFlowsTests.openingBalanceForeignCurrencyLegUsesTxnDate`),
+  /// but a regression that wired the calculator to `Date()` while
+  /// the helper kept `transaction.date` would slip past helper-level
+  /// tests alone.
+  @Test("extractFlows converts foreign-currency contributions on transaction.date")
+  func extractFlowsConvertsOnTransactionDate() async throws {
+    let usd = Instrument.USD
+    let accountId = UUID()
+    let txnDate = Date(timeIntervalSince1970: 1_700_000_000)
+    let nowDate = Date(timeIntervalSince1970: 1_800_000_000)
+    let txnRate = try #require(Decimal(string: "1.50"))
+    let nowRate = try #require(Decimal(string: "1.40"))
+    let service = DateBasedFixedConversionService(rates: [
+      txnDate: [usd.id: txnRate],
+      nowDate: [usd.id: nowRate],
+    ])
+    let txn = Transaction(
+      date: txnDate,
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: usd, quantity: 100,
+          type: .openingBalance)
+      ]
+    )
+    let valued = [
+      ValuedPosition(
+        instrument: aud, quantity: 200, unitPrice: nil, costBasis: nil,
+        value: InstrumentAmount(quantity: 200, instrument: aud))
+    ]
+    let perf = try await AccountPerformanceCalculator.compute(
+      accountId: accountId,
+      transactions: [txn],
+      valuedPositions: valued,
+      profileCurrency: aud,
+      conversionService: service,
+      now: nowDate
+    )
+    // 100 USD × 1.50 (txnDate rate) — a Date()-ish regression would
+    // pick the 1.40 nowDate rate and produce 140.
+    #expect(
+      perf.totalContributions == InstrumentAmount(quantity: 150, instrument: aud)
+    )
+  }
 }
