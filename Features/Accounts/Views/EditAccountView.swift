@@ -1,4 +1,21 @@
+import OSLog
 import SwiftUI
+
+/// Outcome of the snapshot-presence probe used to decide whether
+/// `EditAccountView` offers the Valuation picker. Lifted to module
+/// scope (rather than nested inside `EditAccountView`) because tests
+/// reference it directly via `@testable import Moolah`. Specific
+/// name disambiguates from any future "picker visibility" state in
+/// other features. See
+/// `plans/2026-05-05-restrict-valuation-picker-design.md` §3.3.
+enum ValuationPickerVisibility: Equatable, Sendable {
+  case hidden
+  case shown
+  case shownAfterFailure
+}
+
+private let editAccountLogger = Logger(
+  subsystem: "com.moolah.app", category: "EditAccountView")
 
 struct EditAccountView: View {
   @Environment(\.dismiss) private var dismiss
@@ -16,6 +33,31 @@ struct EditAccountView: View {
 
   private enum Field: Hashable {
     case name
+  }
+
+  /// Resolves whether the Valuation picker should be shown for an
+  /// investment account currently in `.calculatedFromTrades` mode.
+  /// Pure async function over a closure-typed probe so the rule is
+  /// directly unit-testable. The `accountId` parameter exists so the
+  /// warning log on probe failure can identify which account
+  /// triggered it; supply the real account ID for diagnosability.
+  /// Re-throws `CancellationError` per the structured-concurrency
+  /// contract; converts any other error into `.shownAfterFailure`
+  /// (fail-open).
+  static func resolvePickerVisibility(
+    accountId: UUID,
+    snapshotProbe: () async throws -> Bool
+  ) async throws -> ValuationPickerVisibility {
+    do {
+      return try await snapshotProbe() ? .shown : .hidden
+    } catch let error as CancellationError {
+      throw error
+    } catch {
+      editAccountLogger.warning(
+        "valuation snapshot probe failed for \(accountId, privacy: .public): \(error.localizedDescription, privacy: .public)"
+      )
+      return .shownAfterFailure
+    }
   }
 
   init(account: Account, accountStore: AccountStore) {
