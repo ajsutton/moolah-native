@@ -89,4 +89,15 @@ private struct ApplyPathConversionService: InstrumentConversionService {
     throw ConversionError.unsupportedConversion(
       from: amount.instrument.id, to: instrument.id)
   }
+
+  func convertResult(
+    _ amount: InstrumentAmount,
+    to instrument: Instrument,
+    on date: Date
+  ) async throws -> ConversionResult {
+    throw ConversionError.unsupportedConversion(
+      from: amount.instrument.id, to: instrument.id)
+  }
+
+  func invalidateCache(for instrument: Instrument) async {}
 }

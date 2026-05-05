@@ -8,11 +8,12 @@ import Testing
 struct FullConversionErrorPropagationTests {
   struct FakeRegistryError: Error {}
 
-  /// When the `providerMappings` closure throws (e.g. registry read failure),
-  /// the error must propagate through `convert(_:from:to:on:)` for a crypto
-  /// conversion rather than being silently collapsed to an empty mapping
-  /// table — which would masquerade as a spurious `noProviderMapping` error
-  /// and violate Rule 11 of `guides/INSTRUMENT_CONVERSION_GUIDE.md`.
+  /// When the `cryptoRegistrations` closure throws (e.g. registry read
+  /// failure), the error must propagate through `convert(_:from:to:on:)` for a
+  /// crypto conversion rather than being silently collapsed to an empty
+  /// mapping table — which would masquerade as a spurious
+  /// `noProviderMapping` error and violate Rule 11 of
+  /// `guides/INSTRUMENT_CONVERSION_GUIDE.md`.
   @Test
   func cryptoConversionPropagatesRegistryError() async throws {
     let database = try ProfileDatabase.openInMemory()
@@ -30,7 +31,7 @@ struct FullConversionErrorPropagationTests {
       exchangeRates: exchangeService,
       stockPrices: stockService,
       cryptoPrices: cryptoService,
-      providerMappings: { () async throws -> [CryptoProviderMapping] in
+      cryptoRegistrations: { () async throws -> [CryptoRegistration] in
         throw FakeRegistryError()
       }
     )

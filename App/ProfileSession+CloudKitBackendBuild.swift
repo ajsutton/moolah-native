@@ -42,8 +42,8 @@ extension ProfileSession {
       exchangeRates: marketData.exchangeRates,
       stockPrices: marketData.stockPrices,
       cryptoPrices: marketData.cryptoPrices,
-      providerMappings: {
-        try await registry.allCryptoRegistrations().map(\.mapping)
+      cryptoRegistrations: {
+        try await registry.allCryptoRegistrations()
       }
     )
     let hooks = grdbRepoHooks(zoneID: zoneID, syncCoordinator: syncCoordinator)

@@ -9,26 +9,32 @@ actor FullConversionService: InstrumentConversionService {
   private let exchangeRates: ExchangeRateService
   private let stockPrices: StockPriceService
   private let cryptoPrices: CryptoPriceService?
-  private let providerMappings: @Sendable () async throws -> [CryptoProviderMapping]
+  private let cryptoRegistrations: @Sendable () async throws -> [CryptoRegistration]
   private let logger = Logger(subsystem: "com.moolah.app", category: "CurrencyConversion")
 
-  /// - Parameter providerMappings: Closure invoked on each crypto conversion
-  ///   to obtain the current set of provider mappings. Tokens registered via
-  ///   `CryptoPriceService` after service construction become resolvable on
-  ///   the next conversion without rebuilding the service. Errors thrown by
-  ///   the closure (e.g. registry read failures) propagate through
-  ///   `convert(_:from:to:on:)` rather than collapsing silently to an empty
-  ///   mapping table — see `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 11.
+  /// - Parameter cryptoRegistrations: Closure invoked on each crypto
+  ///   conversion to obtain the current set of crypto registrations. Tokens
+  ///   registered via `CryptoPriceService` after service construction become
+  ///   resolvable on the next conversion without rebuilding the service.
+  ///   Errors thrown by the closure (e.g. registry read failures) propagate
+  ///   through `convert(_:from:to:on:)` rather than collapsing silently to an
+  ///   empty mapping table — see `guides/INSTRUMENT_CONVERSION_GUIDE.md`
+  ///   Rule 11.
+  ///
+  ///   Returning the full `CryptoRegistration` (rather than just its
+  ///   `mapping`) is required so `convertResult(...)` can honour the
+  ///   `pricingStatus` (`.priced` / `.unpriced` / `.spam`) per the
+  ///   discriminated `CryptoPriceLookup` flow.
   init(
     exchangeRates: ExchangeRateService,
     stockPrices: StockPriceService,
     cryptoPrices: CryptoPriceService? = nil,
-    providerMappings: @Sendable @escaping () async throws -> [CryptoProviderMapping] = { [] }
+    cryptoRegistrations: @Sendable @escaping () async throws -> [CryptoRegistration] = { [] }
   ) {
     self.exchangeRates = exchangeRates
     self.stockPrices = stockPrices
     self.cryptoPrices = cryptoPrices
-    self.providerMappings = providerMappings
+    self.cryptoRegistrations = cryptoRegistrations
   }
 
   func convert(
@@ -99,6 +105,51 @@ actor FullConversionService: InstrumentConversionService {
     return InstrumentAmount(quantity: converted, instrument: instrument)
   }
 
+  /// Discriminated convert. When the source instrument is a crypto token
+  /// whose registration carries a non-`.priced` `pricingStatus` (i.e.
+  /// `.unpriced` or `.spam`), returns `.knownZero(targetInstrument:)`
+  /// without invoking any price provider. Otherwise wraps the existing
+  /// `convertAmount` in `.value(...)`. A real provider failure throws —
+  /// per `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 11, never collapsed
+  /// to `.knownZero`.
+  ///
+  /// Same-instrument identity is a fast path — even for `.unpriced` /
+  /// `.spam` tokens — because the position list still wants to render
+  /// the native quantity for the user (the token isn't worth zero ETH
+  /// of itself; its *fiat aggregation* contribution is zero).
+  func convertResult(
+    _ amount: InstrumentAmount,
+    to instrument: Instrument,
+    on date: Date
+  ) async throws -> ConversionResult {
+    if amount.instrument == instrument {
+      return .value(amount)
+    }
+    if amount.instrument.kind == .cryptoToken {
+      let registrations = try await cryptoRegistrations()
+      if let registration = registrations.first(where: { $0.id == amount.instrument.id }),
+        registration.pricingStatus != .priced
+      {
+        // `.unpriced` and `.spam` resolve to a clean zero in the
+        // requested target instrument without a provider call.
+        return .knownZero(targetInstrument: instrument)
+      }
+    }
+    let converted = try await convertAmount(amount, to: instrument, on: date)
+    return .value(converted)
+  }
+
+  /// Invalidate any cached state held about `instrument`. For crypto
+  /// instruments this clears the in-memory and on-disk price rows in
+  /// `CryptoPriceService` so the next conversion fetches fresh data —
+  /// required after any user mutation that changes
+  /// `pricingStatus` for the instrument's registration. No-op for
+  /// fiat / stock instruments and when no `CryptoPriceService` is wired.
+  func invalidateCache(for instrument: Instrument) async {
+    guard instrument.kind == .cryptoToken, let cryptoPrices else { return }
+    await cryptoPrices.purgeCache(instrumentId: instrument.id)
+  }
+
   // MARK: - Stock helpers
 
   private func convertStockToFiat(
@@ -137,11 +188,12 @@ actor FullConversionService: InstrumentConversionService {
     guard let cryptoPrices else {
       throw ConversionError.noCryptoPriceService
     }
-    let mappings = try await providerMappings()
-    guard let mapping = mappings.first(where: { $0.instrumentId == instrument.id }) else {
+    let registrations = try await cryptoRegistrations()
+    guard let registration = registrations.first(where: { $0.id == instrument.id }) else {
       throw ConversionError.noProviderMapping(instrumentId: instrument.id)
     }
-    return try await cryptoPrices.price(for: instrument, mapping: mapping, on: date)
+    return try await cryptoPrices.price(
+      for: registration.instrument, mapping: registration.mapping, on: date)
   }
 
   // MARK: - USD intermediary helpers

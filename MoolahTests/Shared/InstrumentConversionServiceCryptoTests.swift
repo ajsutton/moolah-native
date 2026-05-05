@@ -38,11 +38,34 @@ struct InstrumentConversionServiceCryptoTests {
       database: database
     )
     let stockService = StockPriceService(client: FixedStockPriceClient(), database: database)
+    let registrations = providerMappings.map { mapping in
+      CryptoRegistration(
+        instrument: Self.instrument(forMappingId: mapping.instrumentId),
+        mapping: mapping)
+    }
     return FullConversionService(
       exchangeRates: exchangeService,
       stockPrices: stockService,
       cryptoPrices: cryptoService,
-      providerMappings: { providerMappings }
+      cryptoRegistrations: { registrations }
+    )
+  }
+
+  /// Reconstruct an `Instrument` from a `CryptoProviderMapping.instrumentId`
+  /// of the form `"chainId:contractOrNative"`. Test fixtures only need
+  /// enough metadata for the registration's `id` to match what the
+  /// service is looking up; any other fields are best-effort.
+  private static func instrument(forMappingId id: String) -> Instrument {
+    let parts = id.split(separator: ":", maxSplits: 1).map(String.init)
+    let chainId = Int(parts.first ?? "") ?? 0
+    let contract = parts.count > 1 ? parts[1] : "native"
+    let isNative = contract == "native"
+    return .crypto(
+      chainId: chainId,
+      contractAddress: isNative ? nil : contract,
+      symbol: isNative ? "NATIVE" : contract,
+      name: isNative ? "NATIVE" : contract,
+      decimals: 18
     )
   }
 
@@ -226,13 +249,13 @@ struct InstrumentConversionServiceCryptoTests {
       database: database
     )
     let stockService = StockPriceService(client: FixedStockPriceClient(), database: database)
-    let source = MutableMappingsSource()
+    let source = MutableRegistrationsSource()
 
     let service = FullConversionService(
       exchangeRates: exchangeService,
       stockPrices: stockService,
       cryptoPrices: cryptoService,
-      providerMappings: { await source.current() }
+      cryptoRegistrations: { await source.current() }
     )
 
     await #expect(throws: (any Error).self) {
@@ -240,9 +263,12 @@ struct InstrumentConversionServiceCryptoTests {
     }
 
     await source.set([
-      CryptoProviderMapping(
-        instrumentId: "1:native", coingeckoId: "ethereum",
-        cryptocompareSymbol: "ETH", binanceSymbol: "ETHUSDT"
+      CryptoRegistration(
+        instrument: eth,
+        mapping: CryptoProviderMapping(
+          instrumentId: "1:native", coingeckoId: "ethereum",
+          cryptocompareSymbol: "ETH", binanceSymbol: "ETHUSDT"
+        )
       )
     ])
 
@@ -253,10 +279,10 @@ struct InstrumentConversionServiceCryptoTests {
   }
 }
 
-private actor MutableMappingsSource {
-  private var mappings: [CryptoProviderMapping] = []
+private actor MutableRegistrationsSource {
+  private var registrations: [CryptoRegistration] = []
 
-  func current() -> [CryptoProviderMapping] { mappings }
+  func current() -> [CryptoRegistration] { registrations }
 
-  func set(_ new: [CryptoProviderMapping]) { mappings = new }
+  func set(_ new: [CryptoRegistration]) { registrations = new }
 }
