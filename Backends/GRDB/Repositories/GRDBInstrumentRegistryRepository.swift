@@ -242,17 +242,31 @@ final class GRDBInstrumentRegistryRepository:
   func applyRemoteChangesSync(saved rows: [InstrumentRow], deleted ids: [String]) throws {
     try database.write { database in
       for var row in rows {
-        // Per spec §"`CryptoRegistration.pricingStatus`" — apply the field-
-        // level merge rule for pricingStatus before upserting. CKSyncEngine's
-        // default "server wins" would let the daily auto-resolver on one
-        // device clobber a `.spam` classification a user made on another.
+        // Per spec §"`CryptoRegistration.pricingStatus`" — apply the
+        // field-level merge rule for `pricingStatus` before upserting.
+        // CKSyncEngine's default "server wins" would let the daily
+        // auto-resolver on one device clobber a `.spam` classification a
+        // user made on another. The rule is centralised in
+        // `PricingStatusMerge.merge` and unit-tested against the full
+        // 3x3 truth table.
+        //
+        // Unrecognised raw values (only possible from a future-version
+        // device sending an enum case this build doesn't compile against,
+        // since legacy records that omit the field decode as `"priced"`
+        // in `InstrumentRow+CloudKit.swift`) decode as `.priced`. That
+        // matches the legacy fallback and keeps the merge defensive
+        // rather than throwing.
         if let existing =
           try InstrumentRow
           .filter(InstrumentRow.Columns.id == row.id)
           .fetchOne(database)
         {
-          row.pricingStatus = Self.mergedPricingStatus(
-            local: existing.pricingStatus, incoming: row.pricingStatus)
+          let local = TokenPricingStatus(rawValue: existing.pricingStatus) ?? .priced
+          let incoming = TokenPricingStatus(rawValue: row.pricingStatus) ?? .priced
+          row.pricingStatus =
+            PricingStatusMerge.merge(
+              local: local, incoming: incoming
+            ).rawValue
         }
         try row.upsert(database)
       }
@@ -262,18 +276,43 @@ final class GRDBInstrumentRegistryRepository:
     }
   }
 
-  /// Cross-device merge rule for `pricingStatus` per design spec:
-  /// - local `.spam` always wins (user intent never auto-reverts)
-  /// - incoming `.spam` always accepted (mirror user intent across devices)
-  /// - `.priced` beats `.unpriced` either direction (resolution success sticks)
-  /// - same → no change
-  static func mergedPricingStatus(local: String, incoming: String) -> String {
-    let spam = TokenPricingStatus.spam.rawValue
-    let priced = TokenPricingStatus.priced.rawValue
-    if local == spam { return spam }
-    if incoming == spam { return spam }
-    if local == priced || incoming == priced { return priced }
-    return incoming
+  /// Persists a new `pricingStatus` for the row identified by
+  /// `registration.instrument.id`, leaving every other column unchanged.
+  /// Used by `CryptoTokenStore.setStatus(_:for:)` to record a user-driven
+  /// classification (`.spam` / `.priced` / `.unpriced`). Throws when no
+  /// row is registered for the supplied instrument id — callers should
+  /// have an existing registration in hand before calling.
+  ///
+  /// **Field coverage.** Only the `pricing_status` column is rewritten;
+  /// `instrument` / `mapping` are read from `registration` purely to
+  /// locate the row. To rewrite the provider mapping, call
+  /// `registerCrypto(_:mapping:)` instead. Splitting the two surfaces
+  /// keeps the cross-device merge rule (which only governs
+  /// `pricing_status`) from having to reason about partial updates of
+  /// other server-authoritative columns.
+  ///
+  /// Fires `onRecordChanged` and the `observeChanges()` fan-out on
+  /// success so CKSyncEngine queues the record for upload and any picker
+  /// UI refreshes.
+  func update(_ registration: CryptoRegistration) async throws {
+    let updated = try await database.write { database -> Bool in
+      guard
+        var existing =
+          try InstrumentRow
+          .filter(InstrumentRow.Columns.id == registration.instrument.id)
+          .fetchOne(database)
+      else { return false }
+      existing.pricingStatus = registration.pricingStatus.rawValue
+      try existing.update(database)
+      return true
+    }
+    guard updated else {
+      throw BackendError.notFound(
+        "InstrumentRegistry: no row registered for id '\(registration.instrument.id)'"
+      )
+    }
+    onRecordChanged(registration.instrument.id)
+    await notifySubscribers()
   }
 
   /// Writes (or clears) the cached system-fields blob on a single row.

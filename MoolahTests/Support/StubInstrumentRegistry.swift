@@ -24,7 +24,7 @@ final class StubInstrumentRegistry: InstrumentRegistryRepository, Sendable {
   /// Errors thrown by the stub when `shouldThrowOnRegister` is set. Lets
   /// tests exercise the picker's "registry write failed after a successful
   /// resolve" path without needing a separate stub class.
-  enum RegisterError: Error { case stockFailed, cryptoFailed }
+  enum RegisterError: Error { case stockFailed, cryptoFailed, updateFailed }
 
   private let state: OSAllocatedUnfairLock<State>
 
@@ -82,6 +82,16 @@ extension StubInstrumentRegistry {
       state.registeredStocks.append(instrument)
       state.instruments.removeAll { $0.id == instrument.id }
       state.instruments.append(instrument)
+    }
+  }
+
+  func update(_ registration: CryptoRegistration) async throws {
+    try state.withLock { state in
+      if state.shouldThrowOnRegister { throw RegisterError.updateFailed }
+      guard
+        let index = state.cryptoRegistrations.firstIndex(where: { $0.id == registration.id })
+      else { return }
+      state.cryptoRegistrations[index] = registration
     }
   }
 

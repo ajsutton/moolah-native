@@ -41,6 +41,24 @@ protocol InstrumentRegistryRepository: Sendable {
   ///   kind is a programmer error and traps.
   func registerStock(_ instrument: Instrument) async throws
 
+  /// Persists a new `pricingStatus` for an existing crypto registration,
+  /// leaving every other column unchanged. Used by user-mutation paths
+  /// (e.g. the Discovered Tokens inbox / Spam tokens management UI) that
+  /// flip a token between `.priced` / `.unpriced` / `.spam` without
+  /// rewriting its provider mapping. Invokes the implementation's
+  /// sync-queue hook on success.
+  ///
+  /// Implementations rewrite only `pricingStatus`; `instrument` and
+  /// `mapping` on the supplied `registration` are used solely to locate
+  /// the row. Callers wanting to rewrite the provider mapping should
+  /// call `registerCrypto(_:mapping:)`, which upserts the full row.
+  ///
+  /// Throws `BackendError.notFound(_:)` when no row is registered for
+  /// `registration.instrument.id` — callers must have an existing
+  /// registration in hand. To insert a brand-new registration, call
+  /// `registerCrypto(_:mapping:)` instead.
+  func update(_ registration: CryptoRegistration) async throws
+
   /// Removes a registered instrument by id. No-op for fiat ids and for
   /// ids that are not currently registered — does not throw. Invokes the
   /// implementation's sync-queue hook after a successful delete.

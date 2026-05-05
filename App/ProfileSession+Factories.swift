@@ -157,7 +157,8 @@ extension ProfileSession {
     }
     let store = CryptoTokenStore(
       registry: cloudBackend.instrumentRegistry,
-      cryptoPriceService: cryptoPriceService)
+      cryptoPriceService: cryptoPriceService,
+      conversionService: cloudBackend.conversionService)
     let searchService = InstrumentSearchService(
       registry: cloudBackend.instrumentRegistry,
       catalog: catalog,
