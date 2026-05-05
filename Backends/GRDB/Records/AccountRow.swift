@@ -24,6 +24,8 @@ struct AccountRow {
     case isHidden = "is_hidden"
     case encodedSystemFields = "encoded_system_fields"
     case valuationMode = "valuation_mode"
+    case walletAddress = "wallet_address"
+    case chainId = "chain_id"
   }
 
   enum CodingKeys: String, CodingKey {
@@ -36,13 +38,15 @@ struct AccountRow {
     case isHidden = "is_hidden"
     case encodedSystemFields = "encoded_system_fields"
     case valuationMode = "valuation_mode"
+    case walletAddress = "wallet_address"
+    case chainId = "chain_id"
   }
 
   var id: UUID
   var recordName: String
   var name: String
   /// Raw value of `AccountType` (`"bank"`, `"creditCard"`, `"asset"`,
-  /// `"investment"`). Pinned by a CHECK constraint.
+  /// `"investment"`, `"crypto"`). Pinned by a CHECK constraint.
   var type: String
   var instrumentId: String
   var position: Int
@@ -52,6 +56,14 @@ struct AccountRow {
   /// `"calculatedFromTrades"`). Decoded with a `recordedValue` fallback
   /// to tolerate forward-incompatible schema migrations.
   var valuationMode: String
+  /// `0x…` lowercased wallet address, populated when `type == "crypto"`.
+  /// Defaulted to `nil` so existing memberwise-init call sites continue
+  /// to compile.
+  var walletAddress: String?
+  /// EVM chain ID (1 = Ethereum, 10 = OP, 8453 = Base, 137 = Polygon),
+  /// populated when `type == "crypto"`. Defaulted to `nil` so existing
+  /// memberwise-init call sites continue to compile.
+  var chainId: Int?
 }
 
 extension AccountRow: Codable {}

@@ -20,6 +20,7 @@ final class TransactionLegRecord {
   var categoryId: UUID?
   var earmarkId: UUID?
   var sortOrder: Int = 0
+  var externalId: String?
   var encodedSystemFields: Data?
 
   init(
@@ -31,7 +32,8 @@ final class TransactionLegRecord {
     type: String,
     categoryId: UUID? = nil,
     earmarkId: UUID? = nil,
-    sortOrder: Int = 0
+    sortOrder: Int = 0,
+    externalId: String? = nil
   ) {
     self.id = id
     self.transactionId = transactionId
@@ -42,6 +44,7 @@ final class TransactionLegRecord {
     self.categoryId = categoryId
     self.earmarkId = earmarkId
     self.sortOrder = sortOrder
+    self.externalId = externalId
   }
 
   /// Throws `BackendError.dataCorrupted` when `type` carries a raw value
@@ -52,6 +55,7 @@ final class TransactionLegRecord {
       accountId: accountId,
       instrument: instrument,
       quantity: InstrumentAmount(storageValue: quantity, instrument: instrument).quantity,
+      externalId: externalId,
       type: try TransactionType.decoded(rawValue: type),
       categoryId: categoryId,
       earmarkId: earmarkId
@@ -69,7 +73,8 @@ final class TransactionLegRecord {
       type: leg.type.rawValue,
       categoryId: leg.categoryId,
       earmarkId: leg.earmarkId,
-      sortOrder: sortOrder
+      sortOrder: sortOrder,
+      externalId: leg.externalId
     )
   }
 }

@@ -13,6 +13,8 @@ final class AccountRecord {
   var instrumentId: String = "AUD"
   var isHidden: Bool = false
   var valuationMode: String = "recordedValue"  // Raw value of ValuationMode
+  var walletAddress: String?
+  var chainId: Int?
   var encodedSystemFields: Data?
 
   init(
@@ -22,7 +24,9 @@ final class AccountRecord {
     instrumentId: String = "AUD",
     position: Int = 0,
     isHidden: Bool = false,
-    valuationMode: String = "recordedValue"
+    valuationMode: String = "recordedValue",
+    walletAddress: String? = nil,
+    chainId: Int? = nil
   ) {
     self.id = id
     self.name = name
@@ -31,6 +35,8 @@ final class AccountRecord {
     self.position = position
     self.isHidden = isHidden
     self.valuationMode = valuationMode
+    self.walletAddress = walletAddress
+    self.chainId = chainId
   }
 
   /// Throws `BackendError.dataCorrupted` when `type` carries a raw value
@@ -49,7 +55,9 @@ final class AccountRecord {
       positions: positions,
       position: position,
       isHidden: isHidden,
-      valuationMode: ValuationMode(rawValue: valuationMode) ?? .recordedValue
+      valuationMode: ValuationMode(rawValue: valuationMode) ?? .recordedValue,
+      walletAddress: walletAddress,
+      chainId: chainId
     )
   }
 
@@ -61,7 +69,9 @@ final class AccountRecord {
       instrumentId: account.instrument.id,
       position: account.position,
       isHidden: account.isHidden,
-      valuationMode: account.valuationMode.rawValue
+      valuationMode: account.valuationMode.rawValue,
+      walletAddress: account.walletAddress,
+      chainId: account.chainId
     )
   }
 }

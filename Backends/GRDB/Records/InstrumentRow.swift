@@ -33,6 +33,7 @@ struct InstrumentRow {
     case cryptocompareSymbol = "cryptocompare_symbol"
     case binanceSymbol = "binance_symbol"
     case encodedSystemFields = "encoded_system_fields"
+    case pricingStatus = "pricing_status"
   }
 
   enum CodingKeys: String, CodingKey {
@@ -49,6 +50,7 @@ struct InstrumentRow {
     case cryptocompareSymbol = "cryptocompare_symbol"
     case binanceSymbol = "binance_symbol"
     case encodedSystemFields = "encoded_system_fields"
+    case pricingStatus = "pricing_status"
   }
 
   var id: String
@@ -71,6 +73,12 @@ struct InstrumentRow {
   var cryptocompareSymbol: String?
   var binanceSymbol: String?
   var encodedSystemFields: Data?
+  /// Raw value of `TokenPricingStatus` (`"priced"`, `"unpriced"`,
+  /// `"spam"`). Defaults to `"priced"` per the GRDB column default for
+  /// non-crypto rows and legacy crypto rows. Pinned by a CHECK
+  /// constraint. Defaulted on the Swift side to `"priced"` so existing
+  /// memberwise-init call sites continue to compile.
+  var pricingStatus: String = "priced"
 }
 
 extension InstrumentRow: Codable {}

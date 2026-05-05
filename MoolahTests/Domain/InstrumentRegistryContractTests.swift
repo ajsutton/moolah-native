@@ -81,6 +81,11 @@ struct InstrumentRegistryContractTests {
     #expect(reg.mapping.coingeckoId == "ethereum")
     #expect(reg.mapping.cryptocompareSymbol == "ETH")
     #expect(reg.mapping.binanceSymbol == "ETHUSDT")
+    // Default pricingStatus on a freshly-registered crypto registration
+    // is `.priced` — the existing column default in v8 plus the row
+    // mapping's `?? .priced` fallback together cover the discriminated
+    // distinction the spec requires (unpriced/spam vs rate-unavailable).
+    #expect(reg.pricingStatus == .priced)
   }
 
   @Test("registerCrypto with existing id upserts the mapping")

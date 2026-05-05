@@ -20,6 +20,7 @@ struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable {
   let conversionService: any InstrumentConversionService
   let csvImportProfiles: any CSVImportProfileRepository
   let importRules: any ImportRuleRepository
+  let walletSyncState: any WalletSyncStateRepository
 
   /// The GRDB queue backing every repository — exposed so tests can seed
   /// rows alongside the standard repository APIs.
@@ -63,6 +64,7 @@ struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable {
     self.conversionService = backend.conversionService
     self.csvImportProfiles = backend.csvImportProfiles
     self.importRules = backend.importRules
+    self.walletSyncState = backend.walletSyncState
   }
 }
 

@@ -13,7 +13,8 @@ extension AccountRow {
 
   /// Builds a row from a domain `Account`. The `instrument` value is
   /// flattened to its id; the repository reconstructs the full
-  /// `Instrument` on `toDomain`.
+  /// `Instrument` on `toDomain`. The `walletAddress` and `chainId`
+  /// fields are populated when the account is a crypto wallet.
   init(domain: Account) {
     self.id = domain.id
     self.recordName = Self.recordName(for: domain.id)
@@ -24,6 +25,8 @@ extension AccountRow {
     self.isHidden = domain.isHidden
     self.encodedSystemFields = nil
     self.valuationMode = domain.valuationMode.rawValue
+    self.walletAddress = domain.walletAddress
+    self.chainId = domain.chainId
   }
 
   /// Domain projection. `instruments` is the registry lookup
@@ -47,6 +50,8 @@ extension AccountRow {
       positions: positions,
       position: position,
       isHidden: isHidden,
-      valuationMode: ValuationMode(rawValue: valuationMode) ?? .recordedValue)
+      valuationMode: ValuationMode(rawValue: valuationMode) ?? .recordedValue,
+      walletAddress: walletAddress,
+      chainId: chainId)
   }
 }

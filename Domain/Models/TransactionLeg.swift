@@ -4,6 +4,7 @@ struct TransactionLeg: Codable, Sendable, Hashable {
   let accountId: UUID?
   let instrument: Instrument
   let quantity: Decimal
+  let externalId: String?
   var type: TransactionType
   var categoryId: UUID?
   var earmarkId: UUID?
@@ -12,6 +13,7 @@ struct TransactionLeg: Codable, Sendable, Hashable {
     accountId: UUID?,
     instrument: Instrument,
     quantity: Decimal,
+    externalId: String? = nil,
     type: TransactionType,
     categoryId: UUID? = nil,
     earmarkId: UUID? = nil
@@ -19,6 +21,7 @@ struct TransactionLeg: Codable, Sendable, Hashable {
     self.accountId = accountId
     self.instrument = instrument
     self.quantity = quantity
+    self.externalId = externalId
     self.type = type
     self.categoryId = categoryId
     self.earmarkId = earmarkId

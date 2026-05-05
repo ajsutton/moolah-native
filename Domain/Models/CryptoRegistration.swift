@@ -8,8 +8,36 @@ import Foundation
 struct CryptoRegistration: Codable, Sendable, Hashable, Identifiable {
   let instrument: Instrument
   let mapping: CryptoProviderMapping
+  /// How aggregation should treat this token's fiat value. Distinct from
+  /// "rate unavailable" — `.unpriced` and `.spam` are intentionally zero,
+  /// not errors. Defaults to `.priced` for legacy decode and built-in presets.
+  var pricingStatus: TokenPricingStatus
+
+  init(
+    instrument: Instrument,
+    mapping: CryptoProviderMapping,
+    pricingStatus: TokenPricingStatus = .priced
+  ) {
+    self.instrument = instrument
+    self.mapping = mapping
+    self.pricingStatus = pricingStatus
+  }
 
   var id: String { instrument.id }
+
+  private enum CodingKeys: String, CodingKey {
+    case instrument
+    case mapping
+    case pricingStatus
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.instrument = try container.decode(Instrument.self, forKey: .instrument)
+    self.mapping = try container.decode(CryptoProviderMapping.self, forKey: .mapping)
+    self.pricingStatus =
+      try container.decodeIfPresent(TokenPricingStatus.self, forKey: .pricingStatus) ?? .priced
+  }
 
   static let builtInPresets: [CryptoRegistration] = [
     CryptoRegistration(

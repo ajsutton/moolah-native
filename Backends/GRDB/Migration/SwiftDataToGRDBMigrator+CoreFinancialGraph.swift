@@ -84,7 +84,8 @@ extension SwiftDataToGRDBMigrator {
       coingeckoId: source.coingeckoId,
       cryptocompareSymbol: source.cryptocompareSymbol,
       binanceSymbol: source.binanceSymbol,
-      encodedSystemFields: source.encodedSystemFields)
+      encodedSystemFields: source.encodedSystemFields,
+      pricingStatus: TokenPricingStatus.priced.rawValue)
   }
 
   // MARK: - Categories
@@ -224,7 +225,9 @@ extension SwiftDataToGRDBMigrator {
       position: source.position,
       isHidden: source.isHidden,
       encodedSystemFields: source.encodedSystemFields,
-      valuationMode: source.valuationMode)
+      valuationMode: source.valuationMode,
+      walletAddress: source.walletAddress,
+      chainId: source.chainId)
   }
 
 }

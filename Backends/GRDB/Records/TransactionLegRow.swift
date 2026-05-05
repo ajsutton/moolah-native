@@ -23,6 +23,7 @@ struct TransactionLegRow {
     case earmarkId = "earmark_id"
     case sortOrder = "sort_order"
     case encodedSystemFields = "encoded_system_fields"
+    case externalId = "external_id"
   }
 
   enum CodingKeys: String, CodingKey {
@@ -37,6 +38,7 @@ struct TransactionLegRow {
     case earmarkId = "earmark_id"
     case sortOrder = "sort_order"
     case encodedSystemFields = "encoded_system_fields"
+    case externalId = "external_id"
   }
 
   var id: UUID
@@ -53,6 +55,12 @@ struct TransactionLegRow {
   var earmarkId: UUID?
   var sortOrder: Int
   var encodedSystemFields: Data?
+  /// Source-provided identifier for per-leg dedup across re-syncs.
+  /// On-chain `txHash` for wallet-imported legs; `nil` for manual or
+  /// CSV-imported legs. Partial-unique index enforces no duplicates per
+  /// `(account_id, external_id)` for non-NULL values. Defaulted to
+  /// `nil` so existing memberwise-init call sites continue to compile.
+  var externalId: String?
 }
 
 extension TransactionLegRow: Codable {}
