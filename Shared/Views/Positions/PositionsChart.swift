@@ -126,23 +126,35 @@ struct PositionsChart: View {
   /// state mutation.
   @ChartContentBuilder
   private func chartMarks(for row: PositionsChartRenderRow) -> some ChartContent {
-    if let baseline = row.baseline, row.gainSegment > 0 {
+    if let baseline = row.baseline {
+      // Always emit BOTH gain and loss area marks (with explicit
+      // `series:` identifiers) when a baseline is available. Each
+      // series resolves to one continuous polygon that pinches to
+      // zero height at every point on the wrong side of the
+      // baseline. Without the `series:` discriminator, Swift Charts
+      // groups all AreaMarks into a single shape and fills the
+      // entire region one colour — which is what the original
+      // gated emission produced (the bug visible in PR #743 review:
+      // green shading even where value < invested).
       AreaMark(
         x: .value("Date", row.date),
-        yStart: .value("Baseline", Double(truncating: baseline as NSDecimalNumber)),
+        yStart: .value(
+          "Baseline", Double(truncating: baseline as NSDecimalNumber)),
         yEnd: .value(
           "Top",
-          Double(truncating: (baseline + row.gainSegment) as NSDecimalNumber))
+          Double(truncating: (baseline + row.gainSegment) as NSDecimalNumber)),
+        series: .value("Series", "Gain")
       )
       .foregroundStyle(.green.opacity(Self.gainLossOpacity))
-    }
-    if let baseline = row.baseline, row.lossSegment > 0 {
+
       AreaMark(
         x: .value("Date", row.date),
         yStart: .value(
           "Bottom",
           Double(truncating: (baseline - row.lossSegment) as NSDecimalNumber)),
-        yEnd: .value("Baseline", Double(truncating: baseline as NSDecimalNumber))
+        yEnd: .value(
+          "Baseline", Double(truncating: baseline as NSDecimalNumber)),
+        series: .value("Series", "Loss")
       )
       .foregroundStyle(.red.opacity(Self.gainLossOpacity))
     }
