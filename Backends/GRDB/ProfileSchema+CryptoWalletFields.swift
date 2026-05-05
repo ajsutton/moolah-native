@@ -24,8 +24,15 @@ extension ProfileSchema {
   /// constraint (the project drops FKs per v5; cross-table cascade lives
   /// in repository code).
   static func addCryptoWalletFields(_ database: Database) throws {
-    // 1. Rebuild `account` to widen the type CHECK and add the two new
-    //    optional crypto fields. Preserve existing rows and indexes.
+    try rebuildAccountForCrypto(database)
+    try addExternalIdToTransactionLeg(database)
+    try addPricingStatusToInstrument(database)
+    try createWalletSyncStateTable(database)
+  }
+
+  /// Rebuilds `account` to widen the type CHECK and add the two new
+  /// optional crypto fields. Preserves existing rows and indexes.
+  private static func rebuildAccountForCrypto(_ database: Database) throws {
     try database.execute(
       sql: """
         CREATE TABLE account_new (
@@ -58,13 +65,14 @@ extension ProfileSchema {
         CREATE INDEX account_by_position ON account(position);
         CREATE INDEX account_by_type     ON account(type);
         """)
+  }
 
-    // 2. transaction_leg.external_id + partial UNIQUE dedup index.
-    //    NULL external_ids are excluded (existing rows + manually-created
-    //    transactions). Same on-chain hash on different accounts is fine
-    //    (cross-account transfer); same hash on the same account is
-    //    rejected at the DB layer (defence in depth — application dedup
-    //    is the primary check).
+  /// `transaction_leg.external_id` + partial UNIQUE dedup index. NULL
+  /// external_ids are excluded (existing rows + manual transactions).
+  /// Same on-chain hash on different accounts is fine (cross-account
+  /// transfer); same hash on the same account is rejected at the DB
+  /// layer (defence in depth — application dedup is the primary check).
+  private static func addExternalIdToTransactionLeg(_ database: Database) throws {
     try database.execute(
       sql: """
         ALTER TABLE transaction_leg ADD COLUMN external_id TEXT;
@@ -73,21 +81,24 @@ extension ProfileSchema {
             ON transaction_leg(account_id, external_id)
             WHERE external_id IS NOT NULL;
         """)
+  }
 
-    // 3. instrument.pricing_status (TokenPricingStatus enum raw values).
-    //    Default 'priced' so existing rows + built-in presets behave
-    //    unchanged. CHECK pins the enum.
+  /// `instrument.pricing_status` (TokenPricingStatus enum raw values).
+  /// Default `'priced'` so existing rows + built-in presets behave
+  /// unchanged. CHECK pins the enum.
+  private static func addPricingStatusToInstrument(_ database: Database) throws {
     try database.execute(
       sql: """
         ALTER TABLE instrument
           ADD COLUMN pricing_status TEXT NOT NULL DEFAULT 'priced'
             CHECK (pricing_status IN ('priced', 'unpriced', 'spam'));
         """)
+  }
 
-    // 4. wallet_sync_state — per-device sync checkpoints.
-    //    `account_id` is BLOB matching `account.id` (UUID-as-BLOB).
-    //    `last_error_json` validated by json_valid() per
-    //    DATABASE_SCHEMA_GUIDE §3.
+  /// `wallet_sync_state` — per-device sync checkpoints. `account_id` is
+  /// BLOB matching `account.id` (UUID-as-BLOB). `last_error_json`
+  /// validated by `json_valid()` per DATABASE_SCHEMA_GUIDE §3.
+  private static func createWalletSyncStateTable(_ database: Database) throws {
     try database.execute(
       sql: """
         CREATE TABLE wallet_sync_state (

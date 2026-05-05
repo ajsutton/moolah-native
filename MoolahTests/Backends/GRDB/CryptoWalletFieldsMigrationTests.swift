@@ -68,24 +68,72 @@ struct CryptoWalletFieldsMigrationTests {
     }
   }
 
-  @Test(
-    "partial unique index rejects duplicate (account_id, external_id) but allows NULL externalId")
-  func dedupIndexBehaviour() throws {
+  @Test("partial unique index rejects duplicate (account_id, external_id)")
+  func dedupIndexRejectsDuplicate() throws {
     let queue = try DatabaseQueue()
     try ProfileSchema.migrator.migrate(queue)
     let accountId = Data(repeating: 7, count: 16)
     try queue.write { database in
-      try database.execute(
-        sql:
-          "INSERT INTO account (id, record_name, name, type, instrument_id, position, is_hidden, valuation_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        arguments: [
-          accountId, "AccountRecord|dedup1", "Dedup",
-          "investment", "AUD", 0, 0, "recordedValue",
-        ])
-      try database.execute(
-        sql: "INSERT INTO \"transaction\" (id, record_name, date, payee) VALUES (?, ?, ?, ?)",
-        arguments: [Data(repeating: 8, count: 16), "TxnRecord|d", "2024-01-01", ""])
-      // First leg with externalId — fine.
+      try Self.seedAccountAndTransaction(database, accountId: accountId)
+      try Self.insertLeg(
+        database, LegSeed(id: 9, accountId: accountId, externalId: "0xabc", quantity: 1000))
+      do {
+        try Self.insertLeg(
+          database, LegSeed(id: 10, accountId: accountId, externalId: "0xabc", quantity: 500))
+        Issue.record("Expected UNIQUE constraint failure for duplicate (account, externalId)")
+      } catch let error as DatabaseError {
+        #expect(error.resultCode == .SQLITE_CONSTRAINT)
+      }
+    }
+  }
+
+  @Test("partial unique index allows multiple NULL externalIds on same account")
+  func dedupIndexAllowsMultipleNulls() throws {
+    let queue = try DatabaseQueue()
+    try ProfileSchema.migrator.migrate(queue)
+    let accountId = Data(repeating: 7, count: 16)
+    try queue.write { database in
+      try Self.seedAccountAndTransaction(database, accountId: accountId)
+      try Self.insertLeg(
+        database, LegSeed(id: 11, accountId: accountId, externalId: nil, quantity: 200))
+      try Self.insertLeg(
+        database, LegSeed(id: 12, accountId: accountId, externalId: nil, quantity: 300))
+    }
+  }
+
+  // MARK: - Helpers
+
+  private struct LegSeed {
+    let id: UInt8
+    let accountId: Data
+    let externalId: String?
+    let quantity: Int
+    /// All test legs in this suite roll up under the same seeded transaction
+    /// (`Data(repeating: 8, count: 16)`) so dedup is verified at the leg
+    /// level, not skewed by transaction-id mismatches.
+    var transactionId: Data { Data(repeating: 8, count: 16) }
+  }
+
+  private static func seedAccountAndTransaction(
+    _ database: Database, accountId: Data
+  ) throws {
+    try database.execute(
+      sql: """
+        INSERT INTO account
+          (id, record_name, name, type, instrument_id, position, is_hidden, valuation_mode)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+      arguments: [
+        accountId, "AccountRecord|dedup", "Dedup",
+        "investment", "AUD", 0, 0, "recordedValue",
+      ])
+    try database.execute(
+      sql: "INSERT INTO \"transaction\" (id, record_name, date, payee) VALUES (?, ?, ?, ?)",
+      arguments: [Data(repeating: 8, count: 16), "TxnRecord|d", "2024-01-01", ""])
+  }
+
+  private static func insertLeg(_ database: Database, _ seed: LegSeed) throws {
+    if let externalId = seed.externalId {
       try database.execute(
         sql: """
           INSERT INTO transaction_leg
@@ -94,30 +142,11 @@ struct CryptoWalletFieldsMigrationTests {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
         arguments: [
-          Data(repeating: 9, count: 16), "LegRecord|d1",
-          Data(repeating: 8, count: 16), accountId, "AUD",
-          1000, "income", 0, "0xabc",
+          Data(repeating: seed.id, count: 16), "LegRecord|\(seed.id)",
+          seed.transactionId, seed.accountId, "AUD",
+          seed.quantity, "income", 0, externalId,
         ])
-      // Second leg, same (account_id, external_id) — must be rejected.
-      do {
-        try database.execute(
-          sql: """
-            INSERT INTO transaction_leg
-              (id, record_name, transaction_id, account_id, instrument_id,
-               quantity, type, sort_order, external_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-          arguments: [
-            Data(repeating: 10, count: 16), "LegRecord|d2",
-            Data(repeating: 8, count: 16), accountId, "AUD",
-            500, "income", 0, "0xabc",
-          ])
-        Issue.record("Expected UNIQUE constraint failure for duplicate (account, externalId)")
-      } catch let error as DatabaseError {
-        #expect(error.resultCode == .SQLITE_CONSTRAINT)
-      }
-      // Two legs with NULL externalId on the same account — fine
-      // (partial index excludes NULLs).
+    } else {
       try database.execute(
         sql: """
           INSERT INTO transaction_leg
@@ -126,21 +155,9 @@ struct CryptoWalletFieldsMigrationTests {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           """,
         arguments: [
-          Data(repeating: 11, count: 16), "LegRecord|d3",
-          Data(repeating: 8, count: 16), accountId, "AUD",
-          200, "income", 0,
-        ])
-      try database.execute(
-        sql: """
-          INSERT INTO transaction_leg
-            (id, record_name, transaction_id, account_id, instrument_id,
-             quantity, type, sort_order)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          """,
-        arguments: [
-          Data(repeating: 12, count: 16), "LegRecord|d4",
-          Data(repeating: 8, count: 16), accountId, "AUD",
-          300, "income", 0,
+          Data(repeating: seed.id, count: 16), "LegRecord|\(seed.id)",
+          seed.transactionId, seed.accountId, "AUD",
+          seed.quantity, "income", 0,
         ])
     }
   }
