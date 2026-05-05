@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftData
 
 /// Owns the mapping from Profile.ID to ProfileSession.
@@ -7,6 +8,9 @@ import SwiftData
 @Observable
 @MainActor
 final class SessionManager {
+  private static let logger = Logger(
+    subsystem: "com.moolah.app", category: "SessionManager")
+
   /// Map from `Profile.ID` to the live `ProfileSession`.
   ///
   /// **Mutation invariant:** any code path that drops or replaces a
@@ -50,7 +54,18 @@ final class SessionManager {
       fatalError("Failed to open profile database for \(profile.id): \(error)")
     }
     sessions[profile.id] = session
-    Task { try? await session.setUp() }
+    Task { [profileId = profile.id] in
+      do {
+        try await session.setUp()
+      } catch is CancellationError {
+        // Expected when `cleanupSync` cancels `setUpTask` during session
+        // teardown — not a failure.
+      } catch {
+        Self.logger.fault(
+          "ProfileSession.setUp() failed for \(profileId, privacy: .public): \(error.localizedDescription, privacy: .public)"
+        )
+      }
+    }
     return session
   }
 
@@ -95,6 +110,17 @@ final class SessionManager {
       fatalError("Failed to rebuild profile database for \(profile.id): \(error)")
     }
     sessions[profile.id] = session
-    Task { try? await session.setUp() }
+    Task { [profileId = profile.id] in
+      do {
+        try await session.setUp()
+      } catch is CancellationError {
+        // Expected when `cleanupSync` cancels `setUpTask` during session
+        // teardown — not a failure.
+      } catch {
+        Self.logger.fault(
+          "ProfileSession.setUp() failed for \(profileId, privacy: .public): \(error.localizedDescription, privacy: .public)"
+        )
+      }
+    }
   }
 }

@@ -158,6 +158,55 @@ struct EditAccountScreen {
     }
   }
 
+  // MARK: - Mutations
+
+  /// Click the picker, choose `mode`, and assert the selection updated.
+  /// Caller must have already invoked `open(account:)`. Resolves the
+  /// menu-item by user-visible label via `MoolahApp.menuItem(label:)`,
+  /// because `NSMenuItem` does not inherit the SwiftUI accessibility
+  /// identifier on macOS.
+  func selectValuationMode(_ mode: Mode) {
+    Trace.record(#function, detail: "mode=\(mode)")
+    let picker = app.element(for: UITestIdentifiers.EditAccount.valuationModePicker)
+    if !picker.waitForExistence(timeout: 3) {
+      Trace.recordFailure(
+        "editAccount.valuationMode picker did not appear; cannot change selection")
+      XCTFail("Valuation picker did not appear within 3s")
+      return
+    }
+    picker.click()
+    let label = displayLabel(for: mode)
+    let item = app.menuItem(label: label)
+    if !item.waitForExistence(timeout: 3) {
+      Trace.recordFailure(
+        "Picker option '\(label)' did not appear after clicking valuation picker")
+      XCTFail("Picker option '\(label)' did not appear within 3s")
+      return
+    }
+    item.click()
+    expectValuationMode(mode)
+  }
+
+  /// Click the Save toolbar button. Returns once the dialog dismisses
+  /// (the Cancel button — which doubles as the dialog presence sentinel
+  /// — disappears).
+  func save() {
+    Trace.record(#function)
+    let saveButton = app.element(for: UITestIdentifiers.EditAccount.saveButton)
+    if !saveButton.waitForExistence(timeout: 3) {
+      Trace.recordFailure("editAccount.save button did not appear")
+      XCTFail("Save button did not appear within 3s")
+      return
+    }
+    saveButton.click()
+    let cancelButton = app.element(for: UITestIdentifiers.EditAccount.cancelButton)
+    if !cancelButton.waitForNonExistence(timeout: 3) {
+      Trace.recordFailure(
+        "editAccount.cancel did not disappear after Save click; sheet still open")
+      XCTFail("EditAccountView dialog did not disappear within 3s of Save")
+    }
+  }
+
   // MARK: - Helpers
 
   /// Maps `Mode` to the user-visible Picker label produced by
