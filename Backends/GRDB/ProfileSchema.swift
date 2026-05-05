@@ -33,6 +33,12 @@ import GRDB
 /// pre-cap builds. See `ProfileSchema+PurgeIntradayCaches.swift` and
 /// `Shared/PriceCacheCap.swift` for the cap-at-yesterday rule that
 /// prevents re-poisoning.
+/// `v8_add_crypto_wallet_fields` — adds `wallet_address`/`chain_id`
+/// to `account` (rebuilding the table to widen the type CHECK to
+/// include `'crypto'`), `external_id` + partial-unique dedup index
+/// to `transaction_leg`, `pricing_status` to `instrument`, and the
+/// per-device `wallet_sync_state` table. See
+/// `ProfileSchema+CryptoWalletFields.swift`.
 ///
 /// **Retention policy for the cache tables.** All six cache tables
 /// created by `v1_initial` (`exchange_rate`, `exchange_rate_meta`,
@@ -54,7 +60,7 @@ enum ProfileSchema {
   /// Bumped each time a migration is added. Surfaced for open-time
   /// integrity checks; not used by `DatabaseMigrator` (which keys on
   /// the stable string IDs of registered migrations).
-  static let version = 7
+  static let version = 8
 
   static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
@@ -76,6 +82,8 @@ enum ProfileSchema {
       "v6_account_valuation_mode", migrate: addAccountValuationMode)
     migrator.registerMigration(
       "v7_purge_intraday_cached_prices", migrate: purgeIntradayCachedPrices)
+    migrator.registerMigration(
+      "v8_add_crypto_wallet_fields", migrate: addCryptoWalletFields)
 
     return migrator
   }
