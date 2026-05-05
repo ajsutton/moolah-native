@@ -42,11 +42,17 @@ CloudKit Production schema changes can only be deployed via the **CloudKit Conso
 
 The pipeline writes detailed instructions to the workflow run's job summary when it pauses — follow those.
 
+## SHA pinning
+
+The release pipeline locks onto a single commit at pre-flight time and uses it for every subsequent step. `release-preflight` checks CI on that exact SHA (not "latest CI on main"); `release-create-rc` tags that SHA (not `--target main`, which resolves server-side and would silently bump if a PR landed mid-release).
+
+Practical implication: **don't `git pull` or `git fetch` between `release-preflight` and `release-create-rc`.** If you do, your local HEAD moves and so does the SHA you pinned. If you genuinely need the new tip, re-run `release-preflight` to lock onto the new SHA — nothing else changes.
+
 ## Cut a release candidate
 
-1. **Pre-flight.** Run `just release-preflight`. Fix any issue it reports (push outstanding work, sync with origin, authenticate `gh`, wait for green CI) before continuing.
+1. **Pre-flight.** Run `just release-preflight`. It locks onto local HEAD and prints the pinned SHA. Fix any issue it reports (push outstanding work, sync with origin, authenticate `gh`, wait for green CI on the pinned SHA) before continuing. Don't pull again after this.
 
-2. **Confirm intent.** Pre-flight verifies your local main is in sync with `origin/main`; it cannot verify which PRs you *believe* are in this release. A stale local main, an unmerged PR, or a merge that landed seconds after you tagged will all sail through pre-flight.
+2. **Confirm intent.** Pre-flight checks CI for the pinned SHA; it cannot verify which PRs you *believe* are in this release. A stale local main or an unmerged PR will both sail through pre-flight.
    - [ ] Run `git log <previous-rc-tag>..HEAD --oneline` and read the list end-to-end. Every issue / PR you mean to ship must appear.
    - [ ] For any PR you're unsure about, run `gh pr view <N> --json mergedAt,mergeCommit | jq` and confirm `mergedAt` is non-null AND `mergeCommit.oid` shows up in the log above.
    - [ ] If anything you expected is missing: either wait for the merge to land and re-run pre-flight, or accept reduced scope and adjust the release notes accordingly. Don't tag and "fix it in the next rc" — once an rc is installed, it takes on a life of its own.

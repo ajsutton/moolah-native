@@ -34,11 +34,24 @@ if gh release view "$tag" >/dev/null 2>&1; then
     exit 1
 fi
 
+# Refuse if HEAD isn't on main — guards against tagging a stray local branch.
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [[ "$branch" != "main" ]]; then
+    printf 'must be on main to cut an RC; HEAD is on %s\n' "$branch" >&2
+    exit 1
+fi
+
+# Pin to local HEAD instead of `--target main`. `--target main` resolves
+# server-side at API-call time, so a PR that lands between preflight and now
+# would silently bump the release commit. Tagging the SHA gives the operator
+# the same commit they preflighted.
+target_sha=$(git rev-parse HEAD)
+
 gh release create "$tag" \
-    --target main \
+    --target "$target_sha" \
     --title "$tag" \
     --notes-file "$notes_file" \
     --prerelease
 
-printf '✓ created GH pre-release %s; release-rc.yml will fire shortly\n' "$tag"
+printf '✓ created GH pre-release %s at %s; release-rc.yml will fire shortly\n' "$tag" "$target_sha"
 printf '  watch: just release-wait %s\n' "$tag"
