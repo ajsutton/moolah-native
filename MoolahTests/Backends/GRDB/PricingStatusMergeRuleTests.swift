@@ -4,52 +4,70 @@ import Testing
 
 @testable import Moolah
 
-@Suite("GRDBInstrumentRegistryRepository pricingStatus merge rule")
+/// Pure-function tests for `PricingStatusMerge.merge(local:incoming:)`.
+/// Covers every cell of the 3x3 truth table from the design's "Cross-device
+/// conflict resolution" section.
+@Suite("PricingStatusMerge.merge — full truth table")
 struct PricingStatusMergeRuleTests {
-  private let priced = TokenPricingStatus.priced.rawValue
-  private let unpriced = TokenPricingStatus.unpriced.rawValue
-  private let spam = TokenPricingStatus.spam.rawValue
+  // MARK: - Local .spam wins over any incoming
 
   @Test
-  func localSpamSurvivesAnyIncoming() {
+  func localSpamBeatsIncomingPriced() {
     #expect(
-      GRDBInstrumentRegistryRepository.mergedPricingStatus(
-        local: spam, incoming: priced) == spam)
-    #expect(
-      GRDBInstrumentRegistryRepository.mergedPricingStatus(
-        local: spam, incoming: unpriced) == spam)
-    #expect(
-      GRDBInstrumentRegistryRepository.mergedPricingStatus(
-        local: spam, incoming: spam) == spam)
+      PricingStatusMerge.merge(local: .spam, incoming: .priced) == .spam)
   }
 
   @Test
-  func incomingSpamWinsOverNonSpamLocal() {
+  func localSpamBeatsIncomingUnpriced() {
     #expect(
-      GRDBInstrumentRegistryRepository.mergedPricingStatus(
-        local: priced, incoming: spam) == spam)
-    #expect(
-      GRDBInstrumentRegistryRepository.mergedPricingStatus(
-        local: unpriced, incoming: spam) == spam)
+      PricingStatusMerge.merge(local: .spam, incoming: .unpriced) == .spam)
   }
 
   @Test
-  func pricedWinsOverUnpricedEitherDirection() {
+  func localSpamMatchesIncomingSpam() {
     #expect(
-      GRDBInstrumentRegistryRepository.mergedPricingStatus(
-        local: priced, incoming: unpriced) == priced)
+      PricingStatusMerge.merge(local: .spam, incoming: .spam) == .spam)
+  }
+
+  // MARK: - Incoming .spam wins over any non-spam local
+
+  @Test
+  func incomingSpamBeatsLocalPriced() {
     #expect(
-      GRDBInstrumentRegistryRepository.mergedPricingStatus(
-        local: unpriced, incoming: priced) == priced)
+      PricingStatusMerge.merge(local: .priced, incoming: .spam) == .spam)
   }
 
   @Test
-  func identicalStatusesAreUnchanged() {
+  func incomingSpamBeatsLocalUnpriced() {
     #expect(
-      GRDBInstrumentRegistryRepository.mergedPricingStatus(
-        local: priced, incoming: priced) == priced)
+      PricingStatusMerge.merge(local: .unpriced, incoming: .spam) == .spam)
+  }
+
+  // MARK: - .priced beats .unpriced either direction (resolution sticks)
+
+  @Test
+  func localPricedBeatsIncomingUnpriced() {
     #expect(
-      GRDBInstrumentRegistryRepository.mergedPricingStatus(
-        local: unpriced, incoming: unpriced) == unpriced)
+      PricingStatusMerge.merge(local: .priced, incoming: .unpriced) == .priced)
+  }
+
+  @Test
+  func incomingPricedBeatsLocalUnpriced() {
+    #expect(
+      PricingStatusMerge.merge(local: .unpriced, incoming: .priced) == .priced)
+  }
+
+  // MARK: - Same-on-both-sides → unchanged
+
+  @Test
+  func bothPricedReturnsPriced() {
+    #expect(
+      PricingStatusMerge.merge(local: .priced, incoming: .priced) == .priced)
+  }
+
+  @Test
+  func bothUnpricedReturnsUnpriced() {
+    #expect(
+      PricingStatusMerge.merge(local: .unpriced, incoming: .unpriced) == .unpriced)
   }
 }

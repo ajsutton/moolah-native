@@ -15,6 +15,7 @@ final class CryptoTokenStore {
 
   private let registry: any InstrumentRegistryRepository
   private let cryptoPriceService: CryptoPriceService
+  private let conversionService: any InstrumentConversionService
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "CryptoTokenStore")
 
@@ -24,10 +25,12 @@ final class CryptoTokenStore {
 
   init(
     registry: any InstrumentRegistryRepository,
-    cryptoPriceService: CryptoPriceService
+    cryptoPriceService: CryptoPriceService,
+    conversionService: any InstrumentConversionService
   ) {
     self.registry = registry
     self.cryptoPriceService = cryptoPriceService
+    self.conversionService = conversionService
   }
 
   func loadRegistrations() async {
@@ -66,6 +69,36 @@ final class CryptoTokenStore {
     guard let registration = registrations.first(where: { $0.instrument.id == instrument.id })
     else { return }
     await removeRegistration(registration)
+  }
+
+  /// Persists a new `pricingStatus` for an existing registration and
+  /// synchronously invalidates any cached conversion derived from the
+  /// instrument so the next aggregation reads fresh data. Used by the
+  /// Discovered Tokens inbox + Spam tokens management UI to flip a
+  /// registration between `.priced` / `.unpriced` / `.spam`.
+  ///
+  /// On failure the local in-memory `registrations` list is left
+  /// untouched and `error` is set; the caller's view re-renders against
+  /// the previous state. Cache invalidation only runs after the registry
+  /// write succeeds — we never invalidate on behalf of a write that
+  /// didn't happen.
+  func setStatus(
+    _ status: TokenPricingStatus,
+    for registration: CryptoRegistration
+  ) async {
+    var updated = registration
+    updated.pricingStatus = status
+    do {
+      try await registry.update(updated)
+      await conversionService.invalidateCache(for: registration.instrument)
+      if let index = registrations.firstIndex(where: { $0.id == registration.id }) {
+        registrations[index] = updated
+      }
+      error = nil
+    } catch {
+      logger.error("Failed to set pricing status: \(error, privacy: .public)")
+      self.error = error.localizedDescription
+    }
   }
 
   // MARK: - API Key

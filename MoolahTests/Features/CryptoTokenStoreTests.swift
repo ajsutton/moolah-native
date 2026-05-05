@@ -26,7 +26,10 @@ struct CryptoTokenStoreTests {
       clients: [FixedCryptoPriceClient()],
       database: database
     )
-    let store = CryptoTokenStore(registry: registry, cryptoPriceService: service)
+    let store = CryptoTokenStore(
+      registry: registry,
+      cryptoPriceService: service,
+      conversionService: RecordingConversionService())
     return (store, registry)
   }
 
@@ -72,7 +75,10 @@ struct CryptoTokenStoreTests {
     let failing = FailingRegistry()
     // swiftlint:disable:next force_try
     let service = CryptoPriceService(clients: [], database: try! ProfileDatabase.openInMemory())
-    let store = CryptoTokenStore(registry: failing, cryptoPriceService: service)
+    let store = CryptoTokenStore(
+      registry: failing,
+      cryptoPriceService: service,
+      conversionService: RecordingConversionService())
     await store.loadRegistrations()
     #expect(store.error != nil)
     #expect(store.registrations.isEmpty)
@@ -142,6 +148,7 @@ private struct FailingRegistry: InstrumentRegistryRepository, @unchecked Sendabl
     _ instrument: Instrument, mapping: CryptoProviderMapping
   ) async throws { throw BoomError() }
   func registerStock(_ instrument: Instrument) async throws { throw BoomError() }
+  func update(_ registration: CryptoRegistration) async throws { throw BoomError() }
   func remove(id: String) async throws { throw BoomError() }
   @MainActor
   func observeChanges() -> AsyncStream<Void> { AsyncStream { _ in } }
