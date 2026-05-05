@@ -21,6 +21,19 @@ protocol InstrumentRegistryRepository: Sendable {
   /// Throws on a backing-store failure.
   func allCryptoRegistrations() async throws -> [CryptoRegistration]
 
+  /// Looks up a single crypto registration by its `Instrument.id`. Returns
+  /// `nil` when no row exists for that id, when the row exists but has no
+  /// provider mapping (all three mapping columns nil — e.g. an auto-insert
+  /// from CSV import that never went through the picker), or when the row
+  /// exists but is not a crypto kind.
+  ///
+  /// Used by `CryptoTokenDiscoveryService` as the fast existence check
+  /// before kicking off a network resolve. Implementations must be safe to
+  /// call concurrently with other reads and writes — the wallet sync's
+  /// build phase issues many concurrent lookups for the same key.
+  /// Throws on a backing-store failure.
+  func cryptoRegistration(byId id: String) async throws -> CryptoRegistration?
+
   /// Registers (or upserts) a crypto instrument with its provider mapping.
   /// Re-registering an id that already exists overwrites the mapping and
   /// mutable metadata fields rather than duplicating the row. Invokes the

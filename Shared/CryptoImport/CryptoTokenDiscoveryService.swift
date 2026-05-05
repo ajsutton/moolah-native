@@ -1,0 +1,258 @@
+// Shared/CryptoImport/CryptoTokenDiscoveryService.swift
+import Foundation
+import OSLog
+
+/// Resolves on-chain token addresses to `CryptoRegistration` rows.
+///
+/// Concurrent calls for the same `(chainId, contractAddress)` are coalesced
+/// via the in-flight `Task` pattern: the first caller starts the resolution,
+/// later callers `await` the same `Task<CryptoRegistration, Error>`. The
+/// actor serialises the "check repository → launch resolution → store
+/// result" critical section so the registry sees at most one new row per
+/// unique key, even under heavy parallel-build-phase contention.
+///
+/// Resolution algorithm:
+///
+/// 1. Fast path — return any existing registration from the registry.
+/// 2. Resolve provider mappings via `CryptoRegistrationResolver`
+///    (CoinGecko by contract → CryptoCompare → Binance).
+/// 3. Query Alchemy's token metadata for the `isSpam` flag (ERC-20 only;
+///    native gas tokens are never spam).
+/// 4. Apply the design's status precedence:
+///    - `isSpam == true` → `.spam` (regardless of resolver outcome).
+///    - resolver succeeded with at least one provider id → `.priced`.
+///    - else → `.unpriced` (surfaces in the Discovered Tokens inbox).
+/// 5. Persist via the registry. Status is sticky-positive: once a row
+///    transitions out of `.unpriced`, the next sync cycle leaves it alone.
+///
+/// Periodic re-resolution (`reResolve`) is the hook surface for Stage 9's
+/// `CryptoSyncStore`. The actual scheduling — at most once per day per
+/// `.unpriced` token, per design — lives in the sync store.
+/// See issue #753 for the cadence tuning.
+actor CryptoTokenDiscoveryService {
+  private var inFlight: [String: Task<CryptoRegistration, Error>] = [:]
+  private let registry: any InstrumentRegistryRepository
+  private let resolver: any CryptoRegistrationResolver
+  private let alchemy: any AlchemyClient
+  private let logger = Logger(
+    subsystem: "com.moolah.app", category: "CryptoTokenDiscovery")
+
+  init(
+    registry: any InstrumentRegistryRepository,
+    resolver: any CryptoRegistrationResolver,
+    alchemy: any AlchemyClient
+  ) {
+    self.registry = registry
+    self.resolver = resolver
+    self.alchemy = alchemy
+  }
+
+  /// Returns the existing `CryptoRegistration` if one is registered for
+  /// `(chain, contractAddress)`, otherwise resolves and persists a new one.
+  /// Concurrent callers for the same key all `await` the same in-flight
+  /// `Task`; the underlying network round-trip executes once.
+  func resolveOrLoad(
+    chain: ChainConfig,
+    contractAddress: String?,
+    symbol: String,
+    name: String,
+    decimals: Int
+  ) async throws -> CryptoRegistration {
+    let id =
+      Instrument.crypto(
+        chainId: chain.chainId,
+        contractAddress: contractAddress,
+        symbol: symbol,
+        name: name,
+        decimals: decimals
+      ).id
+
+    if let existing = try await registry.cryptoRegistration(byId: id) {
+      return existing
+    }
+    if let task = inFlight[id] {
+      return try await task.value
+    }
+
+    let task = Task<CryptoRegistration, Error> { [self] in
+      try await performResolution(
+        chain: chain,
+        contractAddress: contractAddress,
+        symbol: symbol,
+        name: name,
+        decimals: decimals)
+    }
+    inFlight[id] = task
+    do {
+      let result = try await task.value
+      // Actor-serialised — every coalesced waiter resumed before this
+      // line, so clearing the slot now is race-free without a detached
+      // cleanup task.
+      inFlight[id] = nil
+      return result
+    } catch {
+      inFlight[id] = nil
+      throw error
+    }
+  }
+
+  // MARK: - Resolution algorithm
+
+  private func performResolution(
+    chain: ChainConfig,
+    contractAddress: String?,
+    symbol: String,
+    name: String,
+    decimals: Int
+  ) async throws -> CryptoRegistration {
+    let isNative = contractAddress == nil
+    let instrument = Instrument.crypto(
+      chainId: chain.chainId,
+      contractAddress: contractAddress,
+      symbol: symbol,
+      name: name,
+      decimals: decimals)
+
+    // Resolution via provider chain. A non-cancellation throw means "no
+    // mapping" — a normal outcome (e.g. an obscure ERC-20 with no listing
+    // on any provider). `resolveSilently` swallows that case and returns
+    // `nil`; only `CancellationError` propagates so a cancelled sync
+    // never writes a half-resolved row.
+    let resolved = try await resolveSilently(
+      chainId: chain.chainId,
+      contractAddress: contractAddress,
+      symbol: symbol,
+      isNative: isNative)
+
+    // Native gas tokens are never classified as spam — Alchemy's spam
+    // database only covers token contracts. Skip the metadata round-trip.
+    let isSpam: Bool
+    if let contractAddress, !isNative {
+      isSpam = try await fetchSpamFlag(chain: chain, contractAddress: contractAddress)
+    } else {
+      isSpam = false
+    }
+
+    let mapping: CryptoProviderMapping
+    let status: TokenPricingStatus
+    if isSpam {
+      status = .spam
+      mapping = resolved?.mapping ?? emptyMapping(for: instrument.id)
+    } else if let resolved, hasAnyMapping(resolved.mapping) {
+      status = .priced
+      mapping = resolved.mapping
+    } else {
+      status = .unpriced
+      mapping = emptyMapping(for: instrument.id)
+    }
+
+    let registration = CryptoRegistration(
+      instrument: instrument,
+      mapping: mapping,
+      pricingStatus: status)
+
+    // `registerCrypto` upserts the mapping but preserves the prior
+    // `pricingStatus` on an existing row (default `.priced` only on
+    // insert). When the resolved status differs from what the upsert
+    // would leave behind, follow up with `update(_:)` to enforce this
+    // discovery pass's decision. Read the prior row once so the check is
+    // a single registry round-trip rather than two.
+    let priorStatus = try await registry.cryptoRegistration(
+      byId: instrument.id)?.pricingStatus
+    try await registry.registerCrypto(instrument, mapping: mapping)
+    let upsertedStatus: TokenPricingStatus = priorStatus ?? .priced
+    if upsertedStatus != status {
+      try await registry.update(registration)
+    }
+
+    return registration
+  }
+
+  /// Re-runs resolution for an `.unpriced` registration.
+  ///
+  /// Idempotent: re-reads the registry to find the *current* status before
+  /// deciding whether to re-resolve. If the live row is no longer
+  /// `.unpriced` (user marked it spam, or another path resolved it),
+  /// returns that row without issuing any network calls. This preserves
+  /// the design's "user intent wins" property — a spam classification
+  /// made on another device while we were idling between daily cycles
+  /// must not be clobbered by an automatic re-resolution.
+  ///
+  /// Stage 9's `CryptoSyncStore` is the only intended caller and is
+  /// responsible for the daily-cadence gate (issue #753).
+  func reResolve(
+    _ registration: CryptoRegistration,
+    chain: ChainConfig
+  ) async throws -> CryptoRegistration {
+    let id = registration.instrument.id
+    let current = try await registry.cryptoRegistration(byId: id) ?? registration
+    guard current.pricingStatus == .unpriced else { return current }
+
+    let instrument = current.instrument
+    return try await performResolution(
+      chain: chain,
+      contractAddress: instrument.contractAddress,
+      symbol: instrument.ticker ?? instrument.name,
+      name: instrument.name,
+      decimals: instrument.decimals)
+  }
+
+  // MARK: - Helpers
+
+  private func resolveSilently(
+    chainId: Int,
+    contractAddress: String?,
+    symbol: String,
+    isNative: Bool
+  ) async throws -> CryptoRegistration? {
+    do {
+      return try await resolver.resolveRegistration(
+        chainId: chainId,
+        contractAddress: contractAddress,
+        symbol: symbol,
+        isNative: isNative)
+    } catch is CancellationError {
+      // Cooperative cancellation propagates — never write a half-resolved
+      // row when the caller's task hierarchy is unwinding.
+      throw CancellationError()
+    } catch {
+      logger.debug(
+        "Provider resolution returned no mapping for chain \(chainId, privacy: .public) (\(error.localizedDescription, privacy: .public))"
+      )
+      return nil
+    }
+  }
+
+  private func fetchSpamFlag(
+    chain: ChainConfig,
+    contractAddress: String
+  ) async throws -> Bool {
+    do {
+      let metadata = try await alchemy.getTokenMetadata(
+        chain: chain,
+        contractAddress: contractAddress)
+      return metadata.isSpam
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch {
+      logger.debug(
+        "Alchemy spam-flag lookup failed for chain \(chain.chainId, privacy: .public): \(error.localizedDescription, privacy: .public)"
+      )
+      return false
+    }
+  }
+
+  private func emptyMapping(for instrumentId: String) -> CryptoProviderMapping {
+    CryptoProviderMapping(
+      instrumentId: instrumentId,
+      coingeckoId: nil,
+      cryptocompareSymbol: nil,
+      binanceSymbol: nil)
+  }
+
+  private func hasAnyMapping(_ mapping: CryptoProviderMapping) -> Bool {
+    mapping.coingeckoId != nil
+      || mapping.cryptocompareSymbol != nil
+      || mapping.binanceSymbol != nil
+  }
+}
