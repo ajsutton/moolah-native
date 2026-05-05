@@ -110,15 +110,15 @@ struct PositionsContributionsTests {
     ]
     let service = FixedConversionService(rates: [bhp.id: Decimal(50)])
     let builder = PositionsHistoryBuilder(conversionService: service)
+    let day1Date = try date(daysAfterEpoch: 1)
+    let day3Date = try date(daysAfterEpoch: 3)
     let series = await builder.build(
       transactions: txns, accountId: accountId,
       hostCurrency: aud, range: .threeMonths,
       now: try date(daysAfterEpoch: 5)
     )
-    let day1 = try #require(
-      series.totalSeries.first { $0.date == (try? date(daysAfterEpoch: 1)) })
-    let day3 = try #require(
-      series.totalSeries.first { $0.date == (try? date(daysAfterEpoch: 3)) })
+    let day1 = try #require(series.totalSeries.first { $0.date == day1Date })
+    let day3 = try #require(series.totalSeries.first { $0.date == day3Date })
     #expect(day1.contributions == 1_000)
     #expect(day3.contributions == 1_500)
   }
@@ -132,13 +132,13 @@ struct PositionsContributionsTests {
     ]
     let service = FixedConversionService(rates: [bhp.id: Decimal(50)])
     let builder = PositionsHistoryBuilder(conversionService: service)
+    let day3Date = try date(daysAfterEpoch: 3)
     let series = await builder.build(
       transactions: txns, accountId: accountId,
       hostCurrency: aud, range: .threeMonths,
       now: try date(daysAfterEpoch: 5)
     )
-    let day3 = try #require(
-      series.totalSeries.first { $0.date == (try? date(daysAfterEpoch: 3)) })
+    let day3 = try #require(series.totalSeries.first { $0.date == day3Date })
     #expect(day3.contributions == 1_200)
   }
 
@@ -173,6 +173,7 @@ struct PositionsContributionsTests {
       day0: [usd.id: day0Rate, bhp.id: Decimal(50)],
       day10: [usd.id: day10Rate, bhp.id: Decimal(50)],
     ])
+    let day1Date = try date(daysAfterEpoch: 1)
     let txns = try [
       openingBalance(in: usd, qty: 1_000, daysAfterEpoch: 0, hour: 14),
       buy(instrument: bhp, qty: 10, fiat: 500, daysAfterEpoch: 1),
@@ -183,8 +184,7 @@ struct PositionsContributionsTests {
       hostCurrency: aud, range: .threeMonths,
       now: try date(daysAfterEpoch: 12)
     )
-    let day1 = try #require(
-      series.totalSeries.first { $0.date == (try? date(daysAfterEpoch: 1)) })
+    let day1 = try #require(series.totalSeries.first { $0.date == day1Date })
     #expect(day1.contributions == Decimal(1_500))
   }
 
@@ -247,8 +247,8 @@ struct PositionsContributionsTests {
       hostCurrency: aud, range: .threeMonths,
       now: try date(daysAfterEpoch: 5)
     )
-    let day1 = try #require(
-      series.totalSeries.first { $0.date == (try? date(daysAfterEpoch: 1)) })
+    let day1Date = try date(daysAfterEpoch: 1)
+    let day1 = try #require(series.totalSeries.first { $0.date == day1Date })
     #expect(day1.contributions == 1_000)
     // Sticky-latch invariant: no aggregate point on or after day 3
     // carries a populated `contributions`, regardless of whether the
@@ -259,8 +259,19 @@ struct PositionsContributionsTests {
     }
   }
 
-  @Test("cancellation latches contributions to nil and exits cleanly")
+  @Test("cancellation produces no aggregate point with stale contributions")
   func contributionsCancellation() async throws {
+    // Service throws CancellationError on every call. The contribution
+    // fold catches it, latches state.contributions = nil, and rethrows;
+    // the build's per-day loop converts the throw into a partial-series
+    // return. The primary assertions are:
+    //   1. The function returns at all (no deadlock — the test would
+    //      hang otherwise).
+    //   2. No emitted aggregate point carries a populated `contributions`
+    //      value. `allSatisfy` on an empty collection returns `true` —
+    //      that is the correct outcome here, because cancellation
+    //      mid-pre-fold legitimately produces zero emitted points and
+    //      the latch invariant is then trivially satisfied.
     let service = ThrowingCountingConversionService(
       outcome: { _ in .failure(CancellationError()) }
     )
@@ -274,8 +285,6 @@ struct PositionsContributionsTests {
       hostCurrency: aud, range: .threeMonths,
       now: try date(daysAfterEpoch: 5)
     )
-    for point in series.totalSeries {
-      #expect(point.contributions == nil)
-    }
+    #expect(series.totalSeries.allSatisfy { $0.contributions == nil })
   }
 }
