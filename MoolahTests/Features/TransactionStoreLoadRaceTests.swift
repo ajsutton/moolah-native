@@ -234,4 +234,6 @@ actor FirstFetchGatedTransactionRepository: TransactionRepository {
   func fetchPayeeSuggestions(
     prefix: String, excludingTransactionId: UUID?
   ) async throws -> [String] { [] }
+  func legs(matchingExternalId externalId: String) async throws -> [TransactionLeg] { [] }
+  func legExists(accountId: UUID, externalId: String) async throws -> Bool { false }
 }

@@ -17,6 +17,23 @@ protocol TransactionRepository: Sendable {
   /// unsaved drafts — leave the unfiltered list intact.
   func fetchPayeeSuggestions(prefix: String, excludingTransactionId: UUID?) async throws
     -> [String]
+  /// Returns every persisted leg whose `external_id` equals `externalId`.
+  /// Used by the wallet importer's cross-account merge pass to pair an
+  /// in-batch candidate against legs already persisted on a prior cycle
+  /// (so the same on-chain hash arriving via two accounts on different
+  /// devices still merges into one transaction).
+  ///
+  /// Domain return type — the leg's instrument is resolved during the
+  /// fetch the same way `fetch(filter:…)` and `fetchAll(filter:)` resolve
+  /// it. The schema's partial unique index on
+  /// `(account_id, external_id)` keeps this lookup cheap.
+  func legs(matchingExternalId externalId: String) async throws -> [TransactionLeg]
+  /// `true` iff the wallet importer has already persisted a leg keyed by
+  /// `(accountId, externalId)`. Used by the per-leg dedup step of the
+  /// apply pass — re-fetches that span the reorg window cover already-
+  /// imported transactions, so each leg is checked against the partial
+  /// unique index before insertion.
+  func legExists(accountId: UUID, externalId: String) async throws -> Bool
 }
 
 extension TransactionRepository {
