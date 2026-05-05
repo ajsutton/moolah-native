@@ -294,7 +294,7 @@ extension SidebarView {
   private func totalRow(label: String, value: InstrumentAmount?) -> some View {
     LabeledContent(label) {
       if let value {
-        InstrumentAmountView(amount: value, colorOverride: .secondary)
+        InstrumentAmountView(amount: value)
       } else {
         ProgressView()
           .controlSize(.small)
