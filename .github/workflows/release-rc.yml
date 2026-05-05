@@ -168,7 +168,10 @@ jobs:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
           DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
-        run: bundle exec fastlane mac zip version:${{ steps.version.outputs.base }}
+        run: |
+          bundle exec fastlane mac zip \
+              version:${{ steps.version.outputs.base }} \
+              build_number:"$(cat build/build-number.txt)"
 
       - name: Attach Mac zip and build-number to GH pre-release
         env:

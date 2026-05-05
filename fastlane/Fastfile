@@ -170,6 +170,7 @@ platform :mac do
   desc "Build, sign, notarise, and zip the Mac app for direct distribution"
   lane :zip do |options|
     version = options[:version] or UI.user_error!("missing :version (e.g. 1.2.0)")
+    build_number = options[:build_number] or UI.user_error!("missing :build_number (the iOS lane's TestFlight build number; the Mac and iOS builds for an RC must share it)")
 
     certificates
 
@@ -197,6 +198,13 @@ platform :mac do
     # iOS appstore uses `sigh_<bundle>_appstore_profile-name` (no platform suffix)
     # because iOS is fastlane's default platform.
     bake_profile("MAC_PROVISIONING_PROFILE", ENV["sigh_rocks.moolah.app_developer_id_macos_profile-name"])
+
+    # Same ordering rule as the iOS `beta` lane (see comment there): anything that
+    # mutates the pbxproj must come AFTER the last `just generate` (the one inside
+    # `bake_profile`) and BEFORE `build_app`. Setting CURRENT_PROJECT_VERSION here
+    # keeps the Mac build number in lockstep with the iOS upload and lets the
+    # "Verify Release build number" pre-build phase pass.
+    increment_build_number(build_number: build_number)
 
     # Resolve build dir to an absolute path off the repo root. gym/build_app
     # writes outputs to <repo_root>/build/ regardless of fastlane's own cwd,
