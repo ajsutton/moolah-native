@@ -8,6 +8,7 @@ extension Account {
     case .asset: return "house.fill"
     case .creditCard: return "creditcard"
     case .investment: return "chart.line.uptrend.xyaxis"
+    case .crypto: return "chart.line.uptrend.xyaxis"
     }
   }
 }

@@ -5,9 +5,17 @@ enum AccountType: String, Codable, Sendable, CaseIterable {
   case creditCard = "cc"
   case asset
   case investment
+  case crypto
 
   var isCurrent: Bool {
     self == .bank || self == .asset || self == .creditCard
+  }
+
+  /// Whether this type should be treated as an investment account for sidebar
+  /// grouping and any query that filters investments. `true` for `.investment`
+  /// and `.crypto`.
+  var isInvestmentLike: Bool {
+    self == .investment || self == .crypto
   }
 
   var displayName: String {
@@ -16,6 +24,7 @@ enum AccountType: String, Codable, Sendable, CaseIterable {
     case .creditCard: return "Credit Card"
     case .asset: return "Asset"
     case .investment: return "Investment"
+    case .crypto: return "Crypto Wallet"
     }
   }
 }
@@ -28,6 +37,11 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
   var positions: [Position]
   var position: Int
   var isHidden: Bool
+  /// `0x…` lowercased wallet address. Required when `type == .crypto`.
+  var walletAddress: String?
+  /// EVM chain ID (1 = Ethereum, 10 = OP, 8453 = Base, 137 = Polygon).
+  /// Required when `type == .crypto`.
+  var chainId: Int?
   var valuationMode: ValuationMode
 
   init(
@@ -38,7 +52,9 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     positions: [Position] = [],
     position: Int = 0,
     isHidden: Bool = false,
-    valuationMode: ValuationMode = .recordedValue
+    valuationMode: ValuationMode = .recordedValue,
+    walletAddress: String? = nil,
+    chainId: Int? = nil
   ) {
     self.id = id
     self.name = name
@@ -48,6 +64,8 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     self.position = position
     self.isHidden = isHidden
     self.valuationMode = valuationMode
+    self.walletAddress = walletAddress
+    self.chainId = chainId
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -58,6 +76,8 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     case position
     case isHidden = "hidden"
     case valuationMode
+    case walletAddress
+    case chainId
   }
 
   init(from decoder: Decoder) throws {
@@ -73,6 +93,8 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     isHidden = try container.decode(Bool.self, forKey: .isHidden)
     valuationMode =
       try container.decodeIfPresent(ValuationMode.self, forKey: .valuationMode) ?? .recordedValue
+    walletAddress = try container.decodeIfPresent(String.self, forKey: .walletAddress)
+    chainId = try container.decodeIfPresent(Int.self, forKey: .chainId)
   }
 
   func encode(to encoder: Encoder) throws {
@@ -84,6 +106,8 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     try container.encode(position, forKey: .position)
     try container.encode(isHidden, forKey: .isHidden)
     try container.encode(valuationMode, forKey: .valuationMode)
+    try container.encodeIfPresent(walletAddress, forKey: .walletAddress)
+    try container.encodeIfPresent(chainId, forKey: .chainId)
   }
 
   static func == (lhs: Account, rhs: Account) -> Bool {
@@ -91,6 +115,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
       && lhs.instrument == rhs.instrument
       && lhs.position == rhs.position && lhs.isHidden == rhs.isHidden
       && lhs.valuationMode == rhs.valuationMode
+      && lhs.walletAddress == rhs.walletAddress && lhs.chainId == rhs.chainId
   }
 
   func hash(into hasher: inout Hasher) {
@@ -101,6 +126,8 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     hasher.combine(position)
     hasher.combine(isHidden)
     hasher.combine(valuationMode)
+    hasher.combine(walletAddress)
+    hasher.combine(chainId)
   }
 
   static func < (lhs: Account, rhs: Account) -> Bool {
