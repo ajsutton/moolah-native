@@ -152,7 +152,8 @@ struct PositionsHistoryBuilder: Sendable {
         qty: qty, instrument: instrument, hostCurrency: hostCurrency, on: day)
       if let value {
         state.perInstrument[instrument.id, default: []].append(
-          HistoricalValueSeries.Point(date: day, value: value, cost: cost))
+          HistoricalValueSeries.Point(
+            date: day, value: value, cost: cost, contributions: nil))
         aggValue += value
         aggCost += cost
       } else {
@@ -162,7 +163,8 @@ struct PositionsHistoryBuilder: Sendable {
 
     if anyHeld && aggOK {
       state.total.append(
-        HistoricalValueSeries.Point(date: day, value: aggValue, cost: aggCost))
+        HistoricalValueSeries.Point(
+          date: day, value: aggValue, cost: aggCost, contributions: nil))
     }
     return false
   }

@@ -148,7 +148,8 @@ private func withChartPreviewInput() -> PositionsViewInput {
   let points: [HistoricalValueSeries.Point] = (0..<60).map { offset in
     let date = calendar.date(byAdding: .day, value: -59 + offset, to: now) ?? now
     return HistoricalValueSeries.Point(
-      date: date, value: 10_000 + Decimal(offset) * 25, cost: 9_500)
+      date: date, value: 10_000 + Decimal(offset) * 25, cost: 9_500,
+      contributions: nil)
   }
   let series = HistoricalValueSeries(
     hostCurrency: aud, total: points, perInstrument: [bhp.id: points])
