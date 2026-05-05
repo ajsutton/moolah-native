@@ -13,7 +13,13 @@ extension WalletSyncStateRow {
     self.lastSyncedAt = state.lastSyncedAt
     if let error = state.lastError {
       let data = try JSONEncoder().encode(error)
-      self.lastErrorJson = String(decoding: data, as: UTF8.self)
+      // JSONEncoder always produces valid UTF-8; throw if it ever doesn't
+      // rather than silently swap to an empty string.
+      guard let json = String(bytes: data, encoding: .utf8) else {
+        throw BackendError.dataCorrupted(
+          "WalletSyncError JSON encoding produced invalid UTF-8")
+      }
+      self.lastErrorJson = json
     } else {
       self.lastErrorJson = nil
     }
