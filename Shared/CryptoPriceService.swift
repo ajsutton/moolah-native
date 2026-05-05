@@ -5,7 +5,9 @@ import GRDB
 import OSLog
 
 actor CryptoPriceService {
-  private let clients: [CryptoPriceClient]
+  // `clients` is accessed by the live-prices extension in
+  // `CryptoPriceService+Live.swift` so it must be at least internal.
+  let clients: [CryptoPriceClient]
 
   // MARK: - Cross-extension internals
   // `caches`, `hydratedTokenIds`, `database`, and `logger` are accessed
@@ -28,15 +30,19 @@ actor CryptoPriceService {
 
   private let dateFormatter: ISO8601DateFormatter
   private let resolutionClient: TokenResolutionClient
+  /// Injected clock so tests can pin "today" deterministically.
+  private let now: @Sendable () -> Date
 
   init(
     clients: [CryptoPriceClient],
     database: any DatabaseWriter,
-    resolutionClient: (any TokenResolutionClient)? = nil
+    resolutionClient: (any TokenResolutionClient)? = nil,
+    now: @Sendable @escaping () -> Date = { Date() }
   ) {
     self.clients = clients
     self.database = database
     self.resolutionClient = resolutionClient ?? NoOpTokenResolutionClient()
+    self.now = now
     self.dateFormatter = ISO8601DateFormatter()
     self.dateFormatter.formatOptions = [.withFullDate]
   }
@@ -102,6 +108,7 @@ actor CryptoPriceService {
     mapping: CryptoProviderMapping,
     on date: Date
   ) async throws -> Decimal {
+    let date = cappedToYesterday(date, now: now)
     let tokenId = instrument.id
     let dateString = dateFormatter.string(from: date)
 
@@ -182,7 +189,9 @@ actor CryptoPriceService {
   /// `StockPriceService.fetchToCoverDate` and `ExchangeRateService`:
   ///
   /// - **Cache exists, requested date past `latestDate`:** forward
-  ///   extension from the day after `latestDate` to the requested date.
+  ///   extension *including* `latestDate` so a stale value (e.g. an
+  ///   intraday tick persisted by an older build) is overwritten by
+  ///   the next finalised close.
   /// - **Cache exists, requested date before `earliestDate`:** backward
   ///   extension from the requested date to the day before
   ///   `earliestDate`.
@@ -193,14 +202,16 @@ actor CryptoPriceService {
   /// The in-range case is unreachable here — `price(...)` short-circuits
   /// before calling this — but a defensive single-day window is returned
   /// just in case.
+  ///
+  /// `requestedDate` is already capped at yesterday by `price(...)`.
   private func extensionWindow(
     for tokenId: String, requestedDate: Date, dateString: String
   ) -> ClosedRange<Date> {
     let calendar = Calendar(identifier: .gregorian)
     if let cache = caches[tokenId] {
       if dateString > cache.latestDate,
-        let latestDate = dateFormatter.date(from: cache.latestDate),
-        let fetchStart = calendar.date(byAdding: .day, value: 1, to: latestDate)
+        let fetchStart = dateFormatter.date(from: cache.latestDate),
+        fetchStart <= requestedDate
       {
         return fetchStart...requestedDate
       }
@@ -229,8 +240,12 @@ actor CryptoPriceService {
       try await loadCache(tokenId: tokenId)
     }
 
+    // Cap the *fetch* upper bound at yesterday — same rationale as
+    // `price(for:mapping:on:)`. The result series below still walks the
+    // caller-supplied range; today's slot fills via `lastKnownPrice`.
+    let fetchUpperBound = cappedToYesterday(range.upperBound, now: now)
     let rangeStart = dateFormatter.string(from: range.lowerBound)
-    let rangeEnd = dateFormatter.string(from: range.upperBound)
+    let fetchEndString = dateFormatter.string(from: fetchUpperBound)
 
     let gregorian = Calendar(identifier: .gregorian)
     if let cache = caches[tokenId] {
@@ -241,16 +256,18 @@ actor CryptoPriceService {
         try await fetchRange(
           instrument: instrument, mapping: mapping, from: range.lowerBound, to: fetchEnd)
       }
-      if rangeEnd > cache.latestDate,
-        let latestDate = dateFormatter.date(from: cache.latestDate),
-        let fetchStart = gregorian.date(byAdding: .day, value: 1, to: latestDate)
+      // Forward extension overlaps the existing latest entry — same
+      // rationale as `extensionWindow`.
+      if fetchEndString > cache.latestDate,
+        let fetchStart = dateFormatter.date(from: cache.latestDate),
+        fetchStart <= fetchUpperBound
       {
         try await fetchRange(
-          instrument: instrument, mapping: mapping, from: fetchStart, to: range.upperBound)
+          instrument: instrument, mapping: mapping, from: fetchStart, to: fetchUpperBound)
       }
-    } else {
+    } else if range.lowerBound <= fetchUpperBound {
       try await fetchRange(
-        instrument: instrument, mapping: mapping, from: range.lowerBound, to: range.upperBound)
+        instrument: instrument, mapping: mapping, from: range.lowerBound, to: fetchUpperBound)
     }
 
     let dates = generateDateSeries(in: range)
@@ -270,31 +287,9 @@ actor CryptoPriceService {
     return results
   }
 
-  // MARK: - Batch current prices
-
-  func currentPrices(for mappings: [CryptoProviderMapping]) async throws -> [String: Decimal] {
-    var result: [String: Decimal] = [:]
-    for client in clients {
-      do {
-        let prices = try await client.currentPrices(for: mappings)
-        for (id, price) in prices where result[id] == nil {
-          result[id] = price
-        }
-        if result.count == mappings.count { break }
-      } catch {
-        // Best-effort: try the next client. Log so a silent total miss
-        // (all clients failed → empty dict) is diagnosable.
-        logger.debug(
-          "currentPrices: client \(type(of: client), privacy: .public) failed: \(error.localizedDescription, privacy: .public)"
-        )
-        continue
-      }
-    }
-    if result.isEmpty && !mappings.isEmpty {
-      logger.warning("currentPrices: all clients failed; returning empty result")
-    }
-    return result
-  }
+  // `currentPrices(for:)` (the live / spot endpoint) lives in
+  // `CryptoPriceService+Live.swift` so the main actor body stays under
+  // SwiftLint's `type_body_length` and `file_length` thresholds.
 
   // MARK: - Prefetch
 
@@ -309,7 +304,10 @@ actor CryptoPriceService {
       )
       return
     }
-    let dateString = dateFormatter.string(from: Date())
+    // Tag the live tick as yesterday-UTC; see `Shared/PriceCacheCap.swift`.
+    // The next forward `dailyPrices` extension overwrites this best-effort
+    // value with the finalised close.
+    let dateString = dateFormatter.string(from: cappedToYesterday(now(), now: now))
     for (tokenId, price) in prices {
       let registration = registrations.first { $0.id == tokenId }
       let symbol = registration?.instrument.ticker ?? registration?.instrument.name ?? ""
@@ -385,16 +383,8 @@ extension CryptoPriceService {
     if let error = lastError { throw error }
   }
 
-  // `mergeReturningDelta` lives in `CryptoPriceService+Merge.swift` so
-  // the main actor body stays under SwiftLint's `type_body_length` and
+  // `mergeReturningDelta` lives in `CryptoPriceService+Merge.swift` and
+  // `NoOpTokenResolutionClient` lives in its own sibling file so the
+  // main actor body stays under SwiftLint's `type_body_length` and
   // `file_length` thresholds.
-}
-
-/// Fallback when no resolution client is configured. Returns empty results.
-private struct NoOpTokenResolutionClient: TokenResolutionClient {
-  func resolve(
-    chainId: Int, contractAddress: String?, symbol: String?, isNative: Bool
-  ) async throws -> TokenResolutionResult {
-    TokenResolutionResult()
-  }
 }

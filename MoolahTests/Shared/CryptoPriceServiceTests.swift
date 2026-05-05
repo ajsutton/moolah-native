@@ -35,7 +35,8 @@ struct CryptoPriceServiceTests {
     prices: [String: [String: Decimal]] = [:],
     shouldFail: Bool = false,
     database: DatabaseQueue? = nil,
-    resolutionClient: (any TokenResolutionClient)? = nil
+    resolutionClient: (any TokenResolutionClient)? = nil,
+    now: @Sendable @escaping () -> Date = { Date() }
   ) throws -> CryptoPriceService {
     let clientList =
       clients.isEmpty
@@ -45,7 +46,8 @@ struct CryptoPriceServiceTests {
     return CryptoPriceService(
       clients: clientList,
       database: resolved,
-      resolutionClient: resolutionClient
+      resolutionClient: resolutionClient,
+      now: now
     )
   }
 
@@ -263,5 +265,6 @@ struct CryptoPriceServiceTests {
   }
 
   // Rollback contract for `persistDelta` lives in `CryptoPriceServiceTestsMore.swift`
+  // and cap-at-yesterday tests live in `CryptoPriceServiceCapTests.swift`
   // so this file stays under SwiftLint's `type_body_length` cap.
 }

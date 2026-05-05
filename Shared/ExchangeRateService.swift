@@ -24,11 +24,21 @@ actor ExchangeRateService {
   let logger = Logger(
     subsystem: "com.moolah.app", category: "ExchangeRateService")
 
-  private let dateFormatter: ISO8601DateFormatter
+  // `dateFormatter` and `now` are accessed by `prefetchLatest` in
+  // `ExchangeRateService+Prefetch.swift`, so they must be at least
+  // internal.
+  let dateFormatter: ISO8601DateFormatter
+  /// Injected clock so tests can pin "today" deterministically.
+  let now: @Sendable () -> Date
 
-  init(client: ExchangeRateClient, database: any DatabaseWriter) {
+  init(
+    client: ExchangeRateClient,
+    database: any DatabaseWriter,
+    now: @Sendable @escaping () -> Date = { Date() }
+  ) {
     self.client = client
     self.database = database
+    self.now = now
     self.dateFormatter = ISO8601DateFormatter()
     self.dateFormatter.formatOptions = [.withFullDate]
   }
@@ -36,6 +46,7 @@ actor ExchangeRateService {
   func rate(from: Instrument, to: Instrument, on date: Date) async throws -> Decimal {
     if from.id == to.id { return Decimal(1) }
 
+    let date = cappedDate(date)
     let dateString = dateFormatter.string(from: date)
     let base = from.id
     let quote = to.id
@@ -93,16 +104,20 @@ actor ExchangeRateService {
   /// Extends the cached range toward `date`, fetching only the gap between
   /// the requested date and the existing `[earliestDate, latestDate]`
   /// window. `rate()` short-circuits in-range requests before calling
-  /// this, so we only ever extend the boundary — never refetch dates we
-  /// already cover. Errors are swallowed; callers fall back to cached
-  /// rates when the fetch fails.
+  /// this, so we only ever extend the boundary. The forward branch
+  /// overlaps the existing latest entry by one day so a stale value
+  /// (e.g. an intraday partial bar persisted by an older build) is
+  /// overwritten by the next finalised close — `mergeReturningDelta`
+  /// is a no-op when the re-fetched value matches what's cached.
+  /// Errors are swallowed; callers fall back to cached rates when the
+  /// fetch fails. `date` is already capped at yesterday by `rate()`.
   private func fetchToCoverDate(base: String, date: Date, dateString: String) async {
     let calendar = Calendar(identifier: .gregorian)
     do {
       if let cache = caches[base] {
         if dateString > cache.latestDate,
-          let latestDate = dateFormatter.date(from: cache.latestDate),
-          let fetchStart = calendar.date(byAdding: .day, value: 1, to: latestDate)
+          let fetchStart = dateFormatter.date(from: cache.latestDate),
+          fetchStart <= date
         {
           try await fetchInChunks(base: base, from: fetchStart, to: date)
         } else if dateString < cache.earliestDate,
@@ -126,6 +141,11 @@ actor ExchangeRateService {
     }
   }
 
+  /// See `Shared/PriceCacheCap.swift` for the rationale.
+  private func cappedDate(_ date: Date) -> Date {
+    cappedToYesterday(date, now: now)
+  }
+
   func rates(
     from: Instrument, to: Instrument, in range: ClosedRange<Date>
   ) async throws -> [(date: Date, rate: Decimal)] {
@@ -141,9 +161,12 @@ actor ExchangeRateService {
       try await loadCache(base: base)
     }
 
-    // Determine what we need to fetch
+    // Cap the *fetch* upper bound at yesterday — same rationale as
+    // `rate()`. The result series below still walks the caller-supplied
+    // range; today's slot fills via `lastKnownRate` carry-forward.
+    let fetchUpperBound = cappedDate(range.upperBound)
     let rangeStart = dateFormatter.string(from: range.lowerBound)
-    let rangeEnd = dateFormatter.string(from: range.upperBound)
+    let fetchEndString = dateFormatter.string(from: fetchUpperBound)
 
     let gregorian = Calendar(identifier: .gregorian)
     if let cache = caches[base] {
@@ -153,14 +176,16 @@ actor ExchangeRateService {
       {
         try await fetchInChunks(base: base, from: range.lowerBound, to: fetchEnd)
       }
-      if rangeEnd > cache.latestDate,
-        let latestDate = dateFormatter.date(from: cache.latestDate),
-        let fetchStart = gregorian.date(byAdding: .day, value: 1, to: latestDate)
+      // Forward extension overlaps the existing latest entry — same
+      // rationale as `fetchToCoverDate`.
+      if fetchEndString > cache.latestDate,
+        let fetchStart = dateFormatter.date(from: cache.latestDate),
+        fetchStart <= fetchUpperBound
       {
-        try await fetchInChunks(base: base, from: fetchStart, to: range.upperBound)
+        try await fetchInChunks(base: base, from: fetchStart, to: fetchUpperBound)
       }
-    } else {
-      try await fetchInChunks(base: base, from: range.lowerBound, to: range.upperBound)
+    } else if range.lowerBound <= fetchUpperBound {
+      try await fetchInChunks(base: base, from: range.lowerBound, to: fetchUpperBound)
     }
 
     // Build result series
@@ -191,49 +216,9 @@ actor ExchangeRateService {
     return InstrumentAmount(quantity: converted, instrument: instrument)
   }
 
-  func prefetchLatest(base: Instrument) async {
-    let code = base.id
-
-    if !hydratedBases.contains(code) {
-      do {
-        try await loadCache(base: code)
-      } catch {
-        logger.warning(
-          "prefetchLatest: loadCache failed for base \(code, privacy: .public): \(error.localizedDescription, privacy: .public)"
-        )
-      }
-    }
-
-    let calendar = Calendar(identifier: .gregorian)
-    let today = Date()
-    let todayString = dateFormatter.string(from: today)
-
-    if let cache = caches[code], cache.latestDate >= todayString {
-      return  // Already up to date
-    }
-
-    let fetchFrom: Date
-    if let cache = caches[code],
-      let latestDate = dateFormatter.date(from: cache.latestDate),
-      let next = calendar.date(byAdding: .day, value: 1, to: latestDate)
-    {
-      fetchFrom = next
-    } else if let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: today) {
-      fetchFrom = thirtyDaysAgo
-    } else {
-      fetchFrom = today
-    }
-
-    do {
-      try await fetchAndMerge(base: code, from: fetchFrom, to: today)
-    } catch {
-      // Prefetch is best-effort — log so disk-write failures (which would
-      // otherwise be conflated with expected network errors) are observable.
-      logger.warning(
-        "prefetchLatest: fetchAndMerge failed for base \(code, privacy: .public): \(error.localizedDescription, privacy: .public)"
-      )
-    }
-  }
+  // `prefetchLatest(base:)` lives in `ExchangeRateService+Prefetch.swift`
+  // so the main actor body stays under SwiftLint's `type_body_length`
+  // and `file_length` thresholds.
 
   // MARK: - Private helpers
 
@@ -276,7 +261,7 @@ actor ExchangeRateService {
     }
   }
 
-  private func fetchAndMerge(base: String, from: Date, to: Date) async throws {
+  func fetchAndMerge(base: String, from: Date, to: Date) async throws {
     let fetched = try await client.fetchRates(base: base, from: from, to: to)
     // Frankfurter (and the chunked extension call sites in this service)
     // legitimately return an empty payload for weekend / holiday / future
