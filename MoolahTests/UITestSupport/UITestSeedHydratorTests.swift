@@ -65,7 +65,10 @@ final class UITestSeedHydratorTests: XCTestCase {
     let database = try containerManager.database(for: profile.id)
 
     let accounts = try database.read { database in try AccountRow.fetchAll(database) }
-    XCTAssertEqual(accounts.count, 3, "expected checking + brokerage + USD accounts")
+    XCTAssertEqual(
+      accounts.count, 4,
+      "expected checking + brokerage (recordedValue) + USD + trades-brokerage (calculatedFromTrades)"
+    )
     let ids = Set(accounts.map(\.id))
     XCTAssertEqual(
       ids,
@@ -73,12 +76,53 @@ final class UITestSeedHydratorTests: XCTestCase {
         UITestFixtures.TradeBaseline.checkingAccountId,
         UITestFixtures.TradeBaseline.brokerageAccountId,
         UITestFixtures.TradeBaseline.usdAccountId,
+        UITestFixtures.TradeBaseline.tradesBrokerageAccountId,
       ]
     )
     let usd = try XCTUnwrap(
       accounts.first { $0.id == UITestFixtures.TradeBaseline.usdAccountId }
     )
     XCTAssertEqual(usd.instrumentId, UITestFixtures.TradeBaseline.usdAccountInstrumentCode)
+
+    let tradesBrokerage = try XCTUnwrap(
+      accounts.first { $0.id == UITestFixtures.TradeBaseline.tradesBrokerageAccountId }
+    )
+    XCTAssertEqual(tradesBrokerage.valuationMode, ValuationMode.calculatedFromTrades.rawValue)
+    let legacyBrokerage = try XCTUnwrap(
+      accounts.first { $0.id == UITestFixtures.TradeBaseline.brokerageAccountId }
+    )
+    XCTAssertEqual(legacyBrokerage.valuationMode, ValuationMode.recordedValue.rawValue)
+  }
+
+  func testHydrateTradeBaselineSeedsTheBrokerageInvestmentValueSnapshot() throws {
+    let profile = try XCTUnwrap(
+      try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager))
+    let database = try containerManager.database(for: profile.id)
+
+    let snapshots = try database.read { database in
+      try InvestmentValueRow
+        .filter(
+          InvestmentValueRow.Columns.accountId
+            == UITestFixtures.TradeBaseline.brokerageAccountId
+        )
+        .fetchAll(database)
+    }
+    XCTAssertEqual(snapshots.count, 1, "legacy brokerage account should have one snapshot")
+    let snapshot = try XCTUnwrap(snapshots.first)
+    XCTAssertEqual(snapshot.id, UITestFixtures.TradeBaseline.brokerageSnapshotId)
+    XCTAssertEqual(snapshot.date, UITestFixtures.TradeBaseline.brokerageSnapshotDate)
+
+    let tradesSnapshots = try database.read { database in
+      try InvestmentValueRow
+        .filter(
+          InvestmentValueRow.Columns.accountId
+            == UITestFixtures.TradeBaseline.tradesBrokerageAccountId
+        )
+        .fetchAll(database)
+    }
+    XCTAssertTrue(
+      tradesSnapshots.isEmpty,
+      "trades-brokerage account should have no snapshots so picker stays hidden")
   }
 
   func testHydrateTradeBaselineSeedsTheTradeTransaction() throws {

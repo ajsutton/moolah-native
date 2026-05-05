@@ -114,6 +114,29 @@ public struct UITestHistoricalExpense: Sendable {
   }
 }
 
+/// One `InvestmentValue` snapshot row hydrated alongside an
+/// investment account. Stored in the `investment_value` table by
+/// `UITestSeedHydrator+Upserts.upsertInvestmentValue`. Used by the
+/// `EditAccountView` valuation-picker visibility test:
+/// `.recordedValue` accounts that have at least one snapshot show
+/// the picker; accounts with no snapshots in `.calculatedFromTrades`
+/// hide it.
+public struct UITestInvestmentValueSeed: Sendable {
+  public let id: UUID
+  public let accountId: UUID
+  public let date: Date
+  public let instrumentId: String
+  public let cents: Int
+
+  public init(id: UUID, accountId: UUID, date: Date, instrumentId: String, cents: Int) {
+    self.id = id
+    self.accountId = accountId
+    self.date = date
+    self.instrumentId = instrumentId
+    self.cents = cents
+  }
+}
+
 /// Fixed-UUID fixtures used by both the app (when seeding) and UI-test
 /// drivers (when resolving identifiers). Grouping constants by seed family
 /// keeps fixtures local to the scenario that needs them.
@@ -123,7 +146,17 @@ public enum UITestFixtures {
   /// Entities (all fixed, deterministic):
   ///   - Profile `personal` — label "Personal", currency AUD, CloudKit-backed.
   ///   - Account `checking` — "Checking", bank, AUD.
-  ///   - Account `brokerage` — "Brokerage", investment, AUD.
+  ///   - Account `brokerage` — "Brokerage", investment, AUD,
+  ///     `valuationMode = .recordedValue` (legacy). One
+  ///     `InvestmentValue` snapshot for $12,345.00 on 2026-04-15 UTC, so
+  ///     `EditAccountValuationPickerTests` can assert the picker is
+  ///     shown for the legacy-with-data scenario.
+  ///   - Account `tradesBrokerage` — "Trades brokerage", investment,
+  ///     AUD, `valuationMode = .calculatedFromTrades` and **no**
+  ///     `InvestmentValue` snapshots. Drives the
+  ///     "calculatedFromTrades + no snapshots → picker hidden" half of
+  ///     the same test pair.
+  ///   - Account `usd` — "USD Savings", bank, USD.
   ///   - Transaction `bhpPurchase` — trade on 2026-04-01 UTC, payee
   ///     "BHP Purchase". Two legs in the profile instrument: −5,000.00 AUD
   ///     from `checking` (expense) and +5,000.00 AUD into `brokerage`
@@ -133,23 +166,42 @@ public enum UITestFixtures {
   ///     occurs twice so it sorts strictly above single-occurrence payees
   ///     regardless of dictionary iteration order.
   public enum TradeBaseline {
-    public static let profileId = UUID(uuidString: "A1000000-0000-0000-0000-000000000001")!
+    public static let profileId = uuidLiteral("A1000000-0000-0000-0000-000000000001")
     public static let profileLabel = "Personal"
     public static let profileCurrencyCode = "AUD"
 
-    public static let checkingAccountId = UUID(uuidString: "A1000000-0000-0000-0000-000000000010")!
+    public static let checkingAccountId = uuidLiteral("A1000000-0000-0000-0000-000000000010")
     public static let checkingAccountName = "Checking"
 
-    public static let brokerageAccountId = UUID(uuidString: "A1000000-0000-0000-0000-000000000011")!
+    public static let brokerageAccountId = uuidLiteral("A1000000-0000-0000-0000-000000000011")
     public static let brokerageAccountName = "Brokerage"
 
     /// A USD-denominated account so the cross-currency test can switch a
     /// transfer's counterpart leg to a different instrument.
-    public static let usdAccountId = UUID(uuidString: "A1000000-0000-0000-0000-000000000012")!
+    public static let usdAccountId = uuidLiteral("A1000000-0000-0000-0000-000000000012")
     public static let usdAccountName = "USD Savings"
     public static let usdAccountInstrumentCode = "USD"
 
-    public static let bhpPurchaseId = UUID(uuidString: "A1000000-0000-0000-0000-000000000020")!
+    /// Investment account in `.calculatedFromTrades` mode with no
+    /// `InvestmentValue` snapshots. Drives the
+    /// "calculatedFromTrades + no snapshots → picker hidden" test in
+    /// `EditAccountValuationPickerTests`.
+    public static let tradesBrokerageAccountId =
+      uuidLiteral("A1000000-0000-0000-0000-000000000013")
+    public static let tradesBrokerageAccountName = "Trades brokerage"
+
+    /// One `InvestmentValue` snapshot for the existing `brokerage`
+    /// (recordedValue mode) account. Drives the "recordedValue + has
+    /// snapshot → picker shown" test in
+    /// `EditAccountValuationPickerTests`.
+    public static let brokerageSnapshotId =
+      uuidLiteral("A1000000-0000-0000-0000-000000000060")
+    public static let brokerageSnapshotCents = 1_234_500  // 12,345.00 AUD
+    /// 2026-04-15 00:00:00 UTC.
+    public static let brokerageSnapshotDate =
+      Date(timeIntervalSince1970: 1_776_211_200)
+
+    public static let bhpPurchaseId = uuidLiteral("A1000000-0000-0000-0000-000000000020")
     public static let bhpPurchasePayee = "BHP Purchase"
     public static let bhpPurchaseAmountCents = 500_000  // 5,000.00 AUD
     /// 2026-04-01 00:00:00 UTC.
@@ -170,10 +222,10 @@ public enum UITestFixtures {
     // Seeded flat — no parent hierarchy — because the test only asserts
     // dropdown visibility, not label formatting.
     public static let groceriesCategoryId =
-      UUID(uuidString: "A1000000-0000-0000-0000-000000000040")!
+      uuidLiteral("A1000000-0000-0000-0000-000000000040")
     public static let groceriesCategoryName = "Groceries"
     public static let gymCategoryId =
-      UUID(uuidString: "A1000000-0000-0000-0000-000000000041")!
+      uuidLiteral("A1000000-0000-0000-0000-000000000041")
     public static let gymCategoryName = "Gym"
 
     // MARK: - Custom (multi-leg) transaction
@@ -182,7 +234,7 @@ public enum UITestFixtures {
     // account so `Transaction.isSimple == false` → `TransactionDraft.isCustom
     // == true` → the detail view renders per-leg sections with category
     // autocomplete fields.
-    public static let splitShopId = UUID(uuidString: "A1000000-0000-0000-0000-000000000050")!
+    public static let splitShopId = uuidLiteral("A1000000-0000-0000-0000-000000000050")
     public static let splitShopPayee = "Split Shop"
     /// 2026-03-23 00:00:00 UTC — between the historical expenses and the
     /// BHP trade.
@@ -201,22 +253,22 @@ public enum UITestFixtures {
     /// the seed still exercises the common "no prior category" path.
     public static let historicalPayees: [UITestHistoricalExpense] = [
       UITestHistoricalExpense(
-        id: UUID(uuidString: "A1000000-0000-0000-0000-000000000030")!,
+        id: uuidLiteral("A1000000-0000-0000-0000-000000000030"),
         payee: "Coles",
         date: Date(timeIntervalSince1970: 1_772_668_800)  // 2026-03-05 UTC
       ),
       UITestHistoricalExpense(
-        id: UUID(uuidString: "A1000000-0000-0000-0000-000000000031")!,
+        id: uuidLiteral("A1000000-0000-0000-0000-000000000031"),
         payee: "Woolworths",
         date: Date(timeIntervalSince1970: 1_773_100_800)  // 2026-03-10 UTC
       ),
       UITestHistoricalExpense(
-        id: UUID(uuidString: "A1000000-0000-0000-0000-000000000032")!,
+        id: uuidLiteral("A1000000-0000-0000-0000-000000000032"),
         payee: "Woolworths Metro",
         date: Date(timeIntervalSince1970: 1_773_532_800)  // 2026-03-15 UTC
       ),
       UITestHistoricalExpense(
-        id: UUID(uuidString: "A1000000-0000-0000-0000-000000000033")!,
+        id: uuidLiteral("A1000000-0000-0000-0000-000000000033"),
         payee: "Woolworths",
         date: Date(timeIntervalSince1970: 1_773_964_800),  // 2026-03-20 UTC
         categoryId: groceriesCategoryId
