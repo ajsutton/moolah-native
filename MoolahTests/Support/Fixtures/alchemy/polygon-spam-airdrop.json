@@ -1,0 +1,44 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "transfers": [
+      {
+        "blockNum": "0x4321abc",
+        "uniqueId": "0x9999000000000000000000000000000000000000000000000000000000000aaa:log:1",
+        "hash": "0x9999000000000000000000000000000000000000000000000000000000000aaa",
+        "from": "0x0000000000000000000000000000000000005555",
+        "to": "0x6666666666666666666666666666666666666666",
+        "value": 1000000.0,
+        "asset": "VISIT-AIRDROP-SITE.COM",
+        "category": "erc20",
+        "rawContract": {
+          "rawValue": "0xd3c21bcecceda1000000",
+          "address": "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+          "decimal": "0x12"
+        },
+        "metadata": {
+          "blockTimestamp": "2024-11-15T03:45:00.000Z"
+        }
+      },
+      {
+        "blockNum": "0x4321abe",
+        "uniqueId": "0x9999000000000000000000000000000000000000000000000000000000000bbb:specialnft:0",
+        "hash": "0x9999000000000000000000000000000000000000000000000000000000000bbb",
+        "from": "0x0000000000000000000000000000000000005555",
+        "to": "0x6666666666666666666666666666666666666666",
+        "value": null,
+        "asset": "Spam NFT",
+        "category": "specialnft",
+        "rawContract": {
+          "rawValue": "0x1",
+          "address": "0xcafebabecafebabecafebabecafebabecafebabe",
+          "decimal": null
+        },
+        "metadata": {
+          "blockTimestamp": "2024-11-15T03:50:00.000Z"
+        }
+      }
+    ]
+  }
+}
