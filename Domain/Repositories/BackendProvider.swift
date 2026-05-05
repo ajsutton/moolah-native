@@ -13,4 +13,8 @@ protocol BackendProvider: Sendable {
   var conversionService: any InstrumentConversionService { get }
   var csvImportProfiles: any CSVImportProfileRepository { get }
   var importRules: any ImportRuleRepository { get }
+  /// Per-device sync checkpoints for crypto wallet accounts. Local-only
+  /// (not synced via CKSyncEngine — see `WalletSyncStateRepository`
+  /// doc-comment).
+  var walletSyncState: any WalletSyncStateRepository { get }
 }

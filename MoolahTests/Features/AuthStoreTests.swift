@@ -124,6 +124,7 @@ private struct TestAuthBackend: BackendProvider {
   let conversionService: any InstrumentConversionService
   let csvImportProfiles: any CSVImportProfileRepository
   let importRules: any ImportRuleRepository
+  let walletSyncState: any WalletSyncStateRepository
 
   init(auth: any AuthProvider) throws {
     let (backend, _) = try TestBackend.create()
@@ -137,6 +138,7 @@ private struct TestAuthBackend: BackendProvider {
     self.conversionService = backend.conversionService
     self.csvImportProfiles = backend.csvImportProfiles
     self.importRules = backend.importRules
+    self.walletSyncState = backend.walletSyncState
   }
 }
 

@@ -13,6 +13,7 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
   let csvImportProfiles: any CSVImportProfileRepository
   let importRules: any ImportRuleRepository
   let instrumentRegistry: any InstrumentRegistryRepository
+  let walletSyncState: any WalletSyncStateRepository
   /// Concrete GRDB-backed repositories. Exposed alongside the
   /// protocol-typed properties so `ProfileSession` can register the
   /// concrete instances with `SyncCoordinator` (which needs the concrete
@@ -113,6 +114,7 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
     self.importRules = repos.importRules
     self.instrumentRegistry = instrumentRegistry
     self.conversionService = conversionService
+    self.walletSyncState = GRDBWalletSyncStateRepository(database: database)
   }
 
   /// Bundle of GRDB repositories produced by `makeRepositories`. Keeps
