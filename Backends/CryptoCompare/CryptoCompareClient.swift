@@ -119,10 +119,10 @@ struct CryptoCompareClient: CryptoPriceClient, Sendable {
   static func parseCoinListResponse(_ data: Data) throws -> [String: String] {
     let container = try JSONDecoder().decode(CoinListContainer.self, from: data)
     var index: [String: String] = [:]
-    for (_, coin) in container.Data {
-      let addr = coin.SmartContractAddress
+    for coin in container.entries.values {
+      let addr = coin.smartContractAddress
       guard addr != "N/A", !addr.isEmpty else { continue }
-      index[addr.lowercased()] = coin.Symbol
+      index[addr.lowercased()] = coin.symbol
     }
     return index
   }
@@ -131,10 +131,10 @@ struct CryptoCompareClient: CryptoPriceClient, Sendable {
   static func parseNativeSymbols(_ data: Data) throws -> Set<String> {
     let container = try JSONDecoder().decode(CoinListContainer.self, from: data)
     var symbols: Set<String> = []
-    for (_, coin) in container.Data {
-      let addr = coin.SmartContractAddress
+    for coin in container.entries.values {
+      let addr = coin.smartContractAddress
       if addr == "N/A" || addr.isEmpty {
-        symbols.insert(coin.Symbol)
+        symbols.insert(coin.symbol)
       }
     }
     return symbols
@@ -160,14 +160,53 @@ struct CryptoCompareClient: CryptoPriceClient, Sendable {
 
 // MARK: - Response types
 
+/// Decoded per-entry rather than as `[String: CoinListEntry]` because
+/// CryptoCompare's coin list occasionally ships rows with missing fields
+/// (e.g. an `MLS` entry missing `CoinName`). An atomic decode would throw
+/// on the first bad row and break token resolution for every crypto.
 private struct CoinListContainer: Decodable {
-  let Data: [String: CoinListEntry]  // swiftlint:disable:this identifier_name
+  let entries: [String: CoinListEntry]
+
+  init(from decoder: Decoder) throws {
+    let outer = try decoder.container(keyedBy: OuterKey.self)
+    var collected: [String: CoinListEntry] = [:]
+    if let inner = try? outer.nestedContainer(keyedBy: DynamicKey.self, forKey: .data) {
+      for key in inner.allKeys {
+        guard let entry = try? inner.decode(CoinListEntry.self, forKey: key) else { continue }
+        collected[key.stringValue] = entry
+      }
+    }
+    self.entries = collected
+  }
+
+  private enum OuterKey: String, CodingKey {
+    case data = "Data"
+  }
+
+  private struct DynamicKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+
+    init?(stringValue: String) {
+      self.stringValue = stringValue
+      self.intValue = nil
+    }
+
+    init?(intValue: Int) {
+      self.stringValue = String(intValue)
+      self.intValue = intValue
+    }
+  }
 }
 
 private struct CoinListEntry: Decodable {
-  let Symbol: String  // swiftlint:disable:this identifier_name
-  let CoinName: String  // swiftlint:disable:this identifier_name
-  let SmartContractAddress: String  // swiftlint:disable:this identifier_name
+  let symbol: String
+  let smartContractAddress: String
+
+  private enum CodingKeys: String, CodingKey {
+    case symbol = "Symbol"
+    case smartContractAddress = "SmartContractAddress"
+  }
 }
 
 private struct HistodayContainer: Decodable {
