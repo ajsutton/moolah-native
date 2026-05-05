@@ -6,16 +6,25 @@ import SwiftUI
 /// the two panes leaves neither with enough room, so a segmented picker
 /// swaps between them.
 ///
-/// The macOS divider position is shared across every call site (all users of
-/// this container autosave under the same `NSSplitView` key). That matches
-/// the Finder-sidebar convention: the user adjusts once and their preference
-/// applies everywhere this component renders.
+/// Two layouts coexist and must NOT share a divider:
+///   - **Chartless** (default, used by multi-currency non-investment accounts):
+///     header + table only. ~180pt is plenty for several rows.
+///   - **With chart** (investment accounts in `.calculatedFromTrades`):
+///     header + chart (220pt fixed) + table. ~180pt clips the table below
+///     the chart so it appears empty unless the user drags the divider —
+///     hence a separate, taller default and a distinct autosave key.
+///
+/// Within a layout, the divider position is autosaved and shared across all
+/// call sites — Finder-sidebar style: adjust once, applies everywhere of
+/// the same shape.
 struct PositionsTransactionsSplit<Positions: View, Transactions: View>: View {
   /// The pane the iOS segmented picker selects initially. On macOS both
   /// panes are always visible in the split, so this only affects iOS.
   enum Tab { case positions, transactions }
 
   let defaultTab: Tab
+  let autosaveName: String
+  let initialTopHeight: CGFloat
   @ViewBuilder let positions: () -> Positions
   @ViewBuilder let transactions: () -> Transactions
 
@@ -25,10 +34,14 @@ struct PositionsTransactionsSplit<Positions: View, Transactions: View>: View {
 
   init(
     defaultTab: Tab,
+    autosaveName: String = "positions-transactions-split",
+    initialTopHeight: CGFloat = 180,
     @ViewBuilder positions: @escaping () -> Positions,
     @ViewBuilder transactions: @escaping () -> Transactions
   ) {
     self.defaultTab = defaultTab
+    self.autosaveName = autosaveName
+    self.initialTopHeight = initialTopHeight
     self.positions = positions
     self.transactions = transactions
     #if !os(macOS)
@@ -39,8 +52,8 @@ struct PositionsTransactionsSplit<Positions: View, Transactions: View>: View {
   var body: some View {
     #if os(macOS)
       ResizableVSplit(
-        autosaveName: "positions-transactions-split",
-        initialTopHeight: 180
+        autosaveName: autosaveName,
+        initialTopHeight: initialTopHeight
       ) {
         positions()
       } bottom: {
