@@ -90,7 +90,6 @@ struct EditAccountView: View {
     NavigationStack {
       form
     }
-    .accessibilityIdentifier(UITestIdentifiers.EditAccount.dialog)
     #if os(macOS)
       .frame(minWidth: 500, minHeight: 400)
     #endif

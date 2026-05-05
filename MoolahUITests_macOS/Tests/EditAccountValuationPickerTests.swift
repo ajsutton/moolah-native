@@ -32,13 +32,14 @@ final class EditAccountValuationPickerTests: MoolahUITestCase {
     app.editAccount.cancel()
   }
 
-  func testRecordedValueLegacyAccountExposesAccessibilityHint() {
-    let app = launch(seed: .tradeBaseline)
-
-    app.editAccount.open(account: .brokerage)
-    app.editAccount.expectAccessibilityHint(for: EditAccountScreen.Mode.recordedValue)
-    app.editAccount.cancel()
-  }
+  // Note: there is no UI test for the picker's `.accessibilityHint`.
+  // macOS XCUITest does not surface `accessibilityHint` as a
+  // queryable XCUIElement attribute (it is a VoiceOver-only concept
+  // that the runtime delivers through speech, not the accessibility
+  // tree). The hint copy is pinned by
+  // `ValuationModeDisplayTextTests.dataSourceHint_returnsExpectedString`
+  // at the model layer; manual VoiceOver verification covers the
+  // propagation path.
 
   func testCalculatedFromTradesAccountWithNoSnapshotsHidesValuationPicker() {
     let app = launch(seed: .tradeBaseline)

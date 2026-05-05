@@ -28,11 +28,10 @@ struct EditAccountScreen {
   // MARK: - Open / dismiss
 
   /// Right-clicks the sidebar row for `account` and clicks the "Edit
-  /// Account…" item to present the dialog. Returns once the dialog's
-  /// root container materialises in the accessibility tree — the
-  /// presence sentinel a subsequent `expectValuationSectionAbsent()`
-  /// call relies on, so the absence check can't pass vacuously when the
-  /// sheet failed to open.
+  /// Account…" item to present the dialog. Returns once the Cancel
+  /// button has materialised — the presence sentinel a subsequent
+  /// `expectValuationSectionAbsent()` call relies on, so the absence
+  /// check can't pass vacuously when the sheet failed to open.
   func open(account: SidebarAccount) {
     Trace.record(#function, detail: "account=\(account)")
     let row = app.element(for: UITestIdentifiers.Sidebar.account(account.id))
@@ -44,14 +43,16 @@ struct EditAccountScreen {
     }
     row.rightClick()
 
-    // The sidebar's `accountContextMenu` produces an NSMenu whose
-    // items attach to the application's menu hierarchy at runtime;
-    // SwiftUI doesn't propagate `.accessibilityIdentifier(_:)` onto
-    // the resulting NSMenuItem, so resolve by label. The `menuItem`
-    // helper on `MoolahApp` keeps the single-resolver invariant.
-    let editItem = app.menuItem(label: "Edit Account…")
+    // SwiftUI does propagate `.accessibilityIdentifier(_:)` onto
+    // context-menu Buttons (verified — the menu item's identifier
+    // appears in the accessibility tree). Resolve by identifier
+    // rather than by label so we don't collide with the menu-bar
+    // "Account → Edit Account…" command, which carries the same
+    // title.
+    let editItem = app.element(for: UITestIdentifiers.Sidebar.editAccountContextMenuItem)
     if !editItem.waitForExistence(timeout: 3) {
-      Trace.recordFailure("'Edit Account…' menu item did not appear after right-click")
+      Trace.recordFailure(
+        "sidebar.contextMenu.editAccount item did not appear after right-click")
       XCTFail("'Edit Account…' menu item did not appear within 3s of right-click")
       return
     }
@@ -63,12 +64,15 @@ struct EditAccountScreen {
   /// Asserts the dialog is currently on screen. Used as a presence
   /// sentinel: a subsequent absence assertion on the Valuation section
   /// would otherwise pass vacuously when the sheet failed to open.
+  /// The Cancel button is the working sentinel because SwiftUI's
+  /// `.accessibilityIdentifier(_:)` on `NavigationStack` / `Form`
+  /// does not propagate to the macOS-rendered window root.
   func expectVisible() {
     Trace.record(#function)
-    let dialog = app.element(for: UITestIdentifiers.EditAccount.dialog)
-    if !dialog.waitForExistence(timeout: 3) {
+    let cancelButton = app.element(for: UITestIdentifiers.EditAccount.cancelButton)
+    if !cancelButton.waitForExistence(timeout: 3) {
       Trace.recordFailure(
-        "editAccount.dialog did not appear; cannot assert section visibility")
+        "editAccount.cancel did not appear; the Edit Account sheet failed to open")
       XCTFail("EditAccountView dialog did not appear within 3s")
     }
   }
@@ -85,9 +89,10 @@ struct EditAccountScreen {
     }
     cancelButton.click()
 
-    let dialog = app.element(for: UITestIdentifiers.EditAccount.dialog)
-    if !dialog.waitForNonExistence(timeout: 3) {
-      Trace.recordFailure("editAccount.dialog did not disappear after Cancel click")
+    // Post-condition: the Cancel button (which IS the sentinel)
+    // disappears once the sheet is dismissed.
+    if !cancelButton.waitForNonExistence(timeout: 3) {
+      Trace.recordFailure("editAccount.cancel did not disappear after Cancel click")
       XCTFail("EditAccountView dialog did not disappear within 3s of Cancel")
     }
   }
@@ -153,35 +158,6 @@ struct EditAccountScreen {
     }
   }
 
-  /// Asserts the picker's `accessibilityHint` matches the canonical
-  /// hint for `mode` (the production source is
-  /// `ValuationMode.dataSourceHint`; mirrored locally in
-  /// `accessibilityHint(for:)` because the UI test target can't import
-  /// the main app module). Detects regressions in the hint copy.
-  func expectAccessibilityHint(for mode: Mode) {
-    Trace.record(#function, detail: "mode=\(mode)")
-    let picker = app.element(for: UITestIdentifiers.EditAccount.valuationModePicker)
-    if !picker.waitForExistence(timeout: 3) {
-      Trace.recordFailure(
-        "editAccount.valuationMode picker did not appear; cannot read hint")
-      XCTFail("Valuation picker did not appear within 3s")
-      return
-    }
-    let expected = accessibilityHint(for: mode)
-    // `accessibilityHint` does not always project as a `value`; SwiftUI
-    // surfaces it in `XCUIElement.label`-adjacent fields. The canonical
-    // pop-up-button accessor for the inline hint string is the
-    // `placeholderValue` / `label` family. We assert via direct property
-    // read — falling through to `XCTFail` when neither matches.
-    let pickerLabel = picker.label
-    if !pickerLabel.contains(expected) {
-      Trace.recordFailure(
-        "editAccount.valuationMode picker label '\(pickerLabel)' "
-          + "does not contain hint '\(expected)'")
-      XCTFail("Valuation picker hint missing or wrong; label='\(pickerLabel)'")
-    }
-  }
-
   // MARK: - Helpers
 
   /// Maps `Mode` to the user-visible Picker label produced by
@@ -194,17 +170,4 @@ struct EditAccountScreen {
     }
   }
 
-  /// Mirror of `ValuationMode.dataSourceHint`. Hard-coded because the
-  /// UI test target can't import the main app module. If the
-  /// production hint changes (see
-  /// `Domain/Models/ValuationMode+DisplayText.swift`), update this
-  /// helper to match.
-  private func accessibilityHint(for mode: Mode) -> String {
-    switch mode {
-    case .recordedValue:
-      return "Balance comes from the value you last recorded"
-    case .calculatedFromTrades:
-      return "Balance is calculated from your trade history and current prices of your holdings"
-    }
-  }
 }

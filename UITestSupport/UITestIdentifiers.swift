@@ -33,6 +33,13 @@ public enum UITestIdentifiers {
 
     /// "New Account" toolbar button in the sidebar (macOS only).
     public static let newAccountButton = "sidebar.toolbar.newAccount"
+
+    /// "Edit Account…" item in the sidebar account context menu.
+    /// Distinct from the menu-bar Account → Edit Account command,
+    /// which has the same title but lives in the application menu —
+    /// drivers must resolve via this identifier rather than the
+    /// shared label.
+    public static let editAccountContextMenuItem = "sidebar.contextMenu.editAccount"
   }
 
   public enum TransactionList {
@@ -217,13 +224,6 @@ public enum UITestIdentifiers {
   }
 
   public enum EditAccount {
-    /// Root container of the Edit Account dialog. Pinned on the form's
-    /// outermost element. Drivers wait for this to materialise as the
-    /// presence sentinel before any content assertions run, so an
-    /// absent-section assertion can't pass vacuously when the sheet
-    /// failed to open.
-    public static let dialog = "editAccount.dialog"
-
     /// Valuation-mode picker shown for legacy investment accounts in
     /// `.recordedValue` mode or `.calculatedFromTrades` accounts that
     /// still have at least one `InvestmentValue` snapshot. Identifier
@@ -231,7 +231,14 @@ public enum UITestIdentifiers {
     public static let valuationModePicker = "editAccount.valuationMode"
 
     /// Cancel toolbar button. Drivers click it to dismiss the dialog
-    /// after assertions run.
+    /// after assertions run, AND use it as the presence sentinel for
+    /// `expectVisible()` — Cancel is the only element that's
+    /// guaranteed to render whenever the dialog opens (the rest of
+    /// the form depends on account type and visibility resolver
+    /// state). SwiftUI's `.accessibilityIdentifier(_:)` on
+    /// `NavigationStack` / `Form` does not propagate to the
+    /// macOS-rendered window root, so a content-element sentinel is
+    /// the working pattern here.
     public static let cancelButton = "editAccount.cancel"
 
     /// Save toolbar button. Pinned for symmetry with `cancelButton` so

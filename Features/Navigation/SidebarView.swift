@@ -309,6 +309,7 @@ extension SidebarView {
     Button("Edit Account\u{2026}", systemImage: "pencil") {
       accountToEdit = account
     }
+    .accessibilityIdentifier(UITestIdentifiers.Sidebar.editAccountContextMenuItem)
     Button("View Transactions", systemImage: "list.bullet") {
       selection = .account(account.id)
     }
