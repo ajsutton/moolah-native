@@ -20,7 +20,7 @@ struct PositionsChartLegendRow: View {
     HStack(spacing: 16) {
       PositionsChartLegendItem(color: .accentColor, label: "Value", dashed: false)
       PositionsChartLegendItem(color: .secondary, label: baselineLabel, dashed: true)
-      ProfitLossPositionsChartLegendItem(unavailable: unavailable, opacity: gainLossOpacity)
+      ProfitLossLegendSwatch(unavailable: unavailable, opacity: gainLossOpacity)
       Spacer()
     }
     .font(.caption2)
@@ -28,7 +28,7 @@ struct PositionsChartLegendRow: View {
   }
 }
 
-struct PositionsChartLegendItem: View {
+private struct PositionsChartLegendItem: View {
   let color: Color
   let label: String
   let dashed: Bool
@@ -45,11 +45,15 @@ struct PositionsChartLegendItem: View {
       Text(label)
     }
     .accessibilityElement(children: .combine)
-    .accessibilityLabel(label)
+    // Append the line-style cue so VoiceOver can disambiguate two
+    // entries that differ only in solid-vs-dashed (the legend's
+    // "Value" line is solid; the baseline line is dashed). Color
+    // alone never carries information per UI_GUIDE.md §5.
+    .accessibilityLabel(dashed ? "\(label), dashed line" : "\(label), solid line")
   }
 }
 
-struct DashedLineSwatch: View {
+private struct DashedLineSwatch: View {
   let color: Color
   var body: some View {
     GeometryReader { _ in
@@ -69,7 +73,7 @@ struct DashedLineSwatch: View {
 /// non-color pairing. Inner colour blocks are
 /// `.accessibilityHidden(true)` and the combined element carries a
 /// single descriptive `.accessibilityLabel`.
-struct ProfitLossPositionsChartLegendItem: View {
+private struct ProfitLossLegendSwatch: View {
   let unavailable: Bool
   let opacity: Double
 

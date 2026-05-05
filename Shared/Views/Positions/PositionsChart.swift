@@ -1,3 +1,8 @@
+// Reason: Swift Charts mark APIs (`AreaMark`, `LineMark`,
+// `AxisMarks`, `AXDataSeriesDescriptor`, etc.) take long labelled
+// argument lists where SwiftLint's multi-line arguments rule fights
+// the natural call-site shape. Disabling at file scope rather than
+// reformatting every Charts call site to one-arg-per-line.
 // swiftlint:disable multiline_arguments
 
 import Accessibility
