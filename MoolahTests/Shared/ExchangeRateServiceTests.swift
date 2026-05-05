@@ -10,11 +10,12 @@ struct ExchangeRateServiceTests {
   private func makeService(
     rates: [String: [String: Decimal]] = [:],
     shouldFail: Bool = false,
-    database: DatabaseQueue? = nil
+    database: DatabaseQueue? = nil,
+    now: @Sendable @escaping () -> Date = { Date() }
   ) throws -> ExchangeRateService {
     let client = FixedRateClient(rates: rates, shouldFail: shouldFail)
     let resolved = try database ?? ProfileDatabase.openInMemory()
-    return ExchangeRateService(client: client, database: resolved)
+    return ExchangeRateService(client: client, database: resolved, now: now)
   }
 
   private func date(_ string: String) -> Date {
@@ -334,4 +335,6 @@ struct ExchangeRateServiceTests {
     #expect(client.fetchCount == primedFetches)
   }
 
+  // Cap-at-yesterday tests live in `ExchangeRateServiceCapTests.swift`
+  // so this suite stays under SwiftLint's `type_body_length` cap.
 }

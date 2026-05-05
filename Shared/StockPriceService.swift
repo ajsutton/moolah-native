@@ -17,12 +17,19 @@ actor StockPriceService {
   private var hydratedTickers: Set<String> = []
   private let database: any DatabaseWriter
   private let dateFormatter: ISO8601DateFormatter
+  /// Injected clock so tests can pin "today" deterministically.
+  private let now: @Sendable () -> Date
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "StockPriceService")
 
-  init(client: StockPriceClient, database: any DatabaseWriter) {
+  init(
+    client: StockPriceClient,
+    database: any DatabaseWriter,
+    now: @Sendable @escaping () -> Date = { Date() }
+  ) {
     self.client = client
     self.database = database
+    self.now = now
     self.dateFormatter = ISO8601DateFormatter()
     self.dateFormatter.formatOptions = [.withFullDate]
   }
@@ -30,6 +37,7 @@ actor StockPriceService {
   // MARK: - Public API
 
   func price(ticker: String, on date: Date) async throws -> Decimal {
+    let date = cappedDate(date)
     let dateString = dateFormatter.string(from: date)
 
     // Check in-memory cache
@@ -77,9 +85,13 @@ actor StockPriceService {
       try await loadCache(ticker: ticker)
     }
 
-    // Determine what we need to fetch
+    // Cap the *fetch* upper bound at yesterday — never ask Yahoo for
+    // today's still-running bar. The result series below still walks the
+    // caller-supplied range; today's slot fills via `lastKnownPrice`
+    // carry-forward (which lands on yesterday's close).
+    let fetchUpperBound = cappedDate(range.upperBound)
     let rangeStart = dateFormatter.string(from: range.lowerBound)
-    let rangeEnd = dateFormatter.string(from: range.upperBound)
+    let fetchEndString = dateFormatter.string(from: fetchUpperBound)
 
     let gregorian = Calendar(identifier: .gregorian)
     if let cache = caches[ticker] {
@@ -89,14 +101,17 @@ actor StockPriceService {
       {
         try await fetchInChunks(ticker: ticker, from: range.lowerBound, to: fetchEnd)
       }
-      if rangeEnd > cache.latestDate,
-        let latestDate = dateFormatter.date(from: cache.latestDate),
-        let fetchStart = gregorian.date(byAdding: .day, value: 1, to: latestDate)
+      // Forward extension overlaps the existing latest entry by one day so
+      // a stale value (e.g. an intraday partial bar persisted by an older
+      // build) is overwritten by the next finalised close.
+      if fetchEndString > cache.latestDate,
+        let fetchStart = dateFormatter.date(from: cache.latestDate),
+        fetchStart <= fetchUpperBound
       {
-        try await fetchInChunks(ticker: ticker, from: fetchStart, to: range.upperBound)
+        try await fetchInChunks(ticker: ticker, from: fetchStart, to: fetchUpperBound)
       }
-    } else {
-      try await fetchInChunks(ticker: ticker, from: range.lowerBound, to: range.upperBound)
+    } else if range.lowerBound <= fetchUpperBound {
+      try await fetchInChunks(ticker: ticker, from: range.lowerBound, to: fetchUpperBound)
     }
 
     // Build result series
@@ -137,15 +152,22 @@ actor StockPriceService {
   /// via `fallbackPrice`. Warm cache extends only the gap between the cache
   /// edge and the requested date.
   ///
+  /// Forward extensions overlap the existing latest entry by one day so a
+  /// stale value (an intraday partial bar persisted by an older build) is
+  /// overwritten by the next finalised close. `mergeReturningDelta` is a
+  /// no-op when the re-fetched value matches what's already cached.
+  ///
   /// Unlike `ExchangeRateService.fetchToCoverDate`, this method propagates
   /// fetch errors so `price(ticker:on:)` can surface network failures when
   /// the fallback cache is also empty.
+  ///
+  /// `date` is already capped at yesterday by `price(ticker:on:)`.
   private func fetchToCoverDate(ticker: String, date: Date, dateString: String) async throws {
     let gregorian = Calendar(identifier: .gregorian)
     if let cache = caches[ticker] {
       if dateString > cache.latestDate,
-        let latestDate = dateFormatter.date(from: cache.latestDate),
-        let fetchStart = gregorian.date(byAdding: .day, value: 1, to: latestDate)
+        let fetchStart = dateFormatter.date(from: cache.latestDate),
+        fetchStart <= date
       {
         try await fetchInChunks(ticker: ticker, from: fetchStart, to: date)
       } else if dateString < cache.earliestDate,
@@ -159,6 +181,12 @@ actor StockPriceService {
     } else {
       try await fetchAndMerge(ticker: ticker, from: date, to: date)
     }
+  }
+
+  /// See `Shared/PriceCacheCap.swift` for the rationale on capping
+  /// requests at yesterday-UTC.
+  private func cappedDate(_ date: Date) -> Date {
+    cappedToYesterday(date, now: now)
   }
 
   private func lookupPrice(ticker: String, dateString: String) -> Decimal? {
@@ -317,10 +345,13 @@ actor StockPriceService {
   /// Each delta row is written `INSERT OR REPLACE` so a re-fetched date
   /// updates in place; the meta row is `INSERT OR REPLACE`d via
   /// `StockTickerMetaRecord`'s `.replace` conflict policy. There is no
-  /// `deleteAll` — historic prices never change, and rewriting the whole
-  /// ticker on every fetch saturates the GRDB queue. The rollback
-  /// contract still holds because every statement runs inside one
-  /// `database.write` closure and any failure rolls them back together.
+  /// `deleteAll` — once a date is finalised its close is stable, and the
+  /// forward-extension overlap (see `fetchToCoverDate`) re-fetches the
+  /// latest cached date on every extension so a stale intraday tick
+  /// persisted by an older build gets overwritten the next time the
+  /// range moves forward. The rollback contract still holds because
+  /// every statement runs inside one `database.write` closure and any
+  /// failure rolls them back together.
   ///
   /// The price denomination in `StockPriceCache` is the API-reported
   /// fiat currency the ticker trades in (see

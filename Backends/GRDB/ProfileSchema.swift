@@ -28,13 +28,19 @@ import GRDB
 /// the `account` table (per-account choice between recorded value and
 /// calculated-from-trades). See
 /// `ProfileSchema+AccountValuationMode.swift`.
+/// `v7_purge_intraday_cached_prices` — one-shot `DELETE FROM` of all
+/// six rate-cache tables to clear poisoned intraday rows persisted by
+/// pre-cap builds. See `ProfileSchema+PurgeIntradayCaches.swift` and
+/// `Shared/PriceCacheCap.swift` for the cap-at-yesterday rule that
+/// prevents re-poisoning.
 ///
 /// **Retention policy for the cache tables.** All six cache tables
 /// created by `v1_initial` (`exchange_rate`, `exchange_rate_meta`,
 /// `stock_price`, `stock_ticker_meta`, `crypto_price`,
 /// `crypto_token_meta`) are **kept forever** — needed for
 /// historic-conversion correctness on reports older than the upstream
-/// rate APIs can serve. See `guides/DATABASE_SCHEMA_GUIDE.md` §9.
+/// rate APIs can serve. See `guides/DATABASE_SCHEMA_GUIDE.md` §9. The
+/// `v7` purge resets state once; the retention policy is unchanged.
 ///
 /// Each migration body lives in its own sibling-extension file so
 /// `ProfileSchema.swift` stays a small index of registered migrations.
@@ -48,7 +54,7 @@ enum ProfileSchema {
   /// Bumped each time a migration is added. Surfaced for open-time
   /// integrity checks; not used by `DatabaseMigrator` (which keys on
   /// the stable string IDs of registered migrations).
-  static let version = 6
+  static let version = 7
 
   static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
@@ -68,6 +74,8 @@ enum ProfileSchema {
       "v5_drop_foreign_keys", migrate: dropForeignKeys)
     migrator.registerMigration(
       "v6_account_valuation_mode", migrate: addAccountValuationMode)
+    migrator.registerMigration(
+      "v7_purge_intraday_cached_prices", migrate: purgeIntradayCachedPrices)
 
     return migrator
   }

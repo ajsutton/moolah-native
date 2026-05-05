@@ -101,11 +101,14 @@ struct AccountStoreConversionTests {
     let account = Account(
       id: accountId, name: "Revolut", type: .bank,
       instrument: .defaultTestInstrument)
+    // Cache cap routes today's request to yesterday's row — see
+    // `Shared/PriceCacheCap.swift`. Seed both keys with the same value
+    // so the assertion is independent of UTC midnight crossings.
     let todayString = Date().iso8601DateOnlyString
+    let yesterdayString = Date().addingTimeInterval(-86400).iso8601DateOnlyString
     let rates: [String: [String: Decimal]] = [
-      todayString: [
-        "AUD": dec("1.5385")
-      ]
+      todayString: ["AUD": dec("1.5385")],
+      yesterdayString: ["AUD": dec("1.5385")],
     ]
     let (backend, database) = try TestBackend.create(exchangeRates: rates)
     TestBackend.seed(accounts: [account], in: database)

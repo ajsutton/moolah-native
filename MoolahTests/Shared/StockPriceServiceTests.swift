@@ -10,11 +10,12 @@ struct StockPriceServiceTests {
   private func makeService(
     responses: [String: StockPriceResponse] = [:],
     shouldFail: Bool = false,
-    database: DatabaseQueue? = nil
+    database: DatabaseQueue? = nil,
+    now: @Sendable @escaping () -> Date = { Date() }
   ) throws -> StockPriceService {
     let client = FixedStockPriceClient(responses: responses, shouldFail: shouldFail)
     let resolved = try database ?? ProfileDatabase.openInMemory()
-    return StockPriceService(client: client, database: resolved)
+    return StockPriceService(client: client, database: resolved, now: now)
   }
 
   private func date(_ string: String) -> Date {
@@ -185,6 +186,88 @@ struct StockPriceServiceTests {
   // SQL persistence tests (round-trip + rollback + delta-write contracts)
   // live in `StockPriceServicePersistenceTests` so this suite stays under
   // SwiftLint's `type_body_length` cap.
+
+  // MARK: - Cap-at-yesterday rule
+
+  @Test
+  func todayRequestRoutesToYesterday() async throws {
+    // Pin "today" at 2026-04-12 so "yesterday" is 2026-04-11. bhpResponse
+    // has 2026-04-11 = 38.60. The request for "today" should fall back.
+    let frozen = self.date("2026-04-12")
+    let service = try makeService(
+      responses: ["BHP.AX": bhpResponse()], now: { frozen })
+    let price = try await service.price(ticker: "BHP.AX", on: frozen)
+    #expect(price == dec("38.60"))
+  }
+
+  @Test
+  func todayHitsCacheWithoutNetworkFetch() async throws {
+    // Seed yesterday via a writeable client, then re-issue the same query
+    // with a failing client — if the cap routes "today" to "yesterday" and
+    // yesterday is in the cache, no fetch is needed.
+    let database = try ProfileDatabase.openInMemory()
+    let frozen = self.date("2026-04-12")
+    let writer = try makeService(
+      responses: ["BHP.AX": bhpResponse()],
+      database: database,
+      now: { frozen })
+    _ = try await writer.price(ticker: "BHP.AX", on: self.date("2026-04-11"))
+
+    let reader = try makeService(
+      shouldFail: true,
+      database: database,
+      now: { frozen })
+    let price = try await reader.price(ticker: "BHP.AX", on: frozen)
+    #expect(price == dec("38.60"))
+  }
+
+  @Test
+  func forwardExtensionOverwritesStaleLatest() async throws {
+    // First service caches a value for 2026-04-11; second returns a
+    // *different* value for the same date. Asking for a later date should
+    // trigger a forward extension that overlaps 2026-04-11 and overwrites.
+    let database = try ProfileDatabase.openInMemory()
+    let initial = StockPriceResponse(
+      instrument: .AUD,
+      prices: ["2026-04-11": dec("38.60")])
+    let revised = StockPriceResponse(
+      instrument: .AUD,
+      prices: [
+        "2026-04-11": dec("38.99"),
+        "2026-04-13": dec("39.10"),
+        "2026-04-14": dec("39.20"),
+      ])
+
+    let frozenInitial = self.date("2026-04-12")
+    let pre = try makeService(
+      responses: ["BHP.AX": initial],
+      database: database,
+      now: { frozenInitial })
+    _ = try await pre.price(ticker: "BHP.AX", on: self.date("2026-04-11"))
+
+    let frozenLater = self.date("2026-04-15")
+    let post = try makeService(
+      responses: ["BHP.AX": revised],
+      database: database,
+      now: { frozenLater })
+    _ = try await post.price(ticker: "BHP.AX", on: self.date("2026-04-14"))
+
+    let revisedAt11 = try await post.price(ticker: "BHP.AX", on: self.date("2026-04-11"))
+    #expect(revisedAt11 == dec("38.99"))
+  }
+
+  @Test
+  func rangeEndingTodayCarriesForwardYesterday() async throws {
+    let frozen = self.date("2026-04-12")
+    let service = try makeService(
+      responses: ["BHP.AX": bhpResponse()],
+      now: { frozen })
+    let results = try await service.prices(
+      ticker: "BHP.AX",
+      in: self.date("2026-04-10")...frozen)
+    #expect(results.count == 3)
+    #expect(results.last?.price == dec("38.60"))
+  }
 
   // MARK: - Multiple tickers
 

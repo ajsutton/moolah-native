@@ -34,12 +34,16 @@ struct InstrumentConversionServiceStockTests {
 
   @Test
   func stockToListingCurrencySameFiat() async throws {
-    // BHP listed in AUD, converting to AUD — just stock price, no FX
+    // BHP listed in AUD, converting to AUD — just stock price, no FX.
+    // Cache caps "today" requests to yesterday — see
+    // `Shared/PriceCacheCap.swift`. Seed both keys.
     let today = Date()
     let dateKey = dateString(today)
+    let yKey = dateString(today.addingTimeInterval(-86400))
     let service = try makeService(
       stockPrices: [
-        "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: dec("42.30")])
+        "BHP.AX": StockPriceResponse(
+          instrument: .AUD, prices: [dateKey: dec("42.30"), yKey: dec("42.30")])
       ]
     )
 
@@ -53,11 +57,16 @@ struct InstrumentConversionServiceStockTests {
     // AAPL listed in USD, converting to AUD — stock price * FX rate
     let today = Date()
     let dateKey = dateString(today)
+    let yKey = dateString(today.addingTimeInterval(-86400))
     let service = try makeService(
       stockPrices: [
-        "AAPL": StockPriceResponse(instrument: .USD, prices: [dateKey: dec("185.50")])
+        "AAPL": StockPriceResponse(
+          instrument: .USD, prices: [dateKey: dec("185.50"), yKey: dec("185.50")])
       ],
-      exchangeRates: [dateKey: ["AUD": dec("1.55")]]  // 1 USD = 1.55 AUD
+      exchangeRates: [
+        dateKey: ["AUD": dec("1.55")],
+        yKey: ["AUD": dec("1.55")],
+      ]
     )
 
     let result = try await service.convert(Decimal(10), from: aapl, to: aud, on: today)
@@ -103,9 +112,11 @@ struct InstrumentConversionServiceStockTests {
     // Simulate a USD-listed stock converting to USD directly (no FX required).
     let today = Date()
     let dateKey = dateString(today)
+    let yKey = dateString(today.addingTimeInterval(-86400))
     let service = try makeService(
       stockPrices: [
-        "AAPL": StockPriceResponse(instrument: .USD, prices: [dateKey: dec("185.50")])
+        "AAPL": StockPriceResponse(
+          instrument: .USD, prices: [dateKey: dec("185.50"), yKey: dec("185.50")])
       ]
     )
 

@@ -69,8 +69,11 @@ struct StockPositionDisplayTests {
     let today = Date()
     let dateKey = dateString(today)
 
+    // Cache caps "today" → yesterday — see `Shared/PriceCacheCap.swift`.
+    let yKey = dateString(today.addingTimeInterval(-86400))
     let stockClient = FixedStockPriceClient(responses: [
-      "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: dec("45.00")])
+      "BHP.AX": StockPriceResponse(
+        instrument: .AUD, prices: [dateKey: dec("45.00"), yKey: dec("45.00")])
     ])
     let cacheDatabase = try ProfileDatabase.openInMemory()
     let stockService = StockPriceService(client: stockClient, database: cacheDatabase)
@@ -148,9 +151,13 @@ struct StockPositionDisplayTests {
 
   private func makeTotalPortfolioConversionService(today: Date) throws -> FullConversionService {
     let dateKey = dateString(today)
+    // Cache caps "today" → yesterday — see `Shared/PriceCacheCap.swift`.
+    let yKey = dateString(today.addingTimeInterval(-86400))
     let stockClient = FixedStockPriceClient(responses: [
-      "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: dec("45.00")]),
-      "CBA.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: dec("120.00")]),
+      "BHP.AX": StockPriceResponse(
+        instrument: .AUD, prices: [dateKey: dec("45.00"), yKey: dec("45.00")]),
+      "CBA.AX": StockPriceResponse(
+        instrument: .AUD, prices: [dateKey: dec("120.00"), yKey: dec("120.00")]),
     ])
     let database = try ProfileDatabase.openInMemory()
     let stockService = StockPriceService(client: stockClient, database: database)

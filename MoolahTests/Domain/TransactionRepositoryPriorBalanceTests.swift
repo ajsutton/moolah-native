@@ -110,12 +110,16 @@ struct TransactionRepositoryPriorBalanceTests {
 
     // USD -> AUD at 1.5 today. FixedRateClient keys are ISO-8601 date →
     // quote-currency rates (base is passed separately to fetchRates).
+    // Cache caps "today" requests to yesterday — see
+    // `Shared/PriceCacheCap.swift`. Seed both keys.
     let todayFormatter = ISO8601DateFormatter()
     todayFormatter.formatOptions = [.withFullDate]
     let todayKey = todayFormatter.string(from: Date())
+    let yesterdayKey = todayFormatter.string(from: Date().addingTimeInterval(-86400))
     let audRate = try #require(Decimal(string: "1.5"))
     let rates: [String: [String: Decimal]] = [
-      todayKey: ["AUD": audRate]
+      todayKey: ["AUD": audRate],
+      yesterdayKey: ["AUD": audRate],
     ]
     let (backend, database) = try TestBackend.create(
       instrument: accountInstrument, exchangeRates: rates)
