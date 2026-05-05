@@ -94,13 +94,15 @@ enum AccountPerformanceCalculator {
       now: now)
   }
 
-  /// Cash-flow extraction. A leg L in `accountId` produces one
-  /// `CashFlow` iff (a) `L.type == .openingBalance`, OR (b) the
-  /// transaction crosses an account boundary (some other leg references a
-  /// different non-nil account). Rationale: any boundary-crossing
-  /// transaction moves capital regardless of leg type, while pure intra-
-  /// account activity (trades, dividends, fees) is reflected via the
-  /// account's terminal value rather than as a flow.
+  /// Cash-flow extraction. Delegates the per-leg "is this a flow"
+  /// classification (opening balance OR boundary-crossing) and the
+  /// on-date conversion to `AccountCashFlows.flowAmounts(for:)` so
+  /// the boundary-crossing rule lives in exactly one place — see
+  /// `Shared/AccountCashFlows.swift`. Per-leg `CashFlow` granularity
+  /// is preserved by flat-mapping each transaction's returned
+  /// amounts into one `CashFlow` per qualifying leg, all dated at
+  /// `transaction.date` (the IRR / Modified-Dietz weighting code
+  /// keys on date, not leg index).
   private static func extractFlows(
     from transactions: [Transaction],
     accountId: UUID,
@@ -110,19 +112,14 @@ enum AccountPerformanceCalculator {
     var flows: [CashFlow] = []
     let sorted = transactions.sorted { $0.date < $1.date }
     for transaction in sorted {
-      let otherAccountIds = Set(transaction.legs.compactMap(\.accountId))
-        .subtracting([accountId])
-      let crossesBoundary = !otherAccountIds.isEmpty
-      for leg in transaction.legs where leg.accountId == accountId {
-        guard leg.type == .openingBalance || crossesBoundary else { continue }
-        let amountInProfileCurrency: Decimal
-        if leg.instrument == profileCurrency {
-          amountInProfileCurrency = leg.quantity
-        } else {
-          amountInProfileCurrency = try await conversionService.convert(
-            leg.quantity, from: leg.instrument, to: profileCurrency, on: transaction.date)
-        }
-        flows.append(CashFlow(date: transaction.date, amount: amountInProfileCurrency))
+      let amounts = try await AccountCashFlows.flowAmounts(
+        for: transaction,
+        accountId: accountId,
+        hostCurrency: profileCurrency,
+        service: conversionService
+      )
+      for amount in amounts {
+        flows.append(CashFlow(date: transaction.date, amount: amount))
       }
     }
     return flows
