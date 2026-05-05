@@ -33,6 +33,13 @@ public enum UITestIdentifiers {
 
     /// "New Account" toolbar button in the sidebar (macOS only).
     public static let newAccountButton = "sidebar.toolbar.newAccount"
+
+    /// "Edit Account…" item in the sidebar account context menu.
+    /// Distinct from the menu-bar Account → Edit Account command,
+    /// which has the same title but lives in the application menu —
+    /// drivers must resolve via this identifier rather than the
+    /// shared label.
+    public static let editAccountContextMenuItem = "sidebar.contextMenu.editAccount"
   }
 
   public enum TransactionList {
@@ -214,6 +221,30 @@ public enum UITestIdentifiers {
     public static func registrationRow(_ id: String) -> String {
       "crypto.settings.registration.\(id)"
     }
+  }
+
+  public enum EditAccount {
+    /// Valuation-mode picker shown for legacy investment accounts in
+    /// `.recordedValue` mode or `.calculatedFromTrades` accounts that
+    /// still have at least one `InvestmentValue` snapshot. Identifier
+    /// pinned by `EditAccountView.valuationSection`.
+    public static let valuationModePicker = "editAccount.valuationMode"
+
+    /// Cancel toolbar button. Drivers click it to dismiss the dialog
+    /// after assertions run, AND use it as the presence sentinel for
+    /// `expectVisible()` — Cancel is the only element that's
+    /// guaranteed to render whenever the dialog opens (the rest of
+    /// the form depends on account type and visibility resolver
+    /// state). SwiftUI's `.accessibilityIdentifier(_:)` on
+    /// `NavigationStack` / `Form` does not propagate to the
+    /// macOS-rendered window root, so a content-element sentinel is
+    /// the working pattern here.
+    public static let cancelButton = "editAccount.cancel"
+
+    /// Save toolbar button. Pinned for symmetry with `cancelButton` so
+    /// future tests can exercise the save path through the same
+    /// resolver pattern.
+    public static let saveButton = "editAccount.save"
   }
 
   public enum Autocomplete {

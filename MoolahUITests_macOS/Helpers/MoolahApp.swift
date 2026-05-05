@@ -69,6 +69,11 @@ final class MoolahApp {
   /// `CreateAccountView` sheet. Open it by calling `createAccount.open(...)`.
   var createAccount: CreateAccountScreen { CreateAccountScreen(app: self) }
 
+  /// `EditAccountView` sheet. Open it by right-clicking an account row in
+  /// the sidebar and choosing "Edit Account…", or programmatically via
+  /// `editAccount.open(account:)`.
+  var editAccount: EditAccountScreen { EditAccountScreen(app: self) }
+
   /// macOS Settings scene. Open it via `settings.open()`; tab drivers
   /// (e.g. `settings.openCryptoTab()`) hang off the returned screen.
   var settings: SettingsScreen { SettingsScreen(app: self) }
@@ -99,6 +104,15 @@ final class MoolahApp {
   /// invariant (UI_TEST_GUIDE §3 #5) is preserved.
   func toolbarButton(label: String) -> XCUIElement {
     application.toolbars.buttons[label]
+  }
+
+  /// Menu-item-by-label resolver. Used by drivers when SwiftUI drops
+  /// `.accessibilityIdentifier(_:)` on the underlying control — context
+  /// menus and macOS Picker pop-ups are the current cases (NSMenuItem
+  /// doesn't inherit the SwiftUI identifier). All such lookups route
+  /// through this method so the single-resolver invariant is preserved.
+  func menuItem(label: String) -> XCUIElement {
+    application.menuItems[label]
   }
 
   // MARK: - Predicate-based escape hatches
