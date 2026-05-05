@@ -1,0 +1,217 @@
+// MoolahTests/Shared/CryptoImport/CryptoTokenDiscoveryServiceTests.swift
+import Foundation
+import Testing
+
+@testable import Moolah
+
+/// Behavioural tests for `CryptoTokenDiscoveryService`. The in-flight
+/// coalescer / stress assertions live in `CryptoTokenDiscoveryCoalescerTests`
+/// to keep this file under SwiftLint's length thresholds.
+@Suite("CryptoTokenDiscoveryService — Resolution")
+struct CryptoTokenDiscoveryServiceTests {
+  // Reusable USDC-like contract for the ERC-20 paths.
+  static let usdcAddress = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+  static let usdcId = "1:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+
+  // MARK: - Single-resolve happy paths
+
+  @Test("Resolved mapping → .priced registration persisted")
+  func resolvedMappingIsPriced() async throws {
+    let subject = makeDiscoverySubject()
+    subject.resolver.script(
+      .init(chainId: 1, contractAddress: Self.usdcAddress.lowercased()),
+      .success(coingecko: "usd-coin", cryptocompare: "USDC", binance: "USDCUSDT"))
+
+    let registration = try await subject.service.resolveOrLoad(
+      chain: .ethereum,
+      contractAddress: Self.usdcAddress,
+      symbol: "USDC",
+      name: "USD Coin",
+      decimals: 6)
+
+    #expect(registration.pricingStatus == .priced)
+    #expect(registration.mapping.coingeckoId == "usd-coin")
+    #expect(registration.instrument.id == Self.usdcId)
+
+    let stored = try await subject.registry.cryptoRegistration(byId: Self.usdcId)
+    #expect(stored?.pricingStatus == .priced)
+    #expect(stored?.mapping.coingeckoId == "usd-coin")
+  }
+
+  @Test("isSpam metadata wins over a successful provider resolution")
+  func spamWinsOverResolution() async throws {
+    let subject = makeDiscoverySubject()
+    subject.resolver.script(
+      .init(chainId: 1, contractAddress: Self.usdcAddress.lowercased()),
+      .success(coingecko: "spammy-but-listed", cryptocompare: nil, binance: nil))
+    subject.alchemy.script(
+      .init(chainId: 1, contractAddress: Self.usdcAddress.lowercased()),
+      .metadata(
+        AlchemyTokenMetadata(
+          symbol: "SPAM", name: "Spam", decimals: 18, logo: nil, isSpam: true)))
+
+    let registration = try await subject.service.resolveOrLoad(
+      chain: .ethereum,
+      contractAddress: Self.usdcAddress,
+      symbol: "SPAM",
+      name: "Spam",
+      decimals: 18)
+
+    #expect(registration.pricingStatus == .spam)
+    let stored = try await subject.registry.cryptoRegistration(byId: Self.usdcId)
+    #expect(stored?.pricingStatus == .spam)
+  }
+
+  @Test("No mapping + not spam → .unpriced")
+  func noMappingIsUnpriced() async throws {
+    struct ProviderFailed: Error {}
+    let subject = makeDiscoverySubject()
+    subject.resolver.script(
+      .init(chainId: 1, contractAddress: Self.usdcAddress.lowercased()),
+      .failure(ProviderFailed()))
+    subject.alchemy.setDefaultSpam(false)
+
+    let registration = try await subject.service.resolveOrLoad(
+      chain: .ethereum,
+      contractAddress: Self.usdcAddress,
+      symbol: "OBS",
+      name: "Obscure",
+      decimals: 18)
+
+    #expect(registration.pricingStatus == .unpriced)
+    #expect(registration.mapping.coingeckoId == nil)
+    let all = try await subject.registry.allCryptoRegistrations()
+    #expect(all.contains { $0.id == Self.usdcId && $0.pricingStatus == .unpriced })
+  }
+
+  @Test("Provider success but no mapping ids → .unpriced")
+  func providerSucceedsWithoutMappingIsUnpriced() async throws {
+    let subject = makeDiscoverySubject()
+    subject.resolver.script(
+      .init(chainId: 1, contractAddress: Self.usdcAddress.lowercased()),
+      .success(coingecko: nil, cryptocompare: nil, binance: nil))
+
+    let registration = try await subject.service.resolveOrLoad(
+      chain: .ethereum,
+      contractAddress: Self.usdcAddress,
+      symbol: "OBS",
+      name: "Obscure",
+      decimals: 18)
+
+    #expect(registration.pricingStatus == .unpriced)
+    #expect(registration.mapping.coingeckoId == nil)
+    #expect(registration.mapping.cryptocompareSymbol == nil)
+    #expect(registration.mapping.binanceSymbol == nil)
+  }
+
+  @Test("Native token never queries Alchemy spam metadata")
+  func nativeTokenSkipsSpamCheck() async throws {
+    let subject = makeDiscoverySubject()
+    subject.resolver.setDefault(
+      .success(coingecko: "ethereum", cryptocompare: "ETH", binance: "ETHUSDT"))
+
+    let registration = try await subject.service.resolveOrLoad(
+      chain: .ethereum,
+      contractAddress: nil,
+      symbol: "ETH",
+      name: "Ethereum",
+      decimals: 18)
+
+    #expect(registration.pricingStatus == .priced)
+    // The Alchemy stub keys on (chainId, contractAddress); a native call
+    // would key on the empty address. Either way, the only ERC-20-style
+    // callers are the explicit scripts we set above, so the recorded
+    // count for the empty-string key is the right thing to check.
+    #expect(subject.alchemy.callCount(for: .init(chainId: 1, contractAddress: "")) == 0)
+  }
+
+  @Test("Existing registration short-circuits — no resolver or Alchemy call")
+  func existingRegistrationShortCircuits() async throws {
+    let preexisting = CryptoRegistration(
+      instrument: Instrument.crypto(
+        chainId: 1, contractAddress: Self.usdcAddress, symbol: "USDC",
+        name: "USD Coin", decimals: 6),
+      mapping: CryptoProviderMapping(
+        instrumentId: Self.usdcId,
+        coingeckoId: "usd-coin", cryptocompareSymbol: "USDC", binanceSymbol: "USDCUSDT"),
+      pricingStatus: .priced)
+    let subject = makeDiscoverySubject(seededRegistrations: [preexisting])
+
+    let registration = try await subject.service.resolveOrLoad(
+      chain: .ethereum,
+      contractAddress: Self.usdcAddress,
+      symbol: "USDC",
+      name: "USD Coin",
+      decimals: 6)
+
+    #expect(registration.id == preexisting.id)
+    #expect(
+      subject.resolver.callCount(
+        for: .init(chainId: 1, contractAddress: Self.usdcAddress.lowercased())) == 0)
+    #expect(
+      subject.alchemy.callCount(
+        for: .init(chainId: 1, contractAddress: Self.usdcAddress.lowercased())) == 0)
+  }
+
+  // MARK: - Re-resolution
+
+  @Test("reResolve(.unpriced → .priced) flips status when provider now succeeds")
+  func reResolveUnpricedToPriced() async throws {
+    let unpriced = CryptoRegistration(
+      instrument: Instrument.crypto(
+        chainId: 1, contractAddress: Self.usdcAddress, symbol: "OBS",
+        name: "Obscure", decimals: 18),
+      mapping: CryptoProviderMapping(
+        instrumentId: Self.usdcId,
+        coingeckoId: nil, cryptocompareSymbol: nil, binanceSymbol: nil),
+      pricingStatus: .unpriced)
+    let subject = makeDiscoverySubject(seededRegistrations: [unpriced])
+    subject.resolver.script(
+      .init(chainId: 1, contractAddress: Self.usdcAddress.lowercased()),
+      .success(coingecko: "newly-listed", cryptocompare: nil, binance: nil))
+
+    let updated = try await subject.service.reResolve(unpriced, chain: .ethereum)
+
+    #expect(updated.pricingStatus == .priced)
+    #expect(updated.mapping.coingeckoId == "newly-listed")
+    let stored = try await subject.registry.cryptoRegistration(byId: Self.usdcId)
+    #expect(stored?.pricingStatus == .priced)
+    #expect(stored?.mapping.coingeckoId == "newly-listed")
+  }
+
+  @Test("reResolve respects registry-current status when caller's snapshot is stale")
+  func reResolveSkipsWhenRegistryNoLongerUnpriced() async throws {
+    // Caller hands in an `.unpriced` snapshot, but the registry has
+    // since been updated to `.spam` (e.g. user classified the token on
+    // another device while this device was idle between daily cycles).
+    // The "user intent wins" property requires reResolve to re-read the
+    // registry and bail out without re-resolving.
+    let staleSnapshot = CryptoRegistration(
+      instrument: Instrument.crypto(
+        chainId: 1, contractAddress: Self.usdcAddress, symbol: "OBS",
+        name: "Obscure", decimals: 18),
+      mapping: CryptoProviderMapping(
+        instrumentId: Self.usdcId,
+        coingeckoId: nil, cryptocompareSymbol: nil, binanceSymbol: nil),
+      pricingStatus: .unpriced)
+    let liveRow = CryptoRegistration(
+      instrument: staleSnapshot.instrument,
+      mapping: staleSnapshot.mapping,
+      pricingStatus: .spam)
+    let subject = makeDiscoverySubject(seededRegistrations: [liveRow])
+    // Even if the provider would succeed, reResolve must not call it.
+    subject.resolver.script(
+      .init(chainId: 1, contractAddress: Self.usdcAddress.lowercased()),
+      .success(coingecko: "should-not-be-used", cryptocompare: nil, binance: nil))
+
+    let result = try await subject.service.reResolve(staleSnapshot, chain: .ethereum)
+
+    #expect(result.pricingStatus == .spam)
+    let resolverKey = CountingRegistrationResolver.Key(
+      chainId: 1, contractAddress: Self.usdcAddress.lowercased())
+    #expect(subject.resolver.callCount(for: resolverKey) == 0)
+    let alchemyKey = CountingAlchemyClientStub.Key(
+      chainId: 1, contractAddress: Self.usdcAddress.lowercased())
+    #expect(subject.alchemy.callCount(for: alchemyKey) == 0)
+  }
+}
