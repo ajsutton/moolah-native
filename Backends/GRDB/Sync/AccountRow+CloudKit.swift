@@ -16,12 +16,14 @@ extension AccountRow: CloudKitRecordConvertible {
       recordType: Self.recordType, uuid: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
     AccountRecordCloudKitFields(
+      chainId: chainId.map(Int64.init),
       instrumentId: instrumentId,
       isHidden: isHidden ? 1 : 0,
       name: name,
       position: Int64(position),
       type: type,
-      valuationMode: valuationMode
+      valuationMode: valuationMode,
+      walletAddress: walletAddress
     ).write(to: record)
     return record
   }
@@ -40,7 +42,9 @@ extension AccountRow: CloudKitRecordConvertible {
       // Stamped by applyGRDBBatchSave after upsert; never read from the
       // CKRecord itself.
       encodedSystemFields: nil,
-      valuationMode: fields.valuationMode ?? "recordedValue"
+      valuationMode: fields.valuationMode ?? "recordedValue",
+      walletAddress: fields.walletAddress,
+      chainId: fields.chainId.map(Int.init)
     )
   }
 }

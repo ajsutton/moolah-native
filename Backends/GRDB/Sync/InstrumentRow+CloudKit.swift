@@ -23,6 +23,7 @@ extension InstrumentRow: CloudKitRecordConvertible {
       exchange: exchange,
       kind: kind,
       name: name,
+      pricingStatus: pricingStatus,
       ticker: ticker
     ).write(to: record)
     return record
@@ -50,6 +51,7 @@ extension InstrumentRow: CloudKitRecordConvertible {
       binanceSymbol: fields.binanceSymbol,
       // Stamped by applyGRDBBatchSave after upsert; never read from the
       // CKRecord itself.
-      encodedSystemFields: nil)
+      encodedSystemFields: nil,
+      pricingStatus: fields.pricingStatus ?? "priced")
   }
 }

@@ -19,6 +19,7 @@ extension TransactionLegRow: CloudKitRecordConvertible {
       accountId: accountId?.uuidString,
       categoryId: categoryId?.uuidString,
       earmarkId: earmarkId?.uuidString,
+      externalId: externalId,
       instrumentId: instrumentId,
       quantity: quantity,
       sortOrder: Int64(sortOrder),
@@ -49,7 +50,8 @@ extension TransactionLegRow: CloudKitRecordConvertible {
       sortOrder: Int(fields.sortOrder ?? 0),
       // Stamped by applyGRDBBatchSave after upsert; never read from the
       // CKRecord itself.
-      encodedSystemFields: nil
+      encodedSystemFields: nil,
+      externalId: fields.externalId
     )
   }
 }
