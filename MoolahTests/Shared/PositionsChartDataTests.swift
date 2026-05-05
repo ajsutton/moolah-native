@@ -1,0 +1,89 @@
+import Foundation
+import Testing
+
+@testable import Moolah
+
+@Suite("PositionsChart data shape")
+struct PositionsChartDataTests {
+  let aud = Instrument.AUD
+
+  private func point(
+    day: Int, value: Decimal, cost: Decimal, contributions: Decimal?
+  ) throws -> HistoricalValueSeries.Point {
+    let calendar = Calendar(identifier: .gregorian)
+    var epoch = DateComponents()
+    epoch.year = 2026
+    epoch.month = 1
+    epoch.day = 1
+    let base = try #require(calendar.date(from: epoch))
+    let date = try #require(calendar.date(byAdding: .day, value: day, to: base))
+    return HistoricalValueSeries.Point(
+      date: date, value: value, cost: cost, contributions: contributions
+    )
+  }
+
+  @Test("aggregate mode picks point.contributions as baseline")
+  func aggregateBaselineIsContributions() throws {
+    let points = try [
+      point(day: 0, value: 1_100, cost: 800, contributions: 1_000),
+      point(day: 1, value: 1_150, cost: 800, contributions: 1_000),
+    ]
+    let resolved = PositionsChartBaselineResolver.resolve(
+      points: points, mode: .aggregate
+    )
+    #expect(resolved.map(\.baseline) == [1_000, 1_000])
+    #expect(resolved.map(\.gainSegment) == [100, 150])
+    #expect(resolved.map(\.lossSegment) == [0, 0])
+    #expect(resolved.last?.legendUnavailable == false)
+  }
+
+  @Test("per-instrument mode picks point.cost as baseline")
+  func perInstrumentBaselineIsCost() throws {
+    let points = try [
+      point(day: 0, value: 850, cost: 800, contributions: nil),
+      point(day: 1, value: 900, cost: 800, contributions: nil),
+    ]
+    let resolved = PositionsChartBaselineResolver.resolve(
+      points: points, mode: .perInstrument
+    )
+    #expect(resolved.map(\.baseline) == [800, 800])
+    #expect(resolved.map(\.gainSegment) == [50, 100])
+  }
+
+  @Test("loss segments are emitted when value < baseline")
+  func lossSegments() throws {
+    let points = try [point(day: 0, value: 950, cost: 1_000, contributions: nil)]
+    let resolved = PositionsChartBaselineResolver.resolve(
+      points: points, mode: .perInstrument
+    )
+    #expect(resolved[0].gainSegment == 0)
+    #expect(resolved[0].lossSegment == 50)
+  }
+
+  @Test("nil baseline produces a no-area entry; value-line still renderable")
+  func nilBaselineSuppressesArea() throws {
+    let points = try [
+      point(day: 0, value: 1_100, cost: 800, contributions: 1_000),
+      point(day: 1, value: 1_150, cost: 800, contributions: nil),
+    ]
+    let resolved = PositionsChartBaselineResolver.resolve(
+      points: points, mode: .aggregate
+    )
+    #expect(resolved[0].baseline != nil)
+    #expect(resolved[1].baseline == nil)
+    #expect(resolved[1].gainSegment == 0)
+    #expect(resolved[1].lossSegment == 0)
+  }
+
+  @Test("most-recent point with nil baseline triggers legend-unavailable signal")
+  func legendUnavailableWhenLatestNil() throws {
+    let points = try [
+      point(day: 0, value: 1_100, cost: 800, contributions: 1_000),
+      point(day: 1, value: 1_150, cost: 800, contributions: nil),
+    ]
+    let resolved = PositionsChartBaselineResolver.resolve(
+      points: points, mode: .aggregate
+    )
+    #expect(resolved.last?.legendUnavailable == true)
+  }
+}

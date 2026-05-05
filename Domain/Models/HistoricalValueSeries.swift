@@ -17,9 +17,19 @@ import Foundation
 struct HistoricalValueSeries: Sendable, Hashable {
   struct Point: Sendable, Hashable {
     let date: Date
-    /// `value` and `cost` are denominated in the enclosing series' `hostCurrency`.
+    /// Market value in the enclosing series' `hostCurrency`.
     let value: Decimal
+    /// Remaining cost basis of currently-held lots in `hostCurrency`.
+    /// Meaningful for both aggregate and per-instrument series.
     let cost: Decimal
+    /// Cumulative net external contributions to the account in
+    /// `hostCurrency`, evaluated at this date. Populated only for
+    /// the aggregate (account-level) series; per-instrument series
+    /// leave this `nil`. `nil` does not mean zero — it means
+    /// "not applicable at this granularity" (per-instrument) or
+    /// "conversion failure for some flow on or before this date"
+    /// (Rule 11 — see `PositionsHistoryBuilder`).
+    let contributions: Decimal?
   }
 
   let hostCurrency: Instrument

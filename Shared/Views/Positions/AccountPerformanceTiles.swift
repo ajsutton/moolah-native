@@ -46,8 +46,29 @@ struct AccountPerformanceTiles: View {
           .font(.title3)
           .foregroundStyle(.secondary)
       }
+    } subtitle: {
+      investedSubtitleView
     }
-    .accessibilityLabel(currentValueAccessibilityLabel)
+    .accessibilityLabel(
+      AccountPerformanceTileLabels.currentValueAccessibilityLabel(performance)
+    )
+  }
+
+  @ViewBuilder private var investedSubtitleView: some View {
+    if let text = AccountPerformanceTileLabels.investedSubtitleText(performance) {
+      if performance.totalContributions != nil {
+        Text(text)
+          .font(.caption)
+          .monospacedDigit()
+          .foregroundStyle(.secondary)
+      } else {
+        // "Invested —" form: no number to monospace; tertiary
+        // colour matches the P/L tile's `—` styling.
+        Text(text)
+          .font(.caption)
+          .foregroundStyle(.tertiary)
+      }
+    }
   }
 
   @ViewBuilder private var profitLossTile: some View {
@@ -155,12 +176,9 @@ struct AccountPerformanceTiles: View {
 
   // MARK: - Accessibility labels
 
-  private var currentValueAccessibilityLabel: String {
-    guard let value = performance.currentValue else {
-      return "Current Value: Unavailable"
-    }
-    return "Current Value: \(value.formatted)"
-  }
+  // currentValueAccessibilityLabel logic moved to
+  // AccountPerformanceTileLabels (Domain Layer is strictly isolated
+  // from UI copy per CLAUDE.md), so this view only invokes it.
 
   private var profitLossAccessibilityLabel: String {
     guard let profitLoss = performance.profitLoss else {

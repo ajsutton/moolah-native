@@ -1,3 +1,8 @@
+// Reason: Swift Charts mark APIs (`AreaMark`, `LineMark`,
+// `AxisMarks`, `AXDataSeriesDescriptor`, etc.) take long labelled
+// argument lists where SwiftLint's multi-line arguments rule fights
+// the natural call-site shape. Disabling at file scope rather than
+// reformatting every Charts call site to one-arg-per-line.
 // swiftlint:disable multiline_arguments
 
 import Accessibility
@@ -58,6 +63,13 @@ struct PositionsChart: View {
 
   // MARK: - Chart
 
+  /// Source of truth for the gain/loss area opacity. Both the
+  /// `AreaMark` fills inside the chart AND the legend swatch must
+  /// reference this constant so a tuning pass in `#Preview` adjusts
+  /// the legend preview at the same time as the chart, keeping the
+  /// legend an accurate visual sample of the chart fill.
+  private static let gainLossOpacity: Double = 0.20
+
   @ViewBuilder private var chartBody: some View {
     let points = visiblePoints
     if points.isEmpty {
@@ -68,32 +80,12 @@ struct PositionsChart: View {
       }
       .frame(minHeight: 200)
     } else {
+      let mode: PositionsChartMode =
+        (selectedInstrument == nil) ? .aggregate : .perInstrument
+      let rows = PositionsChartBaselineResolver.resolve(points: points, mode: mode)
       Chart {
-        ForEach(points, id: \.date) { point in
-          AreaMark(
-            x: .value("Date", point.date),
-            y: .value("Value", Double(truncating: point.value as NSDecimalNumber))
-          )
-          .foregroundStyle(Color.accentColor.opacity(0.18))
-          .interpolationMethod(.linear)
-
-          LineMark(
-            x: .value("Date", point.date),
-            y: .value("Value", Double(truncating: point.value as NSDecimalNumber)),
-            series: .value("Series", "Value")
-          )
-          .foregroundStyle(Color.accentColor)
-          .lineStyle(StrokeStyle(lineWidth: 2))
-          .interpolationMethod(.linear)
-
-          LineMark(
-            x: .value("Date", point.date),
-            y: .value("Cost", Double(truncating: point.cost as NSDecimalNumber)),
-            series: .value("Series", "Cost")
-          )
-          .foregroundStyle(.secondary)
-          .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
-          .interpolationMethod(.stepEnd)
+        ForEach(rows, id: \.date) { row in
+          chartMarks(for: row)
         }
       }
       .chartXAxis {
@@ -123,44 +115,66 @@ struct PositionsChart: View {
       .frame(height: 220)
       .accessibilityChartDescriptor(self)
 
-      HStack(spacing: 16) {
-        legendItem(color: .accentColor, label: "Value", dashed: false)
-        legendItem(color: .secondary, label: "Cost basis", dashed: true)
-        Spacer()
-      }
-      .font(.caption2)
+      PositionsChartLegendRow(
+        rows: rows, mode: mode, gainLossOpacity: Self.gainLossOpacity)
+    }
+  }
+
+  /// Per-row mark emission. Factored out of `chartBody` so the
+  /// outer SwiftUI closure stays under SwiftLint's
+  /// `closure_body_length` threshold; pure presentational logic, no
+  /// state mutation.
+  @ChartContentBuilder
+  private func chartMarks(for row: PositionsChartRenderRow) -> some ChartContent {
+    if let baseline = row.baseline {
+      // Always emit BOTH gain and loss area marks (with explicit
+      // `series:` identifiers) when a baseline is available. Each
+      // series resolves to one continuous polygon that pinches to
+      // zero height at every point on the wrong side of the
+      // baseline. Without the `series:` discriminator, Swift Charts
+      // groups all AreaMarks into a single shape and fills the
+      // entire region one colour — which is what the original
+      // gated emission produced (the bug visible in PR #743 review:
+      // green shading even where value < invested).
+      AreaMark(
+        x: .value("Date", row.date),
+        yStart: .value(
+          "Baseline", Double(truncating: baseline as NSDecimalNumber)),
+        yEnd: .value(
+          "Top",
+          Double(truncating: (baseline + row.gainSegment) as NSDecimalNumber)),
+        series: .value("Series", "Gain")
+      )
+      .foregroundStyle(.green.opacity(Self.gainLossOpacity))
+
+      AreaMark(
+        x: .value("Date", row.date),
+        yStart: .value(
+          "Bottom",
+          Double(truncating: (baseline - row.lossSegment) as NSDecimalNumber)),
+        yEnd: .value(
+          "Baseline", Double(truncating: baseline as NSDecimalNumber)),
+        series: .value("Series", "Loss")
+      )
+      .foregroundStyle(.red.opacity(Self.gainLossOpacity))
+    }
+    LineMark(
+      x: .value("Date", row.date),
+      y: .value("Value", Double(truncating: row.value as NSDecimalNumber)),
+      series: .value("Series", "Value")
+    )
+    .foregroundStyle(Color.accentColor)
+    .lineStyle(StrokeStyle(lineWidth: 2))
+    .interpolationMethod(.linear)
+    if let baseline = row.baseline {
+      LineMark(
+        x: .value("Date", row.date),
+        y: .value("Baseline", Double(truncating: baseline as NSDecimalNumber)),
+        series: .value("Series", "Baseline")
+      )
       .foregroundStyle(.secondary)
-    }
-  }
-
-  @ViewBuilder
-  private func legendItem(color: Color, label: String, dashed: Bool) -> some View {
-    HStack(spacing: 4) {
-      if dashed {
-        DashedLineSwatch(color: color)
-      } else {
-        Capsule()
-          .fill(color)
-          .frame(width: 14, height: 2)
-      }
-      Text(label)
-    }
-    .accessibilityElement(children: .combine)
-    .accessibilityLabel(label)
-  }
-
-  private struct DashedLineSwatch: View {
-    let color: Color
-    var body: some View {
-      GeometryReader { _ in
-        Path { path in
-          path.move(to: .init(x: 0, y: 1))
-          path.addLine(to: .init(x: 14, y: 1))
-        }
-        .stroke(style: StrokeStyle(lineWidth: 2, dash: [3, 2]))
-        .foregroundStyle(color)
-      }
-      .frame(width: 14, height: 2)
+      .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+      .interpolationMethod(.stepEnd)
     }
   }
 
@@ -231,9 +245,20 @@ extension PositionsChart: AXChartDescriptorRepresentable {
 
     let dateLabels = points.map { $0.date.formatted(.dateTime.month(.abbreviated).day().year()) }
     let valueDoubles = points.map { Double(truncating: $0.value as NSDecimalNumber) }
-    let costDoubles = points.map { Double(truncating: $0.cost as NSDecimalNumber) }
 
-    let allValues = valueDoubles + costDoubles
+    // Pair each point with its baseline (or nil); drop nil-baseline rows
+    // before they reach the AX descriptor so VoiceOver doesn't speak NaN.
+    let baselinePairs: [(label: String, value: Double)] = points.compactMap { point in
+      let baseline: Decimal? =
+        selectedInstrument == nil ? point.contributions : point.cost
+      guard let baseline else { return nil }
+      return (
+        point.date.formatted(.dateTime.month(.abbreviated).day().year()),
+        Double(truncating: baseline as NSDecimalNumber)
+      )
+    }
+
+    let allValues = valueDoubles + baselinePairs.map(\.value)
     let minVal = allValues.min() ?? 0
     let maxVal = allValues.max() ?? max(minVal + 1, 1)
 
@@ -243,11 +268,10 @@ extension PositionsChart: AXChartDescriptorRepresentable {
         AXDataPoint(x: date, y: val)
       }
     )
-    let costSeries = AXDataSeriesDescriptor(
-      name: "Cost basis", isContinuous: true,
-      dataPoints: zip(dateLabels, costDoubles).map { date, val in
-        AXDataPoint(x: date, y: val)
-      }
+    let baselineName = selectedInstrument == nil ? "Invested amount" : "Cost basis"
+    let baselineSeries = AXDataSeriesDescriptor(
+      name: baselineName, isContinuous: true,
+      dataPoints: baselinePairs.map { AXDataPoint(x: $0.label, y: $0.value) }
     )
 
     let summary: String? =
@@ -262,7 +286,7 @@ extension PositionsChart: AXChartDescriptorRepresentable {
       yTitle: "Value (\(input.hostCurrency.id))",
       yMin: minVal,
       yMax: max(minVal + 1, maxVal),
-      series: [valueSeries, costSeries]
+      series: [valueSeries, baselineSeries]
     )
   }
 
@@ -289,7 +313,8 @@ private func previewChartInput(days: Int, base: Decimal, step: Decimal, cost: De
   let points: [HistoricalValueSeries.Point] = (0..<days).map { offset in
     let date = calendar.date(byAdding: .day, value: -(days - 1) + offset, to: now) ?? now
     return HistoricalValueSeries.Point(
-      date: date, value: base + Decimal(offset) * step, cost: cost)
+      date: date, value: base + Decimal(offset) * step, cost: cost,
+      contributions: nil)
   }
   let series = HistoricalValueSeries(
     hostCurrency: aud, total: points, perInstrument: [bhp.id: points])

@@ -1,0 +1,112 @@
+import Foundation
+import Testing
+
+@testable import Moolah
+
+@Suite("AccountPerformanceTileLabels")
+struct AccountPerformanceTileLabelsTests {
+  let aud = Instrument.AUD
+
+  private func performance(
+    currentValue: Decimal? = nil,
+    contributions: Decimal? = nil,
+    profitLoss: Decimal? = nil,
+    firstFlowDate: Date? = nil
+  ) -> AccountPerformance {
+    AccountPerformance(
+      instrument: aud,
+      currentValue: currentValue.map { InstrumentAmount(quantity: $0, instrument: aud) },
+      totalContributions: contributions.map {
+        InstrumentAmount(quantity: $0, instrument: aud)
+      },
+      profitLoss: profitLoss.map { InstrumentAmount(quantity: $0, instrument: aud) },
+      profitLossPercent: nil,
+      annualisedReturn: nil,
+      firstFlowDate: firstFlowDate
+    )
+  }
+
+  @Test("subtitle shows Invested $X when both flowDate and contributions populated")
+  func subtitleShowsInvested() {
+    let perf = performance(
+      currentValue: 12_000, contributions: 10_000,
+      firstFlowDate: Date(timeIntervalSince1970: 1_700_000_000)
+    )
+    let expected = "Invested \(InstrumentAmount(quantity: 10_000, instrument: aud).formatted)"
+    #expect(AccountPerformanceTileLabels.investedSubtitleText(perf) == expected)
+  }
+
+  @Test("subtitle shows Invested em-dash when flowDate set but contributions nil")
+  func subtitleShowsUnavailable() {
+    let perf = performance(
+      currentValue: 12_000, contributions: nil,
+      firstFlowDate: Date(timeIntervalSince1970: 1_700_000_000)
+    )
+    #expect(AccountPerformanceTileLabels.investedSubtitleText(perf) == "Invested —")
+  }
+
+  @Test("subtitle hidden when no flows yet")
+  func subtitleHiddenNoFlows() {
+    let perf = performance(currentValue: 12_000, contributions: nil, firstFlowDate: nil)
+    #expect(AccountPerformanceTileLabels.investedSubtitleText(perf) == nil)
+  }
+
+  @Test("accessibility label combines both fields when both populated")
+  func accessibilityBothPopulated() {
+    let perf = performance(
+      currentValue: 12_000, contributions: 10_000,
+      firstFlowDate: Date(timeIntervalSince1970: 1_700_000_000)
+    )
+    let valueText = InstrumentAmount(quantity: 12_000, instrument: aud).formatted
+    let inv = InstrumentAmount(quantity: 10_000, instrument: aud).formatted
+    #expect(
+      AccountPerformanceTileLabels.currentValueAccessibilityLabel(perf)
+        == "Current Value: \(valueText), Invested: \(inv)"
+    )
+  }
+
+  @Test("accessibility label when currentValue nil but contributions populated")
+  func accessibilityCurrentValueNil() {
+    let perf = performance(
+      contributions: 10_000,
+      firstFlowDate: Date(timeIntervalSince1970: 1_700_000_000)
+    )
+    let inv = InstrumentAmount(quantity: 10_000, instrument: aud).formatted
+    #expect(
+      AccountPerformanceTileLabels.currentValueAccessibilityLabel(perf)
+        == "Current Value: Unavailable, Invested: \(inv)"
+    )
+  }
+
+  @Test("accessibility label when currentValue populated but contributions nil")
+  func accessibilityContributionsNil() {
+    let perf = performance(
+      currentValue: 12_000,
+      firstFlowDate: Date(timeIntervalSince1970: 1_700_000_000)
+    )
+    let valueText = InstrumentAmount(quantity: 12_000, instrument: aud).formatted
+    #expect(
+      AccountPerformanceTileLabels.currentValueAccessibilityLabel(perf)
+        == "Current Value: \(valueText), Invested: Unavailable"
+    )
+  }
+
+  @Test("accessibility label drops Invested clause when no flows yet")
+  func accessibilityNoFlowsClause() {
+    let perf = performance(currentValue: 12_000, firstFlowDate: nil)
+    let valueText = InstrumentAmount(quantity: 12_000, instrument: aud).formatted
+    #expect(
+      AccountPerformanceTileLabels.currentValueAccessibilityLabel(perf)
+        == "Current Value: \(valueText)"
+    )
+  }
+
+  @Test("accessibility label when both nil and no flows")
+  func accessibilityAllUnavailable() {
+    let perf = performance()
+    #expect(
+      AccountPerformanceTileLabels.currentValueAccessibilityLabel(perf)
+        == "Current Value: Unavailable"
+    )
+  }
+}
