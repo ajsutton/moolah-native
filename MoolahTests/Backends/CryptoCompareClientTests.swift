@@ -151,6 +151,52 @@ struct CryptoCompareClientTests {
     #expect(nativeSymbols.contains("ETH"))
   }
 
+  // CryptoCompare occasionally ships entries with missing fields (e.g. an MLS
+  // row missing `CoinName`). A single malformed row must not kill the entire
+  // list — token resolution would otherwise fail for every crypto.
+  // See https://github.com/ajsutton/moolah-native/issues/746.
+  @Test
+  func parseCoinListResponse_skipsMalformedEntries() throws {
+    let json = Data(
+      """
+      {
+          "Data": {
+              "MLS": {
+                  "Symbol": "MLS",
+                  "SmartContractAddress": "N/A"
+              },
+              "UNI": {
+                  "Symbol": "UNI",
+                  "CoinName": "Uniswap",
+                  "SmartContractAddress": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984"
+              },
+              "BROKEN": null
+          }
+      }
+      """.utf8)
+
+    let index = try CryptoCompareClient.parseCoinListResponse(json)
+    #expect(index["0x1f9840a85d5af5bf1d1762f925bdaddc4201f984"] == "UNI")
+  }
+
+  @Test
+  func parseNativeSymbols_skipsMalformedEntries() throws {
+    let json = Data(
+      """
+      {
+          "Data": {
+              "MLS": { "Symbol": "MLS", "SmartContractAddress": "N/A" },
+              "BTC": { "Symbol": "BTC", "CoinName": "Bitcoin", "SmartContractAddress": "N/A" },
+              "BROKEN": null
+          }
+      }
+      """.utf8)
+
+    let nativeSymbols = try CryptoCompareClient.parseNativeSymbols(json)
+    #expect(nativeSymbols.contains("BTC"))
+    #expect(nativeSymbols.contains("MLS"))
+  }
+
   // MARK: - Mapping without CryptoCompare symbol
 
   @Test
