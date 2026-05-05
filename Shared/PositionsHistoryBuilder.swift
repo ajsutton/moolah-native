@@ -66,12 +66,25 @@ struct PositionsHistoryBuilder: Sendable {
       sortedTxns: sortedTxns, accountId: accountId,
       hostCurrency: hostCurrency, calendar: calendar)
     var state = BuildState()
-    await preFoldHistory(before: start, context: context, state: &state)
+    do {
+      try await preFoldHistory(before: start, context: context, state: &state)
+    } catch is CancellationError {
+      return state.series(hostCurrency: hostCurrency)
+    } catch {
+      // apply() only re-throws CancellationError; any other error is
+      // already swallowed and latched.
+    }
 
     var day = start
     while day <= endDay {
       if Task.isCancelled { return state.series(hostCurrency: hostCurrency) }
-      await applyTransactions(on: day, context: context, state: &state)
+      do {
+        try await applyTransactions(on: day, context: context, state: &state)
+      } catch is CancellationError {
+        return state.series(hostCurrency: hostCurrency)
+      } catch {
+        // see preFoldHistory comment
+      }
       let cancelled = await emitDailyPoints(
         for: day, hostCurrency: hostCurrency, state: &state)
       if cancelled { return state.series(hostCurrency: hostCurrency) }
@@ -88,14 +101,15 @@ struct PositionsHistoryBuilder: Sendable {
     before start: Date,
     context: BuildContext,
     state: inout BuildState
-  ) async {
+  ) async throws {
     while state.txnIndex < context.sortedTxns.count
       && context.calendar.startOfDay(for: context.sortedTxns[state.txnIndex].date) < start
     {
-      await apply(
-        transaction: context.sortedTxns[state.txnIndex], accountId: context.accountId,
+      try await apply(
+        transaction: context.sortedTxns[state.txnIndex],
+        accountId: context.accountId,
         hostCurrency: context.hostCurrency,
-        quantities: &state.quantities, engine: &state.engine
+        state: &state
       )
       state.txnIndex += 1
     }
@@ -106,14 +120,15 @@ struct PositionsHistoryBuilder: Sendable {
     on day: Date,
     context: BuildContext,
     state: inout BuildState
-  ) async {
+  ) async throws {
     while state.txnIndex < context.sortedTxns.count
       && context.calendar.startOfDay(for: context.sortedTxns[state.txnIndex].date) == day
     {
-      await apply(
-        transaction: context.sortedTxns[state.txnIndex], accountId: context.accountId,
+      try await apply(
+        transaction: context.sortedTxns[state.txnIndex],
+        accountId: context.accountId,
         hostCurrency: context.hostCurrency,
-        quantities: &state.quantities, engine: &state.engine
+        state: &state
       )
       state.txnIndex += 1
     }
@@ -164,7 +179,8 @@ struct PositionsHistoryBuilder: Sendable {
     if anyHeld && aggOK {
       state.total.append(
         HistoricalValueSeries.Point(
-          date: day, value: aggValue, cost: aggCost, contributions: nil))
+          date: day, value: aggValue, cost: aggCost,
+          contributions: state.contributions))
     }
     return false
   }
@@ -186,12 +202,23 @@ struct PositionsHistoryBuilder: Sendable {
   }
 
   /// Mutable running state threaded through `build`'s per-day loop.
+  /// Exclusively owned by the single `@concurrent` build task; no
+  /// other task ever holds a reference. The `inout`-across-`await`
+  /// usage in `apply` is therefore safe — there is no concurrent
+  /// reader or writer.
   private struct BuildState {
     var quantities: [Instrument: Decimal] = [:]
     var engine = CostBasisEngine()
     var txnIndex = 0
     var perInstrument: [String: [HistoricalValueSeries.Point]] = [:]
     var total: [HistoricalValueSeries.Point] = []
+    /// Running cumulative contributions in `hostCurrency`. `nil`
+    /// once any contribution conversion has thrown — sticky latch
+    /// never reset within a build (Rule 11 cumulative-sum
+    /// semantics). The single-`Decimal?` design (rather than
+    /// `Decimal` + `Bool`) lets the type system enforce the
+    /// invariant "unavailable contributions have no running value".
+    var contributions: Decimal? = 0
 
     func series(hostCurrency: Instrument) -> HistoricalValueSeries {
       HistoricalValueSeries(
@@ -199,7 +226,8 @@ struct PositionsHistoryBuilder: Sendable {
     }
   }
 
-  /// Fold one transaction into the running quantity dict and FIFO engine.
+  /// Fold one transaction into the running quantity dict, FIFO engine,
+  /// and contributions accumulator.
   ///
   /// Quantities update directly from the account's signed leg quantities
   /// (so an ETH→BTC swap subtracts ETH and adds BTC). Cost basis updates
@@ -212,16 +240,22 @@ struct PositionsHistoryBuilder: Sendable {
   /// `quantities` because the chart tracks non-cash *position* holdings.
   /// Their contribution is captured by the cost basis via
   /// `TradeEventClassifier`.
+  ///
+  /// Contributions are folded via `AccountCashFlows.flowAmounts(for:)`
+  /// — the same boundary-crossing predicate the
+  /// `AccountPerformanceCalculator` tile path uses, so the chart and
+  /// the tile cannot disagree on a per-flow basis. Throws
+  /// `CancellationError` (and only `CancellationError`); general
+  /// conversion errors set the sticky latch and stay swallowed.
   private func apply(
     transaction: Transaction,
     accountId: UUID,
     hostCurrency: Instrument,
-    quantities: inout [Instrument: Decimal],
-    engine: inout CostBasisEngine
-  ) async {
+    state: inout BuildState
+  ) async throws {
     let accountLegs = transaction.legs.filter { $0.accountId == accountId }
     for leg in accountLegs where leg.instrument != hostCurrency {
-      quantities[leg.instrument, default: 0] += leg.quantity
+      state.quantities[leg.instrument, default: 0] += leg.quantity
     }
 
     do {
@@ -230,15 +264,17 @@ struct PositionsHistoryBuilder: Sendable {
         hostCurrency: hostCurrency, conversionService: conversionService
       )
       for buy in classification.buys {
-        engine.processBuy(
+        state.engine.processBuy(
           instrument: buy.instrument, quantity: buy.quantity,
           costPerUnit: buy.costPerUnit, date: transaction.date)
       }
       for sell in classification.sells {
-        _ = engine.processSell(
+        _ = state.engine.processSell(
           instrument: sell.instrument, quantity: sell.quantity,
           proceedsPerUnit: sell.proceedsPerUnit, date: transaction.date)
       }
+    } catch is CancellationError {
+      throw CancellationError()
     } catch {
       // A failed conversion when classifying a swap means we cannot derive
       // a cost basis for this leg. Quantities still update so the value
@@ -247,6 +283,28 @@ struct PositionsHistoryBuilder: Sendable {
       // the gap, which is the honest representation of "we don't know").
       logger.warning(
         "TradeEventClassifier failed for txn \(transaction.id, privacy: .public) on \(transaction.date, privacy: .public): \(error.localizedDescription, privacy: .public)"
+      )
+    }
+
+    // Contributions fold (sticky latch — see BuildState docs).
+    guard let running = state.contributions else { return }
+    do {
+      let amounts = try await AccountCashFlows.flowAmounts(
+        for: transaction, accountId: accountId,
+        hostCurrency: hostCurrency, service: conversionService
+      )
+      if !amounts.isEmpty {
+        state.contributions = running + amounts.reduce(0, +)
+      }
+    } catch is CancellationError {
+      // Rule 11: don't let a stale partial total reach an emitted
+      // point. Latch first, then propagate.
+      state.contributions = nil
+      throw CancellationError()
+    } catch {
+      state.contributions = nil
+      logger.warning(
+        "AccountCashFlows.flowAmounts failed for txn \(transaction.id, privacy: .public) on \(transaction.date, privacy: .public): \(error.localizedDescription, privacy: .public)"
       )
     }
   }
