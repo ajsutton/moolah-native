@@ -40,9 +40,9 @@ enum AccountCashFlows {
     hostCurrency: Instrument,
     service: any InstrumentConversionService
   ) async throws -> [Decimal] {
-    let crossesBoundary = !Set(transaction.legs.compactMap(\.accountId))
-      .subtracting([accountId])
-      .isEmpty
+    let crossesBoundary = transaction.legs.contains { leg in
+      leg.accountId != nil && leg.accountId != accountId
+    }
 
     var amounts: [Decimal] = []
     for leg in transaction.legs where leg.accountId == accountId {

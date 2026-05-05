@@ -10,14 +10,17 @@ struct AccountCashFlowsTests {
   let accountId = UUID()
   let otherAccountId = UUID()
 
-  /// Day 0 = 2026-03-15.
+  /// Day 0 = 2026-03-15. `days` may exceed month length; calendar
+  /// arithmetic rolls over correctly.
   private func date(daysAfterEpoch days: Int, hour: Int = 0) throws -> Date {
-    var components = DateComponents()
-    components.year = 2026
-    components.month = 3
-    components.day = 15 + days
-    components.hour = hour
-    return try #require(Calendar(identifier: .gregorian).date(from: components))
+    let calendar = Calendar(identifier: .gregorian)
+    var epoch = DateComponents()
+    epoch.year = 2026
+    epoch.month = 3
+    epoch.day = 15
+    epoch.hour = hour
+    let base = try #require(calendar.date(from: epoch))
+    return try #require(calendar.date(byAdding: .day, value: days, to: base))
   }
 
   // MARK: - Opening balance leg counts as a flow
