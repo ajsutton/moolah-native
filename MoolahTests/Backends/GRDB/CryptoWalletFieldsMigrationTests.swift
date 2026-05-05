@@ -223,14 +223,22 @@ struct CryptoWalletFieldsMigrationTests {
     // Valid JSON in last_error_json — accepted.
     try queue.write { database in
       try database.execute(
-        sql: "INSERT INTO wallet_sync_state VALUES (?, ?, ?, ?)",
+        sql: """
+          INSERT INTO wallet_sync_state
+            (account_id, last_synced_block_number, last_synced_at, last_error_json)
+          VALUES (?, ?, ?, ?)
+          """,
         arguments: [Data(repeating: 13, count: 16), 100, "2024-01-01T00:00:00Z", "{\"foo\":1}"])
     }
     // Invalid JSON — rejected.
     try queue.write { database in
       do {
         try database.execute(
-          sql: "INSERT INTO wallet_sync_state VALUES (?, ?, ?, ?)",
+          sql: """
+            INSERT INTO wallet_sync_state
+              (account_id, last_synced_block_number, last_synced_at, last_error_json)
+            VALUES (?, ?, ?, ?)
+            """,
           arguments: [Data(repeating: 14, count: 16), 100, "2024-01-01T00:00:00Z", "not json"])
         Issue.record("Expected json_valid CHECK to reject")
       } catch let error as DatabaseError {

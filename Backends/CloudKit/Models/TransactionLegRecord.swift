@@ -55,10 +55,10 @@ final class TransactionLegRecord {
       accountId: accountId,
       instrument: instrument,
       quantity: InstrumentAmount(storageValue: quantity, instrument: instrument).quantity,
+      externalId: externalId,
       type: try TransactionType.decoded(rawValue: type),
       categoryId: categoryId,
-      earmarkId: earmarkId,
-      externalId: externalId
+      earmarkId: earmarkId
     )
   }
 

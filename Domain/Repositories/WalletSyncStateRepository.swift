@@ -8,20 +8,24 @@ import Foundation
 /// synced cross-device, so a restored-from-backup device falls back to a
 /// genesis-style refetch rather than trusting a stale shared checkpoint.
 protocol WalletSyncStateRepository: Sendable {
-  /// Why: at app launch the store needs to know which accounts are stale
-  /// (`lastSyncedAt > 24h ago`). Returning every checkpoint avoids N round
-  /// trips through `load(accountId:)`.
+  /// Returns every wallet checkpoint on this device. `CryptoSyncStore`
+  /// calls this at launch to identify stale accounts (`lastSyncedAt`
+  /// older than 24 h) without paying N round-trips through
+  /// `load(accountId:)`.
   func loadAll() async throws -> [WalletSyncState]
-  /// Why: per-sync-cycle, the engine reads `lastSyncedBlockNumber` so the
-  /// reorg window starts at `block - 32`. `nil` means "never synced — fetch
-  /// from genesis or chain config's seed block".
+  /// Returns one account's checkpoint, or `nil` when the account has
+  /// never been synced on this device — callers should treat that as a
+  /// genesis-fetch (start from the chain config's seed block).
+  /// `WalletSyncEngine` calls this per sync cycle to derive the reorg
+  /// window's `fromBlock = lastSyncedBlockNumber - 32`.
   func load(accountId: UUID) async throws -> WalletSyncState?
-  /// Why: the engine writes the checkpoint after every cycle (success or
-  /// failure — failures populate `lastError` so the UI can surface staleness
-  /// without losing the prior block-number checkpoint). Upsert on `id`.
+  /// Persists a checkpoint, upserting on `id`. Called once per sync
+  /// cycle on success and after a failed cycle (to record `lastError`
+  /// without dropping the prior block-number checkpoint).
   func save(_ state: WalletSyncState) async throws
-  /// Why: account deletion races with sync; if the engine writes a row right
-  /// after the account is deleted, the next account-deletion path needs to
-  /// idempotently clean up — succeeds with no effect when no row exists.
+  /// Removes a checkpoint by id. Idempotent — succeeds with no effect
+  /// when no checkpoint exists. Called from the account-deletion path,
+  /// which races with in-flight sync writes; the no-op-on-missing
+  /// behaviour absorbs that race without an error.
   func delete(accountId: UUID) async throws
 }

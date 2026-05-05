@@ -13,10 +13,10 @@ struct TransactionLeg: Codable, Sendable, Hashable {
     accountId: UUID?,
     instrument: Instrument,
     quantity: Decimal,
+    externalId: String? = nil,
     type: TransactionType,
     categoryId: UUID? = nil,
-    earmarkId: UUID? = nil,
-    externalId: String? = nil
+    earmarkId: UUID? = nil
   ) {
     self.accountId = accountId
     self.instrument = instrument

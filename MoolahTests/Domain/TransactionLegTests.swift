@@ -176,8 +176,8 @@ struct TransactionLegTests {
       accountId: UUID(),
       instrument: .AUD,
       quantity: 100,
-      type: .income,
-      externalId: "0xabcdef"
+      externalId: "0xabcdef",
+      type: .income
     )
     let data = try JSONEncoder().encode(leg)
     let decoded = try JSONDecoder().decode(TransactionLeg.self, from: data)

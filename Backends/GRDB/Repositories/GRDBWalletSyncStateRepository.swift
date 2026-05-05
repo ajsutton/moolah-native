@@ -8,12 +8,14 @@ import GRDB
 /// `wallet_sync_state` table. NOT synced via CKSyncEngine (intentional —
 /// see `WalletSyncStateRepository` doc-comment).
 ///
-/// **`@unchecked Sendable` justification.** All stored properties are
-/// `let`. `database` (`any DatabaseWriter`) is itself `Sendable` (GRDB
-/// protocol guarantee — the queue's serial executor mediates concurrent
-/// access). Pattern matches `GRDBAccountRepository` (and the other GRDB
-/// repos that hold only a `let database`).
-final class GRDBWalletSyncStateRepository: WalletSyncStateRepository, @unchecked Sendable {
+/// Implemented as a `Sendable` struct (not a `final class` with
+/// `@unchecked Sendable`) per CONCURRENCY_GUIDE §2: the only stored
+/// property is `let database: any DatabaseWriter`, which GRDB
+/// guarantees is `Sendable`. There is no mutable state, no
+/// `@MainActor`-isolated closures, no observation fan-out — none of
+/// the genuine reasons that force `@unchecked` in
+/// `GRDBInstrumentRegistryRepository`.
+struct GRDBWalletSyncStateRepository: WalletSyncStateRepository, Sendable {
   private let database: any DatabaseWriter
 
   init(database: any DatabaseWriter) {

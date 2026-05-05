@@ -241,13 +241,39 @@ final class GRDBInstrumentRegistryRepository:
 
   func applyRemoteChangesSync(saved rows: [InstrumentRow], deleted ids: [String]) throws {
     try database.write { database in
-      for row in rows {
+      for var row in rows {
+        // Per spec §"`CryptoRegistration.pricingStatus`" — apply the field-
+        // level merge rule for pricingStatus before upserting. CKSyncEngine's
+        // default "server wins" would let the daily auto-resolver on one
+        // device clobber a `.spam` classification a user made on another.
+        if let existing =
+          try InstrumentRow
+          .filter(InstrumentRow.Columns.id == row.id)
+          .fetchOne(database)
+        {
+          row.pricingStatus = Self.mergedPricingStatus(
+            local: existing.pricingStatus, incoming: row.pricingStatus)
+        }
         try row.upsert(database)
       }
       for id in ids {
         _ = try InstrumentRow.deleteOne(database, key: id)
       }
     }
+  }
+
+  /// Cross-device merge rule for `pricingStatus` per design spec:
+  /// - local `.spam` always wins (user intent never auto-reverts)
+  /// - incoming `.spam` always accepted (mirror user intent across devices)
+  /// - `.priced` beats `.unpriced` either direction (resolution success sticks)
+  /// - same → no change
+  static func mergedPricingStatus(local: String, incoming: String) -> String {
+    let spam = TokenPricingStatus.spam.rawValue
+    let priced = TokenPricingStatus.priced.rawValue
+    if local == spam { return spam }
+    if incoming == spam { return spam }
+    if local == priced || incoming == priced { return priced }
+    return incoming
   }
 
   /// Writes (or clears) the cached system-fields blob on a single row.

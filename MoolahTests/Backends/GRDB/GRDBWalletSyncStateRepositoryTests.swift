@@ -94,8 +94,8 @@ struct GRDBWalletSyncStateRepositoryTests {
   }
 
   // Plan-pinning test per DATABASE_CODE_GUIDE §6: loadAll runs on the
-  // app-launch hot path. A regression that adds a non-PK scan would
-  // surface here.
+  // app-launch hot path. A regression that adds a join or sub-select
+  // would surface here.
   @Test
   func loadAllUsesExpectedQueryPlan() async throws {
     let queue = try makeQueue()
@@ -108,11 +108,33 @@ struct GRDBWalletSyncStateRepositoryTests {
       ).map { row in
         (row["detail"] as? String) ?? String(describing: row)
       }
-      // wallet_sync_state has no secondary indexes; SQLite uses a SCAN
-      // over the table. The point of the pin is to fail loud if a
-      // future migration adds a join or sub-select that wasn't intended.
-      #expect(plan.contains { $0.contains("wallet_sync_state") })
+      // wallet_sync_state has no secondary indexes and is WITHOUT ROWID;
+      // SQLite walks the PRIMARY KEY B-tree. A SCAN of the table is the
+      // only sane plan; the assertion pins the table-scan token (not
+      // just the table name) so a future migration that introduces a
+      // join or sub-select fails loudly.
+      #expect(plan.contains { $0.contains("SCAN wallet_sync_state") })
       #expect(!plan.contains { $0.contains("USING TEMP B-TREE") })
+    }
+  }
+
+  // Plan-pinning for load(accountId:) — runs per-sync-cycle for every
+  // wallet account, so a regression to a full scan would multiply by N.
+  @Test
+  func loadByAccountIdUsesPrimaryKey() async throws {
+    let queue = try makeQueue()
+    try await queue.read { database in
+      let plan = try Row.fetchAll(
+        database,
+        sql: """
+          EXPLAIN QUERY PLAN SELECT * FROM wallet_sync_state WHERE account_id = ?
+          """,
+        arguments: [UUID()]
+      ).map { row in
+        (row["detail"] as? String) ?? String(describing: row)
+      }
+      // Lookup must use the PRIMARY KEY (sqlite_autoindex_*).
+      #expect(plan.contains { $0.contains("SEARCH wallet_sync_state USING PRIMARY KEY") })
     }
   }
 }

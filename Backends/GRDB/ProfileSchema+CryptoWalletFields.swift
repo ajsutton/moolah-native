@@ -72,6 +72,12 @@ extension ProfileSchema {
   /// Same on-chain hash on different accounts is fine (cross-account
   /// transfer); same hash on the same account is rejected at the DB
   /// layer (defence in depth — application dedup is the primary check).
+  ///
+  /// **Not a prefix duplicate of `leg_by_account`.** `leg_by_account` is
+  /// `(account_id) WHERE account_id IS NOT NULL`; the new index here is
+  /// `(account_id, external_id) WHERE external_id IS NOT NULL`. The
+  /// partial-index predicates are different, so neither subsumes the
+  /// other and the SQLite planner treats them as distinct. Both stay.
   private static func addExternalIdToTransactionLeg(_ database: Database) throws {
     try database.execute(
       sql: """
@@ -98,6 +104,12 @@ extension ProfileSchema {
   /// `wallet_sync_state` — per-device sync checkpoints. `account_id` is
   /// BLOB matching `account.id` (UUID-as-BLOB). `last_error_json`
   /// validated by `json_valid()` per DATABASE_SCHEMA_GUIDE §3.
+  ///
+  /// `WITHOUT ROWID`: per DATABASE_SCHEMA_GUIDE §3 decision table —
+  /// single `BLOB NOT NULL PRIMARY KEY` lookup table with no
+  /// auto-increment and no rowid joins. The single 16-byte UUID PK +
+  /// small fixed columns + occasional small JSON payload all comfortably
+  /// fit in B-tree leaf pages.
   private static func createWalletSyncStateTable(_ database: Database) throws {
     try database.execute(
       sql: """
@@ -107,7 +119,7 @@ extension ProfileSchema {
             last_synced_at            TEXT    NOT NULL,
             last_error_json           TEXT
                 CHECK (last_error_json IS NULL OR json_valid(last_error_json))
-        ) STRICT;
+        ) STRICT, WITHOUT ROWID;
         """)
   }
 }

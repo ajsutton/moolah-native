@@ -84,7 +84,14 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decode(UUID.self, forKey: .id)
     name = try container.decode(String.self, forKey: .name)
-    type = try container.decode(AccountType.self, forKey: .type)
+    // Defensive decode for `type`: an older build receiving an Account
+    // record from a newer device (e.g. with `type = "crypto"` before this
+    // build added the case, or any future type after) falls back to
+    // `.asset` rather than throwing — so archive/preview paths don't
+    // break on encountering a future type. The wire-layer mapper applies
+    // the same fallback for sync correctness.
+    let typeRaw = try container.decode(String.self, forKey: .type)
+    type = AccountType(rawValue: typeRaw) ?? .asset
     instrument = try container.decodeIfPresent(Instrument.self, forKey: .instrument) ?? .AUD
     // positions are not persisted via Codable — they are computed by the
     // repository layer from transaction legs and injected at fetch time.

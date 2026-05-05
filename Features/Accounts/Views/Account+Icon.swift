@@ -8,6 +8,10 @@ extension Account {
     case .asset: return "house.fill"
     case .creditCard: return "creditcard"
     case .investment: return "chart.line.uptrend.xyaxis"
+    // Sharing the .investment chart icon for now: the design treats
+    // crypto wallets as investment-like for sidebar grouping. A
+    // dedicated crypto SF Symbol can land in a UI follow-up once the
+    // wallet feature surfaces a distinct visual identity.
     case .crypto: return "chart.line.uptrend.xyaxis"
     }
   }
