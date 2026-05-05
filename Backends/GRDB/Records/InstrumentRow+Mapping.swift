@@ -51,6 +51,7 @@ extension InstrumentRow {
     self.cryptocompareSymbol = nil
     self.binanceSymbol = nil
     self.encodedSystemFields = nil
+    self.pricingStatus = TokenPricingStatus.priced.rawValue
   }
 
   /// Domain projection. Provider-mapping fields are exposed via

@@ -86,7 +86,12 @@ final class GRDBInstrumentRegistryRepository:
         .fetchAll(database)
       return try rows.compactMap { row -> CryptoRegistration? in
         guard let mapping = row.cryptoMapping() else { return nil }
-        return CryptoRegistration(instrument: try row.toDomain(), mapping: mapping)
+        let status =
+          TokenPricingStatus(rawValue: row.pricingStatus) ?? .priced
+        return CryptoRegistration(
+          instrument: try row.toDomain(),
+          mapping: mapping,
+          pricingStatus: status)
       }
     }
   }
