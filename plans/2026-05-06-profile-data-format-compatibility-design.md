@@ -461,7 +461,7 @@ Append a new section to `.claude/agents/database-schema-review.md`, alongside th
 >
 > - **Critical:** New `RECORD TYPE` added to `CloudKit/schema.ckdb`.
 > - **Critical:** New CKSyncEngine zone introduced (a `CKRecordZone.ID(zoneName:)` literal not previously present).
-> - **Critical:** New non-defaulted field added to a synced record type — any `+`-line in `CloudKit/schema.ckdb` that adds a field declaration to an existing `RECORD TYPE`. Exclude fields whose *immediately-preceding diff line* is `+ +// DEPRECATED` (those are covered by the deprecation bullet below; they are renames, not net-new fields).
+> - **Critical:** New non-defaulted field added to a synced record type — any `+`-line in `CloudKit/schema.ckdb` that adds a field declaration to an existing `RECORD TYPE`. Exclude fields whose *immediately-preceding diff line* is `+    // DEPRECATED` (those are covered by the deprecation bullet below; they are renames, not net-new fields).
 > - **Critical:** New case added to an enum marked `// SyncBoundary —` in its source file. Detection requires two passes: list files containing the marker, then look for new enum cases in those files. False-positive guard: a `+ case` line inside a `switch { }` body (not inside an `enum { ... }` body) must NOT be flagged. The agent must inspect the surrounding context lines to confirm the `+ case` line is inside an enum declaration before raising the finding.
 > - **Critical:** A field on a synced record type marked `// DEPRECATED` in `schema.ckdb` (the wire-struct generator drops it; older builds still write it; rubric bullet 6).
 >
