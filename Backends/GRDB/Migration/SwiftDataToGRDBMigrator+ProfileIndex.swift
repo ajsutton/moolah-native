@@ -89,6 +89,7 @@ extension SwiftDataToGRDBMigrator {
       currencyCode: source.currencyCode,
       financialYearStartMonth: source.financialYearStartMonth,
       createdAt: source.createdAt,
-      encodedSystemFields: source.encodedSystemFields)
+      encodedSystemFields: source.encodedSystemFields,
+      dataFormatVersion: source.dataFormatVersion)
   }
 }

@@ -11,19 +11,22 @@ final class ProfileRecord {
   var financialYearStartMonth: Int = 7
   var createdAt = Date()
   var encodedSystemFields: Data?
+  var dataFormatVersion: Int = 0
 
   init(
     id: UUID = UUID(),
     label: String,
     currencyCode: String,
     financialYearStartMonth: Int = 7,
-    createdAt: Date = .now
+    createdAt: Date = .now,
+    dataFormatVersion: Int = 0
   ) {
     self.id = id
     self.label = label
     self.currencyCode = currencyCode
     self.financialYearStartMonth = financialYearStartMonth
     self.createdAt = createdAt
+    self.dataFormatVersion = dataFormatVersion
   }
 
   func toProfile() -> Profile {
@@ -32,7 +35,8 @@ final class ProfileRecord {
       label: label,
       currencyCode: currencyCode,
       financialYearStartMonth: financialYearStartMonth,
-      createdAt: createdAt
+      createdAt: createdAt,
+      dataFormatVersion: dataFormatVersion
     )
   }
 
@@ -42,7 +46,8 @@ final class ProfileRecord {
       label: profile.label,
       currencyCode: profile.currencyCode,
       financialYearStartMonth: profile.financialYearStartMonth,
-      createdAt: profile.createdAt
+      createdAt: profile.createdAt,
+      dataFormatVersion: profile.dataFormatVersion
     )
   }
 }
