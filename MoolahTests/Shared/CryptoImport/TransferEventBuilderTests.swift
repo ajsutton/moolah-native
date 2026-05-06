@@ -8,10 +8,10 @@ import Testing
 /// transfer-leg construction, hash grouping, sign convention, and the
 /// `unknown`-category skip path.
 ///
-/// Gas-leg construction is deferred — see issue #762. The "ETH send"
-/// and "ERC-20 send" tests therefore assert on a single transfer leg
-/// rather than the design's eventual transfer + gas pair; the gas-leg
-/// path will gain its own tests once the receipt-fetch wiring lands.
+/// Gas-leg construction is covered separately in
+/// `TransferEventBuilderGasLegTests`; tests here use a
+/// `ZeroReceiptAlchemyStub` whose receipts produce a non-positive total
+/// (and so emit no gas leg) to keep transfer-leg assertions focused.
 @Suite("TransferEventBuilder")
 struct TransferEventBuilderTests {
   // Reusable addresses.
@@ -35,8 +35,10 @@ struct TransferEventBuilderTests {
     let built = try await TransferEventBuilder().build(
       transfers: [transfer],
       account: account,
-      chain: .ethereum,
-      discovery: subject.service,
+      services: BuilderServices(
+        chain: .ethereum,
+        discovery: subject.service,
+        alchemy: ZeroReceiptAlchemyStub()),
       importOrigin: origin)
 
     #expect(built.count == 1)
@@ -77,8 +79,10 @@ struct TransferEventBuilderTests {
     let built = try await TransferEventBuilder().build(
       transfers: [transfer],
       account: account,
-      chain: .ethereum,
-      discovery: subject.service,
+      services: BuilderServices(
+        chain: .ethereum,
+        discovery: subject.service,
+        alchemy: ZeroReceiptAlchemyStub()),
       importOrigin: origin)
 
     let candidate = try #require(built.first)
@@ -108,8 +112,10 @@ struct TransferEventBuilderTests {
     let built = try await TransferEventBuilder().build(
       transfers: [transfer],
       account: account,
-      chain: .ethereum,
-      discovery: subject.service,
+      services: BuilderServices(
+        chain: .ethereum,
+        discovery: subject.service,
+        alchemy: ZeroReceiptAlchemyStub()),
       importOrigin: origin)
 
     let candidate = try #require(built.first)
@@ -154,8 +160,10 @@ struct TransferEventBuilderTests {
     let built = try await TransferEventBuilder().build(
       transfers: [first, second],
       account: account,
-      chain: .ethereum,
-      discovery: subject.service,
+      services: BuilderServices(
+        chain: .ethereum,
+        discovery: subject.service,
+        alchemy: ZeroReceiptAlchemyStub()),
       importOrigin: origin)
 
     #expect(built.count == 1)
@@ -199,69 +207,16 @@ struct TransferEventBuilderTests {
     let built = try await TransferEventBuilder().build(
       transfers: [nftTransfer],
       account: account,
-      chain: .ethereum,
-      discovery: subject.service,
+      services: BuilderServices(
+        chain: .ethereum,
+        discovery: subject.service,
+        alchemy: ZeroReceiptAlchemyStub()),
       importOrigin: origin)
     #expect(built.isEmpty)
   }
 
-  // MARK: - Stable instrument across builds
-
-  @Test("100 concurrent builders → single resolver call (coalescer holds)")
-  func concurrentBuildersCoalesceInstrumentResolution() async throws {
-    let subject = makeDiscoverySubject()
-    subject.resolver.script(
-      .init(chainId: 1, contractAddress: Self.usdcAddress.lowercased()),
-      .success(coingecko: "usd-coin", cryptocompare: nil, binance: nil))
-
-    let account = makeCryptoAccount(walletAddress: Self.wallet, chain: .ethereum)
-    let origin = makeWalletImportOrigin(for: account.id)
-    let template = makeAlchemyTransfer(
-      hash: "0xshared",
-      from: Self.wallet,
-      to: Self.counterparty,
-      category: .erc20,
-      asset: "USDC",
-      contractAddress: Self.usdcAddress,
-      decimalsHex: "0x6",
-      rawValueHex: "0x5f5e100")
-
-    // Each task uses a unique hash so the builder doesn't collapse into
-    // a single transaction; the discovery key is the same so the
-    // coalescer is the load-bearing claim.
-    try await withThrowingTaskGroup(of: Set<String>.self) { group in
-      for index in 0..<100 {
-        let hash = "0x\(String(format: "%064x", index))"
-        let transfer = makeAlchemyTransfer(
-          hash: hash,
-          from: template.from,
-          to: template.to,
-          category: .erc20,
-          asset: "USDC",
-          contractAddress: Self.usdcAddress,
-          decimalsHex: "0x6",
-          rawValueHex: "0x5f5e100")
-        group.addTask {
-          let built = try await TransferEventBuilder().build(
-            transfers: [transfer],
-            account: account,
-            chain: .ethereum,
-            discovery: subject.service,
-            importOrigin: origin)
-          return Set(built.flatMap { $0.transaction.legs.map(\.instrument.id) })
-        }
-      }
-      var observed: Set<String> = []
-      for try await ids in group {
-        observed.formUnion(ids)
-      }
-      #expect(observed.count == 1)
-    }
-
-    let resolverKey = CountingRegistrationResolver.Key(
-      chainId: 1, contractAddress: Self.usdcAddress.lowercased())
-    #expect(subject.resolver.callCount(for: resolverKey) == 1)
-  }
+  // Token-discovery coalescing across 100 concurrent builders is
+  // exercised in `TransferEventBuilderConcurrencyTests`.
 
   // MARK: - Other edge cases
 
@@ -282,8 +237,10 @@ struct TransferEventBuilderTests {
     let built = try await TransferEventBuilder().build(
       transfers: [transfer],
       account: account,
-      chain: .ethereum,
-      discovery: subject.service,
+      services: BuilderServices(
+        chain: .ethereum,
+        discovery: subject.service,
+        alchemy: ZeroReceiptAlchemyStub()),
       importOrigin: origin)
     let leg = try #require(built.first?.transaction.legs.first)
     #expect(leg.instrument == ChainConfig.ethereum.nativeInstrument)
@@ -301,8 +258,10 @@ struct TransferEventBuilderTests {
       _ = try await TransferEventBuilder().build(
         transfers: [],
         account: account,
-        chain: .ethereum,
-        discovery: subject.service,
+        services: BuilderServices(
+          chain: .ethereum,
+          discovery: subject.service,
+          alchemy: ZeroReceiptAlchemyStub()),
         importOrigin: origin)
     }
   }

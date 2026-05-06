@@ -94,6 +94,10 @@ final class CountingAlchemyClientStub: AlchemyClient, @unchecked Sendable {
   }
 
   struct UnexpectedTransfersCall: Error {}
+  /// Thrown when an unrelated test path triggers a receipt fetch. The
+  /// discovery service never calls `getTransactionReceipt`, so any
+  /// invocation here is a wiring bug worth surfacing.
+  struct UnexpectedReceiptCall: Error {}
 
   private let lock = NSLock()
   private var responses: [Key: Response] = [:]
@@ -139,6 +143,13 @@ final class CountingAlchemyClientStub: AlchemyClient, @unchecked Sendable {
       return AlchemyTokenMetadata(
         symbol: nil, name: nil, decimals: nil, logo: nil, isSpam: fallbackSpam)
     }
+  }
+
+  func getTransactionReceipt(
+    chain: ChainConfig,
+    hash: String
+  ) async throws -> AlchemyTransactionReceipt {
+    throw UnexpectedReceiptCall()
   }
 }
 
