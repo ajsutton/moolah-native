@@ -81,6 +81,21 @@ public enum UITestSeed: String, CaseIterable, Sendable {
   /// to trade mode, setting paid/received legs and a fee — without any
   /// remote data dependency.
   case tradeReady = "trade-ready"
+
+  /// One profile in the index whose `dataFormatVersion` is one above
+  /// the build's `DataFormatVersion.current` — drives
+  /// `IncompatibleProfileView` once the picker row is tapped.
+  ///
+  /// The seed deliberately hydrates a SECOND, compatible profile too:
+  /// otherwise `WelcomeView`'s single-profile auto-activate path fires
+  /// and the test never sees the picker. With two rows the picker is
+  /// always shown, the test taps the incompatible one, and lands on
+  /// the incompatible view.
+  ///
+  /// Fixtures (deterministic UUIDs / labels / dates):
+  /// - incompatible: `profileId`, label="Future", dataFormatVersion=current+1
+  /// - compatible: `compatibleProfileId`, label="Today", dataFormatVersion=0
+  case incompatibleProfile
 }
 
 /// Fixtures for the first-run Welcome seeds. Defined here so both the
@@ -91,6 +106,27 @@ public enum UITestWelcomeFixtures {
   public static let sideBusinessProfileId = uuidLiteral("B0000000-0000-0000-0000-000000000002")
   public static let sideBusinessProfileLabel = "Side business"
   public static let profileCurrencyCode = "AUD"
+}
+
+/// Fixtures for the `.incompatibleProfile` seed.
+///
+/// Two profiles are hydrated so the picker is forced to render:
+/// `WelcomeView`'s single-profile auto-activate would otherwise skip
+/// the picker and the test could never reach
+/// `IncompatibleProfileView` via the user-facing flow.
+public enum UITestIncompatibleProfileFixtures {
+  /// Incompatible profile (dataFormatVersion = DataFormatVersion.current + 1).
+  /// Tapping its picker row routes to IncompatibleProfileView.
+  public static let profileId = uuidLiteral("D8E1F0AA-0001-4000-8000-0000B0764000")
+  public static let profileLabel = "Future"
+
+  /// Compatible profile, exists only to force the multi-profile picker
+  /// to render (single-profile seeds auto-activate via WelcomeView).
+  public static let compatibleProfileId = uuidLiteral("D8E1F0AA-0001-4000-8000-0000B0764001")
+  public static let compatibleProfileLabel = "Today"
+
+  public static let profileCurrencyCode = "AUD"
+  public static let createdAt = Date(timeIntervalSince1970: 1_700_000_000)
 }
 
 /// A past single-leg expense used to seed payee suggestions.

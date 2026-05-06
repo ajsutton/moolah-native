@@ -29,11 +29,11 @@ struct IncompatibleProfileView: View {
       HStack(spacing: 12) {
         Button("Switch Profile", action: onSwitchProfile)
           .buttonStyle(.bordered)
-          .accessibilityIdentifier("incompatibleProfile.switchProfile")
+          .accessibilityIdentifier(UITestIdentifiers.IncompatibleProfile.switchProfile)
 
         Button("Check for Updates", action: onCheckForUpdates)
           .buttonStyle(.borderedProminent)
-          .accessibilityIdentifier("incompatibleProfile.checkForUpdates")
+          .accessibilityIdentifier(UITestIdentifiers.IncompatibleProfile.checkForUpdates)
       }
       .controlSize(.large)
 
@@ -47,7 +47,7 @@ struct IncompatibleProfileView: View {
     }
     .padding(40)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .accessibilityIdentifier("incompatibleProfile.root")
+    .accessibilityIdentifier(UITestIdentifiers.IncompatibleProfile.root)
   }
 
   private var bodyText: String {

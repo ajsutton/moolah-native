@@ -70,7 +70,41 @@ enum UITestSeedHydrator {
       return try hydrateTradeBaseline(into: manager)
     case .tradeReady:
       return try hydrateTradeReady(into: manager)
+    case .incompatibleProfile:
+      try hydrateIncompatibleProfile(into: manager)
+      // Return nil → no auto-activate, picker renders, test taps the row.
+      return nil
     }
+  }
+
+  /// Seeds two profiles in the index — one compatible (v0) and one
+  /// incompatible (`DataFormatVersion.current + 1`). The second profile
+  /// forces the multi-profile picker to render (single-profile seeds
+  /// would auto-activate via `WelcomeView`), giving the test a path to
+  /// reach `IncompatibleProfileView` by tapping the incompatible row.
+  private static func hydrateIncompatibleProfile(
+    into manager: ProfileContainerManager
+  ) throws {
+    let fixtures = UITestIncompatibleProfileFixtures.self
+    // Compatible profile first so the picker has at least one valid row.
+    try upsertProfile(
+      Profile(
+        id: fixtures.compatibleProfileId,
+        label: fixtures.compatibleProfileLabel,
+        currencyCode: fixtures.profileCurrencyCode,
+        financialYearStartMonth: 7,
+        createdAt: fixtures.createdAt,
+        dataFormatVersion: 0),
+      into: manager)
+    try upsertProfile(
+      Profile(
+        id: fixtures.profileId,
+        label: fixtures.profileLabel,
+        currencyCode: fixtures.profileCurrencyCode,
+        financialYearStartMonth: 7,
+        createdAt: fixtures.createdAt,
+        dataFormatVersion: DataFormatVersion.current + 1),
+      into: manager)
   }
 
   private static func hydrateWelcomeProfile(

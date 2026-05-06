@@ -86,6 +86,13 @@ final class MoolahApp {
   /// after `cryptoSettings.tapAddToken()` has presented the sheet.
   var addToken: AddTokenScreen { AddTokenScreen(app: self) }
 
+  /// `IncompatibleProfileView`. Reachable from the multi-profile picker
+  /// when the selected profile's `dataFormatVersion` exceeds the
+  /// build's `DataFormatVersion.current`.
+  var incompatibleProfile: IncompatibleProfileScreen {
+    IncompatibleProfileScreen(app: self)
+  }
+
   // MARK: - Single element resolver
 
   /// All identifier lookups in the driver layer go through this method, by

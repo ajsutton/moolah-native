@@ -200,18 +200,40 @@ extension MoolahUITestCase {
     case .welcomeDownloading:
       lines.append("# SyncProgress driven to .receiving with recordsReceivedThisSession=1234")
       lines.append("# WelcomeView resolves to .heroDownloading(count: 1234)")
+    case .sidebarFooterUpToDate, .sidebarFooterReceiving, .sidebarFooterSending:
+      appendSidebarFooterFixtures(seed: app.seed, into: &lines)
+    case .cryptoCatalogPreloaded:
+      appendCryptoCatalogPreloadedFixtures(into: &lines)
+    case .tradeReady:
+      appendTradeReadyFixtures(into: &lines)
+    case .incompatibleProfile:
+      appendIncompatibleProfileFixtures(into: &lines)
+    }
+    return lines.joined(separator: "\n") + "\n"
+  }
+
+  private func appendSidebarFooterFixtures(seed: UITestSeed, into lines: inout [String]) {
+    switch seed {
     case .sidebarFooterUpToDate:
       lines.append("# SyncProgress driven to .upToDate, lastSettledAt ~5 minutes ago")
     case .sidebarFooterReceiving:
       lines.append("# SyncProgress driven to .receiving with recordsReceivedThisSession=1234")
     case .sidebarFooterSending:
       lines.append("# SyncProgress driven to .upToDate with pendingUploads=12 then settled")
-    case .cryptoCatalogPreloaded:
-      appendCryptoCatalogPreloadedFixtures(into: &lines)
-    case .tradeReady:
-      appendTradeReadyFixtures(into: &lines)
+    default:
+      break  // unreachable — caller filters to sidebar-footer seeds
     }
-    return lines.joined(separator: "\n") + "\n"
+  }
+
+  private func appendIncompatibleProfileFixtures(into lines: inout [String]) {
+    let fixtures = UITestIncompatibleProfileFixtures.self
+    lines.append("# fixtures — multi-profile picker with one incompatible row")
+    lines.append("compatible.id      = \(fixtures.compatibleProfileId)")
+    lines.append("compatible.label   = \(fixtures.compatibleProfileLabel)")
+    lines.append("compatible.dataFormatVersion = 0")
+    lines.append("incompatible.id    = \(fixtures.profileId)")
+    lines.append("incompatible.label = \(fixtures.profileLabel)")
+    lines.append("incompatible.dataFormatVersion = DataFormatVersion.current + 1")
   }
 
   private func appendCryptoCatalogPreloadedFixtures(into lines: inout [String]) {
