@@ -75,22 +75,17 @@ extension GRDBAnalysisRepository {
   /// pinned by
   /// `AnalysisAggregationPlanPinningTests.fetchCategoryBalancesUsesCategoryIndex`.
   ///
-  /// **Investment-account exclusion.** The LEFT JOIN to `account`
-  /// produces a NULL `a.type` for legs whose `account_id` is null
-  /// (treated as `isInvestmentAccount = false`); the
-  /// `(a.type IS NULL OR a.type <> 'investment')` predicate accepts
-  /// those rows and rejects investment-account legs. Account-less
-  /// categorised legs therefore surface in the breakdown — the
-  /// pre-SQL Swift accumulator never filtered on `accountId`, and
-  /// `GRDBCategoryBalancesConversionTests` pins the same behaviour.
-  ///
-  /// **Plan note.** The LEFT JOIN reads `leg.account_id` to drive the
-  /// join, but `account_id` is not in `leg_analysis_by_type_category`'s
-  /// column list. SQLite therefore has to fetch the leg's base row and
-  /// the plan resolves to plain `USING INDEX` (not COVERING). Adding
-  /// `account_id` to the composite would bloat every leg row to fix a
-  /// read-time concern; the plan-pinning test asserts no `SCAN` on the
-  /// leg or transaction tables but does NOT require COVERING here.
+  /// **Account-type neutral.** Every categorised income/expense leg
+  /// counts toward the breakdown regardless of which account holds it
+  /// — a dividend or brokerage fee booked against an investment
+  /// account belongs in the income/expense report just like a salary
+  /// or a grocery shop on a bank account. This matches
+  /// `fetchIncomeAndExpense`'s contract (see
+  /// `+IncomeAndExpenseAggregation.swift`). Trade and transfer legs
+  /// are excluded by `leg.type = ?` (the bound `transactionType` is
+  /// always `.income` or `.expense`); the `leg.category_id IS NOT NULL`
+  /// guard is a defensive filter for income/expense legs that happen
+  /// to lack a category.
   ///
   /// **`categoryIds` parameterisation.** SQLite cannot bind a
   /// variable-length array to a single named parameter; an
@@ -164,13 +159,12 @@ extension GRDBAnalysisRepository {
       ? SQL("")
       : SQL("AND leg.category_id IN \(args.categoryIds)")
 
-    // `leg.instrument_id` and `leg.category_id` must be table-qualified
-    // throughout because `account` exposes its own `instrument_id` column,
-    // and a bare `instrument_id` in the GROUP BY would be ambiguous to
-    // SQLite once the LEFT JOIN to `account` brings `a.instrument_id`
-    // into scope. The column-aliases (`AS day`, `AS category_id`,
-    // `AS instrument_id`) are fine in the SELECT list but cannot be
-    // referenced bare in GROUP BY for the same ambiguity reason.
+    // Columns are table-qualified (`leg.`, `t.`) defensively — none of
+    // the current tables in scope share a column name, but if a future
+    // filter fragment joins a table that exposes one of these columns,
+    // a bare reference in GROUP BY would silently become ambiguous.
+    // Keeping the qualifications now means a future join won't tip the
+    // SELECT/GROUP BY shape over.
     let literal: SQL = """
       SELECT DATE(t.date)        AS day,
              leg.category_id     AS category_id,
@@ -178,12 +172,10 @@ extension GRDBAnalysisRepository {
              SUM(leg.quantity)   AS qty
       FROM transaction_leg leg
       JOIN "transaction"    t ON leg.transaction_id = t.id
-      LEFT JOIN account     a ON leg.account_id = a.id
       WHERE t.recur_period IS NULL
         AND t.date >= \(lower) AND t.date <= \(upper)
         AND leg.type = \(typeRaw)
         AND leg.category_id IS NOT NULL
-        AND (a.type IS NULL OR a.type <> 'investment')
         \(accountClause)
         \(earmarkClause)
         \(payeeClause)
