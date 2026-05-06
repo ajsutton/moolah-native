@@ -340,17 +340,33 @@ extension ContentView {
           investmentStore: investmentStore,
           transactionStore: transactionStore)
       } else {
-        TransactionListView(
-          title: account.name,
-          filter: TransactionFilter(accountId: account.id),
-          accounts: accountStore.accounts,
-          categories: categoryStore.categories,
-          earmarks: earmarkStore.earmarks,
-          transactionStore: transactionStore,
-          positions: accountStore.positions(for: account.id),
-          positionsHostCurrency: account.instrument,
-          positionsTitle: account.name,
-          conversionService: session.backend.conversionService)
+        VStack(spacing: 0) {
+          // Crypto wallets get a header bar above the transaction list
+          // showing the truncated address, chain, last-synced state,
+          // and a Sync now action. Skipped for non-crypto accounts and
+          // for crypto accounts whose `chainId` couldn't be resolved
+          // (defensive — surfaces a config gap rather than crashing).
+          if account.type == .crypto, let chainId = account.chainId,
+            let chain = ChainConfig.config(for: chainId),
+            let cryptoSyncStore = session.cryptoSyncStore
+          {
+            WalletAccountHeaderView(
+              account: account,
+              chain: chain,
+              cryptoSyncStore: cryptoSyncStore)
+          }
+          TransactionListView(
+            title: account.name,
+            filter: TransactionFilter(accountId: account.id),
+            accounts: accountStore.accounts,
+            categories: categoryStore.categories,
+            earmarks: earmarkStore.earmarks,
+            transactionStore: transactionStore,
+            positions: accountStore.positions(for: account.id),
+            positionsHostCurrency: account.instrument,
+            positionsTitle: account.name,
+            conversionService: session.backend.conversionService)
+        }
       }
     }
   }

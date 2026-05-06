@@ -119,6 +119,14 @@ public enum UITestIdentifiers {
     public static func tradeFeeRemove(_ index: Int) -> String {
       "transactionDetail.trade.feeRemove.\(index)"
     }
+
+    /// "View on block explorer" link for the leg at the given index.
+    /// Only rendered when the leg has a non-nil `externalId` (the on-chain
+    /// transaction hash recorded by the wallet importer) and a chain id
+    /// resolvable through `ChainConfig`.
+    public static func blockExplorerLink(legIndex: Int) -> String {
+      "detail.leg.\(legIndex).blockExplorer"
+    }
   }
 
   public enum SyncFooter {
@@ -214,6 +222,35 @@ public enum UITestIdentifiers {
     /// `CreateAccountView`. The user pastes a `0x…` address here;
     /// validation lives in `Account.validatedWalletAddress`.
     public static let walletAddressField = "createAccount.crypto.walletAddress"
+  }
+
+  public enum WalletAccountHeader {
+    /// Container of the `WalletAccountHeaderView` bar shown above the
+    /// transaction list on a `.crypto` account. Sentinel for "the
+    /// wallet header is on screen".
+    public static let container = "wallet.header.container"
+
+    /// Truncated `0xabcd…wxyz` wallet-address label. The full address
+    /// is exposed via the row's `accessibilityLabel`.
+    public static let truncatedAddress = "wallet.header.address"
+
+    /// Copy-address button. Tapping copies the full lowercased
+    /// wallet address to the system pasteboard.
+    public static let copyAddressButton = "wallet.header.copyAddress"
+
+    /// Chain display-name label (e.g. "Ethereum").
+    public static let chainName = "wallet.header.chain"
+
+    /// Last-synced relative-time label (e.g. "Synced 2h ago" or
+    /// "Never synced").
+    public static let lastSynced = "wallet.header.lastSynced"
+
+    /// "Sync now" button. Disabled while the account is in-flight.
+    public static let syncButton = "wallet.header.syncNow"
+
+    /// Overflow menu button (ellipsis). Holds the
+    /// "View on block explorer" action.
+    public static let overflowMenu = "wallet.header.overflowMenu"
   }
 
   public enum CryptoSettings {

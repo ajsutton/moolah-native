@@ -154,6 +154,10 @@ extension TransactionDetailView {
   private var formContent: some View {
     Form {
       modeAwareSections
+      // Per-leg block-explorer links for any leg with an externalId
+      // (on-chain tx hash). Skipped when no leg qualifies — the section
+      // hides itself rather than rendering an empty header.
+      TransactionDetailBlockExplorerSection(transaction: transaction)
       if isScheduled {
         TransactionDetailPaySection(
           transaction: transaction,
