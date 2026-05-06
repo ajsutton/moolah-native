@@ -1,6 +1,7 @@
 // Shared/CryptoImport/AlchemyClient.swift
 import Foundation
 import OSLog
+import os
 
 /// Public protocol so test stubs can replace the live client. Stage 6's
 /// `WalletSyncEngine` injects an `AlchemyClient` rather than a concrete
@@ -88,6 +89,21 @@ struct LiveAlchemyClient: AlchemyClient {
     walletAddress: String,
     fromBlock: UInt64
   ) async throws -> [AlchemyTransfer] {
+    let signpostID = OSSignpostID(log: Signposts.cryptoSync)
+    os_signpost(
+      .begin,
+      log: Signposts.cryptoSync,
+      name: "alchemy.getAssetTransfers",
+      signpostID: signpostID,
+      "chain %{public}d",
+      chain.chainId)
+    defer {
+      os_signpost(
+        .end,
+        log: Signposts.cryptoSync,
+        name: "alchemy.getAssetTransfers",
+        signpostID: signpostID)
+    }
     var transfers: [AlchemyTransfer] = []
     transfers.append(
       contentsOf: try await fetchTransfers(

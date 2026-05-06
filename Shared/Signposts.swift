@@ -13,6 +13,14 @@ enum Signposts {
   /// transactions, investmentValues) emits its own region so hangs surface
   /// in Instruments rather than as a user-reported silent failure.
   static let export = OSLog(subsystem: "com.moolah.app", category: "Export")
+  /// Per-stage boundaries for the crypto wallet sync pipeline. Named
+  /// regions cover `alchemy.getAssetTransfers`,
+  /// `transferEventBuilder.build`, `crossAccountTransferMerger.merge`,
+  /// `walletApplyEngine.{dedup,persist,rules}`,
+  /// `crossDeviceLegDeduper.dedup`, and the top-level
+  /// `cryptoSyncStore.syncAccounts`. Inspect via the os_signpost
+  /// instrument filtered to `com.moolah.app` / `CryptoSync`.
+  static let cryptoSync = OSLog(subsystem: "com.moolah.app", category: "CryptoSync")
 }
 
 extension Duration {

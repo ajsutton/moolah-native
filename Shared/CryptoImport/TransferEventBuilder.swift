@@ -1,6 +1,7 @@
 // Shared/CryptoImport/TransferEventBuilder.swift
 import Foundation
 import OSLog
+import os
 
 /// Pure builder that converts raw Alchemy transfers (already grouped by
 /// `hash`) into `BuiltTransaction`s. Stateless and `Sendable` — every
@@ -58,6 +59,21 @@ struct TransferEventBuilder: Sendable {
     discovery: CryptoTokenDiscoveryService,
     importOrigin: ImportOrigin
   ) async throws -> [BuiltTransaction] {
+    let signpostID = OSSignpostID(log: Signposts.cryptoSync)
+    os_signpost(
+      .begin,
+      log: Signposts.cryptoSync,
+      name: "transferEventBuilder.build",
+      signpostID: signpostID,
+      "%{public}d transfers",
+      transfers.count)
+    defer {
+      os_signpost(
+        .end,
+        log: Signposts.cryptoSync,
+        name: "transferEventBuilder.build",
+        signpostID: signpostID)
+    }
     guard let rawAddress = account.walletAddress else {
       throw WalletSyncError.providerMalformedResponse(stage: "buildEvents-walletAddress")
     }

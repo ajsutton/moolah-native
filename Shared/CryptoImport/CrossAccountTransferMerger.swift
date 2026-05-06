@@ -1,5 +1,6 @@
 // Shared/CryptoImport/CrossAccountTransferMerger.swift
 import Foundation
+import os
 
 /// Cross-account merge stage. Pairs `BuiltTransaction`s sharing a non-nil
 /// `externalId` on opposing-sign value-bearing legs of the same instrument
@@ -30,6 +31,21 @@ struct CrossAccountTransferMerger: Sendable {
     candidates: [BuiltTransaction],
     existingLegLookup: @Sendable (_ externalId: String) async throws -> [TransactionLeg]
   ) async throws -> [BuiltTransaction] {
+    let signpostID = OSSignpostID(log: Signposts.cryptoSync)
+    os_signpost(
+      .begin,
+      log: Signposts.cryptoSync,
+      name: "crossAccountTransferMerger.merge",
+      signpostID: signpostID,
+      "%{public}d candidates",
+      candidates.count)
+    defer {
+      os_signpost(
+        .end,
+        log: Signposts.cryptoSync,
+        name: "crossAccountTransferMerger.merge",
+        signpostID: signpostID)
+    }
     // Walk candidates in order; for each, decide whether it can be paired
     // with a later candidate (in-batch pair) or with an existing
     // persisted leg (prior-cycle pair). The single-pass walk keeps the

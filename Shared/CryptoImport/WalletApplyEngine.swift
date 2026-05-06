@@ -1,5 +1,6 @@
 // Shared/CryptoImport/WalletApplyEngine.swift
 import Foundation
+import os
 
 /// Sequential `@MainActor` apply pass for the crypto-wallet importer.
 /// Runs after Stage 6's parallel build phase. Owns: cross-account
@@ -65,15 +66,101 @@ final class WalletApplyEngine {
   /// sync-state. Stage 9's orchestrator owns per-account error
   /// containment; this method either succeeds or throws as a unit.
   func apply(perAccount: [AccountInput]) async throws -> [Transaction] {
+    let signpostID = OSSignpostID(log: Signposts.cryptoSync)
+    os_signpost(
+      .begin,
+      log: Signposts.cryptoSync,
+      name: "walletApplyEngine.apply",
+      signpostID: signpostID,
+      "%{public}d accounts",
+      perAccount.count)
+    defer {
+      os_signpost(
+        .end,
+        log: Signposts.cryptoSync,
+        name: "walletApplyEngine.apply",
+        signpostID: signpostID)
+    }
     let allCandidates = perAccount.flatMap { $0.candidates }
     let lookup = makeExistingLegLookup()
     let merged = try await merger.merge(
       candidates: allCandidates, existingLegLookup: lookup)
-    let deduped = try await dedup(merged)
-    let persisted = try await persist(deduped)
-    let ruled = try await importRules.apply(transactions: persisted)
+    let deduped = try await runDedupSignposted(merged, signpostID: signpostID)
+    let persisted = try await runPersistSignposted(deduped, signpostID: signpostID)
+    let ruled = try await runRulesSignposted(persisted, signpostID: signpostID)
     try await updateSyncState(for: perAccount)
     return ruled
+  }
+
+  // MARK: - Signposted wrappers
+
+  /// Wraps `dedup` in a `walletApplyEngine.dedup` signpost region. Kept
+  /// out-of-line so the public `apply` body stays readable.
+  private func runDedupSignposted(
+    _ candidates: [BuiltTransaction],
+    signpostID: OSSignpostID
+  ) async throws -> [BuiltTransaction] {
+    os_signpost(
+      .begin,
+      log: Signposts.cryptoSync,
+      name: "walletApplyEngine.dedup",
+      signpostID: signpostID,
+      "%{public}d candidates",
+      candidates.count)
+    defer {
+      os_signpost(
+        .end,
+        log: Signposts.cryptoSync,
+        name: "walletApplyEngine.dedup",
+        signpostID: signpostID)
+    }
+    return try await dedup(candidates)
+  }
+
+  /// Wraps `persist` in a `walletApplyEngine.persist` signpost region.
+  private func runPersistSignposted(
+    _ candidates: [BuiltTransaction],
+    signpostID: OSSignpostID
+  ) async throws -> [Transaction] {
+    os_signpost(
+      .begin,
+      log: Signposts.cryptoSync,
+      name: "walletApplyEngine.persist",
+      signpostID: signpostID,
+      "%{public}d candidates",
+      candidates.count)
+    defer {
+      os_signpost(
+        .end,
+        log: Signposts.cryptoSync,
+        name: "walletApplyEngine.persist",
+        signpostID: signpostID)
+    }
+    return try await persist(candidates)
+  }
+
+  /// Wraps `importRules.apply` in a `walletApplyEngine.rules` signpost
+  /// region. Records the input count so per-cycle rule cost is visible
+  /// in Instruments without instrumenting every rule implementation.
+  private func runRulesSignposted(
+    _ persisted: [Transaction],
+    signpostID: OSSignpostID
+  ) async throws -> [Transaction] {
+    os_signpost(
+      .begin,
+      log: Signposts.cryptoSync,
+      name: "walletApplyEngine.rules",
+      signpostID: signpostID,
+      "%{public}d transactions",
+      persisted.count)
+    defer {
+      os_signpost(
+        .end,
+        log: Signposts.cryptoSync,
+        name: "walletApplyEngine.rules",
+        signpostID: signpostID)
+    }
+    return try await importRules.apply(transactions: persisted)
   }
 
   // MARK: - Pipeline steps
