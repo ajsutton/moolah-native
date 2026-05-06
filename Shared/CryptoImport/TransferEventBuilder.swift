@@ -383,37 +383,3 @@ private struct SignAndCounterparty {
   let signedQuantity: Decimal
   let counterpartyAddress: String?
 }
-
-/// Shared per-sync-cycle services the builder needs — the chain,
-/// the token-discovery actor, and the Alchemy client used for both
-/// transfer fetches and per-hash receipt lookups. Bundled into a
-/// single value so the public `build(...)` entry point stays inside
-/// SwiftLint's parameter-count budget without sacrificing call-site
-/// clarity.
-struct BuilderServices: Sendable {
-  let chain: ChainConfig
-  let discovery: CryptoTokenDiscoveryService
-  let alchemy: any AlchemyClient
-}
-
-/// Direction a single Alchemy transfer takes relative to the synced
-/// wallet. Computed from the lowercased `from` / `to` fields.
-private enum TransferDirection {
-  case outbound
-  case inbound
-  case selfSend
-  case unrelated
-
-  init(fromAddress: String, toAddress: String?, walletAddress: String) {
-    let from = fromAddress.lowercased()
-    let to = toAddress?.lowercased()
-    let fromIsUs = from == walletAddress
-    let toIsUs = to == walletAddress
-    switch (fromIsUs, toIsUs) {
-    case (true, true): self = .selfSend
-    case (true, false): self = .outbound
-    case (false, true): self = .inbound
-    case (false, false): self = .unrelated
-    }
-  }
-}
