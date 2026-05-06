@@ -48,6 +48,21 @@ final class FailingAccountRepository: AccountRepository, @unchecked Sendable {
     return accounts
   }
 
+  /// No-op observation for the failing fake. Returns an empty stream
+  /// because no `AccountStore` test that uses this fake exercises the
+  /// reactive surface — `AccountStore` migrates to `observeAll()` in
+  /// Stage 5 of the reactive-sync plan, at which point this fake will
+  /// either get a real (in-memory) observation or be replaced with
+  /// `TestBackend`-driven coverage.
+  func observeAll() -> AsyncStream<[Account]> {
+    AsyncStream { _ in }
+  }
+
+  /// No-op error stream. See `observeAll()` above.
+  func observeErrors() -> AsyncStream<any Error> {
+    AsyncStream { _ in }
+  }
+
   func create(_ account: Account, openingBalance: InstrumentAmount?) async throws -> Account {
     if shouldFail { throw BackendError.networkUnavailable }
     accounts.append(account)
