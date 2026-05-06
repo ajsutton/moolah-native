@@ -28,6 +28,15 @@ final class SessionManager {
   /// after an app update the entry doesn't linger.
   private(set) var incompatibleProfiles: [UUID: IncompatibleProfileInfo] = [:]
 
+  /// Per-profile rebuild-task registry. `rebuildSession(for:)` cancels
+  /// any prior in-flight rebuild for the same profile id before
+  /// starting a new one — so rapid `onChange`-driven rebuilds (e.g.
+  /// label edits arriving via sync) don't race writes back into the
+  /// view's `sessionResult`. Storing the handle here (not in view
+  /// `@State`) survives view-identity changes — see
+  /// `guides/CONCURRENCY_GUIDE.md` §8 ("Store tasks in the store").
+  private var rebuildTasks: [UUID: Task<SessionOpenResult, Never>] = [:]
+
   let containerManager: ProfileContainerManager
   let syncCoordinator: SyncCoordinator?
   let profileIndexRepository: any ProfileIndexRepository
@@ -45,7 +54,7 @@ final class SessionManager {
   }
 
   /// Opens a session for the given profile, gated on data-format
-  /// compatibility. See [spec §4.1].
+  /// compatibility (issue #764).
   ///
   /// Re-reads the profile-index row before the gate check so a stale
   /// in-memory `Profile` snapshot can't bypass an incompatibility that
@@ -182,15 +191,6 @@ final class SessionManager {
   var openProfiles: [ProfileSession] {
     Array(sessions.values)
   }
-
-  /// Per-profile rebuild-task registry. `rebuildSession(for:)` cancels
-  /// any prior in-flight rebuild for the same profile id before
-  /// starting a new one — so rapid `onChange`-driven rebuilds (e.g.
-  /// label edits arriving via sync) don't race writes back into the
-  /// view's `sessionResult`. Storing the handle here (not in view
-  /// `@State`) survives view-identity changes — see
-  /// `guides/CONCURRENCY_GUIDE.md` §8 ("Store tasks in the store").
-  private var rebuildTasks: [UUID: Task<SessionOpenResult, Never>] = [:]
 
   /// Replaces the session for a profile with a fresh instance — runs
   /// `cleanupSync` on the prior session and re-opens through

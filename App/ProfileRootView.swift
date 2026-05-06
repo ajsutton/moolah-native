@@ -24,8 +24,7 @@
         // selected a profile, so the else branch naturally handles
         // the picker case.
         if let info = incompatibleInfo {
-          // `IncompatibleProfileView` lands in Task 14 — placeholder
-          // keeps the build green and the gate surface end-to-end.
+          // TODO(#764): replace with IncompatibleProfileView once it exists.
           Text(
             "Profile incompatible (v\(info.profileVersion); build v\(info.buildVersion))"
           )

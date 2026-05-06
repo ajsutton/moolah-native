@@ -6,6 +6,8 @@ import Testing
 @Suite("AutomationService Category Operations")
 @MainActor
 struct AutomationServiceCategoryTests {
+  private struct OpenSessionFailed: Error {}
+
   private func makeServiceWithSession() async throws -> (AutomationService, ProfileSession) {
     let containerManager = try ProfileContainerManager.forTesting()
     let sessionManager = SessionManager(
@@ -18,7 +20,7 @@ struct AutomationServiceCategoryTests {
     )
     guard case .ready(let session) = await sessionManager.session(for: profile) else {
       Issue.record("expected .ready")
-      throw CancellationError()
+      throw OpenSessionFailed()
     }
     await session.categoryStore.load()
     let service = AutomationService(sessionManager: sessionManager)

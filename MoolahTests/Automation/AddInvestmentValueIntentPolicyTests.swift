@@ -12,6 +12,8 @@ import Testing
 @Suite("AddInvestmentValueIntent (policy)")
 @MainActor
 struct AddInvestmentValueIntentPolicyTests {
+  private struct OpenSessionFailed: Error {}
+
   private func makeServiceWithSession() async throws -> (AutomationService, ProfileSession) {
     let containerManager = try ProfileContainerManager.forTesting()
     let sessionManager = SessionManager(
@@ -24,7 +26,7 @@ struct AddInvestmentValueIntentPolicyTests {
     )
     guard case .ready(let session) = await sessionManager.session(for: profile) else {
       Issue.record("expected .ready")
-      throw CancellationError()
+      throw OpenSessionFailed()
     }
     await session.accountStore.load()
     let service = AutomationService(sessionManager: sessionManager)

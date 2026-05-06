@@ -6,6 +6,8 @@ import Testing
 @Suite("SessionManager")
 @MainActor
 struct SessionManagerTests {
+  private struct OpenSessionFailed: Error {}
+
   private func makeManager() throws -> SessionManager {
     let containerManager = try ProfileContainerManager.forTesting()
     return SessionManager(
@@ -23,7 +25,7 @@ struct SessionManagerTests {
     let result = await manager.session(for: profile)
     guard case .ready(let session) = result else {
       Issue.record("expected .ready, got \(result)")
-      throw CancellationError()
+      throw OpenSessionFailed()
     }
     return session
   }

@@ -17,17 +17,11 @@ struct SessionManagerCompatibilityTests {
     )
   }
 
-  private func storeProfile(
-    _ profile: Profile, in repository: any ProfileIndexRepository
-  ) async throws {
-    try await repository.upsert(profile)
-  }
-
   @Test("returns .ready when profile dataFormatVersion equals build's")
   func readyAtCurrent() async throws {
     let (manager, repo) = try makeFixture()
     let profile = Profile(label: "Test", dataFormatVersion: DataFormatVersion.current)
-    try await storeProfile(profile, in: repo)
+    try await repo.upsert(profile)
 
     if case .incompatible = await manager.session(for: profile) {
       Issue.record("expected .ready")
@@ -39,7 +33,7 @@ struct SessionManagerCompatibilityTests {
     let (manager, repo) = try makeFixture()
     let profile = Profile(
       label: "Test", dataFormatVersion: max(DataFormatVersion.current - 1, 0))
-    try await storeProfile(profile, in: repo)
+    try await repo.upsert(profile)
 
     if case .incompatible = await manager.session(for: profile) {
       Issue.record("expected .ready")
@@ -50,7 +44,7 @@ struct SessionManagerCompatibilityTests {
   func readyAtZero() async throws {
     let (manager, repo) = try makeFixture()
     let profile = Profile(label: "Test", dataFormatVersion: 0)
-    try await storeProfile(profile, in: repo)
+    try await repo.upsert(profile)
 
     if case .incompatible = await manager.session(for: profile) {
       Issue.record("expected .ready")
@@ -62,7 +56,7 @@ struct SessionManagerCompatibilityTests {
     let (manager, repo) = try makeFixture()
     let profile = Profile(
       label: "Test", dataFormatVersion: DataFormatVersion.current + 1)
-    try await storeProfile(profile, in: repo)
+    try await repo.upsert(profile)
 
     let result = await manager.session(for: profile)
     guard case .incompatible(let info) = result else {
@@ -79,7 +73,7 @@ struct SessionManagerCompatibilityTests {
     let (manager, repo) = try makeFixture()
     let profile = Profile(
       label: "Test", dataFormatVersion: DataFormatVersion.current + 1)
-    try await storeProfile(profile, in: repo)
+    try await repo.upsert(profile)
 
     _ = await manager.session(for: profile)
 
@@ -93,7 +87,7 @@ struct SessionManagerCompatibilityTests {
     let stale = Profile(id: id, label: "Stale", dataFormatVersion: 0)
     let stored = Profile(
       id: id, label: "Stale", dataFormatVersion: DataFormatVersion.current + 1)
-    try await storeProfile(stored, in: repo)
+    try await repo.upsert(stored)
 
     let result = await manager.session(for: stale)
     if case .ready = result {

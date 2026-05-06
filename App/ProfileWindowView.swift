@@ -39,9 +39,7 @@
     var body: some View {
       Group {
         if resolvedProfile != nil {
-          // `IncompatibleProfileView` lands in Task 14; until then a
-          // placeholder `Text` lets the build stay green and the gate
-          // surface end-to-end.
+          // TODO(#764): replace with IncompatibleProfileView once it exists.
           switch sessionResult {
           case .ready(let session):
             SessionRootView(session: session)

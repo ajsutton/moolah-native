@@ -18,7 +18,7 @@ struct IncompatibleProfileInfo: Equatable, Sendable {
 /// zone registered). `.incompatible` is returned when
 /// `profile.dataFormatVersion > DataFormatVersion.current`; no
 /// `ProfileSession` is constructed and the per-profile zone is not
-/// registered with `SyncCoordinator`. See [spec §4.1].
+/// registered with `SyncCoordinator` (issue #764).
 enum SessionOpenResult {
   case ready(ProfileSession)
   case incompatible(IncompatibleProfileInfo)

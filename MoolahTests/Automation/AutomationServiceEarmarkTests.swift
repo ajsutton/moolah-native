@@ -6,6 +6,8 @@ import Testing
 @Suite("AutomationService Earmark Operations")
 @MainActor
 struct AutomationServiceEarmarkTests {
+  private struct OpenSessionFailed: Error {}
+
   private func makeServiceWithSession() async throws -> (AutomationService, ProfileSession) {
     let containerManager = try ProfileContainerManager.forTesting()
     let sessionManager = SessionManager(
@@ -18,7 +20,7 @@ struct AutomationServiceEarmarkTests {
     )
     guard case .ready(let session) = await sessionManager.session(for: profile) else {
       Issue.record("expected .ready")
-      throw CancellationError()
+      throw OpenSessionFailed()
     }
     await session.earmarkStore.load()
     let service = AutomationService(sessionManager: sessionManager)
