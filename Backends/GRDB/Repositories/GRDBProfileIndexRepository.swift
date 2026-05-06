@@ -10,11 +10,14 @@ import os
 /// `ProfileStore`) and the sync-side dispatch surface (consumed by
 /// `ProfileIndexSyncHandler`).
 ///
-/// **Scope.** This repository is intentionally not declared on a
-/// `Domain/Repositories/` protocol. The profile-index DB is an
-/// app-level concern, not a per-profile data concern, so the protocol
-/// boundary that Domain repositories use to keep features
-/// backend-agnostic does not apply here.
+/// **Scope.** Most of this repository's surface (sync entry points,
+/// system-fields helpers, hook wiring) is intentionally not on a
+/// Domain protocol — the profile-index DB is an app-level concern, so
+/// the per-feature protocol boundary that other repositories use does
+/// not apply. The narrow subset that `SessionManager` needs
+/// (`profile(forID:)`, `upsert`, `fetchAll`) is exposed via
+/// `ProfileIndexRepository` in `Domain/Repositories/` so the App
+/// layer can hold a reference without importing `Backends/GRDB/`.
 ///
 /// **Concurrency.** `final class` + `Sendable` rather than `actor`.
 /// The CKSyncEngine delegate path calls into the repository's sync
@@ -42,7 +45,7 @@ import os
 /// `(String, UUID)` form used by per-profile repositories. Only one
 /// record type ever flows through the profile-index DB, so the
 /// recordType prefix would be redundant.
-final class GRDBProfileIndexRepository: Sendable {
+final class GRDBProfileIndexRepository: ProfileIndexRepository, Sendable {
   /// Holds the post-init hook closures so they can be swapped in
   /// atomically by `attachSyncHooks`. A small struct rather than two
   /// independent locks so the install is a single atomic write.
@@ -92,6 +95,16 @@ final class GRDBProfileIndexRepository: Sendable {
         .order(ProfileRow.Columns.createdAt.asc)
         .fetchAll(database)
         .map { $0.toDomain() }
+    }
+  }
+
+  /// Async single-profile fetch — see protocol doc.
+  func profile(forID id: UUID) async throws -> Profile? {
+    try await database.read { database in
+      try ProfileRow
+        .filter(ProfileRow.Columns.id == id)
+        .fetchOne(database)?
+        .toDomain()
     }
   }
 
@@ -178,6 +191,35 @@ final class GRDBProfileIndexRepository: Sendable {
         .filter(ProfileRow.Columns.id == id)
         .updateAll(database, [ProfileRow.Columns.encodedSystemFields.set(to: data)])
         > 0
+    }
+  }
+
+  /// Atomic `max(local, remote)` merge for `data_format_version` —
+  /// reads the row and conditionally writes the higher value back inside
+  /// a single GRDB write transaction, closing the read-modify-write
+  /// window. Called from `ProfileIndexSyncHandler.handleSentRecordZoneChanges`
+  /// after `resolveSystemFields(for:)` and before re-queue.
+  ///
+  /// Does NOT trigger the `pending_change` queue (no `onRecordChanged`
+  /// hook fires); CKSyncEngine's own retry covers the re-upload.
+  /// No-op when the row is absent (e.g. the profile was deleted between
+  /// the conflict response and this call).
+  func mergeDataFormatVersionSync(id: UUID, remoteValue: Int) throws {
+    try database.write { database in
+      guard
+        let row =
+          try ProfileRow
+          .filter(ProfileRow.Columns.id == id)
+          .fetchOne(database)
+      else { return }
+      let merged = max(row.dataFormatVersion, remoteValue)
+      guard merged != row.dataFormatVersion else { return }
+      _ =
+        try ProfileRow
+        .filter(ProfileRow.Columns.id == id)
+        .updateAll(
+          database,
+          [ProfileRow.Columns.dataFormatVersion.set(to: merged)])
     }
   }
 
