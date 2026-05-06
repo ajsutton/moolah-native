@@ -1,5 +1,3 @@
-import Foundation
-
 /// Highest profile data-format version this build can safely read and write.
 ///
 /// `DataFormatVersion` is a case-less enum used as a namespace — not
