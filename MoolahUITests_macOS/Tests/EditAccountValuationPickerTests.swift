@@ -49,4 +49,23 @@ final class EditAccountValuationPickerTests: MoolahUITestCase {
     app.editAccount.expectValuationSectionAbsent()
     app.editAccount.cancel()
   }
+
+  /// End-to-end coverage for flipping the picker. Brokerage starts in
+  /// `.recordedValue` mode (one snapshot in the seed). Flipping it to
+  /// `.calculatedFromTrades` and saving must persist — re-opening shows
+  /// the new selection. Pairs with `AccountStoreUpdateValuationTests` at
+  /// the store layer; this test exercises the picker click path the
+  /// store-level test does not cover.
+  func testFlippingValuationModePersists() {
+    let app = launch(seed: .tradeBaseline)
+
+    app.editAccount.open(account: .brokerage)
+    app.editAccount.expectValuationMode(EditAccountScreen.Mode.recordedValue)
+    app.editAccount.selectValuationMode(EditAccountScreen.Mode.calculatedFromTrades)
+    app.editAccount.save()
+
+    app.editAccount.open(account: .brokerage)
+    app.editAccount.expectValuationMode(EditAccountScreen.Mode.calculatedFromTrades)
+    app.editAccount.cancel()
+  }
 }

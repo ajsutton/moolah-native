@@ -154,6 +154,16 @@ extension TransactionDetailView {
   private var formContent: some View {
     Form {
       modeAwareSections
+      // Per-leg block-explorer links for any leg with an externalId
+      // (on-chain tx hash). Skipped when no leg qualifies — the section
+      // hides itself rather than rendering an empty header.
+      TransactionDetailBlockExplorerSection(transaction: transaction)
+      // Per-leg on-chain counterparty rows for any leg with a non-nil
+      // `counterpartyAddress`. Skipped when no leg qualifies. Renders
+      // truncated addresses with copy-to-clipboard buttons; deliberately
+      // not a clickable link (an arbitrary on-chain address shouldn't
+      // look authoritative).
+      TransactionDetailCounterpartySection(transaction: transaction)
       if isScheduled {
         TransactionDetailPaySection(
           transaction: transaction,

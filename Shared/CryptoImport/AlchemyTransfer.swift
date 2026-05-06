@@ -51,42 +51,17 @@ struct AlchemyTransfer: Sendable, Hashable, Decodable {
     let rawValue: String?
 
     /// Parses `decimal` from 0x-hex into an `Int`. Returns `nil` if the
-    /// field is missing or malformed.
+    /// field is missing or malformed. Defers to `HexDecimal.parseInt`.
     var decimalsValue: Int? {
-      decimal.flatMap { Self.parseHexInt($0) }
+      decimal.flatMap { HexDecimal.parseInt($0) }
     }
 
     /// Parses `rawValue` from 0x-hex into a `Decimal`. Returns `nil` if
     /// the field is missing or malformed. `Decimal` is used because
-    /// 256-bit token amounts overflow `UInt64`.
+    /// 256-bit token amounts overflow `UInt64`. Defers to
+    /// `HexDecimal.parse`.
     var rawDecimalValue: Decimal? {
-      rawValue.flatMap { Self.parseHexDecimal($0) }
-    }
-
-    private static func parseHexInt(_ string: String) -> Int? {
-      let trimmed = stripHexPrefix(string)
-      return Int(trimmed, radix: 16)
-    }
-
-    /// Parses a 0x-prefixed hex string into a `Decimal`. Loops over each
-    /// nibble multiplying by 16 — accumulator-based because `Decimal`
-    /// has no built-in radix-16 initializer and we need the full
-    /// 256-bit range.
-    private static func parseHexDecimal(_ string: String) -> Decimal? {
-      let trimmed = stripHexPrefix(string)
-      guard !trimmed.isEmpty else { return nil }
-      var result: Decimal = 0
-      for char in trimmed {
-        guard let nibble = char.hexDigitValue else { return nil }
-        result = result * 16 + Decimal(nibble)
-      }
-      return result
-    }
-
-    private static func stripHexPrefix(_ string: String) -> String {
-      string.hasPrefix("0x") || string.hasPrefix("0X")
-        ? String(string.dropFirst(2))
-        : string
+      rawValue.flatMap { HexDecimal.parse($0) }
     }
   }
 

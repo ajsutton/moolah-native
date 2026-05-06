@@ -1,6 +1,7 @@
 // Shared/CryptoImport/AlchemyClient.swift
 import Foundation
 import OSLog
+import os
 
 /// Public protocol so test stubs can replace the live client. Stage 6's
 /// `WalletSyncEngine` injects an `AlchemyClient` rather than a concrete
@@ -25,6 +26,21 @@ protocol AlchemyClient: Sendable {
     chain: ChainConfig,
     contractAddress: String
   ) async throws -> AlchemyTokenMetadata
+
+  /// Fetches the on-chain receipt for `hash` so the wallet sync
+  /// pipeline can compute the gas-leg quantity (`gasUsed *
+  /// effectiveGasPrice`). Alchemy's `alchemy_getAssetTransfers` doesn't
+  /// include gas-cost data per transfer, so callers fetch one receipt
+  /// per unique outbound `txHash`.
+  ///
+  /// Throws `WalletSyncError.providerMalformedResponse(stage:
+  /// "getTransactionReceipt")` when the JSON-RPC `result` is `null`
+  /// (rare — only when the hash isn't on chain yet, or the node has
+  /// pruned it) or when the response payload can't be decoded.
+  func getTransactionReceipt(
+    chain: ChainConfig,
+    hash: String
+  ) async throws -> AlchemyTransactionReceipt
 }
 
 /// Token metadata returned by Alchemy's `alchemy_getTokenMetadata` JSON-RPC
@@ -88,6 +104,21 @@ struct LiveAlchemyClient: AlchemyClient {
     walletAddress: String,
     fromBlock: UInt64
   ) async throws -> [AlchemyTransfer] {
+    let signpostID = OSSignpostID(log: Signposts.cryptoSync)
+    os_signpost(
+      .begin,
+      log: Signposts.cryptoSync,
+      name: "alchemy.getAssetTransfers",
+      signpostID: signpostID,
+      "chain %{public}d",
+      chain.chainId)
+    defer {
+      os_signpost(
+        .end,
+        log: Signposts.cryptoSync,
+        name: "alchemy.getAssetTransfers",
+        signpostID: signpostID)
+    }
     var transfers: [AlchemyTransfer] = []
     transfers.append(
       contentsOf: try await fetchTransfers(
@@ -113,7 +144,7 @@ struct LiveAlchemyClient: AlchemyClient {
     contractAddress: String
   ) async throws -> AlchemyTokenMetadata {
     try await rateLimiter.acquire()
-    let body = JSONRPCRequest<AlchemyParams>(
+    let body = AlchemyJSONRPCRequest<AlchemyJSONRPCParams>(
       method: "alchemy_getTokenMetadata",
       params: .tokenMetadata(contractAddress: contractAddress)
     )
@@ -124,7 +155,7 @@ struct LiveAlchemyClient: AlchemyClient {
     let data = try await send(request: request, stage: "getTokenMetadata")
     do {
       let envelope = try JSONDecoder().decode(
-        JSONRPCResponse<AlchemyTokenMetadata>.self,
+        AlchemyJSONRPCResponse<AlchemyTokenMetadata>.self,
         from: data
       )
       return envelope.result
@@ -133,6 +164,62 @@ struct LiveAlchemyClient: AlchemyClient {
         "Alchemy token metadata decode failed for chain \(chain.chainId, privacy: .public): \(error.localizedDescription, privacy: .public)"
       )
       throw WalletSyncError.providerMalformedResponse(stage: "getTokenMetadata")
+    }
+  }
+
+  func getTransactionReceipt(
+    chain: ChainConfig,
+    hash: String
+  ) async throws -> AlchemyTransactionReceipt {
+    let signpostID = OSSignpostID(log: Signposts.cryptoSync)
+    os_signpost(
+      .begin,
+      log: Signposts.cryptoSync,
+      name: "alchemy.getTransactionReceipt",
+      signpostID: signpostID,
+      "chain %{public}d",
+      chain.chainId)
+    defer {
+      os_signpost(
+        .end,
+        log: Signposts.cryptoSync,
+        name: "alchemy.getTransactionReceipt",
+        signpostID: signpostID)
+    }
+    try await rateLimiter.acquire()
+    let body = AlchemyJSONRPCRequest<AlchemyJSONRPCParams>(
+      method: "eth_getTransactionReceipt",
+      params: .transactionReceipt(hash: hash)
+    )
+    let request = try buildRequest(chain: chain, body: body)
+    // Hash is `.private` in logs — pairing a tx hash with the device
+    // identifies wallet activity even though the chain itself is public.
+    logger.debug(
+      "Alchemy getTransactionReceipt: chain \(chain.chainId, privacy: .public) hash \(hash, privacy: .private)"
+    )
+    let data = try await send(request: request, stage: "getTransactionReceipt")
+    do {
+      let envelope = try JSONDecoder().decode(
+        AlchemyJSONRPCNullableResponse<AlchemyTransactionReceiptPayload>.self,
+        from: data
+      )
+      guard let payload = envelope.result else {
+        // `result: null` — happens when the hash isn't on chain (yet) or
+        // the node has pruned it. Surface as a malformed-response error
+        // so the orchestrator's per-account containment can decide.
+        logger.notice(
+          "Alchemy getTransactionReceipt returned null result for chain \(chain.chainId, privacy: .public) hash \(hash, privacy: .private)"
+        )
+        throw WalletSyncError.providerMalformedResponse(stage: "getTransactionReceipt")
+      }
+      return try payload.toReceipt(hash: hash)
+    } catch let error as WalletSyncError {
+      throw error
+    } catch {
+      logger.error(
+        "Alchemy getTransactionReceipt decode failed for chain \(chain.chainId, privacy: .public): \(error.localizedDescription, privacy: .public)"
+      )
+      throw WalletSyncError.providerMalformedResponse(stage: "getTransactionReceipt")
     }
   }
 
@@ -150,10 +237,10 @@ struct LiveAlchemyClient: AlchemyClient {
     if chain.supportsInternalTransfers {
       categories.append(.internal)
     }
-    let body = JSONRPCRequest<AlchemyParams>(
+    let body = AlchemyJSONRPCRequest<AlchemyJSONRPCParams>(
       method: "alchemy_getAssetTransfers",
       params: .assetTransfers(
-        AssetTransfersParams(
+        AlchemyAssetTransfersParams(
           fromBlock: "0x" + String(fromBlock, radix: 16),
           toBlock: "latest",
           fromAddress: isFromAddress ? address : nil,
@@ -205,7 +292,7 @@ struct LiveAlchemyClient: AlchemyClient {
 
   private func buildRequest<Params: Encodable>(
     chain: ChainConfig,
-    body: JSONRPCRequest<Params>
+    body: AlchemyJSONRPCRequest<Params>
   ) throws -> URLRequest {
     let urlString = "https://\(chain.alchemyNetworkSlug).g.alchemy.com/v2/\(apiKey)"
     guard let url = URL(string: urlString) else {
@@ -226,113 +313,7 @@ struct LiveAlchemyClient: AlchemyClient {
   }
 
   private func validate(response: URLResponse, stage: String) throws {
-    guard let http = response as? HTTPURLResponse else {
-      logger.error(
-        "Alchemy \(stage, privacy: .public): non-HTTP response"
-      )
-      throw WalletSyncError.network(underlyingDescription: "No HTTP response")
-    }
-    switch http.statusCode {
-    case 200...299:
-      return
-    case 401, 403:
-      logger.error(
-        "Alchemy \(stage, privacy: .public): API key rejected (HTTP \(http.statusCode, privacy: .public))"
-      )
-      throw WalletSyncError.invalidApiKey
-    case 429:
-      let retryAfter = parseRetryAfter(http: http)
-      logger.notice(
-        "Alchemy \(stage, privacy: .public): rate limited (HTTP 429)"
-      )
-      throw WalletSyncError.rateLimited(retryAfter: retryAfter)
-    default:
-      logger.error(
-        "Alchemy \(stage, privacy: .public): HTTP \(http.statusCode, privacy: .public)"
-      )
-      throw WalletSyncError.network(
-        underlyingDescription: "HTTP \(http.statusCode)"
-      )
-    }
+    try AlchemyResponseValidator.validate(
+      response: response, stage: stage, logger: logger)
   }
-
-  /// Parses `Retry-After` per RFC 7231: either a non-negative integer
-  /// seconds value or an HTTP-date. Returns `nil` when the header is
-  /// absent or unparseable.
-  private func parseRetryAfter(http: HTTPURLResponse) -> Date? {
-    guard let header = http.value(forHTTPHeaderField: "Retry-After") else {
-      return nil
-    }
-    let trimmed = header.trimmingCharacters(in: .whitespaces)
-    if let seconds = TimeInterval(trimmed) {
-      return Date().addingTimeInterval(seconds)
-    }
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.timeZone = TimeZone(identifier: "GMT")
-    formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
-    return formatter.date(from: trimmed)
-  }
-}
-
-// MARK: - JSON-RPC envelope
-
-/// Outer JSON-RPC 2.0 request envelope. `id` is fixed at 1 — Alchemy
-/// echoes it back, but our requests are single-shot so we don't correlate.
-private struct JSONRPCRequest<Params: Encodable>: Encodable {
-  let jsonrpc: String
-  let id: Int
-  let method: String
-  let params: Params
-
-  init(method: String, params: Params) {
-    self.jsonrpc = "2.0"
-    self.id = 1
-    self.method = method
-    self.params = params
-  }
-}
-
-/// Outer JSON-RPC 2.0 response envelope, generic over the result body.
-private struct JSONRPCResponse<Result: Decodable>: Decodable {
-  let result: Result
-}
-
-/// Discriminated `params` payload — covers the two JSON-RPC methods this
-/// client makes today. Each case encodes as the JSON-RPC convention of a
-/// one-element array around the parameter object (or address string).
-private enum AlchemyParams: Encodable {
-  case assetTransfers(AssetTransfersParams)
-  case tokenMetadata(contractAddress: String)
-
-  func encode(to encoder: Encoder) throws {
-    var container = encoder.unkeyedContainer()
-    switch self {
-    case .assetTransfers(let params):
-      try container.encode(params)
-    case .tokenMetadata(let address):
-      try container.encode(address)
-    }
-  }
-}
-
-/// Body for the `params[0]` object of `alchemy_getAssetTransfers`.
-private struct AssetTransfersParams: Encodable {
-  let fromBlock: String
-  let toBlock: String
-  let fromAddress: String?
-  let toAddress: String?
-  let category: [String]
-  let withMetadata: Bool
-  let excludeZeroValue: Bool
-}
-
-/// Decodes the `result` object of `alchemy_getAssetTransfers`. The
-/// outer envelope wraps this in `JSONRPCResponse<AlchemyTransferResult>`.
-private struct AlchemyTransferEnvelope: Decodable {
-  let result: AlchemyTransferResult
-}
-
-private struct AlchemyTransferResult: Decodable {
-  let transfers: [AlchemyTransfer]
 }

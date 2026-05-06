@@ -29,7 +29,7 @@ enum AccountType: String, Codable, Sendable, CaseIterable {
   }
 }
 
-struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
+struct Account {
   let id: UUID
   var name: String
   var type: AccountType
@@ -67,7 +67,13 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     self.walletAddress = walletAddress
     self.chainId = chainId
   }
+}
 
+extension Account: Sendable {}
+
+extension Account: Identifiable {}
+
+extension Account: Codable {
   private enum CodingKeys: String, CodingKey {
     case id
     case name
@@ -116,7 +122,9 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     try container.encodeIfPresent(walletAddress, forKey: .walletAddress)
     try container.encodeIfPresent(chainId, forKey: .chainId)
   }
+}
 
+extension Account: Hashable {
   static func == (lhs: Account, rhs: Account) -> Bool {
     lhs.id == rhs.id && lhs.name == rhs.name && lhs.type == rhs.type
       && lhs.instrument == rhs.instrument
@@ -136,7 +144,9 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     hasher.combine(walletAddress)
     hasher.combine(chainId)
   }
+}
 
+extension Account: Comparable {
   static func < (lhs: Account, rhs: Account) -> Bool {
     lhs.position < rhs.position
   }

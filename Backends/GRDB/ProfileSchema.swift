@@ -39,6 +39,12 @@ import GRDB
 /// to `transaction_leg`, `pricing_status` to `instrument`, and the
 /// per-device `wallet_sync_state` table. See
 /// `ProfileSchema+CryptoWalletFields.swift`.
+/// `v9_add_counterparty_address` — adds `counterparty_address` to
+/// `transaction_leg`. Populated by `TransferEventBuilder` from the
+/// Alchemy transfer's `from`/`to` (whichever isn't this wallet);
+/// `nil` for non-crypto legs and gas/self-send legs. Surfaced in the
+/// transaction detail's "On-chain counterparty" row. See
+/// `ProfileSchema+CounterpartyAddress.swift`.
 ///
 /// **Retention policy for the cache tables.** All six cache tables
 /// created by `v1_initial` (`exchange_rate`, `exchange_rate_meta`,
@@ -60,7 +66,7 @@ enum ProfileSchema {
   /// Bumped each time a migration is added. Surfaced for open-time
   /// integrity checks; not used by `DatabaseMigrator` (which keys on
   /// the stable string IDs of registered migrations).
-  static let version = 8
+  static let version = 9
 
   static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
@@ -84,6 +90,8 @@ enum ProfileSchema {
       "v7_purge_intraday_cached_prices", migrate: purgeIntradayCachedPrices)
     migrator.registerMigration(
       "v8_add_crypto_wallet_fields", migrate: addCryptoWalletFields)
+    migrator.registerMigration(
+      "v9_add_counterparty_address", migrate: addCounterpartyAddressToTransactionLeg)
 
     return migrator
   }

@@ -60,6 +60,11 @@ actor CancellablePagingTransactionRepository: TransactionRepository {
   func fetchPayeeSuggestions(
     prefix: String, excludingTransactionId: UUID?
   ) async throws -> [String] { [] }
+  func legs(matchingExternalId externalId: String) async throws -> [TransactionLeg] { [] }
+  func transactions(touchingExternalIds externalIds: Set<String>) async throws -> [Transaction] {
+    []
+  }
+  func legExists(accountId: UUID, externalId: String) async throws -> Bool { false }
 }
 
 /// A simple one-shot gate that suspends waiters until `open()` is called.

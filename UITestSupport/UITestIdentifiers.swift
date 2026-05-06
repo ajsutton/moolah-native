@@ -119,6 +119,29 @@ public enum UITestIdentifiers {
     public static func tradeFeeRemove(_ index: Int) -> String {
       "transactionDetail.trade.feeRemove.\(index)"
     }
+
+    /// "View on block explorer" link for the leg at the given index.
+    /// Only rendered when the leg has a non-nil `externalId` (the on-chain
+    /// transaction hash recorded by the wallet importer) and a chain id
+    /// resolvable through `ChainConfig`.
+    public static func blockExplorerLink(legIndex: Int) -> String {
+      "detail.leg.\(legIndex).blockExplorer"
+    }
+
+    /// Truncated on-chain counterparty address row for the leg at the
+    /// given index. Only rendered when the leg has a non-nil
+    /// `counterpartyAddress` (recorded by the wallet importer for the
+    /// other side of the transfer). The row itself is non-interactive —
+    /// the copy button next to it is the only affordance.
+    public static func counterpartyAddress(legIndex: Int) -> String {
+      "detail.leg.\(legIndex).counterpartyAddress"
+    }
+
+    /// "Copy address" button next to the counterparty row for the leg at
+    /// the given index.
+    public static func counterpartyCopyButton(legIndex: Int) -> String {
+      "detail.leg.\(legIndex).counterpartyAddress.copy"
+    }
   }
 
   public enum SyncFooter {
@@ -204,6 +227,47 @@ public enum UITestIdentifiers {
     public static let cryptoTabTitle = "Crypto"
   }
 
+  public enum CryptoAccountCreation {
+    /// Chain picker (Ethereum / OP Mainnet / Base / Polygon) inside the
+    /// crypto branch of `CreateAccountView`. Pinned so a UI test can
+    /// switch chains without depending on rendered display names.
+    public static let chainPicker = "createAccount.crypto.chainPicker"
+
+    /// Wallet-address text field inside the crypto branch of
+    /// `CreateAccountView`. The user pastes a `0x…` address here;
+    /// validation lives in `Account.validatedWalletAddress`.
+    public static let walletAddressField = "createAccount.crypto.walletAddress"
+  }
+
+  public enum WalletAccountHeader {
+    /// Container of the `WalletAccountHeaderView` bar shown above the
+    /// transaction list on a `.crypto` account. Sentinel for "the
+    /// wallet header is on screen".
+    public static let container = "wallet.header.container"
+
+    /// Truncated `0xabcd…wxyz` wallet-address label. The full address
+    /// is exposed via the row's `accessibilityLabel`.
+    public static let truncatedAddress = "wallet.header.address"
+
+    /// Copy-address button. Tapping copies the full lowercased
+    /// wallet address to the system pasteboard.
+    public static let copyAddressButton = "wallet.header.copyAddress"
+
+    /// Chain display-name label (e.g. "Ethereum").
+    public static let chainName = "wallet.header.chain"
+
+    /// Last-synced relative-time label (e.g. "Synced 2h ago" or
+    /// "Never synced").
+    public static let lastSynced = "wallet.header.lastSynced"
+
+    /// "Sync now" button. Disabled while the account is in-flight.
+    public static let syncButton = "wallet.header.syncNow"
+
+    /// Overflow menu button (ellipsis). Holds the
+    /// "View on block explorer" action.
+    public static let overflowMenu = "wallet.header.overflowMenu"
+  }
+
   public enum CryptoSettings {
     /// Root container of the `CryptoSettingsView` Form. Sentinel for the
     /// "Crypto tab is on screen" post-condition after switching tabs in the
@@ -220,6 +284,61 @@ public enum UITestIdentifiers {
     /// `1:0x1f9840…f984`).
     public static func registrationRow(_ id: String) -> String {
       "crypto.settings.registration.\(id)"
+    }
+
+    /// Secure field for the Alchemy API key. Pinned so a UI test can
+    /// drive the Stage 11 settings flow end-to-end.
+    public static let alchemyApiKeyField = "crypto.settings.alchemy.field"
+
+    /// "Save" button next to the Alchemy API key entry field.
+    public static let alchemyApiKeySaveButton = "crypto.settings.alchemy.save"
+
+    /// "Remove" button shown when an Alchemy key is already configured.
+    public static let alchemyApiKeyRemoveButton = "crypto.settings.alchemy.remove"
+
+    /// A crypto account row in the accounts list. Qualifier is the
+    /// `Account.id` UUID.
+    public static func accountRow(_ id: UUID) -> String {
+      "crypto.settings.account.\(id.uuidString)"
+    }
+
+    /// Per-row "Sync now" button. Qualifier is the `Account.id` UUID.
+    public static func syncNowButton(_ id: UUID) -> String {
+      "crypto.settings.account.sync.\(id.uuidString)"
+    }
+
+    /// Navigation row that opens the Discovered Tokens inbox.
+    public static let discoveredTokensRow = "crypto.settings.discoveredTokens"
+
+    /// Navigation row that opens the Spam Tokens management view.
+    public static let spamTokensRow = "crypto.settings.spamTokens"
+
+    /// A row inside the Discovered Tokens inbox. Qualifier is the
+    /// `CryptoRegistration.id`.
+    public static func discoveredRow(_ id: String) -> String {
+      "crypto.settings.discovered.\(id)"
+    }
+
+    /// "Mark as spam" button on a Discovered Tokens row.
+    public static func markSpamButton(_ id: String) -> String {
+      "crypto.settings.discovered.spam.\(id)"
+    }
+
+    /// "Re-resolve" button on a Discovered Tokens row.
+    public static func reResolveButton(_ id: String) -> String {
+      "crypto.settings.discovered.reresolve.\(id)"
+    }
+
+    /// A row inside the Spam Tokens management view. Qualifier is the
+    /// `CryptoRegistration.id`.
+    public static func spamRow(_ id: String) -> String {
+      "crypto.settings.spam.\(id)"
+    }
+
+    /// "Restore" button on a Spam Tokens row — flips status back to
+    /// `.unpriced` so the row returns to the Discovered Tokens inbox.
+    public static func restoreButton(_ id: String) -> String {
+      "crypto.settings.spam.restore.\(id)"
     }
   }
 

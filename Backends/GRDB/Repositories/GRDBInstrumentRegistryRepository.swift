@@ -37,7 +37,12 @@ import OSLog
 final class GRDBInstrumentRegistryRepository:
   InstrumentRegistryRepository, @unchecked Sendable
 {
-  private let database: any DatabaseWriter
+  // `database` is `internal` rather than `private` so the sibling
+  // extension file `GRDBInstrumentRegistryRepository+Lookup.swift` (which
+  // hosts `cryptoRegistration(byId:)` to keep this file under SwiftLint's
+  // length budgets) can read from it. The other stored properties remain
+  // private — only the database handle is shared across files.
+  let database: any DatabaseWriter
   private let onRecordChanged: @Sendable (String) -> Void
   private let onRecordDeleted: @Sendable (String) -> Void
   private let logger = Logger(
@@ -84,17 +89,13 @@ final class GRDBInstrumentRegistryRepository:
         try InstrumentRow
         .filter(InstrumentRow.Columns.kind == cryptoKind)
         .fetchAll(database)
-      return try rows.compactMap { row -> CryptoRegistration? in
-        guard let mapping = row.cryptoMapping() else { return nil }
-        let status =
-          TokenPricingStatus(rawValue: row.pricingStatus) ?? .priced
-        return CryptoRegistration(
-          instrument: try row.toDomain(),
-          mapping: mapping,
-          pricingStatus: status)
-      }
+      return try rows.compactMap { row in try Self.project(row: row) }
     }
   }
+
+  // `cryptoRegistration(byId:)` lives in
+  // `GRDBInstrumentRegistryRepository+Lookup.swift` to keep this file
+  // under SwiftLint's `file_length` and `type_body_length` thresholds.
 
   func registerCrypto(
     _ instrument: Instrument, mapping: CryptoProviderMapping

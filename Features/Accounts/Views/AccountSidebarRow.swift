@@ -15,6 +15,13 @@ struct SidebarRowView: View {
   let name: String
   let amount: InstrumentAmount?
   var isSelected: Bool = false
+  /// When non-nil, the row replaces the amount with this short label
+  /// (e.g. "Not set") and the accompanying VoiceOver phrase. Used by
+  /// `AccountSidebarRow` for recorded-value investment accounts that have
+  /// no recorded snapshot, so the sidebar doesn't roll a synthetic `$0` into
+  /// the user's mental model of the column. See guides/UI_GUIDE.md §"Not set"
+  /// and `INSTRUMENT_CONVERSION_GUIDE.md` Rule 11 for the rationale.
+  var unsetIndicator: String?
 
   @Environment(\.backgroundProminence) private var backgroundProminence
 
@@ -45,18 +52,27 @@ struct SidebarRowView: View {
 
       Spacer()
 
-      if let amount {
-        InstrumentAmountView(amount: amount, colorOverride: amountColorOverride)
-      } else {
-        ProgressView()
-          .controlSize(.small)
-      }
+      trailingValue
     }
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(accessibilitySummary)
   }
 
+  @ViewBuilder private var trailingValue: some View {
+    if let unsetIndicator {
+      Text(unsetIndicator)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    } else if let amount {
+      InstrumentAmountView(amount: amount, colorOverride: amountColorOverride)
+    } else {
+      ProgressView()
+        .controlSize(.small)
+    }
+  }
+
   private var accessibilitySummary: String {
+    if let unsetIndicator { return "\(name), \(unsetIndicator)" }
     guard let amount else { return "\(name), balance loading" }
     return "\(name), \(amount.formatted)"
   }
@@ -65,6 +81,13 @@ struct SidebarRowView: View {
 /// Sidebar row for an account. Reads the converted balance from
 /// `AccountStore.convertedBalances` (populated and retried by the store
 /// when conversions fail). Shows a spinner while no balance is available.
+///
+/// Recorded-value investment accounts with no externally-set value render
+/// "Not set" instead of `$0` once the initial conversion pass has completed
+/// — `$0` would be indistinguishable from "user entered zero" and would
+/// roll into net-worth as a real number rather than a missing one. See
+/// `INSTRUMENT_CONVERSION_GUIDE.md` Rule 11 and the design note in
+/// `plans/per-account-valuation-mode.md`.
 struct AccountSidebarRow: View {
   let account: Account
   var isSelected: Bool = false
@@ -75,7 +98,8 @@ struct AccountSidebarRow: View {
       icon: account.sidebarIcon,
       name: account.name,
       amount: accountStore.convertedBalances[account.id],
-      isSelected: isSelected
+      isSelected: isSelected,
+      unsetIndicator: accountStore.hasUnrecordedValue(account) ? "Not set" : nil
     )
   }
 }
@@ -116,6 +140,26 @@ struct AccountSidebarRow: View {
       isSelected: true
     )
     .tag("selected")
+  }
+  .listStyle(.sidebar)
+}
+
+#Preview("Sidebar row — Not set indicator") {
+  List(selection: .constant(Optional("loaded"))) {
+    SidebarRowView(
+      icon: "chart.line.uptrend.xyaxis",
+      name: "Brokerage (no value)",
+      amount: InstrumentAmount(quantity: 0, instrument: .AUD),
+      unsetIndicator: "Not set"
+    )
+    .tag("loaded")
+
+    SidebarRowView(
+      icon: "chart.line.uptrend.xyaxis",
+      name: "Brokerage (loading)",
+      amount: nil
+    )
+    .tag("loading")
   }
   .listStyle(.sidebar)
 }

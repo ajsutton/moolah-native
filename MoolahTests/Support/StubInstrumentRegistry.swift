@@ -62,6 +62,12 @@ extension StubInstrumentRegistry {
     state.withLock { $0.cryptoRegistrations }
   }
 
+  func cryptoRegistration(byId id: String) async throws -> CryptoRegistration? {
+    state.withLock { state in
+      state.cryptoRegistrations.first { $0.id == id }
+    }
+  }
+
   func registerCrypto(
     _ instrument: Instrument, mapping: CryptoProviderMapping
   ) async throws {

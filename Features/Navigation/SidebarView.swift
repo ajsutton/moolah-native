@@ -108,7 +108,9 @@ struct SidebarView: View {
     }
     .sheet(isPresented: $showCreateAccountSheet) {
       CreateAccountView(
-        instrument: session.profile.instrument, accountStore: accountStore)
+        instrument: session.profile.instrument,
+        accountStore: accountStore,
+        cryptoSyncStore: session.cryptoSyncStore)
     }
     .sheet(item: $accountToEdit) { account in
       EditAccountView(

@@ -163,6 +163,13 @@ extension SyncCoordinator {
       savedNames.contains(recordName)
     }
 
+    // Extract every non-nil `externalId` from the just-applied
+    // `TransactionLegRecord` saves before handing off to the apply
+    // path. The deduper hook below uses this set to scope its sweep to
+    // legs the fetch could plausibly have introduced duplicates for —
+    // bounded work even when an unrelated zone push arrived.
+    let touchedExternalIds = Self.extractTouchedExternalIds(saved: saved)
+
     // Heavy upsert/delete/save runs off-main via nonisolated method
     let result = handler.applyRemoteChanges(
       saved: saved, deleted: deleted, preExtractedSystemFields: zonePreExtracted)
@@ -183,6 +190,13 @@ extension SyncCoordinator {
           }
         }
       }
+      // Run the cross-device leg deduper after the apply so any
+      // duplicates introduced by a multi-device race collapse to one
+      // canonical leg before observers see the post-fetch state.
+      // Best-effort — failures are logged inside the deduper and
+      // don't block observer notifications.
+      await runCrossDeviceLegDedup(
+        profileId: profileId, touchedExternalIds: touchedExternalIds)
     case .saveFailed(let errorDescription):
       logger.error(
         "Profile data save failed for \(profileId), scheduling re-fetch: \(errorDescription, privacy: .public)"

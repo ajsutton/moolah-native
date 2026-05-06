@@ -1,6 +1,6 @@
 # Transfer Detection & Merge — Design Spec
 
-**Status:** Draft · 2026-04-18
+**Status:** Implemented (eligibility predicate + same-`externalId` channel ship alongside `plans/2026-05-05-crypto-wallet-import-plan.md` Stage 7) · 2026-05-05
 **Depends on:** `plans/2026-04-18-csv-import-design.md` (CSV import pipeline, `ImportOrigin` on each transaction).
 
 ---
@@ -208,3 +208,41 @@ Fixture files live alongside the CSV import fixtures; the tests use paired CSVs 
 1. **Currency mismatch handling.** If the user has accounts in different currencies, the transfer still happens (convert-on-debit) but the amounts aren't numerically opposite. v1 explicitly skips currency-mismatched pairs. A future v2 could attempt to pair using FX-rate heuristics, but it's noisy — easy to skip in v1 and revisit if users ask.
 2. **Detection window beyond ±3 days.** Some pending transfers (Friday outgoing, Tuesday incoming because of weekends + public holiday) might exceed ±3 days. If this comes up, we widen; v1 errs tight because false positives annoy more than false negatives.
 3. **UI for bulk dismissal.** If a user has lots of suggestions from a large migration, we may want a "Dismiss all in this session" affordance. Punt until data shows it matters.
+
+---
+
+## Extensions A & B (added 2026-05-05 alongside crypto wallet import)
+
+The original draft constrained pairing candidates to single-leg transactions. A wallet-side multi-leg event (transfer leg + gas/fee leg) would have been excluded, and on-chain transactions arriving via two tracked accounts would have produced a suggestion rather than auto-merging. Two extensions, both required by the crypto importer in `plans/2026-05-05-crypto-wallet-import-design.md` Stage 7, are added here as normative additions to the design.
+
+### Extension A — eligibility predicate
+
+> A transaction is *transfer-detection-eligible* iff it has exactly one leg of type `.transfer` (the **value-bearing leg**) **or** exactly one leg of type `.income`/`.expense` (legacy single-leg cash). Any number of additional `.expense` legs in a different instrument from the value-bearing leg are permitted (these are fees: gas, broker fees, …).
+
+This preserves the existing intent (exclude trades — they have two `.trade` legs and don't meet the new criterion either) while enabling on-chain transfers with gas, and brokerage cash transactions that happen to carry an attached fee leg, to participate. Detection's amount/instrument matching always operates on the **value-bearing leg**.
+
+The predicate is implemented as `Transaction.isTransferDetectionEligible: Bool` (exposed via `Transaction.transferDetectionValueLeg: TransactionLeg?` for callers that need the leg). Algorithm replaces the `tx.legs.count == 1` check in §Algorithm above; everything else (instrument match, sign match, ±3-day window, dismissal-aware skip) operates on the value-bearing leg.
+
+### Extension B — deterministic same-`externalId` channel
+
+> Before the standard amount/instrument/date suggestion pass runs, the importer (CSV or crypto) checks for cross-account legs with matching `externalId`. When two transfer-detection-eligible transactions on different tracked accounts have value-bearing legs with the same non-nil `externalId`, the same instrument, and opposite-sign quantities, they are merged immediately into a single multi-leg transfer transaction with **no suggestion** and no inbox row. Each side's fee legs (gas) are preserved on the merged transaction.
+
+A merged on-chain transfer therefore has shape `[transfer leg from A, transfer leg from B, optional gas leg from A, optional gas leg from B]` — the existing multi-leg storage handles this directly.
+
+The standard suggestion flow continues to handle fuzzy matches (CSV from an exchange ↔ on-chain wallet, where the on-chain hash isn't on both sides). Shared `externalId` is a strict superset of the existing pairing — there's no false-positive channel to add.
+
+**Single source of truth.** Extension B is implemented as `CrossAccountTransferMerger` (`Shared/CryptoImport/CrossAccountTransferMerger.swift`). Both the wallet importer's apply pass and the future transfer-detection engine call this same merger; neither reimplements the predicate. The merger:
+
+- Pairs candidates by `externalId == otherLeg.externalId`, `instrument == otherLeg.instrument`, `accountId != otherLeg.accountId`, opposite-sign quantities of equal magnitude.
+- Resolves cross-cycle pairs via an injected `existingLegLookup`: an in-batch candidate can pair against a leg already persisted on a prior cycle, on a different account.
+- Picks the lower-UUID side as `originAccountId` on the merged result and the earliest of the two source dates — both deterministic.
+- Preserves fee legs from both sides (the merge unions, not replaces).
+- Is pure / `Sendable` — no repository writes; the apply engine is the single writer.
+
+**Unmerge / dismissed-pair semantics** carry over from the body of this design unchanged — Extension B is an auto-merge channel, but the resulting transfer is unmergeable like any other transfer transaction.
+
+### Acceptance
+
+These extensions are normative. The transfer-detection engine, when it lands, must:
+- Use `Transaction.isTransferDetectionEligible` (Extension A) as the candidate filter, replacing the `legs.count == 1` check in §Algorithm.
+- Call `CrossAccountTransferMerger` (Extension B) before its amount/instrument/date suggestion pass and skip any pair the merger has already collapsed.
