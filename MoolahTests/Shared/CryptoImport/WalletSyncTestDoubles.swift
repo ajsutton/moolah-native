@@ -33,6 +33,7 @@ final class RecordingAlchemyClientStub: AlchemyClient, @unchecked Sendable {
 
   private let lock = NSLock()
   private var transfersResponse: Response?
+  private var perAddressResponses: [String: Response] = [:]
   private var assetTransfersCalls: [AssetTransfersCall] = []
   /// Optional hook fired before the response is returned — the
   /// cancellation test installs a closure here that cancels the parent
@@ -41,6 +42,14 @@ final class RecordingAlchemyClientStub: AlchemyClient, @unchecked Sendable {
 
   func setTransfersResponse(_ response: Response) {
     lock.withLock { self.transfersResponse = response }
+  }
+
+  /// Per-wallet-address scripted response. Used by Stage 9's tests to
+  /// verify per-account error containment — one wallet throws, another
+  /// returns transfers. Lookup is case-insensitive (Alchemy lowercases
+  /// outputs but wallet records may be checksummed).
+  func setTransfersResponse(_ response: Response, for walletAddress: String) {
+    lock.withLock { self.perAddressResponses[walletAddress.lowercased()] = response }
   }
 
   func setBeforeAssetTransfers(_ hook: (@Sendable () async -> Void)?) {
@@ -62,7 +71,8 @@ final class RecordingAlchemyClientStub: AlchemyClient, @unchecked Sendable {
           chainId: chain.chainId,
           walletAddress: walletAddress,
           fromBlock: fromBlock))
-      return (transfersResponse, beforeAssetTransfers)
+      let perAddress = perAddressResponses[walletAddress.lowercased()]
+      return (perAddress ?? transfersResponse, beforeAssetTransfers)
     }
     if let hook { await hook() }
     try Task.checkCancellation()

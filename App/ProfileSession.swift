@@ -37,6 +37,9 @@ final class ProfileSession: Identifiable {
   let instrumentSearchService: InstrumentSearchService?
   let coinGeckoCatalog: (any CoinGeckoCatalog)?
   let tokenResolutionClient: (any TokenResolutionClient)?
+  /// Orchestrator for crypto-wallet auto-import. `nil` when the profile
+  /// has no `instrumentRegistry` (preview / degraded launches).
+  let cryptoSyncStore: CryptoSyncStore?
   let importStore: ImportStore
   let importRuleStore: ImportRuleStore
   let importPreferences: ImportPreferences
@@ -169,6 +172,13 @@ final class ProfileSession: Identifiable {
     self.folderScanner = importPipeline.scanner
     self.folderWatcher = importPipeline.watcher
 
+    // Crypto-wallet auto-import. Lifecycle hooks live in
+    // `MoolahApp+Lifecycle` and `cleanupSync`.
+    self.cryptoSyncStore = Self.makeCryptoSyncStore(
+      backend: backend,
+      registry: registryWiring.registry,
+      cryptoPriceService: services.cryptoPrice)
+
     finishInit(syncCoordinator: syncCoordinator)
   }
 
@@ -272,6 +282,7 @@ final class ProfileSession: Identifiable {
     syncReloadTask = nil
     catalogRefreshTask?.cancel()
     catalogRefreshTask = nil
+    cryptoSyncStore?.cancelTimer()
     pragmaOptimizeTask?.cancel()
     pragmaOptimizeTask = nil
     periodicPragmaOptimizeTask?.cancel()

@@ -48,10 +48,12 @@ struct WalletSyncEngineTests {
     let (engine, _) = makeEngine(alchemy: alchemy, syncState: syncState)
     let account = makeCryptoAccount(walletAddress: Self.wallet, chain: .ethereum)
 
-    let built = try await engine.build(account: account, chain: .ethereum)
+    let result = try await engine.build(account: account, chain: .ethereum)
 
-    #expect(built.count == 3)
-    #expect(built.allSatisfy { $0.originAccountId == account.id })
+    #expect(result.candidates.count == 3)
+    #expect(result.candidates.allSatisfy { $0.originAccountId == account.id })
+    // `makeAlchemyTransfer` defaults `blockNum = "0x12d4f0a"` → 19_746_570.
+    #expect(result.headBlockNumber == 19_746_570)
     #expect(syncState.saveCount == 0)
     #expect(syncState.deleteCount == 0)
   }
@@ -122,7 +124,7 @@ struct WalletSyncEngineTests {
     let (engine, _) = makeEngine(alchemy: alchemy)
     let account = makeCryptoAccount(walletAddress: Self.wallet, chain: .ethereum)
 
-    let task = Task<[BuiltTransaction], Error> {
+    let task = Task<WalletSyncBuildResult, Error> {
       try await engine.build(account: account, chain: .ethereum)
     }
     // Install a hook that fires inside the alchemy stub so we cancel
@@ -182,6 +184,59 @@ struct WalletSyncEngineTests {
       _ = try await engine.build(account: account, chain: .ethereum)
     }
     #expect(alchemy.recordedCalls.isEmpty)
+  }
+
+  // MARK: - Head block
+
+  @Test("Head block is the maximum blockNum across all returned transfers")
+  func headBlockTracksMaximumBlockNumber() async throws {
+    let alchemy = RecordingAlchemyClientStub()
+    alchemy.setTransfersResponse(
+      .transfers([
+        makeAlchemyTransfer(
+          hash: "0xa", from: Self.counterparty, to: Self.wallet,
+          category: .external, blockNum: "0x10"),  // 16
+        makeAlchemyTransfer(
+          hash: "0xb", from: Self.counterparty, to: Self.wallet,
+          category: .external, blockNum: "0x20"),  // 32
+        makeAlchemyTransfer(
+          hash: "0xc", from: Self.counterparty, to: Self.wallet,
+          category: .external, blockNum: "0x18"),  // 24
+      ]))
+    let (engine, _) = makeEngine(alchemy: alchemy)
+    let account = makeCryptoAccount(walletAddress: Self.wallet, chain: .ethereum)
+
+    let result = try await engine.build(account: account, chain: .ethereum)
+    #expect(result.headBlockNumber == 32)
+  }
+
+  @Test("No transfers + prior checkpoint → head block falls back to prior")
+  func headBlockFallsBackToPriorCheckpoint() async throws {
+    let alchemy = RecordingAlchemyClientStub()
+    alchemy.setTransfersResponse(.transfers([]))
+    let syncState = RecordingWalletSyncStateRepository()
+    let account = makeCryptoAccount(walletAddress: Self.wallet, chain: .ethereum)
+    syncState.seed(
+      WalletSyncState(
+        id: account.id,
+        lastSyncedBlockNumber: 1234,
+        lastSyncedAt: Date(timeIntervalSince1970: 1_700_000_000),
+        lastError: nil))
+    let (engine, _) = makeEngine(alchemy: alchemy, syncState: syncState)
+
+    let result = try await engine.build(account: account, chain: .ethereum)
+    #expect(result.headBlockNumber == 1234)
+  }
+
+  @Test("No transfers + no prior checkpoint → head block 0")
+  func headBlockGenesisFallsBackToZero() async throws {
+    let alchemy = RecordingAlchemyClientStub()
+    alchemy.setTransfersResponse(.transfers([]))
+    let (engine, _) = makeEngine(alchemy: alchemy)
+    let account = makeCryptoAccount(walletAddress: Self.wallet, chain: .ethereum)
+
+    let result = try await engine.build(account: account, chain: .ethereum)
+    #expect(result.headBlockNumber == 0)
   }
 
   // MARK: - Read-only invariant
