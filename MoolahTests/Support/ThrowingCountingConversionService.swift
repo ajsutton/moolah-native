@@ -55,6 +55,19 @@ final class ThrowingCountingConversionService: InstrumentConversionService, Send
   }
 
   func invalidateCache(for instrument: Instrument) async {}
+
+  // No-op observation stubs — see `FixedConversionService.observeRates`
+  // for the rationale.
+  func observeRates() -> AsyncStream<Void> {
+    AsyncStream { continuation in
+      continuation.yield(())
+      continuation.finish()
+    }
+  }
+
+  func observeErrors() -> AsyncStream<any Error> {
+    AsyncStream { $0.finish() }
+  }
 }
 
 /// Async-safe collector for per-row failure-callback fan-out observed by

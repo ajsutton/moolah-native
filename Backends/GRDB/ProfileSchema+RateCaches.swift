@@ -13,6 +13,18 @@ import GRDB
 // `guides/DATABASE_SCHEMA_GUIDE.md` §3) once the writers switched
 // away from `upsert` to `insert(onConflict: .replace)`. Editing this
 // body in place would violate §6 (frozen migrations).
+//
+// **`WITHOUT ROWID` and `ValueObservation`.** The three rate tables
+// (`exchange_rate`, `stock_price`, `crypto_price`) are also declared
+// `WITHOUT ROWID` below. SQLite's `sqlite3_update_hook` does **not**
+// fire for `WITHOUT ROWID` tables (a documented SQLite limitation —
+// see GRDB's `ValueObservation.md`). Any caller writing into these
+// tables that wants `ValueObservation` to see the change MUST call
+// `db.notifyRateCacheChange(...)` inside the same `db.write { ... }`
+// block, after the insert / update / delete. The helper lives at
+// `Backends/GRDB/Observation/RateCacheTable.swift`. Without
+// the notify, every `InstrumentConversionService.observeRates()`
+// subscription would hang after the initial tick.
 
 extension ProfileSchema {
   static func createInitialTables(_ database: Database) throws {

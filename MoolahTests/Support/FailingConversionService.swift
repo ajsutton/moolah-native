@@ -57,6 +57,19 @@ actor FailingConversionService: InstrumentConversionService {
   }
 
   func invalidateCache(for instrument: Instrument) async {}
+
+  // No-op observation stubs — see `FixedConversionService.observeRates`
+  // for the rationale.
+  nonisolated func observeRates() -> AsyncStream<Void> {
+    AsyncStream { continuation in
+      continuation.yield(())
+      continuation.finish()
+    }
+  }
+
+  nonisolated func observeErrors() -> AsyncStream<any Error> {
+    AsyncStream { $0.finish() }
+  }
 }
 
 enum FailingConversionError: Error, Equatable {

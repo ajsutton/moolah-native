@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import OSLog
 
 /// Full conversion service supporting fiat-to-fiat, stock-to-fiat, and crypto conversions.
@@ -11,6 +12,15 @@ actor FullConversionService: InstrumentConversionService {
   private let cryptoPrices: CryptoPriceService?
   private let cryptoRegistrations: @Sendable () async throws -> [CryptoRegistration]
   private let logger = Logger(subsystem: "com.moolah.app", category: "CurrencyConversion")
+  /// Database used by `observeRates()` to watch the live price-cache
+  /// tables. Optional so existing test fixtures that don't observe
+  /// rates can keep their construction call unchanged — when nil,
+  /// `observeRates()` emits a single tick on subscription and
+  /// `observeErrors()` returns an empty stream.
+  private let database: (any DatabaseWriter)?
+  /// Shared error channel for `observeRates()`. See
+  /// `ObservationErrorChannel` doc for the surface-then-finish contract.
+  private let errorChannel: ObservationErrorChannel?
 
   /// - Parameter cryptoRegistrations: Closure invoked on each crypto
   ///   conversion to obtain the current set of crypto registrations. Tokens
@@ -29,12 +39,15 @@ actor FullConversionService: InstrumentConversionService {
     exchangeRates: ExchangeRateService,
     stockPrices: StockPriceService,
     cryptoPrices: CryptoPriceService? = nil,
-    cryptoRegistrations: @Sendable @escaping () async throws -> [CryptoRegistration] = { [] }
+    cryptoRegistrations: @Sendable @escaping () async throws -> [CryptoRegistration] = { [] },
+    database: (any DatabaseWriter)? = nil
   ) {
     self.exchangeRates = exchangeRates
     self.stockPrices = stockPrices
     self.cryptoPrices = cryptoPrices
     self.cryptoRegistrations = cryptoRegistrations
+    self.database = database
+    self.errorChannel = database == nil ? nil : ObservationErrorChannel()
   }
 
   func convert(
@@ -148,6 +161,33 @@ actor FullConversionService: InstrumentConversionService {
   func invalidateCache(for instrument: Instrument) async {
     guard instrument.kind == .cryptoToken, let cryptoPrices else { return }
     await cryptoPrices.purgeCache(instrumentId: instrument.id)
+  }
+
+  // MARK: - Observation
+
+  /// Reactive rate-tick stream. See protocol docs for the contract.
+  /// When constructed without a database (legacy test sites that don't
+  /// observe), emits a single tick on subscription and never again —
+  /// stores subscribing fire `recomputeConvertedTotals` once and stop,
+  /// which is harmless.
+  nonisolated func observeRates() -> AsyncStream<Void> {
+    guard let database, let errorChannel else {
+      return AsyncStream { continuation in
+        continuation.yield(())
+        continuation.finish()
+      }
+    }
+    return makeRateCacheTickStream(
+      database: database,
+      errorChannel: errorChannel,
+      repoMethod: "FullConversionService.observeRates")
+  }
+
+  nonisolated func observeErrors() -> AsyncStream<any Error> {
+    guard let errorChannel else {
+      return AsyncStream { $0.finish() }
+    }
+    return errorChannel.stream
   }
 
   // MARK: - Stock helpers

@@ -56,6 +56,25 @@ struct FixedConversionService: InstrumentConversionService {
   }
 
   func invalidateCache(for instrument: Instrument) async {}
+
+  /// No-op stub: emit a single tick on subscription so subscribers
+  /// fire `recomputeConvertedTotals` once and stop. Real rate-cache
+  /// changes are only observed by the GRDB-backed services
+  /// (`FiatConversionService` / `FullConversionService`) when
+  /// constructed with a `database:` parameter — see those classes for
+  /// the real implementation. Tests that need to assert tick wiring
+  /// against real cache writes use `TestBackend.create()`'s real
+  /// `FiatConversionService`.
+  func observeRates() -> AsyncStream<Void> {
+    AsyncStream { continuation in
+      continuation.yield(())
+      continuation.finish()
+    }
+  }
+
+  func observeErrors() -> AsyncStream<any Error> {
+    AsyncStream { $0.finish() }
+  }
 }
 
 /// Surfaces only when a test marks an instrument as `.knownZero` and a

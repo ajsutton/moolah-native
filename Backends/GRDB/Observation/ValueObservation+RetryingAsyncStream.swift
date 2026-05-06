@@ -151,7 +151,16 @@ struct RetryingAsyncStreamPolicy: Sendable {
 /// Internal (not `private`) so contract tests can drive the loop with a
 /// synthetic factory and verify the retry / budget / categorisation
 /// branches without a live GRDB instance.
-func makeRetryingAsyncStream<Value: Sendable & Equatable>(
+///
+/// **No `Equatable` constraint on `Value`.** The retry loop body never
+/// compares emitted values — `removeDuplicates()` is applied by the
+/// `ValueObservation`-side wrapper (`toRetryingAsyncStream`) before the
+/// stream reaches this driver. Keeping `Value` constrained only by
+/// `Sendable` lets `Void`-emitting callers (notably the rate-cache
+/// tick stream — `Void == Void` always, so `removeDuplicates()` would
+/// suppress every emission after the first) reuse the same retry,
+/// categorisation, and logging plumbing without duplicating it.
+func makeRetryingAsyncStream<Value: Sendable>(
   makeAttempt:
     @escaping @Sendable (
       _ errorSink: @escaping @Sendable (any Error) async -> Void
@@ -181,7 +190,7 @@ private enum AttemptOutcome {
 /// Body of the retry loop. Pulled out of `makeRetryingAsyncStream` so
 /// the surrounding `Task { ... }` and `onTermination` wiring stay
 /// readable; the loop itself is what the unit tests exercise.
-private func runRetryLoop<Value: Sendable & Equatable>(
+private func runRetryLoop<Value: Sendable>(
   makeAttempt:
     @Sendable (
       _ errorSink: @escaping @Sendable (any Error) async -> Void

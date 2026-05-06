@@ -48,7 +48,9 @@ enum TestBackend {
     let database = try ProfileDatabase.openInMemory()
     let exchangeRateService = ExchangeRateService(
       client: rateClient, database: database)
-    let conversionService = FiatConversionService(exchangeRates: exchangeRateService)
+    let conversionService = FiatConversionService(
+      exchangeRates: exchangeRateService,
+      database: database)
     let registry = GRDBInstrumentRegistryRepository(database: database)
     let backend = CloudKitBackend(
       database: database,

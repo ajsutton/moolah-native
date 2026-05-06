@@ -44,7 +44,8 @@ enum PreviewBackend {
       client: FrankfurterClient(),
       database: database
     )
-    let conversionService = FiatConversionService(exchangeRates: exchangeRates)
+    let conversionService = FiatConversionService(
+      exchangeRates: exchangeRates, database: database)
     let registry = GRDBInstrumentRegistryRepository(database: database)
     let backend = CloudKitBackend(
       database: database,
