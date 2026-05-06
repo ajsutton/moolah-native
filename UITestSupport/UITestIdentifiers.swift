@@ -204,6 +204,18 @@ public enum UITestIdentifiers {
     public static let cryptoTabTitle = "Crypto"
   }
 
+  public enum CryptoAccountCreation {
+    /// Chain picker (Ethereum / OP Mainnet / Base / Polygon) inside the
+    /// crypto branch of `CreateAccountView`. Pinned so a UI test can
+    /// switch chains without depending on rendered display names.
+    public static let chainPicker = "createAccount.crypto.chainPicker"
+
+    /// Wallet-address text field inside the crypto branch of
+    /// `CreateAccountView`. The user pastes a `0x…` address here;
+    /// validation lives in `Account.validatedWalletAddress`.
+    public static let walletAddressField = "createAccount.crypto.walletAddress"
+  }
+
   public enum CryptoSettings {
     /// Root container of the `CryptoSettingsView` Form. Sentinel for the
     /// "Crypto tab is on screen" post-condition after switching tabs in the

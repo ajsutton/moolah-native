@@ -14,20 +14,35 @@ struct CreateAccountView: View {
   @State private var errorMessage: String?
   @FocusState private var focusedField: Field?
 
+  // MARK: - Crypto-only form state
+  //
+  // Held at this level so the shared shell (Cancel + Save toolbar) and
+  // the shared name + type Picker keep one set of bindings regardless of
+  // which type is currently selected. Switching from `.crypto` back to
+  // `.bank` simply hides these fields; the values are preserved so the
+  // user can flip back without retyping.
+
+  @State private var cryptoChain: ChainConfig = .ethereum
+  @State private var cryptoWalletAddress = ""
+
   let instrument: Instrument
   let accountStore: AccountStore
+  let cryptoSyncStore: CryptoSyncStore?
 
   private enum Field: Hashable {
     case name
     case balance
+    case walletAddress
   }
 
   init(
     instrument: Instrument,
-    accountStore: AccountStore
+    accountStore: AccountStore,
+    cryptoSyncStore: CryptoSyncStore? = nil
   ) {
     self.instrument = instrument
     self.accountStore = accountStore
+    self.cryptoSyncStore = cryptoSyncStore
     _currency = State(initialValue: instrument)
   }
 
@@ -43,7 +58,12 @@ struct CreateAccountView: View {
   private var form: some View {
     Form {
       Section {
-        detailsFields
+        sharedFields
+        if type == .crypto {
+          cryptoFields
+        } else {
+          standardFields
+        }
       }
       if let errorMessage {
         Section {
@@ -72,10 +92,12 @@ struct CreateAccountView: View {
     }
   }
 
-  @ViewBuilder private var detailsFields: some View {
-    TextField("Name", text: $name, prompt: Text("e.g. MyBank - Savings"))
+  // Shared name + type picker. The crypto branch reuses both, so they
+  // live above the type-specific fork.
+  @ViewBuilder private var sharedFields: some View {
+    TextField("Name", text: $name, prompt: Text(namePrompt))
       .focused($focusedField, equals: .name)
-      .onSubmit { focusedField = .balance }
+      .onSubmit { focusedField = type == .crypto ? .walletAddress : .balance }
       .accessibilityLabel("Account name")
 
     Picker("Account Type", selection: $type) {
@@ -83,7 +105,9 @@ struct CreateAccountView: View {
         Text(type.displayName).tag(type)
       }
     }
+  }
 
+  @ViewBuilder private var standardFields: some View {
     InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
 
     TextField(
@@ -101,8 +125,26 @@ struct CreateAccountView: View {
     DatePicker("Opening Date", selection: $date, displayedComponents: .date)
   }
 
+  @ViewBuilder private var cryptoFields: some View {
+    CryptoAccountCreationView(
+      chain: $cryptoChain,
+      walletAddressInput: $cryptoWalletAddress)
+  }
+
+  private var namePrompt: String {
+    switch type {
+    case .crypto: return "e.g. Hardware Wallet — Ethereum"
+    default: return "e.g. MyBank - Savings"
+    }
+  }
+
   private var isValid: Bool {
-    !name.trimmingCharacters(in: .whitespaces).isEmpty
+    let trimmedName = name.trimmingCharacters(in: .whitespaces)
+    guard !trimmedName.isEmpty else { return false }
+    if type == .crypto {
+      return Account.validatedWalletAddress(cryptoWalletAddress) != nil
+    }
+    return true
   }
 
   private func submit() async {
@@ -110,6 +152,12 @@ struct CreateAccountView: View {
 
     isSubmitting = true
     errorMessage = nil
+
+    if type == .crypto {
+      await submitCrypto()
+      isSubmitting = false
+      return
+    }
 
     let selectedInstrument = currency
     let openingBalance = InstrumentAmount(quantity: balanceDecimal, instrument: selectedInstrument)
@@ -127,6 +175,21 @@ struct CreateAccountView: View {
     } catch {
       errorMessage = error.localizedDescription
       isSubmitting = false
+    }
+  }
+
+  private func submitCrypto() async {
+    let logic = CryptoAccountCreationLogic(
+      accountStore: accountStore, cryptoSyncStore: cryptoSyncStore)
+    let outcome = await logic.submit(
+      name: name, chain: cryptoChain, walletAddressInput: cryptoWalletAddress)
+    switch outcome {
+    case .created:
+      dismiss()
+    case .invalidAddress:
+      errorMessage = "Enter a valid 0x wallet address."
+    case .failure(let error):
+      errorMessage = error.localizedDescription
     }
   }
 }
