@@ -110,6 +110,29 @@ If a finding is genuinely too large to fix in the current change, say so explici
 - "No change" overloaded as `[]` rather than a sum-type case (`unchanged` vs `replace([])`). **[Important]**
 - Cache-table recreate path that doesn't remove `-wal` / `-shm` sidecars. **[Important]**
 
+### Forward-incompatibility version bumps (§ DataFormatVersion)
+
+A change to a synced data shape requires bumping `DataFormatVersion.current` in `Domain/Models/DataFormatVersion.swift`. Flag any of the following in the diff that does NOT also bump the constant:
+
+- **Critical:** New `RECORD TYPE` added to `CloudKit/schema.ckdb`.
+- **Critical:** New CKSyncEngine zone introduced (a `CKRecordZone.ID(zoneName:)` literal not previously present).
+- **Critical:** New non-defaulted field added to a synced record type — any `+`-line in `CloudKit/schema.ckdb` that adds a field declaration to an existing `RECORD TYPE`. Exclude fields whose *immediately-preceding diff line* is `+    // DEPRECATED` (those are covered by the deprecation bullet below; they are renames, not net-new fields).
+- **Critical:** New case added to an enum marked `// SyncBoundary —` in its source file. Detection requires two passes: list files containing the marker, then look for new enum cases in those files. False-positive guard: a `+ case` line inside a `switch { }` body (not inside an `enum { ... }` body) must NOT be flagged. The agent must inspect the surrounding context lines to confirm the `+ case` line is inside an enum declaration before raising the finding.
+- **Critical:** A field on a synced record type marked `// DEPRECATED` in `schema.ckdb` (the wire-struct generator drops it; older builds still write it).
+
+Cosmetic / additive changes that older builds preserve correctly do not require a bump and should not be flagged. The doc-comment block on `DataFormatVersion.current` lists the rubric and prior bumps; cite a specific bullet from the rubric in the finding.
+
+Greppable patterns to run (run all from the repo root):
+
+- `git diff main -- CloudKit/schema.ckdb | rg '^\+ +RECORD TYPE'` — new record type.
+- `git diff main -- CloudKit/schema.ckdb | rg '^\+ +// DEPRECATED'` — newly-deprecated field. (The marker is a comment line above the field, not on the field line itself; the parser at `tools/CKDBSchemaGen/Sources/CKDBSchemaGen/Parser.swift:56` matches it via `line.hasPrefix("//") && line.contains("DEPRECATED")`.)
+- `git diff main -- '**/*.swift' | rg '^\+.*CKRecordZone\.ID\(zoneName:'` — new CKSyncEngine zone literal.
+- `rg -l 'SyncBoundary' Domain/` — list files with the marker. Then for each: `git diff main -- <file> | rg '^\+\s+case '` and inspect the diff context to confirm the `+ case` is inside an `enum { ... }` body, not a `switch { }` body.
+- `rg 'static let current\s*=\s*(\d+)' Domain/Models/DataFormatVersion.swift` — read the current value directly (for inspection / report).
+- `git diff main -- Domain/Models/DataFormatVersion.swift | rg '^\+ +static let current'` — confirm the constant was *changed* in this PR. Absence of this match alongside any triggering pattern above is the Critical finding.
+
+Absence of a bump alongside a triggering change is a **Critical** finding because the failure mode is silent data corruption on downgrade.
+
 ## False Positives to Avoid
 
 - **The existing `Backends/CoinGecko/SQLiteCoinGeckoCatalog.swift` actor and its `+Refresh.swift` / `+Search.swift` extensions** are pre-GRDB raw-`sqlite3` code. Do not flag the `SQLITE_OPEN_FULLMUTEX` flag, the schema-version-mismatch-recreate path, or the absence of a `DatabaseMigrator` in that file. They predate GRDB. New schemas under `Backends/GRDB/` follow this guide.
