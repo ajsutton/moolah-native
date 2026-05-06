@@ -47,6 +47,11 @@ struct IncompatibleProfileView: View {
     }
     .padding(40)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+    // `.contain` keeps the descendant Buttons discoverable as their own
+    // accessibility elements; without it SwiftUI can merge the VStack
+    // into a single combined element and the per-button identifiers
+    // disappear from the XCUITest tree.
+    .accessibilityElement(children: .contain)
     .accessibilityIdentifier(UITestIdentifiers.IncompatibleProfile.root)
   }
 
