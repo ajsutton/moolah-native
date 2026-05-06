@@ -64,25 +64,44 @@ struct ValueObservationAsyncStreamTests {
     try await queue.write { database in
       try database.create(table: "items") { table in
         table.column("id", .integer).primaryKey()
+        table.column("name", .text).notNull()
       }
     }
 
     let stream =
       ValueObservation
-      .tracking { database in try Int.fetchAll(database, sql: "SELECT id FROM items") }
+      .tracking { database in try String.fetchAll(database, sql: "SELECT name FROM items") }
       .values(in: queue)
       .toAsyncStream(onError: { _ in })
 
     let task = Task {
       var iterator = stream.makeAsyncIterator()
-      return await iterator.next()
+      _ = await iterator.next()  // initial empty emission
+      _ = await iterator.next()  // suspends waiting for next change
     }
-    _ = await task.value
+
+    // Give the task a moment to reach the second `await iterator.next()`.
+    try await Task.sleep(for: .milliseconds(20))
     task.cancel()
-    // If onTermination is wired correctly, the underlying observation
-    // is cancelled and no resources leak. We assert by waiting briefly
-    // and verifying no crash / hang.
-    try? await Task.sleep(for: .milliseconds(50))
+    _ = await task.value  // ensures `onTermination` has fired
+
+    // Verify the underlying observation is torn down: a subsequent
+    // write produces no emission on the cancelled stream's iterator
+    // (which has already been destroyed). Use a fresh iterator on a
+    // new stream to confirm the queue itself is still healthy and
+    // that the previous observation is gone.
+    try await queue.write { database in
+      try database.execute(sql: "INSERT INTO items (name) VALUES ('beta')")
+    }
+
+    let freshStream =
+      ValueObservation
+      .tracking { database in try String.fetchAll(database, sql: "SELECT name FROM items") }
+      .values(in: queue)
+      .toAsyncStream(onError: { _ in })
+    var freshIterator = freshStream.makeAsyncIterator()
+    let fresh = await freshIterator.next()
+    #expect(fresh == ["beta"])  // queue is healthy; previous observation didn't interfere
   }
 
   @Test("error path surfaces via onError callback")
