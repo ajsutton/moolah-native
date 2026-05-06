@@ -45,7 +45,7 @@ import os
 /// `(String, UUID)` form used by per-profile repositories. Only one
 /// record type ever flows through the profile-index DB, so the
 /// recordType prefix would be redundant.
-final class GRDBProfileIndexRepository: ProfileIndexRepository, Sendable {
+final class GRDBProfileIndexRepository {
   /// Holds the post-init hook closures so they can be swapped in
   /// atomically by `attachSyncHooks`. A small struct rather than two
   /// independent locks so the install is a single atomic write.
@@ -98,7 +98,6 @@ final class GRDBProfileIndexRepository: ProfileIndexRepository, Sendable {
     }
   }
 
-  /// Async single-profile fetch — see protocol doc.
   func profile(forID id: UUID) async throws -> Profile? {
     try await database.read { database in
       try ProfileRow
@@ -292,3 +291,6 @@ final class GRDBProfileIndexRepository: ProfileIndexRepository, Sendable {
     }
   }
 }
+
+extension GRDBProfileIndexRepository: ProfileIndexRepository {}
+extension GRDBProfileIndexRepository: Sendable {}
