@@ -26,15 +26,31 @@ final class RecordingAlchemyClientStub: AlchemyClient, @unchecked Sendable {
     case failure(any Error)
   }
 
+  /// Scripted reply for a `getTransactionReceipt` call. Tests that
+  /// exercise the gas-leg path script success on the hashes they care
+  /// about and (optionally) failure on others to verify the
+  /// per-receipt error containment.
+  enum ReceiptResponse: Sendable {
+    case receipt(AlchemyTransactionReceipt)
+    case failure(any Error)
+  }
+
   /// Errors thrown when scripting hooks are unset and a test path hits
   /// the stub anyway. Keeps the failure message specific to the path.
   struct UnscriptedTransfersCall: Error { let chainId: Int }
   struct UnexpectedTokenMetadataCall: Error {}
+  /// Thrown when `getTransactionReceipt` is called for a hash that
+  /// hasn't been scripted on this stub. Tests that exercise the
+  /// receipt path script per-hash responses; tests that don't stay on
+  /// the inbound-only path which never triggers a receipt fetch.
+  struct UnscriptedReceiptCall: Error { let hash: String }
 
   private let lock = NSLock()
   private var transfersResponse: Response?
   private var perAddressResponses: [String: Response] = [:]
   private var assetTransfersCalls: [AssetTransfersCall] = []
+  private var receiptResponses: [String: ReceiptResponse] = [:]
+  private var receiptCalls: [String] = []
   /// Optional hook fired before the response is returned — the
   /// cancellation test installs a closure here that cancels the parent
   /// task so the engine throws on the next `checkCancellation()`.
@@ -91,6 +107,39 @@ final class RecordingAlchemyClientStub: AlchemyClient, @unchecked Sendable {
     contractAddress: String
   ) async throws -> AlchemyTokenMetadata {
     throw UnexpectedTokenMetadataCall()
+  }
+
+  /// Scripts a receipt response for a given on-chain hash. The lookup
+  /// is exact-match — production callers always pass the same casing
+  /// they read off `AlchemyTransfer.hash`, so tests can use the same
+  /// values verbatim.
+  func setReceiptResponse(_ response: ReceiptResponse, for hash: String) {
+    lock.withLock { receiptResponses[hash] = response }
+  }
+
+  /// Recorded list of every `getTransactionReceipt` invocation, in
+  /// call order. Used by the coalescing tests to assert that one
+  /// outbound + four inbound triggers exactly one fetch.
+  var recordedReceiptCalls: [String] {
+    lock.withLock { receiptCalls }
+  }
+
+  func getTransactionReceipt(
+    chain: ChainConfig,
+    hash: String
+  ) async throws -> AlchemyTransactionReceipt {
+    let response: ReceiptResponse? = lock.withLock {
+      receiptCalls.append(hash)
+      return receiptResponses[hash]
+    }
+    switch response {
+    case .none:
+      throw UnscriptedReceiptCall(hash: hash)
+    case let .failure(error):
+      throw error
+    case let .receipt(receipt):
+      return receipt
+    }
   }
 }
 
@@ -178,6 +227,50 @@ func makeWalletImportOrigin(
     importedAt: importedAt,
     importSessionId: sessionId,
     parserIdentifier: "alchemy-wallet-sync")
+}
+
+/// `AlchemyClient` that returns a zero-cost receipt for every receipt
+/// fetch and traps on the unrelated `getAssetTransfers` /
+/// `getTokenMetadata` paths. Used by `TransferEventBuilder` tests that
+/// only care about transfer-leg construction — a zero receipt produces
+/// no gas leg (the builder drops a non-positive total) so the legs the
+/// test actually inspects stay deterministic without extra plumbing.
+final class ZeroReceiptAlchemyStub: AlchemyClient, @unchecked Sendable {
+  struct UnexpectedAssetTransfersCall: Error {}
+  struct UnexpectedTokenMetadataCall: Error {}
+
+  private let lock = NSLock()
+  private var receiptHashes: [String] = []
+
+  /// Hashes the builder has asked for receipts on, in call order. Lets
+  /// tests assert that their inbound-only path didn't trigger a fetch.
+  var recordedReceiptCalls: [String] {
+    lock.withLock { receiptHashes }
+  }
+
+  func getAssetTransfers(
+    chain: ChainConfig,
+    walletAddress: String,
+    fromBlock: UInt64
+  ) async throws -> [AlchemyTransfer] {
+    throw UnexpectedAssetTransfersCall()
+  }
+
+  func getTokenMetadata(
+    chain: ChainConfig,
+    contractAddress: String
+  ) async throws -> AlchemyTokenMetadata {
+    throw UnexpectedTokenMetadataCall()
+  }
+
+  func getTransactionReceipt(
+    chain: ChainConfig,
+    hash: String
+  ) async throws -> AlchemyTransactionReceipt {
+    lock.withLock { receiptHashes.append(hash) }
+    return AlchemyTransactionReceipt(
+      hash: hash, gasUsed: 0, effectiveGasPrice: 0)
+  }
 }
 
 /// Builds a crypto `Account` for a given chain + wallet address.

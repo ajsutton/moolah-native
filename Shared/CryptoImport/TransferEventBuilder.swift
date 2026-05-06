@@ -10,12 +10,11 @@ import os
 /// Produces multi-leg transactions:
 /// - One `.transfer` leg in the value token per token movement involving
 ///   this wallet (negative quantity outbound; positive inbound).
-/// - The gas leg (`.expense` in the chain native token, on the from-side
-///   wallet only) is **deferred to a follow-up** — it requires an
-///   `eth_getTransactionReceipt` round-trip that Stage 4's `AlchemyClient`
-///   does not yet expose. See issue #762. Stage 6 ships transfer-leg-only
-///   `BuiltTransaction`s and the gas leg is added once that client method
-///   lands.
+/// - One `.expense` gas leg in the chain native token, on the from-side
+///   wallet only, when this wallet is the sender of an `external`
+///   transfer. The receipt fetch is coalesced per unique outbound
+///   `txHash` so a single complex transaction with N transfer legs only
+///   triggers one `eth_getTransactionReceipt` round-trip.
 ///
 /// Each leg's `externalId` is set to the event's `hash`. The `counterpartyAddress`
 /// is the lowercased on-chain address on the *other* side of the transfer:
@@ -41,13 +40,22 @@ struct TransferEventBuilder: Sendable {
   /// `to` lowercased but callers may have stored the address in
   /// checksummed form. Transfers where `from` matches the wallet are
   /// outbound; matches on `to` are inbound. A self-send (both sides on
-  /// this wallet) emits a single inbound leg — Stage 7's apply pass
-  /// pairs the matching outbound from the build phase if the user
-  /// happens to track the same wallet under two accounts (rare).
+  /// this wallet) emits a single inbound leg plus the gas leg — Stage
+  /// 7's apply pass pairs the matching outbound from the build phase if
+  /// the user happens to track the same wallet under two accounts
+  /// (rare).
   ///
   /// `importOrigin` carries the per-import audit context (sync session
   /// id, parser identifier). Caller supplies; the builder echoes it on
   /// every produced transaction.
+  ///
+  /// `alchemy` is the same client used by `WalletSyncEngine` to fetch
+  /// transfers. The builder uses it to fetch one `eth_getTransactionReceipt`
+  /// per unique outbound `txHash` so it can attach the gas leg. Receipt
+  /// fetches run in parallel via a `TaskGroup`; the rate limiter inside
+  /// the live client handles throttling. A receipt-fetch failure for one
+  /// hash logs and continues — the affected event ships without a gas
+  /// leg rather than failing the whole account.
   ///
   /// Throws: surfaces only `CancellationError` from the discovery actor
   /// and `WalletSyncError.providerMalformedResponse` when a transfer
@@ -58,10 +66,12 @@ struct TransferEventBuilder: Sendable {
   func build(
     transfers: [AlchemyTransfer],
     account: Account,
-    chain: ChainConfig,
-    discovery: CryptoTokenDiscoveryService,
+    services: BuilderServices,
     importOrigin: ImportOrigin
   ) async throws -> [BuiltTransaction] {
+    let chain = services.chain
+    let discovery = services.discovery
+    let alchemy = services.alchemy
     let signpostID = OSSignpostID(log: Signposts.cryptoSync)
     os_signpost(
       .begin,
@@ -90,12 +100,24 @@ struct TransferEventBuilder: Sendable {
     // Stable order: group preserves first-seen order so test fixtures
     // and signposts are deterministic.
     let groups = groupByHash(transfers)
+    let receipts = try await TransferReceiptCoalescer.fetchReceipts(
+      groups: groups,
+      walletAddress: context.walletAddress,
+      chain: chain,
+      alchemy: alchemy)
+
     var results: [BuiltTransaction] = []
     results.reserveCapacity(groups.count)
 
     for events in groups {
       try Task.checkCancellation()
-      guard let built = try await buildEvent(events: events, context: context) else {
+      let receipt = events.first.flatMap { receipts[$0.hash] }
+      guard
+        let built = try await buildEvent(
+          events: events,
+          receipt: receipt,
+          context: context)
+      else {
         continue
       }
       results.append(built)
@@ -125,8 +147,16 @@ struct TransferEventBuilder: Sendable {
   /// Builds one `BuiltTransaction` from a hash group, or returns `nil`
   /// when the group produces no usable legs (every transfer was unknown
   /// category or malformed).
+  ///
+  /// `receipt` is the pre-fetched `eth_getTransactionReceipt` for this
+  /// hash, present only when at least one event is an outbound
+  /// `external` transfer for this wallet. When present the builder
+  /// appends a single `.expense` gas leg in the chain's native token
+  /// using the same `externalId` as the transfer legs, so dedup against
+  /// existing storage stays on `(accountId, externalId)`.
   private func buildEvent(
     events: [AlchemyTransfer],
+    receipt: AlchemyTransactionReceipt?,
     context: BuildContext
   ) async throws -> BuiltTransaction? {
     var legs: [TransactionLeg] = []
@@ -148,6 +178,13 @@ struct TransferEventBuilder: Sendable {
     }
 
     guard !legs.isEmpty else { return nil }
+
+    if let receipt,
+      let gasLeg = TransferReceiptCoalescer.makeGasLeg(
+        receipt: receipt, accountId: context.account.id, chain: context.chain)
+    {
+      legs.append(gasLeg)
+    }
 
     // Date precedence: earliest block timestamp across the group, falling
     // back to `importedAt` so the transaction never lands with a zero
@@ -345,26 +382,4 @@ private struct BuildContext: Sendable {
 private struct SignAndCounterparty {
   let signedQuantity: Decimal
   let counterpartyAddress: String?
-}
-
-/// Direction a single Alchemy transfer takes relative to the synced
-/// wallet. Computed from the lowercased `from` / `to` fields.
-private enum TransferDirection {
-  case outbound
-  case inbound
-  case selfSend
-  case unrelated
-
-  init(fromAddress: String, toAddress: String?, walletAddress: String) {
-    let from = fromAddress.lowercased()
-    let to = toAddress?.lowercased()
-    let fromIsUs = from == walletAddress
-    let toIsUs = to == walletAddress
-    switch (fromIsUs, toIsUs) {
-    case (true, true): self = .selfSend
-    case (true, false): self = .outbound
-    case (false, true): self = .inbound
-    case (false, false): self = .unrelated
-    }
-  }
 }

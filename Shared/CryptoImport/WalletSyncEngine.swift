@@ -110,8 +110,8 @@ struct WalletSyncEngine: Sendable {
     let built = try await builder.build(
       transfers: transfers,
       account: account,
-      chain: chain,
-      discovery: discovery,
+      services: BuilderServices(
+        chain: chain, discovery: discovery, alchemy: alchemy),
       importOrigin: importOrigin)
     return WalletSyncBuildResult(candidates: built, headBlockNumber: headBlock)
   }

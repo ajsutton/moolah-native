@@ -34,8 +34,10 @@ struct TransferEventBuilderCounterpartyTests {
     let built = try await TransferEventBuilder().build(
       transfers: [transfer],
       account: account,
-      chain: .ethereum,
-      discovery: subject.service,
+      services: BuilderServices(
+        chain: .ethereum,
+        discovery: subject.service,
+        alchemy: ZeroReceiptAlchemyStub()),
       importOrigin: origin)
     let leg = try #require(built.first?.transaction.legs.first)
     #expect(leg.counterpartyAddress == Self.counterparty)
@@ -55,8 +57,10 @@ struct TransferEventBuilderCounterpartyTests {
     let built = try await TransferEventBuilder().build(
       transfers: [transfer],
       account: account,
-      chain: .ethereum,
-      discovery: subject.service,
+      services: BuilderServices(
+        chain: .ethereum,
+        discovery: subject.service,
+        alchemy: ZeroReceiptAlchemyStub()),
       importOrigin: origin)
     let leg = try #require(built.first?.transaction.legs.first)
     #expect(leg.counterpartyAddress == Self.counterparty)
@@ -76,8 +80,10 @@ struct TransferEventBuilderCounterpartyTests {
     let built = try await TransferEventBuilder().build(
       transfers: [transfer],
       account: account,
-      chain: .ethereum,
-      discovery: subject.service,
+      services: BuilderServices(
+        chain: .ethereum,
+        discovery: subject.service,
+        alchemy: ZeroReceiptAlchemyStub()),
       importOrigin: origin)
     let leg = try #require(built.first?.transaction.legs.first)
     #expect(leg.counterpartyAddress == nil)
@@ -98,8 +104,10 @@ struct TransferEventBuilderCounterpartyTests {
     let built = try await TransferEventBuilder().build(
       transfers: [transfer],
       account: account,
-      chain: .ethereum,
-      discovery: subject.service,
+      services: BuilderServices(
+        chain: .ethereum,
+        discovery: subject.service,
+        alchemy: ZeroReceiptAlchemyStub()),
       importOrigin: origin)
     let leg = try #require(built.first?.transaction.legs.first)
     #expect(leg.counterpartyAddress == mixedCase.lowercased())
