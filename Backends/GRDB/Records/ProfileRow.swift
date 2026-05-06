@@ -29,6 +29,7 @@ struct ProfileRow {
     case financialYearStartMonth = "financial_year_start_month"
     case createdAt = "created_at"
     case encodedSystemFields = "encoded_system_fields"
+    case dataFormatVersion = "data_format_version"
   }
 
   enum CodingKeys: String, CodingKey {
@@ -39,6 +40,7 @@ struct ProfileRow {
     case financialYearStartMonth = "financial_year_start_month"
     case createdAt = "created_at"
     case encodedSystemFields = "encoded_system_fields"
+    case dataFormatVersion = "data_format_version"
   }
 
   var id: UUID
@@ -48,6 +50,7 @@ struct ProfileRow {
   var financialYearStartMonth: Int
   var createdAt: Date
   var encodedSystemFields: Data?
+  var dataFormatVersion: Int = 0
 }
 
 extension ProfileRow: Codable {}
