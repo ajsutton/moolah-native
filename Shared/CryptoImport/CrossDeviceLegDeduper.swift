@@ -1,6 +1,7 @@
 // Shared/CryptoImport/CrossDeviceLegDeduper.swift
 import Foundation
 import OSLog
+import os
 
 /// Post-CKSyncEngine reconciliation pass. Runs on `@MainActor` after every
 /// CKSyncEngine `fetchedRecordZoneChanges` callback applies cleanly. Scans
@@ -50,6 +51,21 @@ struct CrossDeviceLegDeduper {
   @discardableResult
   func dedup(touchedExternalIds: Set<String>) async throws -> Int {
     guard !touchedExternalIds.isEmpty else { return 0 }
+    let signpostID = OSSignpostID(log: Signposts.cryptoSync)
+    os_signpost(
+      .begin,
+      log: Signposts.cryptoSync,
+      name: "crossDeviceLegDeduper.dedup",
+      signpostID: signpostID,
+      "%{public}d touched ids",
+      touchedExternalIds.count)
+    defer {
+      os_signpost(
+        .end,
+        log: Signposts.cryptoSync,
+        name: "crossDeviceLegDeduper.dedup",
+        signpostID: signpostID)
+    }
     let candidates = try await transactions.transactions(
       touchingExternalIds: touchedExternalIds)
     guard candidates.count > 1 else { return 0 }

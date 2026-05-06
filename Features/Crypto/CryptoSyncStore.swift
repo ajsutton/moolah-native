@@ -3,6 +3,7 @@ import Foundation
 import OSLog
 import Observation
 import SwiftUI
+import os
 
 /// `@MainActor @Observable` orchestrator for the wallet auto-import.
 /// Owns the foreground sync timer, the per-account "Sync now" command,
@@ -205,6 +206,22 @@ final class CryptoSyncStore {
       return true
     }
     guard !inputs.isEmpty else { return }
+
+    let signpostID = OSSignpostID(log: Signposts.cryptoSync)
+    os_signpost(
+      .begin,
+      log: Signposts.cryptoSync,
+      name: "cryptoSyncStore.syncAccounts",
+      signpostID: signpostID,
+      "%{public}d accounts",
+      inputs.count)
+    defer {
+      os_signpost(
+        .end,
+        log: Signposts.cryptoSync,
+        name: "cryptoSyncStore.syncAccounts",
+        signpostID: signpostID)
+    }
 
     for account in inputs { inProgressAccountIds.insert(account.id) }
     defer {
