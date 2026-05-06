@@ -7,9 +7,8 @@ import Testing
 /// Symptom-A regression coverage for the reactive `AccountStore`.
 ///
 /// "Symptom A" is the bug that motivated the reactive-sync-refresh
-/// rewrite (commit 5 of `plans/2026-05-06-reactive-sync-refresh-implementation.md`):
-/// when CloudKit delivered a remote sync write, the sidebar would not
-/// refresh until the user pulled-to-refresh. The reactive
+/// rewrite: when CloudKit delivered a remote sync write, the sidebar
+/// would not refresh until the user pulled-to-refresh. The reactive
 /// `AccountStore` subscribes to `repository.observeAll()` and
 /// `conversionService.observeRates()` from `init`, so any GRDB write —
 /// local OR sync-driven — propagates to the sidebar without a manual

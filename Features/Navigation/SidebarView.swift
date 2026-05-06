@@ -348,8 +348,7 @@ private func seedSidebarPreview(
     openingBalance: InstrumentAmount(quantity: 5000, instrument: .AUD))
   _ = try? await backend.earmarks.create(Earmark(name: "Holiday Fund", instrument: .AUD))
   // `accountStore` is reactive — it loads itself from `init` via
-  // `observeAll()`. Earmarks still load imperatively until that store
-  // migrates in commit 7 of the reactive-sync plan.
+  // `observeAll()`. Earmarks still load imperatively.
   await earmarkStore.load()
 }
 

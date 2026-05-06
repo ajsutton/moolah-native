@@ -20,8 +20,7 @@ extension ProfileSession {
   /// `TransactionRow` did not change in this batch.
   static func storesToReload(for changedTypes: Set<String>) -> StoreReloadPlan {
     var plan: StoreReloadPlan = []
-    // .accounts no longer needed — AccountStore is reactive (commit 5
-    // of plans/2026-05-06-reactive-sync-refresh-implementation.md).
+    // .accounts no longer needed — AccountStore is reactive.
     // Account / Transaction / TransactionLeg changes propagate via
     // AccountRepository.observeAll() and InstrumentConversionService.observeRates().
     if changedTypes.contains(CategoryRow.recordType) {

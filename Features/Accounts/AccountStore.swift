@@ -275,7 +275,11 @@ final class AccountStore {
     // a race without the explicit annotation.
     conversionTask = Task { @MainActor in
       while !Task.isCancelled {
-        try? await Task.sleep(for: delay)
+        do {
+          try await Task.sleep(for: delay)
+        } catch {
+          return  // CancellationError — exit the retry loop immediately
+        }
         guard !Task.isCancelled else { return }
         let retry = await self.computeBalanceSnapshot()
         self.publishSnapshot(retry)

@@ -4,9 +4,8 @@ import OSLog
 // Mutation surface for `AccountStore`. Hoisted out of `AccountStore.swift`
 // so that file stays under SwiftLint's `file_length` threshold.
 //
-// Mutations are pass-through under the reactive design (commit 5 of
-// `plans/2026-05-06-reactive-sync-refresh-implementation.md`): every
-// method calls the repository, the GRDB write commits, and
+// Mutations are pass-through under the reactive design: every method
+// calls the repository, the GRDB write commits, and
 // `repository.observeAll()` delivers the authoritative state via the
 // observation task spawned in `AccountStore.init`. There is no
 // optimistic insert / rollback path — the reactive emission IS the
