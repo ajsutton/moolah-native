@@ -1,6 +1,7 @@
 #if os(iOS)
   import SwiftData
   import SwiftUI
+  import UIKit
 
   /// Routes between profile states (iOS only):
   /// - No profiles → WelcomeView (first-run state machine)
@@ -24,11 +25,21 @@
         // selected a profile, so the else branch naturally handles
         // the picker case.
         if let info = incompatibleInfo {
-          // TODO(#764): replace with IncompatibleProfileView once it exists.
-          Text(
-            "Profile incompatible (v\(info.profileVersion); build v\(info.buildVersion))"
+          IncompatibleProfileView(
+            info: info,
+            onCheckForUpdates: {
+              UIApplication.shared.open(AppStoreURL.update)
+            },
+            onSwitchProfile: {
+              // Pop back to the picker. Clearing the active profile id
+              // routes to `WelcomeView` on the next render via the
+              // `else` branch; the incompatible state is also cleared
+              // so an immediate re-selection re-fires the gate cleanly.
+              profileStore.activeProfileID = nil
+              activeSession = nil
+              incompatibleInfo = nil
+            }
           )
-          .padding()
         } else if let session = activeSession {
           SessionRootView(session: session)
         } else if profileStore.hasProfiles
