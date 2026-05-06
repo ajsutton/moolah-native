@@ -81,4 +81,28 @@ struct SessionManagerMidSessionBumpTests {
 
     #expect(manager.incompatibleProfiles[id] == nil)
   }
+
+  @Test("installIndexObserver wires reconcile to notifyIndexObservers")
+  func observerWireup() async throws {
+    let containerManager = try ProfileContainerManager.forTesting()
+    let repository = containerManager.profileIndexRepositoryForTesting
+    let coordinator = SyncCoordinator(containerManager: containerManager)
+    let manager = SessionManager(
+      containerManager: containerManager,
+      profileIndexRepository: repository,
+      syncCoordinator: coordinator)
+    manager.installIndexObserver()
+
+    let id = UUID()
+    let bumped = Profile(
+      id: id, label: "Bump",
+      dataFormatVersion: DataFormatVersion.current + 1)
+    try await repository.upsert(bumped)
+
+    coordinator.notifyIndexObservers()
+    // Deterministic wait for the spawned reconcile task to complete.
+    await manager.reconcileTaskForTesting?.value
+
+    #expect(manager.incompatibleProfiles[id] != nil)
+  }
 }

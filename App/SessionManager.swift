@@ -44,6 +44,15 @@ final class SessionManager {
   /// idempotent on this `SessionManager` instance.
   private var indexObserverToken: UUID?
 
+  /// In-flight reconcile task spawned by the index-observer callback.
+  /// Cancel-and-replace on each firing: if two observer batches arrive
+  /// in rapid succession, the prior reconcile is cancelled before the
+  /// next one starts so the two don't race writes to
+  /// `incompatibleProfiles` / `sessions`. Makes the `Task.isCancelled`
+  /// guard inside `reconcileIncompatibilityFromIndex` genuinely
+  /// reachable.
+  private var reconcileTask: Task<Void, Never>?
+
   let containerManager: ProfileContainerManager
   let syncCoordinator: SyncCoordinator?
   let profileIndexRepository: any ProfileIndexRepository
@@ -243,10 +252,10 @@ final class SessionManager {
   func installIndexObserver() {
     guard let syncCoordinator, indexObserverToken == nil else { return }
     indexObserverToken = syncCoordinator.addIndexObserver { [weak self] in
-      // Callback is already @MainActor-isolated; spawn a Task only to
-      // bridge sync→async for the reconcile call. `weak self` prevents
-      // the observer from extending the SessionManager's lifetime.
-      Task { @MainActor in
+      // Bridge sync callback to async reconcile. weak self prevents the
+      // observer from extending the SessionManager's lifetime.
+      self?.reconcileTask?.cancel()
+      self?.reconcileTask = Task {
         await self?.reconcileIncompatibilityFromIndex()
       }
     }
@@ -260,12 +269,14 @@ final class SessionManager {
       syncCoordinator.removeIndexObserver(token)
     }
     indexObserverToken = nil
+    reconcileTask?.cancel()
+    reconcileTask = nil
   }
 
   /// Walks the profile-index repository and applies the gate to any
   /// profile that is now incompatible — evicting a live session if one
   /// is open, and recording an `IncompatibleProfileInfo` either way.
-  /// The eviction order (`cleanupSync` then `removeDataHandler`) is
+  /// The eviction order (`cleanupSync` then `evictCachedState`) is
   /// safe under `@MainActor`: both calls are synchronous, so no other
   /// `@MainActor` work interleaves between them, and the
   /// `SyncCoordinator` delegate runs on the same actor.
@@ -293,7 +304,14 @@ final class SessionManager {
         let syncCoordinator
       {
         session.cleanupSync(coordinator: syncCoordinator)
-        syncCoordinator.removeDataHandler(for: profile.id)
+        // evictCachedState (not removeDataHandler) clears both
+        // dataHandlers AND cachedGRDBRepositories — without the second
+        // eviction, handlerForProfileZone would silently reconstruct a
+        // handler from the cached repos on the next fetched-changes
+        // event, routing writes back into local storage and violating
+        // the gate's "no further fetched changes for the per-profile
+        // zone are applied locally" guarantee.
+        syncCoordinator.evictCachedState(for: profile.id)
       }
     }
   }
@@ -311,5 +329,10 @@ final class SessionManager {
     func setIncompatibleProfileForTesting(id: UUID, info: IncompatibleProfileInfo) {
       incompatibleProfiles[id] = info
     }
+
+    /// Test-only: the in-flight reconcile task, if any. Tests `await`
+    /// its `value` after firing `notifyIndexObservers()` to deterministically
+    /// wait for the reconcile to complete.
+    var reconcileTaskForTesting: Task<Void, Never>? { reconcileTask }
   #endif
 }
