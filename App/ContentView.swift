@@ -86,10 +86,12 @@ struct ContentView: View {
     }
     .focusedSceneValue(\.refreshAction) {
       Task {
-        async let accountsLoad: Void = accountStore.load()
+        // AccountStore is reactive (subscribes via observeAll() in
+        // init); the user-driven refresh only needs to nudge the
+        // remaining non-reactive stores.
         async let categoriesLoad: Void = categoryStore.load()
         async let earmarksLoad: Void = earmarkStore.load()
-        _ = await (accountsLoad, categoriesLoad, earmarksLoad)
+        _ = await (categoriesLoad, earmarksLoad)
       }
     }
     // Pass `nil` to disable the menu item when there is nothing to navigate
@@ -139,7 +141,8 @@ struct ContentView: View {
   }
 
   private func loadSidebarData() async {
-    async let accountsLoad: Void = accountStore.load()
+    // AccountStore is reactive — it loads itself from `init` via
+    // `observeAll()`. Only the still-imperative stores are kicked here.
     async let categoriesLoad: Void = categoryStore.load()
     async let earmarksLoad: Void = earmarkStore.load()
     async let badgeRefresh: Void = importStore.refreshBadge()
@@ -147,7 +150,7 @@ struct ContentView: View {
     // catch-up scan) if the user has picked one. The call is a
     // no-op when no folder is configured.
     async let folderWatch: Void = session.startFolderWatch()
-    _ = await (accountsLoad, categoriesLoad, earmarksLoad, badgeRefresh, folderWatch)
+    _ = await (categoriesLoad, earmarksLoad, badgeRefresh, folderWatch)
   }
 
   private func onScenePhaseActive() {

@@ -102,26 +102,33 @@ struct ProfileSessionTests {
 
   // MARK: - storesToReload (sync reload dispatch policy)
 
-  @Test("AccountRecord change reloads the account store")
-  func accountRecordReloadsAccounts() {
+  @Test("AccountRecord change does NOT enqueue an account reload")
+  func accountRecordDoesNotReloadAccounts() {
+    // AccountStore is reactive (commit 5 of
+    // plans/2026-05-06-reactive-sync-refresh-implementation.md):
+    // remote AccountRow / TransactionRow / TransactionLegRow changes
+    // propagate via `AccountRepository.observeAll()` automatically.
+    // The legacy `.accounts` reload path is intentionally not taken.
     let plan = ProfileSession.storesToReload(for: [AccountRow.recordType])
-    #expect(plan == .accounts)
+    #expect(plan.isEmpty)
   }
 
-  @Test("TransactionRecord change reloads the account store")
-  func transactionRecordReloadsAccounts() {
+  @Test("TransactionRecord change does NOT enqueue an account reload")
+  func transactionRecordDoesNotReloadAccounts() {
+    // See `accountRecordDoesNotReloadAccounts` — AccountStore is reactive.
     let plan = ProfileSession.storesToReload(for: [TransactionRow.recordType])
-    #expect(plan == .accounts)
+    #expect(plan.isEmpty)
   }
 
-  @Test("TransactionLegRecord change reloads both accounts and earmarks")
-  func transactionLegRecordReloadsAccountsAndEarmarks() {
-    // Regression for issue #76: leg-only remote changes (e.g. category or
-    // earmark reassignment on another device) must trigger reloads of both
-    // the account store and the earmark store, even when the parent
-    // TransactionRecord did not change in this batch.
+  @Test("TransactionLegRecord change reloads earmarks but NOT accounts")
+  func transactionLegRecordReloadsOnlyEarmarks() {
+    // Regression for issue #76 (post-reactive-migration): leg-only remote
+    // changes (e.g. category or earmark reassignment on another device) must
+    // trigger an earmark reload — `EarmarkStore` is still imperative and
+    // migrates in commit 7. AccountStore is reactive so accounts are
+    // explicitly NOT in the plan.
     let plan = ProfileSession.storesToReload(for: [TransactionLegRow.recordType])
-    #expect(plan.contains(.accounts))
+    #expect(!plan.contains(.accounts))
     #expect(plan.contains(.earmarks))
     #expect(!plan.contains(.categories))
   }
@@ -156,14 +163,16 @@ struct ProfileSessionTests {
     #expect(plan.isEmpty)
   }
 
-  @Test("Mixed record types combine reload plans")
+  @Test("Mixed record types combine reload plans (accounts excluded — reactive)")
   func mixedRecordTypesCombineReloadPlans() {
     let plan = ProfileSession.storesToReload(
       for: [
         TransactionLegRow.recordType,
         CategoryRow.recordType,
       ])
-    #expect(plan.contains(.accounts))
+    // AccountStore is reactive (commit 5) — accounts are not in the
+    // reload plan, even when leg or transaction changes arrive.
+    #expect(!plan.contains(.accounts))
     #expect(plan.contains(.earmarks))
     #expect(plan.contains(.categories))
   }

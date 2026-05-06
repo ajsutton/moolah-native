@@ -50,9 +50,14 @@ struct AccountStoreConversionTestsMoreExtra {
       repository: backend.accounts,
       conversionService: counter,
       targetInstrument: aud)
-    // `load()` awaits the first conversion pass, so the counter baseline
-    // is stable before we measure this call.
-    await store.load()
+    // Wait until the seeded positions are observable, then drain any
+    // in-flight rate-tick recompute so the counter baseline is stable
+    // before we measure this call.
+    try await store.waitForNextEmission(
+      matching: { $0.positions(for: accountId).count == 2 },
+      description: "both positions observed"
+    )
+    await store.waitForPendingConversions()
 
     let baseline = await counter.convertAmountCallCount
     let total = try await store.computeConvertedInvestmentTotal(in: aud)
@@ -122,7 +127,10 @@ struct AccountStoreConversionTestsMoreExtra {
       repository: backend.accounts,
       conversionService: conversion,
       targetInstrument: .USD)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.positions(for: accountId).count == 2 },
+      description: "both positions observed"
+    )
 
     let total = try await store.computeConvertedInvestmentTotal(in: .USD)
     #expect(total.instrument == .USD)
@@ -162,7 +170,10 @@ struct AccountStoreConversionTestsMoreExtra {
       repository: backend.accounts,
       conversionService: conversion,
       targetInstrument: .USD)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.by(id: accountId) != nil },
+      description: "seeded account observed"
+    )
 
     // External valuation in AUD (e.g. latest InvestmentValue): 2000 AUD.
     let externalValue = InstrumentAmount(
@@ -205,7 +216,10 @@ struct AccountStoreConversionTestsMoreExtra {
       repository: backend.accounts,
       conversionService: backend.conversionService,
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { !($0.positions(for: accountId).isEmpty) },
+      description: "position observed"
+    )
 
     let total = try await store.computeConvertedInvestmentTotal(
       in: .defaultTestInstrument)

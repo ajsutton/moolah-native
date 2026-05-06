@@ -51,7 +51,7 @@
         Issue.record("expected .ready")
         return
       }
-      await session.accountStore.load()
+      try? await session.accountStore.waitForFirstEmission()
 
       _ = try await harness.service.createAccount(
         profileIdentifier: "Test Profile",
@@ -102,7 +102,7 @@
         Issue.record("expected .ready")
         return
       }
-      await sourceSession.accountStore.load()
+      try? await sourceSession.accountStore.waitForFirstEmission()
       _ = try await harness.service.createAccount(
         profileIdentifier: "Source Profile",
         name: "Savings",
@@ -132,7 +132,10 @@
         Issue.record("expected .ready")
         return
       }
-      await importedSession.accountStore.load()
+      try? await importedSession.accountStore.waitForNextEmission(
+        matching: { $0.accounts.contains { $0.name == "Savings" } },
+        description: "imported account observable"
+      )
       #expect(importedSession.accountStore.accounts.contains { $0.name == "Savings" })
     }
 

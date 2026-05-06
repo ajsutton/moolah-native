@@ -22,7 +22,10 @@ struct AccountStoreUpdateValuationTests {
       repository: backend.accounts,
       conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.by(id: original.id) != nil },
+      description: "seeded account observed"
+    )
 
     // Mirror EditAccountView.save(): copy the account, assign the picker's
     // value, then hand it to the store.
@@ -46,7 +49,10 @@ struct AccountStoreUpdateValuationTests {
       repository: backend.accounts,
       conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.by(id: original.id) != nil },
+      description: "seeded account observed"
+    )
 
     var updated = original
     updated.valuationMode = .recordedValue

@@ -228,15 +228,16 @@ extension AutomationService {
 
   // MARK: - Refresh
 
-  /// Refreshes all stores for the given profile concurrently.
+  /// Refreshes all stores for the given profile concurrently. The
+  /// reactive `AccountStore` self-loads via `observeAll()` from `init`,
+  /// so this method only kicks the still-imperative stores.
   func refresh(profileIdentifier: String) async throws {
     let session = try resolveSession(for: profileIdentifier)
 
-    async let accountsLoad: Void = session.accountStore.load()
     async let categoriesLoad: Void = session.categoryStore.load()
     async let earmarksLoad: Void = session.earmarkStore.load()
 
-    _ = await (accountsLoad, categoriesLoad, earmarksLoad)
+    _ = await (categoriesLoad, earmarksLoad)
   }
 
   // MARK: - Crypto sync

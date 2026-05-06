@@ -88,7 +88,19 @@ enum TransactionStoreTestSupport {
       conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument
     )
-    await accountStore.load()
+    // `AccountStore` is reactive — wait for an observation emission
+    // that contains the seeded accounts before any TransactionStore code
+    // path that depends on them being visible runs. Without seeded
+    // accounts, the first emission is enough.
+    if accounts.isEmpty {
+      try? await accountStore.waitForFirstEmission()
+    } else {
+      let expectedCount = accounts.count
+      try? await accountStore.waitForNextEmission(
+        matching: { $0.accounts.count == expectedCount },
+        description: "seeded accounts observable"
+      )
+    }
     await earmarkStore.load()
     let store = TransactionStore(
       repository: backend.transactions,

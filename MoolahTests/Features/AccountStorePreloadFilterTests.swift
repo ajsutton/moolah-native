@@ -29,7 +29,10 @@ struct AccountStorePreloadFilterTests {
       conversionService: FixedConversionService(),
       targetInstrument: .AUD,
       investmentRepository: backend.investments)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.investmentValues[recorded.id] != nil },
+      description: "investment values preloaded"
+    )
 
     #expect(store.investmentValues[recorded.id] != nil)
     #expect(store.investmentValues[trades.id] == nil)
@@ -51,7 +54,10 @@ struct AccountStorePreloadFilterTests {
       conversionService: FixedConversionService(),
       targetInstrument: .AUD,
       investmentRepository: backend.investments)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.by(id: account.id) != nil },
+      description: "seeded account observed"
+    )
 
     // The snapshot exists in the repo but the cache excluded it because
     // the account was in `calculatedFromTrades` mode at load time.
@@ -61,9 +67,13 @@ struct AccountStorePreloadFilterTests {
     updated.valuationMode = .recordedValue
     _ = try await store.update(updated)
 
-    // After the mode flip, `update` preloads investment values so the
-    // cache picks up the existing snapshot for the now-recordedValue
-    // account.
+    // Wait for the observation to deliver the updated mode and trigger
+    // the snapshot preload.
+    try await store.waitForNextEmission(
+      matching: { $0.investmentValues[account.id]?.quantity == 250 },
+      description: "snapshot preloaded after mode flip"
+    )
+
     #expect(store.investmentValues[account.id]?.quantity == 250)
   }
 }

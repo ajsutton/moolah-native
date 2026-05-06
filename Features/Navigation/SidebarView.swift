@@ -69,9 +69,10 @@ struct SidebarView: View {
       .environment(\.editMode, $editMode)
     #endif
     .refreshable {
-      async let accountsLoad: Void = accountStore.load()
-      async let earmarksLoad: Void = earmarkStore.load()
-      _ = await (accountsLoad, earmarksLoad)
+      // AccountStore is reactive (subscribes via observeAll() in init),
+      // so pull-to-refresh only needs to nudge the still-imperative
+      // EarmarkStore.
+      await earmarkStore.load()
     }
     .safeAreaInset(edge: .bottom, spacing: 0) {
       SyncProgressFooter()
@@ -346,7 +347,9 @@ private func seedSidebarPreview(
     Account(name: "Asset", type: .asset, instrument: .AUD),
     openingBalance: InstrumentAmount(quantity: 5000, instrument: .AUD))
   _ = try? await backend.earmarks.create(Earmark(name: "Holiday Fund", instrument: .AUD))
-  await accountStore.load()
+  // `accountStore` is reactive — it loads itself from `init` via
+  // `observeAll()`. Earmarks still load imperatively until that store
+  // migrates in commit 7 of the reactive-sync plan.
   await earmarkStore.load()
 }
 

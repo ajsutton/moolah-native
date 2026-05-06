@@ -17,7 +17,10 @@ struct AccountStoreLoadingTests {
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.count == 1 },
+      description: "seeded account is observed"
+    )
 
     #expect(store.accounts.count == 1)
     #expect(store.accounts.first?.name == "Checking")
@@ -34,7 +37,10 @@ struct AccountStoreLoadingTests {
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.count == 2 },
+      description: "both seeded accounts are observed"
+    )
 
     #expect(store.accounts.count == 2)
     #expect(store.accounts[0].name == "A2")
@@ -63,7 +69,10 @@ struct AccountStoreLoadingTests {
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.convertedNetWorth?.quantity == Decimal(2_550_000) / 100 },
+      description: "totals settle"
+    )
 
     #expect(
       store.convertedCurrentTotal
@@ -98,7 +107,10 @@ struct AccountStoreLoadingTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: conversion, targetInstrument: aud)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.convertedCurrentTotal?.quantity == Decimal(240_000) / 100 },
+      description: "totals settle"
+    )
 
     // 1_000.00 AUD + (500.00 USD * 2) + (200.00 USD * 2) = 1_000 + 1_000 + 400 = 2_400.00
     #expect(

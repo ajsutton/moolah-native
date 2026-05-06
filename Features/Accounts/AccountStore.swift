@@ -6,7 +6,6 @@ import Observation
 @MainActor
 final class AccountStore {
   private(set) var accounts = Accounts(from: [])
-  private(set) var isLoading = false
   private(set) var error: Error?
 
   private(set) var convertedCurrentTotal: InstrumentAmount?
@@ -44,7 +43,30 @@ final class AccountStore {
   /// uses ~30s; tests pass a small value to keep retries snappy.
   private let retryDelay: Duration
   private let logger = Logger(subsystem: "com.moolah.app", category: "AccountStore")
+
+  /// The single observation `Task` that runs the `withTaskGroup` of
+  /// child tasks subscribing to `repository.observeAll()`,
+  /// `repository.observeErrors()`, `conversionService.observeRates()`,
+  /// and `conversionService.observeErrors()`. Spawned from `init`,
+  /// torn down by `stopObserving()` (called from
+  /// `ProfileSession.cleanupSync`) or by `deinit` as a safety net.
+  private var observationTask: Task<Void, Never>?
+
+  /// Background retry loop spawned by `recomputeConvertedTotals()` when
+  /// a conversion pass reports any failure. Cancelled when a subsequent
+  /// pass succeeds; otherwise continues until success or the store is
+  /// torn down. See the conditional-cancel pattern below.
   private var conversionTask: Task<Void, Never>?
+
+  /// Test-only emission tick stream. Yields `()` after every state
+  /// assignment in `apply(accounts:)` and after every recompute in
+  /// `recomputeConvertedTotals()`. Tests use the
+  /// `TestableStoreObservation` helpers in
+  /// `MoolahTests/Support/StoreObservation+Test.swift` to await
+  /// emissions deterministically. `internal` access is intentional;
+  /// `@testable import Moolah` exposes it to the test target.
+  let testObservationTickStream: AsyncStream<Void>
+  private let testObservationTickContinuation: AsyncStream<Void>.Continuation
 
   init(
     repository: AccountRepository,
@@ -60,47 +82,98 @@ final class AccountStore {
     self.balanceCalculator = AccountBalanceCalculator(
       conversionService: conversionService, targetInstrument: targetInstrument)
     self.retryDelay = retryDelay
+    let pair = AsyncStream<Void>.makeStream()
+    self.testObservationTickStream = pair.stream
+    self.testObservationTickContinuation = pair.continuation
+
+    // Strong `self` capture is intentional: the store is `@MainActor`,
+    // the task already holds an implicit strong reference, and
+    // `stopObserving()` (called from `cleanupSync`) is the sole lifetime
+    // gate. A weak capture would just add a nil-check hazard without
+    // preventing the retain — and `guard let self else { return }` would
+    // mask cancellation-propagation bugs by silently exiting.
+    observationTask = Task { await self.observe() }
   }
 
-  func load() async {
-    guard !isLoading else { return }
-
-    logger.debug("Loading accounts...")
-    isLoading = true
-    error = nil
-
-    do {
-      accounts = Accounts(from: try await repository.fetchAll())
-      logger.debug("Loaded \(self.accounts.count) accounts")
-      await preloadInvestmentValues()
-      await recomputeConvertedTotals()
-    } catch {
-      logger.error("❌ Failed to load accounts: \(error.localizedDescription)")
-      self.error = error
+  deinit {
+    // Safety net for the case where `cleanupSync` is missed (e.g. an
+    // early-error tear-down path that drops the ProfileSession without
+    // calling cleanupSync). Cancels the strongly-held observation Task
+    // so it does not retain `self` and a stale GRDB connection forever.
+    // Under normal lifecycle, `stopObserving()` runs first via
+    // `cleanupSync` and this is a no-op. Swift 6 makes `deinit`
+    // nonisolated; reading `@MainActor`-isolated state requires
+    // `MainActor.assumeIsolated`. The store is owned by main-actor
+    // code (`ProfileSession`), so the assumption holds in practice.
+    MainActor.assumeIsolated {
+      observationTask?.cancel()
+      conversionTask?.cancel()
+      testObservationTickContinuation.finish()
     }
-
-    isLoading = false
   }
 
-  /// Re-fetches accounts without showing loading state or clearing errors.
-  /// Used when CloudKit delivers remote changes — avoids UI flicker.
-  func reloadFromSync() async {
-    let start = ContinuousClock.now
-    do {
-      let fresh = Accounts(from: try await repository.fetchAll())
-      let elapsed = (ContinuousClock.now - start).inMilliseconds
-      if fresh.ordered != accounts.ordered {
-        accounts = fresh
-        logger.debug("Sync: updated accounts (\(fresh.count) accounts) in \(elapsed)ms")
-        await preloadInvestmentValues()
-        await recomputeConvertedTotals()
+  /// Subscribes to the four reactive streams in parallel via a
+  /// `TaskGroup`. The child tasks run nonisolated; each per-emission
+  /// body awaits a `@MainActor`-isolated method on `self` so state
+  /// assignments happen on the main actor. Capturing the streams
+  /// locally (instead of `self.repository.observeAll()` inside the
+  /// `addTask` closure) lets the region-based isolation checker reason
+  /// about Sendable-ness.
+  private func observe() async {
+    let accountsStream = repository.observeAll()
+    let accountErrors = repository.observeErrors()
+    let rateStream = conversionService.observeRates()
+    let rateErrors = conversionService.observeErrors()
+    await withTaskGroup(of: Void.self) { group in
+      group.addTask { [self] in
+        for await fresh in accountsStream {
+          await self.apply(accounts: fresh)
+        }
       }
-      if elapsed > 16 {
-        logger.warning("⚠️ PERF: accountStore.reloadFromSync took \(elapsed)ms")
+      group.addTask { [self] in
+        for await error in accountErrors {
+          await self.surface(error: error)
+        }
       }
-    } catch {
-      logger.error("Sync reload failed: \(error.localizedDescription)")
+      group.addTask { [self] in
+        for await _ in rateStream {
+          await self.recomputeConvertedTotals()
+        }
+      }
+      group.addTask { [self] in
+        for await error in rateErrors {
+          await self.surface(error: error)
+        }
+      }
+      // Cancellation of `observationTask` cancels the group; the
+      // `for await` loops exit; the group returns naturally.
     }
+  }
+
+  /// Applies a fresh accounts snapshot from `observeAll()`. Preloads
+  /// investment values, then triggers a balance recompute. Both steps
+  /// run on `@MainActor` so the publish order is deterministic.
+  private func apply(accounts fresh: [Account]) async {
+    self.accounts = Accounts(from: fresh)
+    await preloadInvestmentValues()
+    await recomputeConvertedTotals()
+    testObservationTickContinuation.yield(())
+  }
+
+  private func surface(error: any Error) {
+    logger.error("AccountStore observation error: \(error.localizedDescription)")
+    self.error = error
+  }
+
+  /// Tears down the observation task. Idempotent. Called from
+  /// `ProfileSession.cleanupSync(coordinator:)` AFTER any
+  /// `deleteAllLocalData()` call so the empty-state transition is
+  /// emitted to subscribed views before cancellation.
+  func stopObserving() {
+    observationTask?.cancel()
+    observationTask = nil
+    conversionTask?.cancel()
+    conversionTask = nil
   }
 
   /// Asks `investmentValueCache` to hydrate itself with the latest value for
@@ -165,29 +238,52 @@ final class AccountStore {
   }
 
   /// Recompute per-account balances and aggregate totals via
-  /// `balanceCalculator`. The first pass runs inline and is awaited by the
-  /// caller, so after `load()` (and every other caller below) returns,
-  /// observers see fully-published balances. If the first pass reports any
-  /// conversion failure, a `[weak self]` background retry loop is spawned
-  /// that keeps attempting until everything succeeds or a new recompute
-  /// cancels it. Callers that want to await retry success use
-  /// `waitForPendingConversions()`.
+  /// `balanceCalculator`. Driven by emissions from either
+  /// `repository.observeAll()` (fresh data) or
+  /// `conversionService.observeRates()` (rate changes). The first pass
+  /// publishes inline. If the pass reports any conversion failure and
+  /// no retry loop is already running, a `@MainActor` background retry
+  /// is spawned that keeps attempting until everything succeeds.
+  ///
+  /// Conditional cancel: the retry is cancelled only on success. Leaving
+  /// it running on repeat failure is intentional — every emission from
+  /// either source would otherwise reset the clock and a profile with
+  /// frequent unrelated rate ticks could delay recovery indefinitely.
   private func recomputeConvertedTotals() async {
-    conversionTask?.cancel()
-    conversionTask = nil
-
     let snapshot = await computeBalanceSnapshot()
     publishSnapshot(snapshot)
-    guard snapshot.anyFailed else { return }
-
+    testObservationTickContinuation.yield(())
+    if !snapshot.anyFailed {
+      // Success — kill any in-flight retry; nothing left to retry.
+      conversionTask?.cancel()
+      conversionTask = nil
+      return
+    }
+    // Failure — start a retry only if one isn't already running.
+    // Critical: the `guard conversionTask == nil else { return }` line
+    // is load-bearing. Without it, every emission from observeRates()
+    // (including writes for instruments unrelated to this profile) would
+    // cancel and respawn the retry loop, resetting the wait clock and
+    // potentially delaying recovery indefinitely.
+    guard conversionTask == nil else { return }
     let delay = retryDelay
-    conversionTask = Task { [weak self] in
+    // `Task { @MainActor in … }`: the closure mutates
+    // `self.conversionTask` and calls `publishSnapshot` (both
+    // MainActor-isolated). The annotation is required even though the
+    // call site is already on `@MainActor` — future refactors that move
+    // `recomputeConvertedTotals` off MainActor would silently introduce
+    // a race without the explicit annotation.
+    conversionTask = Task { @MainActor in
       while !Task.isCancelled {
         try? await Task.sleep(for: delay)
-        guard let self, !Task.isCancelled else { return }
+        guard !Task.isCancelled else { return }
         let retry = await self.computeBalanceSnapshot()
         self.publishSnapshot(retry)
-        if !retry.anyFailed { return }
+        self.testObservationTickContinuation.yield(())
+        if !retry.anyFailed {
+          self.conversionTask = nil
+          return
+        }
       }
     }
   }
@@ -226,7 +322,11 @@ final class AccountStore {
     await recomputeConvertedTotals()
   }
 
-  /// Applies position deltas to account balances.
+  /// Applies position deltas to account balances. Used by
+  /// `TransactionStore` to keep the sidebar fresh between a write and
+  /// the next observation emission. The reactive observation will
+  /// overwrite this state with authoritative GRDB content shortly
+  /// after; the delta keeps the UI snappy in the interim.
   func applyDelta(_ accountDeltas: PositionDeltas) async {
     var result = accounts
     for (accountId, instrumentDeltas) in accountDeltas {
@@ -236,148 +336,21 @@ final class AccountStore {
     await recomputeConvertedTotals()
   }
 
-  // MARK: - Mutations
+  // Mutation methods live in `AccountStore+Mutations.swift`.
 
-  func create(_ account: Account, openingBalance: InstrumentAmount? = nil) async throws -> Account {
-    isLoading = true
-    error = nil
-
-    // User-driven account creation lands in trades mode by default for
-    // investment accounts: any caller-provided `.recordedValue` is silently
-    // promoted to `.calculatedFromTrades`. Migration / sync paths that need
-    // to write `.recordedValue` go through `accountRepository.update(_:)`
-    // directly, not this method.
-    var toCreate = account
-    if toCreate.type == .investment && toCreate.valuationMode == .recordedValue {
-      toCreate.valuationMode = .calculatedFromTrades
-    }
-
-    do {
-      let created = try await repository.create(toCreate, openingBalance: openingBalance)
-
-      // Optimistically add to local state
-      accounts = Accounts(from: accounts.ordered + [created])
-      logger.debug("Created account: \(created.name)")
-
-      // Populate `convertedBalances` for the new account. Without this,
-      // an account whose positions never differ from what `fetchAll`
-      // returns (notably an empty investment account) would spin forever
-      // in the sidebar, because `reloadFromSync` only recomputes when
-      // fetched accounts differ from the local copy.
-      await recomputeConvertedTotals()
-
-      isLoading = false
-      return created
-    } catch {
-      logger.error("Failed to create account: \(error.localizedDescription)")
-      self.error = error
-      isLoading = false
-      throw error
-    }
+  /// Module-internal hook used by `AccountStore+Mutations.swift` to
+  /// surface and reset the published `error` property. Lives here
+  /// (rather than on the extension) because `error` is `private(set)`
+  /// — the extension cannot mutate it directly.
+  func setError(_ error: (any Error)?) {
+    self.error = error
   }
 
-  func update(_ account: Account) async throws -> Account {
-    isLoading = true
-    error = nil
+  /// Module-internal helper for `AccountStore+Mutations.swift` to log
+  /// against the shared logger.
+  var mutationLogger: Logger { logger }
 
-    // Store previous state for rollback
-    let previousAccounts = accounts
-
-    // Optimistic update
-    accounts = Accounts(from: accounts.ordered.map { $0.id == account.id ? account : $0 })
-
-    do {
-      let updated = try await repository.update(account)
-
-      // Replace with server's version (accept server's balance)
-      accounts = Accounts(from: accounts.ordered.map { $0.id == updated.id ? updated : $0 })
-      logger.debug("Updated account: \(updated.name)")
-
-      // Preload picks up snapshots for accounts whose mode changed to
-      // `recordedValue`: without this, a flip from `calculatedFromTrades`
-      // would leave `displayBalance` returning zero until CloudKit sync
-      // delivered an unrelated refresh.
-      await preloadInvestmentValues()
-      await recomputeConvertedTotals()
-
-      isLoading = false
-      return updated
-    } catch {
-      // Rollback on failure
-      accounts = previousAccounts
-      logger.error("Failed to update account: \(error.localizedDescription)")
-      self.error = error
-      isLoading = false
-      throw error
-    }
-  }
-
-  func reorderAccounts(_ reordered: [Account], positionOffset: Int = 0) async {
-    // Save previous state for rollback on failure.
-    let previousAccounts = accounts
-    error = nil
-
-    // Optimistic local reorder so the UI reflects the new ordering immediately.
-    var optimistic = accounts.ordered
-    for (index, account) in reordered.enumerated() {
-      guard let existingIndex = optimistic.firstIndex(where: { $0.id == account.id }) else {
-        continue
-      }
-      optimistic[existingIndex].position = positionOffset + index
-    }
-    accounts = Accounts(from: optimistic)
-
-    // Persist each reorder. Accumulate the first encountered error rather than
-    // silently swallowing failures — partial failure leaves server state
-    // inconsistent, so we must surface it and roll back.
-    var firstError: Error?
-    for (index, account) in reordered.enumerated() {
-      var updated = account
-      updated.position = positionOffset + index
-      do {
-        _ = try await repository.update(updated)
-      } catch {
-        logger.error("Failed to persist account reorder for \(updated.id): \(error)")
-        if firstError == nil { firstError = error }
-      }
-    }
-
-    if let firstError {
-      // Roll back optimistic state and reload to reconcile with whatever did
-      // persist on the server. Set the error AFTER reload, since load()
-      // clears `error` at its start and would otherwise swallow the failure.
-      accounts = previousAccounts
-      await load()
-      self.error = firstError
-      return
-    }
-
-    // Success: reload to get authoritative state from the repository.
-    await load()
-  }
-
-  func delete(id: UUID) async throws {
-    isLoading = true
-    error = nil
-
-    // Store previous state for rollback
-    let previousAccounts = accounts
-
-    do {
-      try await repository.delete(id: id)
-
-      // Remove from local state (filter out hidden)
-      accounts = Accounts(from: accounts.ordered.filter { $0.id != id })
-      logger.debug("Deleted account: \(id)")
-
-      isLoading = false
-    } catch {
-      // Rollback on failure
-      accounts = previousAccounts
-      logger.error("Failed to delete account: \(error.localizedDescription)")
-      self.error = error
-      isLoading = false
-      throw error
-    }
-  }
+  /// Module-internal accessor for `AccountStore+Mutations.swift` to
+  /// reach the underlying repository.
+  var mutationRepository: AccountRepository { repository }
 }

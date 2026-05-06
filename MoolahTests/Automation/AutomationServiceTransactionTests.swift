@@ -22,7 +22,9 @@ struct AutomationServiceTransactionTests {
       Issue.record("expected .ready")
       throw OpenSessionFailed()
     }
-    await session.accountStore.load()
+    // AccountStore is reactive — wait for the first emission so any
+    // pre-seeded accounts are visible.
+    try? await session.accountStore.waitForFirstEmission()
     await session.categoryStore.load()
     await session.earmarkStore.load()
     let service = AutomationService(sessionManager: sessionManager)
@@ -31,13 +33,17 @@ struct AutomationServiceTransactionTests {
 
   @Test("createTransaction creates a single-leg transaction")
   func createSingleLegTransaction() async throws {
-    let (service, _) = try await makeServiceWithSession()
+    let (service, session) = try await makeServiceWithSession()
 
     // Create an account first
     _ = try await service.createAccount(
       profileIdentifier: "Test",
       name: "Checking",
       type: .bank
+    )
+    try? await session.accountStore.waitForNextEmission(
+      matching: { $0.accounts.contains { $0.name == "Checking" } },
+      description: "new account observable"
     )
 
     let transaction = try await service.createTransaction(
@@ -64,12 +70,16 @@ struct AutomationServiceTransactionTests {
 
   @Test("listTransactions returns created transactions")
   func listTransactions() async throws {
-    let (service, _) = try await makeServiceWithSession()
+    let (service, session) = try await makeServiceWithSession()
 
     _ = try await service.createAccount(
       profileIdentifier: "Test",
       name: "Checking",
       type: .bank
+    )
+    try? await session.accountStore.waitForNextEmission(
+      matching: { $0.accounts.contains { $0.name == "Checking" } },
+      description: "new account observable"
     )
 
     _ = try await service.createTransaction(
@@ -93,12 +103,16 @@ struct AutomationServiceTransactionTests {
 
   @Test("createTransaction with positive amount creates income")
   func createIncomeTransaction() async throws {
-    let (service, _) = try await makeServiceWithSession()
+    let (service, session) = try await makeServiceWithSession()
 
     _ = try await service.createAccount(
       profileIdentifier: "Test",
       name: "Checking",
       type: .bank
+    )
+    try? await session.accountStore.waitForNextEmission(
+      matching: { $0.accounts.contains { $0.name == "Checking" } },
+      description: "new account observable"
     )
 
     let transaction = try await service.createTransaction(

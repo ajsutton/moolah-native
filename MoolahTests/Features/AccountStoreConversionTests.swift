@@ -34,7 +34,10 @@ struct AccountStoreConversionTests {
       conversionService: backend.conversionService,
       targetInstrument: .defaultTestInstrument
     )
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { !($0.positions(for: accountId).isEmpty) },
+      description: "positions are observed"
+    )
 
     let positions = store.positions(for: accountId)
     #expect(positions.count == 1)
@@ -81,7 +84,10 @@ struct AccountStoreConversionTests {
       conversionService: backend.conversionService,
       targetInstrument: .defaultTestInstrument
     )
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.positions(for: accountId).count == 2 },
+      description: "both positions observed"
+    )
 
     let positions = store.positions(for: accountId)
     #expect(positions.count == 2)
@@ -142,7 +148,10 @@ struct AccountStoreConversionTests {
       conversionService: backend.conversionService,
       targetInstrument: .defaultTestInstrument
     )
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.positions(for: accountId).count == 2 },
+      description: "both positions observed"
+    )
 
     // 1000 AUD + 500 USD converted to AUD (500 * 1.5385 = 769.25)
     let total = try await store.computeConvertedCurrentTotal(in: .AUD)
@@ -160,7 +169,7 @@ struct AccountStoreConversionTests {
       conversionService: backend.conversionService,
       targetInstrument: .defaultTestInstrument
     )
-    await store.load()
+    try await store.waitForFirstEmission()
     #expect(store.positions(for: UUID()).isEmpty)
   }
 }

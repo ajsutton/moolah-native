@@ -40,7 +40,10 @@ struct AccountStoreConversionTestsExtra {
       conversionService: backend.conversionService,
       targetInstrument: .defaultTestInstrument
     )
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.positions(for: accountId).count == 2 },
+      description: "both fiat and stock positions observed"
+    )
 
     let positions = store.positions(for: accountId)
     #expect(positions.count == 2)
@@ -91,7 +94,10 @@ struct AccountStoreConversionTestsExtra {
       conversionService: backend.conversionService,
       targetInstrument: .defaultTestInstrument
     )
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.positions(for: accountId).count == 3 },
+      description: "all three kinds of positions observed"
+    )
 
     let positions = store.positions(for: accountId)
     #expect(positions.count == 3)
@@ -132,7 +138,10 @@ struct AccountStoreConversionTestsExtra {
     let store = AccountStore(
       repository: backend.accounts, conversionService: conversion,
       targetInstrument: .AUD)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.positions(for: accountId).count == 2 },
+      description: "both positions observed"
+    )
 
     let balance = try await store.displayBalance(for: accountId)
     #expect(balance.instrument == .AUD)
@@ -162,7 +171,10 @@ struct AccountStoreConversionTestsExtra {
       repository: backend.accounts,
       conversionService: backend.conversionService,
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { !($0.positions(for: accountId).isEmpty) },
+      description: "position observed"
+    )
 
     let balance = try await store.displayBalance(for: accountId)
     #expect(balance.quantity == dec("750.00"))

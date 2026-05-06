@@ -21,7 +21,10 @@ struct AccountStoreMutationsTests {
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.count == 2 },
+      description: "both seeded accounts are observed"
+    )
 
     #expect(store.currentAccounts.count == 1)
     #expect(store.currentAccounts[0].name == "Visible")
@@ -38,7 +41,10 @@ struct AccountStoreMutationsTests {
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.count == 2 },
+      description: "both seeded accounts are observed"
+    )
     store.showHidden = true
 
     #expect(store.currentAccounts.count == 2)
@@ -56,7 +62,10 @@ struct AccountStoreMutationsTests {
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.count == 2 },
+      description: "both seeded accounts are observed"
+    )
 
     #expect(store.investmentAccounts.count == 1)
     store.showHidden = true
@@ -79,7 +88,7 @@ struct AccountStoreMutationsTests {
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    await store.load()
+    try await store.waitForFirstEmission()
 
     #expect(store.investmentAccounts.map(\.name).sorted() == ["Brokerage", "ETH Wallet"])
   }
@@ -92,6 +101,7 @@ struct AccountStoreMutationsTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
+    try await store.waitForFirstEmission()
     let usdInstrument = Instrument.fiat(code: "USD")
     let account = Account(
       id: UUID(), name: "USD Checking", type: .bank, instrument: usdInstrument, position: 0,
@@ -100,6 +110,11 @@ struct AccountStoreMutationsTests {
     let created = try await store.create(account)
 
     #expect(created.instrument.id == usdInstrument.id)
+
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.first?.instrument.id == usdInstrument.id },
+      description: "store sees created account with USD instrument"
+    )
     #expect(store.accounts.first?.instrument.id == usdInstrument.id)
 
     let fetched = try await backend.accounts.fetchAll()
@@ -117,11 +132,17 @@ struct AccountStoreMutationsTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
+    try await store.waitForFirstEmission()
     let account = Account(
       id: UUID(), name: "Brokerage", type: .investment,
       instrument: .defaultTestInstrument, position: 0, isHidden: false)
 
     let created = try await store.create(account)
+
+    try await store.waitForNextEmission(
+      matching: { $0.convertedBalances[created.id] != nil },
+      description: "convertedBalance for new account is populated"
+    )
 
     let balance = store.convertedBalances[created.id]
     #expect(balance != nil)
@@ -136,6 +157,10 @@ struct AccountStoreMutationsTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.by(id: original.id) != nil },
+      description: "seeded account is observed"
+    )
 
     let eurInstrument = Instrument.fiat(code: "EUR")
     var modified = original
@@ -166,10 +191,18 @@ struct AccountStoreMutationsTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.count == 3 },
+      description: "all three accounts observed"
+    )
 
     // Reverse order: C, B, A
     await store.reorderAccounts([third, second, first])
+
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.ordered.map(\.name) == ["C", "B", "A"] },
+      description: "store sees reordered accounts"
+    )
 
     #expect(store.error == nil)
     #expect(store.accounts.ordered.map(\.name) == ["C", "B", "A"])
@@ -194,47 +227,22 @@ struct AccountStoreMutationsTests {
     let store = AccountStore(
       repository: repository, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.count == 2 },
+      description: "initial accounts observed"
+    )
     #expect(store.accounts.ordered.map(\.name) == ["A", "B"])
 
-    // Start failing further repository calls (update + fetchAll during reload).
+    // Start failing repository updates.
     repository.shouldFail = true
     let accounts = store.accounts.ordered
     await store.reorderAccounts([accounts[1], accounts[0]])
 
     // Error must be surfaced, not silently swallowed.
     #expect(store.error != nil)
-    // State rolls back to the pre-reorder ordering when persistence fails.
+    // Local state continues to reflect the authoritative repository
+    // ordering — the reactive store does not optimistically mutate, so
+    // a failed reorder leaves the original ordering visible.
     #expect(store.accounts.ordered.map(\.name) == ["A", "B"])
-  }
-
-  @Test
-  func testReorderAccountsRollsBackLocalStateOnFailure() async throws {
-    let idA = UUID()
-    let idB = UUID()
-    let original = [
-      Account(
-        id: idA, name: "A", type: .bank, instrument: .defaultTestInstrument, position: 0,
-        isHidden: false),
-      Account(
-        id: idB, name: "B", type: .bank, instrument: .defaultTestInstrument, position: 1,
-        isHidden: false),
-    ]
-    let repository = FailingAccountRepository(accounts: original)
-    let store = AccountStore(
-      repository: repository, conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument)
-    await store.load()
-
-    // Make update() fail but allow fetchAll() to succeed so the post-failure
-    // reload restores the original server-side order.
-    repository.failOnUpdate = true
-    let accounts = store.accounts.ordered
-    await store.reorderAccounts([accounts[1], accounts[0]])
-
-    #expect(store.error != nil)
-    // After rollback + reload, the authoritative ordering is preserved.
-    #expect(store.accounts.ordered.map(\.name) == ["A", "B"])
-    #expect(store.accounts.ordered.map(\.position) == [0, 1])
   }
 }
