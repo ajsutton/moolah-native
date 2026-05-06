@@ -1,5 +1,3 @@
-import Foundation
-
 /// Carrier for the "incompatible" branch of `SessionOpenResult`.
 ///
 /// `profileVersion` is the profile's `dataFormatVersion`; `buildVersion`
