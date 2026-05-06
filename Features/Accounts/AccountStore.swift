@@ -62,7 +62,7 @@ final class AccountStore {
   /// assignment in `apply(accounts:)` and after every recompute in
   /// `recomputeConvertedTotals()`. Tests use the
   /// `TestableStoreObservation` helpers in
-  /// `MoolahTests/Support/StoreObservation+Test.swift` to await
+  /// `MoolahTests/Support/TestableStoreObservation.swift` to await
   /// emissions deterministically. `internal` access is intentional;
   /// `@testable import Moolah` exposes it to the test target.
   let testObservationTickStream: AsyncStream<Void>
