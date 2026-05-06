@@ -18,7 +18,8 @@ import GRDB
 /// not benefit from sharing the per-profile WAL.
 ///
 /// Migration history:
-/// `v1_initial` — the `profile` table.
+/// `v1_initial`             — the `profile` table.
+/// `v2_data_format_version` — adds `data_format_version INTEGER NOT NULL DEFAULT 0`.
 ///
 /// Each migration body is registered here. Once shipped, migration IDs
 /// are frozen forever; splitting later is fine, merging post-ship is
@@ -33,7 +34,7 @@ enum ProfileIndexSchema {
   /// Bumped each time a migration is added. Surfaced for open-time
   /// integrity checks; not used by `DatabaseMigrator` (which keys on
   /// the stable string IDs of registered migrations).
-  static let version = 1
+  static let version = 2
 
   static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
@@ -43,6 +44,8 @@ enum ProfileIndexSchema {
     #endif
 
     migrator.registerMigration("v1_initial", migrate: createProfileTable)
+    migrator.registerMigration(
+      "v2_data_format_version", migrate: addDataFormatVersionColumn)
 
     return migrator
   }
@@ -67,6 +70,14 @@ enum ProfileIndexSchema {
 
         -- Drives `loadCloudProfiles`'s SortDescriptor(\\.createdAt).
         CREATE INDEX profile_by_created_at ON profile(created_at);
+        """)
+  }
+
+  private static func addDataFormatVersionColumn(_ database: Database) throws {
+    try database.execute(
+      sql: """
+        ALTER TABLE profile
+          ADD COLUMN data_format_version INTEGER NOT NULL DEFAULT 0;
         """)
   }
 }
