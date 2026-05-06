@@ -2083,7 +2083,16 @@ final class SessionManager {
     }
     let task = Task { await self.session(for: profile) }
     rebuildTasks[profile.id] = task
-    defer { rebuildTasks.removeValue(forKey: profile.id) }
+    defer {
+      // Identity-guard the eviction: a later concurrent caller may
+      // have already replaced this slot with its own task. Removing
+      // unconditionally would leave a third caller unable to cancel
+      // the (still-running) replacement, breaking the cancel-prior
+      // invariant. `Task` is a reference type, so `===` is correct.
+      if rebuildTasks[profile.id] === task {
+        rebuildTasks.removeValue(forKey: profile.id)
+      }
+    }
     return await task.value
   }
 }
