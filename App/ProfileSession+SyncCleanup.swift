@@ -17,6 +17,10 @@ extension ProfileSession {
   /// in quick succession. Only reloads stores affected by the changed record types.
   /// During bulk sync (rapid consecutive batches), the debounce increases to 2s to
   /// avoid thrashing.
+  ///
+  /// `internal` (not `private`) because Swift's `private` does not cross
+  /// file boundaries. The sole caller is the closure in
+  /// `registerWithSyncCoordinator` in `ProfileSession.swift`.
   func scheduleReloadFromSync(changedTypes: Set<String>) {
     pendingChangedTypes.formUnion(changedTypes)
 
@@ -32,6 +36,7 @@ extension ProfileSession {
 
     syncReloadTask?.cancel()
     syncReloadTask = Task {
+      // CancellationError from Task.sleep is intentional — the guard below handles it.
       try? await Task.sleep(for: .milliseconds(debounceMs))
       guard !Task.isCancelled else { return }
 
@@ -44,12 +49,15 @@ extension ProfileSession {
       if plan.contains(.accounts) {
         await accountStore.reloadFromSync()
       }
+      guard !Task.isCancelled else { return }
       if plan.contains(.categories) {
         await categoryStore.reloadFromSync()
       }
+      guard !Task.isCancelled else { return }
       if plan.contains(.earmarks) {
         await earmarkStore.reloadFromSync()
       }
+      guard !Task.isCancelled else { return }
       if plan.contains(.importRules) {
         await importRuleStore.reloadFromSync()
       }

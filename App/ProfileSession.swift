@@ -72,6 +72,9 @@ final class ProfileSession: Identifiable {
 
   nonisolated var id: UUID { profileID }
 
+  /// Module-internal so `ProfileSession+SyncCleanup.swift` and
+  /// `ProfileSession+DatabaseMaintenance.swift` can log without needing
+  /// their own Logger instances.
   let logger = Logger(subsystem: "com.moolah.app", category: "ProfileSession")
   // Module-internal so `ProfileSession+SyncCleanup.swift` can drive the
   // debounced reload + cancel the in-flight task on teardown.
