@@ -249,14 +249,14 @@ private func categoriseAttemptOutcome(
     assertionFailure(
       "GRDB observation programmer bug in \(policy.repoMethod): \(error)")
     logger.error(
-      "GRDB observation error in \(policy.repoMethod, privacy: .public): \(error.localizedDescription, privacy: .public)"
+      "GRDB observation error in \(policy.repoMethod, privacy: .public) [programmer-bug]: \(error.localizedDescription, privacy: .public)"
     )
     await policy.errorChannel.surfaceAndFinish(error)
     return .finish
   }
   // Transient — log, decide whether to restart.
   logger.error(
-    "GRDB observation transient error in \(policy.repoMethod, privacy: .public): \(error.localizedDescription, privacy: .public)"
+    "GRDB observation error in \(policy.repoMethod, privacy: .public) [transient]: \(error.localizedDescription, privacy: .public)"
   )
   let nextFailureCount = transientFailuresBefore + 1
   if nextFailureCount >= policy.maxFailures {

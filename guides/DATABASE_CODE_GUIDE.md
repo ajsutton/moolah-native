@@ -120,7 +120,12 @@ Conventions, all enforced by `database-code-review`:
    - **Retry budget exhaustion** (5 consecutive transient failures) — surface the most recent error to `observeErrors()`, do not restart again.
 
    The retry-loop wrapper is implemented by repositories in subsequent stages (the first one lands in Stage 3); the bridge itself stays minimal because it only holds `self` (the `AsyncValueObservation`), not the underlying writer needed to re-create the observation.
-6. **Logging contract.** Every error log includes the repository name, method name, and underlying error. Format: `GRDB observation error in <Repo>.<method>: <error>`. No bare `print()` or `logger.error("\(error)")`.
+6. **Logging contract.** Every error log includes the repository name, method name, and underlying error. Format: `GRDB observation error in <Repo>.<method> [<qualifier>]: <error>`, where `[programmer-bug]` marks fatal programming errors (malformed SQL, missing tables) and `[transient]` marks recoverable I/O errors. Examples:
+   ```
+   GRDB observation error in AccountRepository.observeAll [transient]: SQLITE_IOERR (errno 5)
+   GRDB observation error in AccountRepository.observeAll [programmer-bug]: malformed SQL
+   ```
+   No bare `print()` or `logger.error("\(error)")`.
 7. **Stream completion.** After the bridge surfaces an error to the store (programmer bug or budget exhausted), both `observeAll()` and `observeErrors()` complete (`continuation.finish()`). The store's `TaskGroup` child tasks exit naturally; the `TaskGroup` returns; teardown is clean.
 
 Stores subscribe in `init` with strong `self` (the store is `@MainActor`; the task already holds an implicit strong reference). `stopObserving()` (called from `ProfileSession.cleanupSync`) cancels the observation; a `deinit { observationTask?.cancel() }` safety net protects against missed `cleanupSync` calls.
