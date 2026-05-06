@@ -208,6 +208,9 @@ final class ProfileIndexSyncHandler: Sendable {
       failedDeletes: failedDeletes,
       logger: logger)
     resolveSystemFields(for: failures)
+    for (_, serverRecord) in failures.conflicts {
+      applyServerRecordChangedMerge(serverRecord: serverRecord)
+    }
     return failures
   }
 
@@ -241,6 +244,31 @@ final class ProfileIndexSyncHandler: Sendable {
       logger.error(
         "Failed to save system fields for \(recordID.recordName, privacy: .public): \(error, privacy: .public)"
       )
+    }
+  }
+}
+
+extension ProfileIndexSyncHandler {
+  /// Promotes the local row's `dataFormatVersion` to `max(local, server)`
+  /// when CKSyncEngine reports `.serverRecordChanged` for the
+  /// profile-index zone. Called from `handleSentRecordZoneChanges` after
+  /// `resolveSystemFields(for: failures)` and before the method returns
+  /// (CKSyncEngine retries the upload from the now-promoted local row).
+  /// Without this step the re-queued save would upload the local row's
+  /// stale field values, silently downgrading a higher server-side value.
+  ///
+  /// `internal` (not `private`) so unit tests can drive a single-record
+  /// merge directly. The read-modify-write happens inside one GRDB write
+  /// transaction (`mergeDataFormatVersionSync`), so concurrent writers
+  /// cannot interleave and produce a stale-write race.
+  func applyServerRecordChangedMerge(serverRecord: CKRecord) {
+    guard let id = serverRecord.recordID.uuid else { return }
+    let remote = (serverRecord["dataFormatVersion"] as? Int64).map(Int.init) ?? 0
+    do {
+      try repository.mergeDataFormatVersionSync(id: id, remoteValue: remote)
+    } catch {
+      logger.error(
+        "applyServerRecordChangedMerge: \(error, privacy: .public)")
     }
   }
 }
