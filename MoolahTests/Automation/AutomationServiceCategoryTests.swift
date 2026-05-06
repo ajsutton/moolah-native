@@ -8,13 +8,18 @@ import Testing
 struct AutomationServiceCategoryTests {
   private func makeServiceWithSession() async throws -> (AutomationService, ProfileSession) {
     let containerManager = try ProfileContainerManager.forTesting()
-    let sessionManager = SessionManager(containerManager: containerManager)
+    let sessionManager = SessionManager(
+      containerManager: containerManager,
+      profileIndexRepository: containerManager.profileIndexRepositoryForTesting)
     let profile = Profile(
       label: "Test",
       currencyCode: "AUD",
       financialYearStartMonth: 7
     )
-    let session = sessionManager.session(for: profile)
+    guard case .ready(let session) = await sessionManager.session(for: profile) else {
+      Issue.record("expected .ready")
+      throw CancellationError()
+    }
     await session.categoryStore.load()
     let service = AutomationService(sessionManager: sessionManager)
     return (service, session)

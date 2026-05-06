@@ -15,6 +15,8 @@
 
     @Environment(\.dismiss) private var dismiss
 
+    @State private var sessionResult: SessionOpenResult?
+
     /// Resolve the profile to display: the window's profileID if it matches a
     /// known profile, otherwise the active profile. Falls back to the single
     /// profile only when exactly one exists — with 2+ profiles and nothing
@@ -36,13 +38,22 @@
 
     var body: some View {
       Group {
-        if let profile = resolvedProfile {
-          let session = sessionManager.session(for: profile)
-          SessionRootView(session: session)
-            .environment(profileStore)
-            .onChange(of: profile.label) { _, _ in
-              sessionManager.rebuildSession(for: profile)
-            }
+        if resolvedProfile != nil {
+          // `IncompatibleProfileView` lands in Task 14; until then a
+          // placeholder `Text` lets the build stay green and the gate
+          // surface end-to-end.
+          switch sessionResult {
+          case .ready(let session):
+            SessionRootView(session: session)
+              .environment(profileStore)
+          case .incompatible(let info):
+            Text(
+              "Profile incompatible (v\(info.profileVersion); build v\(info.buildVersion))"
+            )
+            .padding()
+          case .none:
+            ProgressView()
+          }
         } else if profileID != nil {
           // This window was opened for a specific profile that no longer
           // exists. Close it — the user will land on whichever window
@@ -69,6 +80,26 @@
         }
       }
       .background(tagHostingWindow)
+      .task(id: resolvedProfile?.id) {
+        // Resolve the session for the resolved profile. `.task(id:)`
+        // re-runs whenever the profile id changes (window reopened
+        // against a different profile, or the active profile flips
+        // mid-session).
+        if let profile = resolvedProfile {
+          sessionResult = await sessionManager.session(for: profile)
+        } else {
+          sessionResult = nil
+        }
+      }
+      .onChange(of: resolvedProfile?.label) { _, _ in
+        // Label edits flow through `rebuildSession(for:)` so the cached
+        // session picks up the new value (and the gate re-fires in case
+        // a remote profile-version bump arrived alongside the rename).
+        guard let profile = resolvedProfile else { return }
+        Task {
+          sessionResult = await sessionManager.rebuildSession(for: profile)
+        }
+      }
       .task {
         // Register in-process entry points for AppleScript/App Intents so
         // `NavigateCommand` / `OpenAccountIntent` don't need to round-trip

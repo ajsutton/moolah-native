@@ -24,8 +24,13 @@
           throw AutomationError.operationFailed("Scripting not configured")
         }
         let profile = try await service.importProfile(from: fileURL)
-        let session = sessionManager.session(for: profile)
-        return ScriptableProfile(session: session)
+        switch await sessionManager.session(for: profile) {
+        case .ready(let session):
+          return ScriptableProfile(session: session)
+        case .incompatible:
+          throw AutomationError.operationFailed(
+            "Profile is incompatible with this build")
+        }
       }
       return result
     }

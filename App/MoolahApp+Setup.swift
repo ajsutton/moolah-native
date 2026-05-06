@@ -215,6 +215,31 @@ extension MoolahApp {
     }
   }
 
+  /// Build the `SessionManager` and wire its `onProfileRemoved` cleanup
+  /// hook. Extracted from `MoolahApp.init` so the initializer body
+  /// stays under SwiftLint's `function_body_length` threshold; the
+  /// hook closure captures the manager and coordinator weakly so a
+  /// cleanup hop after profile deletion doesn't keep them alive past
+  /// the app's lifetime.
+  static func makeSessionManager(
+    setup: ContainerSetup, store: ProfileStore, coordinator: SyncCoordinator
+  ) -> SessionManager {
+    let sessionManager = SessionManager(
+      containerManager: setup.manager,
+      profileIndexRepository: setup.manager.profileIndexRepository,
+      syncCoordinator: coordinator)
+    // Clean up cached sessions and the coordinator's per-profile bundle
+    // cache when a profile is removed (locally or via remote sync).
+    // `containerManager.deleteStore` is about to invalidate the
+    // per-profile `DatabaseQueue`; the coordinator's cached handler /
+    // bundle would otherwise outlive it.
+    store.onProfileRemoved = { [weak sessionManager, weak coordinator] profileID in
+      sessionManager?.removeSession(for: profileID)
+      coordinator?.evictCachedState(for: profileID)
+    }
+    return sessionManager
+  }
+
   /// Configure the automation service locator. On macOS this also sets up
   /// the AppleScript scripting context.
   static func configureAutomationService(

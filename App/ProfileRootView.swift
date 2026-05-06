@@ -14,6 +14,7 @@
     @Environment(SyncCoordinator.self) private var syncCoordinator
     @Environment(\.pendingNavigation) private var pendingNavigationBinding
     @Binding var activeSession: ProfileSession?
+    @State private var incompatibleInfo: IncompatibleProfileInfo?
 
     var body: some View {
       Group {
@@ -22,7 +23,14 @@
         // `activeSession` is only set once the user has explicitly
         // selected a profile, so the else branch naturally handles
         // the picker case.
-        if let session = activeSession {
+        if let info = incompatibleInfo {
+          // `IncompatibleProfileView` lands in Task 14 — placeholder
+          // keeps the build green and the gate surface end-to-end.
+          Text(
+            "Profile incompatible (v\(info.profileVersion); build v\(info.buildVersion))"
+          )
+          .padding()
+        } else if let session = activeSession {
           SessionRootView(session: session)
         } else if profileStore.hasProfiles
           && profileStore.activeProfileID != nil
@@ -72,12 +80,16 @@
         let profile = profileStore.profiles.first(where: { $0.id == profileID })
       else {
         activeSession = nil
+        incompatibleInfo = nil
         return
       }
 
       // Only create a new session if profile changed
       if activeSession?.profile.id != profileID {
-        activeSession = sessionManager.session(for: profile)
+        Task {
+          let result = await sessionManager.session(for: profile)
+          applyOpenResult(result)
+        }
       }
     }
 
@@ -85,8 +97,21 @@
     private func rebuildSessionIfNeeded() {
       guard let profile = profileStore.activeProfile else { return }
       if let session = activeSession, session.profile.id == profile.id {
-        sessionManager.rebuildSession(for: profile)
-        activeSession = sessionManager.session(for: profile)
+        Task {
+          let result = await sessionManager.rebuildSession(for: profile)
+          applyOpenResult(result)
+        }
+      }
+    }
+
+    private func applyOpenResult(_ result: SessionOpenResult) {
+      switch result {
+      case .ready(let session):
+        activeSession = session
+        incompatibleInfo = nil
+      case .incompatible(let info):
+        activeSession = nil
+        incompatibleInfo = info
       }
     }
 
