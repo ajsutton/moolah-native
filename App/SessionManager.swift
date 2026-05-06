@@ -70,8 +70,11 @@ final class SessionManager {
   }
 
   /// Removes the session for a profile (e.g. when profile is deleted).
+  /// Cleanup runs even when no `syncCoordinator` is configured so the
+  /// session's tracked tasks (`syncReloadTask`, `setUpTask`, etc.) are
+  /// cancelled before the session reference is dropped.
   func removeSession(for profileID: UUID) {
-    if let session = sessions.removeValue(forKey: profileID), let syncCoordinator {
+    if let session = sessions.removeValue(forKey: profileID) {
       session.cleanupSync(coordinator: syncCoordinator)
     }
   }
@@ -99,7 +102,7 @@ final class SessionManager {
   /// on the new session so the migration runs off `@MainActor` (see
   /// `session(for:)` for the same pattern).
   func rebuildSession(for profile: Profile) {
-    if let oldSession = sessions[profile.id], let syncCoordinator {
+    if let oldSession = sessions[profile.id] {
       oldSession.cleanupSync(coordinator: syncCoordinator)
     }
     let session: ProfileSession

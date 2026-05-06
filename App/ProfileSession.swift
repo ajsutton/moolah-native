@@ -9,7 +9,7 @@ import SwiftData
 @Observable
 @MainActor
 final class ProfileSession: Identifiable {
-  let profile: Profile
+  var profile: Profile
   /// Per-profile GRDB connection. Owns the lifecycle of `data.sqlite`
   /// (or an in-memory queue under previews / tests). Released when the
   /// session deinits; on profile delete the parent `profiles/<id>/`
@@ -58,20 +58,31 @@ final class ProfileSession: Identifiable {
   /// (see issue #359). `nil` when idle so the sheet dismisses automatically.
   var activeExport: ActiveExport?
 
-  /// Observer token for sync coordinator notifications.
-  private var syncObserverToken: SyncCoordinator.ObserverToken?
+  /// Observer token for sync coordinator notifications. Module-internal
+  /// because `cleanupSync` lives in `ProfileSession+SyncCleanup.swift`.
+  var syncObserverToken: SyncCoordinator.ObserverToken?
 
-  nonisolated var id: UUID { profile.id }
+  /// Stable profile identity captured at init time so the nonisolated
+  /// `id` accessor (used by `Identifiable` conformance / SwiftUI diffing)
+  /// does not have to read the main-actor-isolated `profile` property.
+  /// `updateProfile(_:)` preconditions on `updated.id == profile.id`,
+  /// so this stays in lockstep with `profile.id` for the session's
+  /// lifetime.
+  nonisolated private let profileID: UUID
 
-  private let logger = Logger(subsystem: "com.moolah.app", category: "ProfileSession")
-  private var syncReloadTask: Task<Void, Never>?
-  private var pendingChangedTypes = Set<String>()
-  private var lastSyncEventTime: ContinuousClock.Instant?
+  nonisolated var id: UUID { profileID }
+
+  let logger = Logger(subsystem: "com.moolah.app", category: "ProfileSession")
+  // Module-internal so `ProfileSession+SyncCleanup.swift` can drive the
+  // debounced reload + cancel the in-flight task on teardown.
+  var syncReloadTask: Task<Void, Never>?
+  var pendingChangedTypes = Set<String>()
+  var lastSyncEventTime: ContinuousClock.Instant?
   /// Background task handle for the once-per-session CoinGecko
   /// `refreshIfStale()` kick-off. Tracked so it can be cancelled in
   /// `cleanupSync(coordinator:)` if the session is torn down before the
-  /// refresh completes.
-  private var catalogRefreshTask: Task<Void, Never>?
+  /// refresh completes. Module-internal for the sync-cleanup extension.
+  var catalogRefreshTask: Task<Void, Never>?
   /// Background task handle for the most recent `PRAGMA optimize` kick-off.
   /// Tracked so we can cancel any pending optimize on session teardown
   /// (per `guides/CONCURRENCY_GUIDE.md` §8 — fire-and-forget tasks must
@@ -96,8 +107,9 @@ final class ProfileSession: Identifiable {
   var pragmaOptimizeRunCount: Int = 0
   /// Tasks spawned by the investment-store → account-store bridge, kept
   /// reachable so `cleanupSync` can cancel in-flight balance updates
-  /// (per `guides/CONCURRENCY_GUIDE.md` §8).
-  private var crossStoreUpdateTasks: [Task<Void, Never>] = []
+  /// (per `guides/CONCURRENCY_GUIDE.md` §8). Module-internal so
+  /// `ProfileSession+SyncCleanup.swift` can drain the list on teardown.
+  var crossStoreUpdateTasks: [Task<Void, Never>] = []
 
   /// Stashed reference to the container manager so `setUp()` can open the
   /// per-profile SwiftData container and run the SwiftData → GRDB
@@ -110,8 +122,10 @@ final class ProfileSession: Identifiable {
   /// `setUp()` on its first invocation; subsequent calls return the
   /// same task. `nil` until the first call. Tracked here (rather than
   /// in `SessionManager`) so any caller with the session reference can
-  /// await migration completion.
-  private var setUpTask: Task<Void, any Error>?
+  /// await migration completion. Module-internal so
+  /// `ProfileSession+SyncCleanup.swift` can cancel a pending bootstrap
+  /// during teardown.
+  var setUpTask: Task<Void, any Error>?
 
   /// Synchronous initialiser — opens the per-profile GRDB queue and
   /// builds every store / service the session exposes. Does **not** run
@@ -127,6 +141,7 @@ final class ProfileSession: Identifiable {
     database: DatabaseQueue? = nil
   ) throws {
     self.profile = profile
+    self.profileID = profile.id
     self.containerManagerForMigration = containerManager
 
     let resolvedDatabase = try Self.resolveDatabase(
@@ -235,79 +250,8 @@ final class ProfileSession: Identifiable {
     }
   }
 
-  // MARK: - CloudKit Sync
-
-  /// Debounces sync reloads — cancels any pending reload and waits briefly.
-  /// This avoids redundant reloads when CKSyncEngine delivers multiple change batches
-  /// in quick succession. Only reloads stores affected by the changed record types.
-  /// During bulk sync (rapid consecutive batches), the debounce increases to 2s to
-  /// avoid thrashing.
-  private func scheduleReloadFromSync(changedTypes: Set<String>) {
-    pendingChangedTypes.formUnion(changedTypes)
-
-    let now = ContinuousClock.now
-    let isBulkSync: Bool
-    if let last = lastSyncEventTime, now - last < .seconds(1) {
-      isBulkSync = true
-    } else {
-      isBulkSync = false
-    }
-    lastSyncEventTime = now
-    let debounceMs = isBulkSync ? 2000 : 500
-
-    syncReloadTask?.cancel()
-    syncReloadTask = Task {
-      try? await Task.sleep(for: .milliseconds(debounceMs))
-      guard !Task.isCancelled else { return }
-
-      let types = self.pendingChangedTypes
-      self.pendingChangedTypes.removeAll()
-
-      let reloadStart = ContinuousClock.now
-      logger.debug("Reloading stores after CloudKit sync: \(types)")
-      let plan = Self.storesToReload(for: types)
-      if plan.contains(.accounts) {
-        await accountStore.reloadFromSync()
-      }
-      if plan.contains(.categories) {
-        await categoryStore.reloadFromSync()
-      }
-      if plan.contains(.earmarks) {
-        await earmarkStore.reloadFromSync()
-      }
-      if plan.contains(.importRules) {
-        await importRuleStore.reloadFromSync()
-      }
-      let reloadMs = (ContinuousClock.now - reloadStart).inMilliseconds
-      logger.info("📊 Store reloads after sync completed in \(reloadMs)ms for types: \(types)")
-    }
-  }
-
-  // MARK: - Sync Cleanup
-
-  /// Removes the sync observer from the coordinator. Call when the session is being torn down.
-  func cleanupSync(coordinator: SyncCoordinator) {
-    if let token = syncObserverToken {
-      coordinator.removeObserver(token: token)
-      syncObserverToken = nil
-    }
-    coordinator.removeInstrumentRemoteChangeCallback(profileId: profile.id)
-    syncReloadTask?.cancel()
-    syncReloadTask = nil
-    catalogRefreshTask?.cancel()
-    catalogRefreshTask = nil
-    cryptoSyncStore?.cancelTimer()
-    pragmaOptimizeTask?.cancel()
-    pragmaOptimizeTask = nil
-    periodicPragmaOptimizeTask?.cancel()
-    periodicPragmaOptimizeTask = nil
-    for task in crossStoreUpdateTasks {
-      task.cancel()
-    }
-    crossStoreUpdateTasks.removeAll()
-    setUpTask?.cancel()
-    setUpTask = nil
-  }
+  // CloudKit-sync reload debouncing, `cleanupSync(coordinator:)`, and
+  // `updateProfile(_:)` live in `ProfileSession+SyncCleanup.swift`.
 
   // MARK: - Folder watch
 
