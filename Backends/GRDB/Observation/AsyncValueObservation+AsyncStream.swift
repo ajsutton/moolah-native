@@ -27,12 +27,19 @@ extension AsyncValueObservation where Element: Sendable {
   /// - Per-method conventions for repositories live in
   ///   `guides/DATABASE_CODE_GUIDE.md` §2.
   ///
+  /// The `onError` callback is `async` so callers can await actor-isolated
+  /// work (e.g. `ObservationErrorChannel.surfaceAndFinish(_:)`) inline
+  /// without spawning a fire-and-forget `Task`. The bridge's catch block
+  /// awaits `onError` before completing the stream, which makes error
+  /// delivery structured: there is no race window where an unstructured
+  /// `Task { … }` could be cancelled before delivering the error.
+  ///
   /// The bridge keeps this simple shape because `AsyncValueObservation`
   /// is itself single-shot — restart requires re-calling
   /// `.values(in:)` on a fresh `ValueObservation`, which the bridge
   /// (which only holds `self`, not the underlying writer) cannot do.
   func toAsyncStream(
-    onError: @Sendable @escaping (any Error) -> Void
+    onError: @Sendable @escaping (any Error) async -> Void
   ) -> AsyncStream<Element> {
     AsyncStream { continuation in
       // Note on ordering: the AsyncStream init closure is synchronous,
@@ -49,7 +56,7 @@ extension AsyncValueObservation where Element: Sendable {
           }
           continuation.finish()
         } catch {
-          onError(error)
+          await onError(error)
           continuation.finish()
         }
       }

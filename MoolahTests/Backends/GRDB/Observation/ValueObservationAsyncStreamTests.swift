@@ -117,6 +117,9 @@ struct ValueObservationAsyncStreamTests {
         try Int.fetchAll(database, sql: "SELECT id FROM missing_table")
       }
       .values(in: queue)
+      // `onError` is now `async` (the bridge awaits before completing the
+      // stream); `LockedBox.set` is a synchronous lock-guarded mutator
+      // that is callable from any context, so no extra async work needed.
       .toAsyncStream(onError: { error in errorBox.set(error) })
 
     var iterator = stream.makeAsyncIterator()

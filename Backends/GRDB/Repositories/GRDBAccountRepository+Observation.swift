@@ -2,6 +2,10 @@
 
 import Foundation
 import GRDB
+import OSLog
+
+private let logger = Logger(
+  subsystem: "com.moolah.app", category: "GRDBAccountRepository")
 
 // Reactive observation surface for `AccountRepository`. Split out of the
 // main class file to keep `GRDBAccountRepository.swift` under SwiftLint's
@@ -36,6 +40,15 @@ extension GRDBAccountRepository {
     let channel = self.errorChannel
     return
       ValueObservation
+      // Region inference is empty-table-safe here: `AccountRow.fetchAll`,
+      // `InstrumentRow.fetchAll`, and the `transaction_leg`/`transaction`
+      // joins in `computePositions` all access columns via the row
+      // decoders, so GRDB registers each table's region during the first
+      // fetch even on a fresh-install profile with zero rows. Tick
+      // streams that emit `Void` over `SELECT 1 FROM … LIMIT 1` (e.g.
+      // `observeRates` in Stage 4) need the explicit-region form because
+      // those reads never touch a column. See `DATABASE_CODE_GUIDE.md`
+      // §2 convention 1 for the empty-table caveat.
       .tracking { database in
         let instruments = try Self.fetchInstrumentMap(database: database)
         let rows =
@@ -53,7 +66,29 @@ extension GRDBAccountRepository {
       .removeDuplicates()
       .values(in: database)
       .toAsyncStream(onError: { error in
-        Task { await channel.surfaceAndFinish(error) }
+        // Per DATABASE_CODE_GUIDE.md §2 convention 6, every observation
+        // error log includes the repo + method + underlying error in the
+        // exact form: "GRDB observation error in <Repo>.<method>: <error>".
+        logger.error(
+          "GRDB observation error in GRDBAccountRepository.observeAll: \(error.localizedDescription, privacy: .public)"
+        )
+        // Programmer-bug detection: SQLITE_ERROR (1) covers malformed
+        // SQL, missing tables, and the schema-mismatch class. Trip an
+        // assertion in debug so the bug surfaces during development;
+        // release surfaces via the error channel and lets the caller
+        // (typically a store) decide how to react.
+        if let dbError = error as? DatabaseError, dbError.resultCode == .SQLITE_ERROR {
+          assertionFailure(
+            "GRDB observation programmer bug in GRDBAccountRepository.observeAll: \(error)"
+          )
+        }
+        // TODO(#779): transient errors (SQLITE_FULL/SQLITE_IOERR) should
+        // restart the observation with backoff per DATABASE_CODE_GUIDE.md
+        // §2 convention 5. Currently we surface all errors and stop; the
+        // restart loop lands once one of the migrated stores demonstrates
+        // a real-world need —
+        // https://github.com/ajsutton/moolah-native/issues/779
+        await channel.surfaceAndFinish(error)
       })
   }
 

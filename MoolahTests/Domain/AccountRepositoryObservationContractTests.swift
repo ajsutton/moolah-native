@@ -46,6 +46,39 @@ struct AccountRepositoryObservationContractTests {
     #expect(after?.first?.name == "Renamed")
   }
 
+  @Test("no-op update does not re-emit (removeDuplicates works)")
+  func noOpUpdateDoesNotReEmit() async throws {
+    let (backend, _) = try TestBackend.create()
+    let created = try await backend.accounts.create(
+      Account(name: "A", type: .bank, instrument: .defaultTestInstrument),
+      openingBalance: nil
+    )
+
+    var iterator = backend.accounts.observeAll().makeAsyncIterator()
+    _ = await iterator.next()  // discard initial emission (already-created account)
+
+    // No-op update — same fields as the existing record.
+    _ = try await backend.accounts.update(created)
+
+    // Wait briefly; if a duplicate emission would arrive, it would
+    // arrive within this window. The semantic is: no second emission.
+    // We track receipt via a `Bool` rather than capturing the value into
+    // an optional collection (SwiftLint's `discouraged_optional_collection`).
+    let receivedBox = LockedBox<Bool>(false)
+    let pollTask = Task<Void, Never> { [receivedBox] in
+      var localIterator = iterator
+      if await localIterator.next() != nil {
+        receivedBox.set(true)
+      }
+    }
+    try? await Task.sleep(for: .milliseconds(200))
+    pollTask.cancel()
+    _ = await pollTask.value
+    #expect(
+      receivedBox.get() == false,
+      "removeDuplicates failed: a no-op update produced a re-emission")
+  }
+
   @Test("observeErrors stays quiet on a healthy repository")
   func observeErrorsOnHealthyRepository() async throws {
     // We don't have a clean way to inject a programmer-bug error into
