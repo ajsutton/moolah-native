@@ -15,6 +15,7 @@ struct IncompatibleProfileView: View {
       Image(systemName: "arrow.up.circle.fill")
         .font(.system(size: 56))
         .foregroundStyle(.tint)
+        .accessibilityHidden(true)
 
       Text("Update Moolah to Continue")
         .font(.title)
@@ -27,15 +28,18 @@ struct IncompatibleProfileView: View {
 
       HStack(spacing: 12) {
         Button("Switch Profile", action: onSwitchProfile)
+          .buttonStyle(.bordered)
           .accessibilityIdentifier("incompatibleProfile.switchProfile")
 
         Button("Check for Updates", action: onCheckForUpdates)
           .buttonStyle(.borderedProminent)
           .accessibilityIdentifier("incompatibleProfile.checkForUpdates")
       }
+      .controlSize(.large)
 
       Text(versionDetail)
         .font(.footnote)
+        .monospacedDigit()
         .foregroundStyle(.tertiary)
         .accessibilityLabel(
           "Profile format version \(info.profileVersion). This build supports version \(info.buildVersion)."
@@ -53,4 +57,28 @@ struct IncompatibleProfileView: View {
   private var versionDetail: String {
     "Profile format v\(info.profileVersion) · This build supports v\(info.buildVersion) (\(AppVersion.shortVersionString))"
   }
+}
+
+#Preview("Incompatible Profile") {
+  IncompatibleProfileView(
+    info: IncompatibleProfileInfo(
+      profileLabel: "Personal Finance",
+      profileVersion: 5,
+      buildVersion: 4
+    ),
+    onCheckForUpdates: {},
+    onSwitchProfile: {}
+  )
+}
+
+#Preview("Long label") {
+  IncompatibleProfileView(
+    info: IncompatibleProfileInfo(
+      profileLabel: "My Very Long Profile Name That Might Wrap",
+      profileVersion: 12,
+      buildVersion: 4
+    ),
+    onCheckForUpdates: {},
+    onSwitchProfile: {}
+  )
 }
