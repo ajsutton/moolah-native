@@ -323,15 +323,8 @@ struct ProfileIndexSchemaV2Tests {
     }
   }
 
-  @Test("inserted rows default data_format_version to 0 — pre-gate baseline")
+  @Test("inserted rows default data_format_version to 0 — post-migration default")
   func insertedRowsDefaultToZero() throws {
-    // The factory runs both v1 and v2; verifying the default 0 covers the
-    // backfill semantic (`ALTER TABLE … ADD COLUMN … DEFAULT 0` populates
-    // pre-existing rows with 0, and any subsequent INSERT that omits the
-    // column also defaults to 0). A separate "v1-only intermediate state"
-    // test path is not feasible without leaking factory internals; the
-    // ALTER's `DEFAULT 0` clause is what makes this safe and is asserted
-    // here via observed behaviour.
     let queue = try makeMigratedDatabase()
     try queue.write { database in
       try database.execute(sql: """
@@ -341,6 +334,59 @@ struct ProfileIndexSchemaV2Tests {
         """, arguments: [
           UUID(), "ProfileRecord|legacy", "Legacy", "AUD", 7, Date(),
         ])
+      let value = try Int.fetchOne(
+        database, sql: "SELECT data_format_version FROM profile LIMIT 1")
+      #expect(value == 0)
+    }
+  }
+
+  @Test("ALTER TABLE backfills pre-existing rows to data_format_version = 0")
+  func alterTableBackfillsExistingRowsToZero() throws {
+    // True backfill test: insert a row under v1-only schema, then run
+    // v2's ALTER TABLE, then read the column. This exercises SQLite's
+    // ADD COLUMN ... DEFAULT 0 backfill semantic for existing rows
+    // (different from the post-migration INSERT path covered above).
+    // Implemented via a pair of explicit DatabaseMigrator instances —
+    // value types, no factory internals required.
+    let queue = try DatabaseQueue()
+    var v1Migrator = DatabaseMigrator()
+    v1Migrator.registerMigration("v1_initial") { database in
+      try database.execute(sql: """
+        CREATE TABLE profile (
+            id                          BLOB    NOT NULL PRIMARY KEY,
+            record_name                 TEXT    NOT NULL UNIQUE,
+            label                       TEXT    NOT NULL,
+            currency_code               TEXT    NOT NULL,
+            financial_year_start_month  INTEGER NOT NULL
+                CHECK (financial_year_start_month BETWEEN 1 AND 12),
+            created_at                  TEXT    NOT NULL,
+            encoded_system_fields       BLOB
+        ) STRICT;
+        """)
+    }
+    try v1Migrator.migrate(queue)
+
+    try queue.write { database in
+      try database.execute(sql: """
+        INSERT INTO profile (id, record_name, label, currency_code,
+          financial_year_start_month, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """, arguments: [
+          UUID(), "ProfileRecord|legacy", "Legacy", "AUD", 7, Date(),
+        ])
+    }
+
+    var v2Migrator = DatabaseMigrator()
+    v2Migrator.registerMigration("v1_initial") { _ in /* already applied */ }
+    v2Migrator.registerMigration("v2_data_format_version") { database in
+      try database.execute(sql: """
+        ALTER TABLE profile
+          ADD COLUMN data_format_version INTEGER NOT NULL DEFAULT 0;
+        """)
+    }
+    try v2Migrator.migrate(queue)
+
+    try queue.read { database in
       let value = try Int.fetchOne(
         database, sql: "SELECT data_format_version FROM profile LIMIT 1")
       #expect(value == 0)
@@ -357,88 +403,45 @@ just test ProfileIndexSchemaV2Tests 2>&1 | tee .agent-tmp/test-output.txt
 
 Expected: failures — `version == 2` is wrong (it's 1); `data_format_version` column does not exist.
 
-- [ ] **Step 2.3: Update `Backends/GRDB/ProfileIndexSchema.swift`**
+- [ ] **Step 2.3: Update `Backends/GRDB/ProfileIndexSchema.swift` (targeted edits)**
 
-Replace the file body to look like:
+Apply these changes in place — do NOT replace the file wholesale (the existing file's `§2`-rationale doc-comment about why `profile-index.sqlite` is a separate file from `data.sqlite` must be preserved). Concretely:
+
+(a) Bump the version from `1` to `2`:
 
 ```swift
-// Backends/GRDB/ProfileIndexSchema.swift
+static let version = 2
+```
 
-import Foundation
-import GRDB
+(b) Append the new migration registration after the existing `v1_initial` line:
 
-/// Schema definition for the app-scoped `profile-index.sqlite`.
-///
-/// One database per app install. Holds one row per CloudKit profile so
-/// the profile picker can list profiles before any of them is
-/// activated. Independent of any per-profile `data.sqlite` — no FKs in
-/// or out.
-///
+```swift
+migrator.registerMigration("v1_initial", migrate: createProfileTable)
+migrator.registerMigration(
+  "v2_data_format_version", migrate: addDataFormatVersionColumn)
+```
+
+(c) Add a private migration body alongside the existing `createProfileTable`:
+
+```swift
+private static func addDataFormatVersionColumn(_ database: Database) throws {
+  try database.execute(
+    sql: """
+      ALTER TABLE profile
+        ADD COLUMN data_format_version INTEGER NOT NULL DEFAULT 0;
+      """)
+}
+```
+
+(d) Update the file-level "Migration history" doc-comment block to add the new entry:
+
+```
 /// Migration history:
 /// `v1_initial`             — the `profile` table.
 /// `v2_data_format_version` — adds `data_format_version INTEGER NOT NULL DEFAULT 0`.
-///
-/// Each migration body is registered here. Once shipped, migration IDs
-/// are frozen forever; splitting later is fine, merging post-ship is
-/// not. As the schema grows, future migration bodies will move into
-/// sibling `ProfileIndexSchema+<Name>.swift` extension files — matching
-/// the convention `ProfileSchema` evolved into — so this file stays a
-/// small index of registered migrations.
-///
-/// See `guides/DATABASE_SCHEMA_GUIDE.md` for the rules this schema
-/// follows.
-enum ProfileIndexSchema {
-  /// Bumped each time a migration is added. Surfaced for open-time
-  /// integrity checks; not used by `DatabaseMigrator` (which keys on
-  /// the stable string IDs of registered migrations).
-  static let version = 2
-
-  static var migrator: DatabaseMigrator {
-    var migrator = DatabaseMigrator()
-
-    #if DEBUG
-      migrator.eraseDatabaseOnSchemaChange = true
-    #endif
-
-    migrator.registerMigration("v1_initial", migrate: createProfileTable)
-    migrator.registerMigration(
-      "v2_data_format_version", migrate: addDataFormatVersionColumn)
-
-    return migrator
-  }
-
-  private static func createProfileTable(_ database: Database) throws {
-    try database.execute(
-      sql: """
-        -- WITHOUT ROWID: not used; encoded_system_fields BLOB dominates
-        -- row size, which makes WITHOUT ROWID's interior-page packing a
-        -- net loss (per `guides/DATABASE_SCHEMA_GUIDE.md` §3 decision
-        -- table).
-        CREATE TABLE profile (
-            id                          BLOB    NOT NULL PRIMARY KEY,
-            record_name                 TEXT    NOT NULL UNIQUE,
-            label                       TEXT    NOT NULL,
-            currency_code               TEXT    NOT NULL,
-            financial_year_start_month  INTEGER NOT NULL
-                CHECK (financial_year_start_month BETWEEN 1 AND 12),
-            created_at                  TEXT    NOT NULL,
-            encoded_system_fields       BLOB
-        ) STRICT;
-
-        -- Drives `loadCloudProfiles`'s SortDescriptor(\\.createdAt).
-        CREATE INDEX profile_by_created_at ON profile(created_at);
-        """)
-  }
-
-  private static func addDataFormatVersionColumn(_ database: Database) throws {
-    try database.execute(
-      sql: """
-        ALTER TABLE profile
-          ADD COLUMN data_format_version INTEGER NOT NULL DEFAULT 0;
-        """)
-  }
-}
 ```
+
+The "A separate file (rather than a table inside `data.sqlite`) is justified because…" rationale paragraph in the doc comment **must be preserved verbatim** — it is the §2 schema-rationale `DATABASE_SCHEMA_GUIDE.md` requires for any new `*.sqlite` file. Same for the "Each migration body is registered here…" paragraph and the "See `guides/DATABASE_SCHEMA_GUIDE.md`…" line.
 
 - [ ] **Step 2.4: Run test to verify it passes**
 
@@ -2026,11 +2029,18 @@ final class SessionManager {
 
   /// Removes the session for a profile (e.g. when profile is deleted)
   /// or evicted under a mid-session bump.
+  ///
+  /// `cleanupSync` runs whether or not a coordinator is wired (Preview /
+  /// some test fixtures construct `SessionManager` without one);
+  /// `cleanupSync(coordinator:)` itself accepts an optional and
+  /// guards the coordinator-only work internally. Without this split,
+  /// no-coordinator builds would leak the session's tracked tasks
+  /// (`syncReloadTask`, `setUpTask`, etc.) past teardown.
   func removeSession(for profileID: UUID) {
-    if let session = sessions.removeValue(forKey: profileID), let syncCoordinator {
-      session.cleanupSync(coordinator: syncCoordinator)
-      syncCoordinator.removeDataHandler(for: profileID)
-    }
+    guard let session = sessions.removeValue(forKey: profileID) else { return }
+    session.cleanupSync(coordinator: syncCoordinator)
+    syncCoordinator?.removeDataHandler(for: profileID)
+    incompatibleProfiles.removeValue(forKey: profileID)
   }
 
   // MARK: - Automation Lookup
@@ -2052,12 +2062,14 @@ final class SessionManager {
   /// `cleanupSync` on the prior session and re-opens through `session(for:)`
   /// so the gate fires again. Returns the same `SessionOpenResult` shape
   /// as `session(for:)`.
+  ///
+  /// `cleanupSync` runs unconditionally (see `removeSession` for the
+  /// rationale on no-coordinator builds).
   func rebuildSession(for profile: Profile) async -> SessionOpenResult {
-    if let oldSession = sessions[profile.id], let syncCoordinator {
+    if let oldSession = sessions.removeValue(forKey: profile.id) {
       oldSession.cleanupSync(coordinator: syncCoordinator)
-      syncCoordinator.removeDataHandler(for: profile.id)
+      syncCoordinator?.removeDataHandler(for: profile.id)
     }
-    sessions.removeValue(forKey: profile.id)
     return await session(for: profile)
   }
 }
@@ -2397,6 +2409,11 @@ Add to `SessionManager`. The observer registration retains the UUID token so the
         "reconcileIncompatibilityFromIndex: fetchAll failed: \(error, privacy: .public)")
       return
     }
+    // Bail if a newer reconcile / a session tear-down ran during the
+    // suspension above — using the (now-stale) snapshot to mutate
+    // `sessions` / `incompatibleProfiles` would re-evict a freshly
+    // opened session or overwrite fresher state with old data.
+    guard !Task.isCancelled else { return }
     for profile in profiles where profile.dataFormatVersion > DataFormatVersion.current {
       let info = IncompatibleProfileInfo(
         profileLabel: profile.label,
@@ -2827,7 +2844,7 @@ In `MoolahUITests_macOS/Helpers/Screens/WelcomeScreen.swift`, append a new metho
   /// from the picker (the row has either taken focus or the parent
   /// view has transitioned), within `timeout`.
   func tapPickerRow(forProfile id: UUID, timeout: TimeInterval = 3) {
-    Trace.record(detail: "id=\(id.uuidString.lowercased())")
+    Trace.record(#function, detail: "id=\(id.uuidString.lowercased())")
     let row = app.element(for: UITestIdentifiers.Welcome.pickerRow(id))
     if !row.waitForExistence(timeout: timeout) {
       Trace.recordFailure("picker row \(id) did not appear")
@@ -2859,7 +2876,7 @@ struct IncompatibleProfileScreen {
   /// Waits for the view's root container to appear. Fails loudly if
   /// the gate did not route to this screen.
   func expectVisible(timeout: TimeInterval = 5) {
-    Trace.record()
+    Trace.record(#function)
     let root = app.element(for: UITestIdentifiers.IncompatibleProfile.root)
     if !root.waitForExistence(timeout: timeout) {
       Trace.recordFailure("IncompatibleProfileView did not appear")
@@ -2869,7 +2886,7 @@ struct IncompatibleProfileScreen {
 
   /// Asserts the "Check for Updates" button is present.
   func expectCheckForUpdatesVisible(timeout: TimeInterval = 2) {
-    Trace.record()
+    Trace.record(#function)
     let button = app.element(for: UITestIdentifiers.IncompatibleProfile.checkForUpdates)
     if !button.waitForExistence(timeout: timeout) {
       Trace.recordFailure("checkForUpdates button did not appear")
@@ -2879,7 +2896,7 @@ struct IncompatibleProfileScreen {
 
   /// Asserts the "Switch Profile" button is present.
   func expectSwitchProfileVisible(timeout: TimeInterval = 2) {
-    Trace.record()
+    Trace.record(#function)
     let button = app.element(for: UITestIdentifiers.IncompatibleProfile.switchProfile)
     if !button.waitForExistence(timeout: timeout) {
       Trace.recordFailure("switchProfile button did not appear")
@@ -2894,7 +2911,7 @@ struct IncompatibleProfileScreen {
   /// an external URL). Asserting the screen survives the click is the
   /// strongest deterministic check available.
   func tapCheckForUpdates() {
-    Trace.record()
+    Trace.record(#function)
     let button = app.element(for: UITestIdentifiers.IncompatibleProfile.checkForUpdates)
     if !button.waitForExistence(timeout: 2) {
       Trace.recordFailure("checkForUpdates button did not appear")
@@ -2912,7 +2929,7 @@ struct IncompatibleProfileScreen {
   /// Clicks "Switch Profile". Post-condition: the root container is
   /// gone (the closure pops back to the picker), within `timeout`.
   func tapSwitchProfile(timeout: TimeInterval = 5) {
-    Trace.record()
+    Trace.record(#function)
     let button = app.element(for: UITestIdentifiers.IncompatibleProfile.switchProfile)
     if !button.waitForExistence(timeout: 2) {
       Trace.recordFailure("switchProfile button did not appear")
