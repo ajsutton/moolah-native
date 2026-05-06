@@ -228,6 +228,12 @@ extension MoolahApp {
       containerManager: setup.manager,
       profileIndexRepository: setup.manager.profileIndexRepository,
       syncCoordinator: coordinator)
+    // Wire the mid-session bump-arrival observer: when a remote
+    // profile-index batch raises a profile's `dataFormatVersion`
+    // above `DataFormatVersion.current`, the observer evicts the
+    // active session (if any) and records an `IncompatibleProfileInfo`
+    // so routing flips to the incompatible view (issue #764).
+    sessionManager.installIndexObserver()
     // Clean up cached sessions and the coordinator's per-profile bundle
     // cache when a profile is removed (locally or via remote sync).
     // `containerManager.deleteStore` is about to invalidate the

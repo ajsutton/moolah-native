@@ -37,6 +37,13 @@ final class SessionManager {
   /// `guides/CONCURRENCY_GUIDE.md` §8 ("Store tasks in the store").
   private var rebuildTasks: [UUID: Task<SessionOpenResult, Never>] = [:]
 
+  /// Token returned by `SyncCoordinator.addIndexObserver` when
+  /// `installIndexObserver` registers the mid-session bump-arrival
+  /// observer. `nil` until installed (and re-`nil`ed on
+  /// `removeIndexObserver`); the install guard relies on this to be
+  /// idempotent on this `SessionManager` instance.
+  private var indexObserverToken: UUID?
+
   let containerManager: ProfileContainerManager
   let syncCoordinator: SyncCoordinator?
   let profileIndexRepository: any ProfileIndexRepository
@@ -221,4 +228,88 @@ final class SessionManager {
     }
     return await task.value
   }
+
+  // MARK: - Mid-session compatibility reconcile
+
+  /// Installs a `SyncCoordinator` index observer that, on every
+  /// profile-index batch, evicts any session whose `dataFormatVersion`
+  /// has been raised above `DataFormatVersion.current` and records an
+  /// `IncompatibleProfileInfo` in `incompatibleProfiles`.
+  ///
+  /// Idempotent on this `SessionManager` instance: subsequent calls are
+  /// no-ops once the observer is installed. Pair with
+  /// `removeIndexObserver()` if you need to drop the registration
+  /// (tests, teardown).
+  func installIndexObserver() {
+    guard let syncCoordinator, indexObserverToken == nil else { return }
+    indexObserverToken = syncCoordinator.addIndexObserver { [weak self] in
+      // Callback is already @MainActor-isolated; spawn a Task only to
+      // bridge sync→async for the reconcile call. `weak self` prevents
+      // the observer from extending the SessionManager's lifetime.
+      Task { @MainActor in
+        await self?.reconcileIncompatibilityFromIndex()
+      }
+    }
+  }
+
+  /// Drops the index-observer registration. Use from `deinit` or
+  /// teardown helpers; production has a single long-lived
+  /// `SessionManager` so this is mostly for test isolation.
+  func removeIndexObserver() {
+    if let token = indexObserverToken, let syncCoordinator {
+      syncCoordinator.removeIndexObserver(token)
+    }
+    indexObserverToken = nil
+  }
+
+  /// Walks the profile-index repository and applies the gate to any
+  /// profile that is now incompatible — evicting a live session if one
+  /// is open, and recording an `IncompatibleProfileInfo` either way.
+  /// The eviction order (`cleanupSync` then `removeDataHandler`) is
+  /// safe under `@MainActor`: both calls are synchronous, so no other
+  /// `@MainActor` work interleaves between them, and the
+  /// `SyncCoordinator` delegate runs on the same actor.
+  private func reconcileIncompatibilityFromIndex() async {
+    let profiles: [Profile]
+    do {
+      profiles = try await profileIndexRepository.fetchAll()
+    } catch {
+      logger.error(
+        "reconcileIncompatibilityFromIndex: fetchAll failed: \(error, privacy: .public)")
+      return
+    }
+    // Bail if a newer reconcile / a session tear-down ran during the
+    // suspension above — using the (now-stale) snapshot to mutate
+    // `sessions` / `incompatibleProfiles` would re-evict a freshly
+    // opened session or overwrite fresher state with old data.
+    guard !Task.isCancelled else { return }
+    for profile in profiles where profile.dataFormatVersion > DataFormatVersion.current {
+      let info = IncompatibleProfileInfo(
+        profileLabel: profile.label,
+        profileVersion: profile.dataFormatVersion,
+        buildVersion: DataFormatVersion.current)
+      incompatibleProfiles[profile.id] = info
+      if let session = sessions.removeValue(forKey: profile.id),
+        let syncCoordinator
+      {
+        session.cleanupSync(coordinator: syncCoordinator)
+        syncCoordinator.removeDataHandler(for: profile.id)
+      }
+    }
+  }
+
+  #if DEBUG
+    /// Test-only: drive `reconcileIncompatibilityFromIndex` directly,
+    /// bypassing the observer callback path. Lets tests assert
+    /// reconciliation outcomes without polling on `Task.yield()`.
+    func reconcileIncompatibilityFromIndexForTesting() async {
+      await reconcileIncompatibilityFromIndex()
+    }
+
+    /// Test-only: seed an incompatible entry so the eviction-on-`.ready`
+    /// path can be verified without first triggering the observer.
+    func setIncompatibleProfileForTesting(id: UUID, info: IncompatibleProfileInfo) {
+      incompatibleProfiles[id] = info
+    }
+  #endif
 }
