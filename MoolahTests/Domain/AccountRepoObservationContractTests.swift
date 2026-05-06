@@ -1,10 +1,11 @@
 import Foundation
+import GRDB
 import Testing
 
 @testable import Moolah
 
 @Suite("AccountRepository observation contract")
-struct AccountRepositoryObservationContractTests {
+struct AccountRepoObservationContractTests {
 
   @Test("initial emission reflects current DB state")
   func initialEmission() async throws {
@@ -101,5 +102,33 @@ struct AccountRepositoryObservationContractTests {
     // surfaced an unexpected error to the channel.
     let surfaced = await pollTask.value
     #expect(surfaced == nil)
+  }
+
+  // MARK: - Error categorisation
+  //
+  // We can't drive a live repository through SQLITE_FULL or SQLITE_ERROR
+  // without poking SQLite VFS internals, so the categorisation contract
+  // is verified two ways: a direct unit test of the predicate here, and
+  // a synthetic-stream test of the retry loop in
+  // `RetryingAsyncStreamTests`.
+
+  @Test("isProgrammerBugError categorises SQLITE_ERROR as a programmer bug")
+  func categorisationProgrammerBug() {
+    let error = DatabaseError(resultCode: .SQLITE_ERROR, message: "no such table")
+    #expect(isProgrammerBugError(error))
+  }
+
+  @Test("isProgrammerBugError categorises transient I/O errors as recoverable")
+  func categorisationTransient() {
+    let full = DatabaseError(resultCode: .SQLITE_FULL, message: "disk full")
+    let ioerr = DatabaseError(resultCode: .SQLITE_IOERR, message: "io error")
+    #expect(isProgrammerBugError(full) == false)
+    #expect(isProgrammerBugError(ioerr) == false)
+  }
+
+  @Test("isProgrammerBugError treats non-DatabaseError as recoverable")
+  func categorisationNonDatabaseError() {
+    struct OtherError: Error {}
+    #expect(isProgrammerBugError(OtherError()) == false)
   }
 }
