@@ -18,6 +18,7 @@ extension TransactionLegRow: CloudKitRecordConvertible {
     TransactionLegRecordCloudKitFields(
       accountId: accountId?.uuidString,
       categoryId: categoryId?.uuidString,
+      counterpartyAddress: counterpartyAddress,
       earmarkId: earmarkId?.uuidString,
       externalId: externalId,
       instrumentId: instrumentId,
@@ -51,7 +52,8 @@ extension TransactionLegRow: CloudKitRecordConvertible {
       // Stamped by applyGRDBBatchSave after upsert; never read from the
       // CKRecord itself.
       encodedSystemFields: nil,
-      externalId: fields.externalId
+      externalId: fields.externalId,
+      counterpartyAddress: fields.counterpartyAddress
     )
   }
 }

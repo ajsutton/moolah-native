@@ -193,4 +193,48 @@ struct TransactionLegTests {
     let decoded = try JSONDecoder().decode(TransactionLeg.self, from: json)
     #expect(decoded.externalId == nil)
   }
+
+  // MARK: - counterpartyAddress (on-chain other-party for crypto wallet legs)
+
+  @Test
+  func counterpartyAddressRoundTrips() throws {
+    let leg = TransactionLeg(
+      accountId: UUID(),
+      instrument: .AUD,
+      quantity: 100,
+      counterpartyAddress: "0x2222222222222222222222222222222222222222",
+      type: .transfer
+    )
+    let data = try JSONEncoder().encode(leg)
+    let decoded = try JSONDecoder().decode(TransactionLeg.self, from: data)
+    #expect(decoded.counterpartyAddress == "0x2222222222222222222222222222222222222222")
+    #expect(decoded == leg)
+  }
+
+  @Test
+  func legacyLegWithoutCounterpartyAddressDecodesWithNil() throws {
+    let json = Data(
+      """
+      {"accountId":"\(UUID().uuidString)","instrument":{"id":"AUD","kind":"fiatCurrency","name":"AUD","decimals":2},"quantity":100,"type":"income"}
+      """.utf8)
+    let decoded = try JSONDecoder().decode(TransactionLeg.self, from: json)
+    #expect(decoded.counterpartyAddress == nil)
+  }
+
+  @Test
+  func legWithExternalIdAndCounterpartyAddressRoundTrips() throws {
+    let leg = TransactionLeg(
+      accountId: UUID(),
+      instrument: .AUD,
+      quantity: -50,
+      externalId: "0xabcdef",
+      counterpartyAddress: "0x2222222222222222222222222222222222222222",
+      type: .transfer
+    )
+    let data = try JSONEncoder().encode(leg)
+    let decoded = try JSONDecoder().decode(TransactionLeg.self, from: data)
+    #expect(decoded.externalId == "0xabcdef")
+    #expect(decoded.counterpartyAddress == "0x2222222222222222222222222222222222222222")
+    #expect(decoded == leg)
+  }
 }

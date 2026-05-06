@@ -127,6 +127,21 @@ public enum UITestIdentifiers {
     public static func blockExplorerLink(legIndex: Int) -> String {
       "detail.leg.\(legIndex).blockExplorer"
     }
+
+    /// Truncated on-chain counterparty address row for the leg at the
+    /// given index. Only rendered when the leg has a non-nil
+    /// `counterpartyAddress` (recorded by the wallet importer for the
+    /// other side of the transfer). The row itself is non-interactive —
+    /// the copy button next to it is the only affordance.
+    public static func counterpartyAddress(legIndex: Int) -> String {
+      "detail.leg.\(legIndex).counterpartyAddress"
+    }
+
+    /// "Copy address" button next to the counterparty row for the leg at
+    /// the given index.
+    public static func counterpartyCopyButton(legIndex: Int) -> String {
+      "detail.leg.\(legIndex).counterpartyAddress.copy"
+    }
   }
 
   public enum SyncFooter {
