@@ -2058,19 +2058,33 @@ final class SessionManager {
     Array(sessions.values)
   }
 
+  /// Per-profile rebuild-task registry. `rebuildSession(for:)` cancels
+  /// any prior in-flight rebuild for the same profile id before
+  /// starting a new one — so rapid `onChange`-driven rebuilds (e.g.
+  /// label edits arriving via sync) don't race writes back into the
+  /// view's `sessionResult`. Storing the handle here (not in view
+  /// `@State`) survives view-identity changes — see
+  /// `guides/CONCURRENCY_GUIDE.md` §8 ("Store tasks in the store").
+  private var rebuildTasks: [UUID: Task<SessionOpenResult, Never>] = [:]
+
   /// Replaces the session for a profile with a fresh instance — runs
   /// `cleanupSync` on the prior session and re-opens through `session(for:)`
   /// so the gate fires again. Returns the same `SessionOpenResult` shape
   /// as `session(for:)`.
   ///
   /// `cleanupSync` runs unconditionally (see `removeSession` for the
-  /// rationale on no-coordinator builds).
+  /// rationale on no-coordinator builds). Cancels any prior rebuild
+  /// task for the same profile id before starting a new one.
   func rebuildSession(for profile: Profile) async -> SessionOpenResult {
+    rebuildTasks[profile.id]?.cancel()
     if let oldSession = sessions.removeValue(forKey: profile.id) {
       oldSession.cleanupSync(coordinator: syncCoordinator)
       syncCoordinator?.removeDataHandler(for: profile.id)
     }
-    return await session(for: profile)
+    let task = Task { await self.session(for: profile) }
+    rebuildTasks[profile.id] = task
+    defer { rebuildTasks.removeValue(forKey: profile.id) }
+    return await task.value
   }
 }
 ```
@@ -2098,7 +2112,6 @@ Read the file first (`Read App/ProfileWindowView.swift`). At line 40 (`let sessi
 
 ```swift
 @State private var sessionResult: SessionOpenResult?
-@State private var rebuildTask: Task<Void, Never>?
 
 var body: some View {
   Group {
@@ -2121,21 +2134,16 @@ var body: some View {
     sessionResult = await sessionManager.session(for: profile)
   }
   .onChange(of: profile.label) { _, _ in
-    // Cancel any in-flight rebuild before starting a new one — rapid
-    // label changes (e.g. live remote-sync updates) would otherwise race
-    // and write `sessionResult` in non-deterministic order.
-    rebuildTask?.cancel()
-    rebuildTask = Task {
-      let result = await sessionManager.rebuildSession(for: profile)
-      if !Task.isCancelled {
-        sessionResult = result
-      }
-    }
+    // SessionManager.rebuildSession internally cancels any prior
+    // in-flight rebuild for this profile id, so rapid onChange events
+    // can't race. The view holds no Task handle (per
+    // `guides/CONCURRENCY_GUIDE.md` §8 — store tasks in the store).
+    Task { sessionResult = await sessionManager.rebuildSession(for: profile) }
   }
 }
 ```
 
-(The exact view body wiring depends on the file's current shape — keep its layout and only swap the session-resolution mechanism. The pattern is: `@State` for the result and the rebuild-Task handle; `.task(id:)` for the initial load; cancel-and-replace `Task { ... }` for the `onChange` rebuild.)
+(The exact view body wiring depends on the file's current shape — keep its layout and only swap the session-resolution mechanism. The pattern is: `@State` for the result; `.task(id:)` for the initial load; a one-liner `Task { ... }` wrapping for the `onChange` rebuild — cancellation is the store's responsibility, not the view's.)
 
 - [ ] **Step 12.8: Migrate `App/ProfileRootView.swift`**
 
