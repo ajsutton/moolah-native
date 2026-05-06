@@ -1,5 +1,6 @@
 import Foundation
 
+// SyncBoundary — adding a case requires bumping DataFormatVersion.current.
 enum AccountType: String, Codable, Sendable, CaseIterable {
   case bank
   case creditCard = "cc"
