@@ -36,6 +36,7 @@ extension TransactionLegRow {
     self.sortOrder = sortOrder
     self.encodedSystemFields = nil
     self.externalId = leg.externalId
+    self.counterpartyAddress = leg.counterpartyAddress
   }
 
   /// Domain projection. Mirrors `TransactionLegRecord.toDomain(instrument:)`.
@@ -51,6 +52,7 @@ extension TransactionLegRow {
       instrument: instrument,
       quantity: InstrumentAmount(storageValue: quantity, instrument: instrument).quantity,
       externalId: externalId,
+      counterpartyAddress: counterpartyAddress,
       type: try TransactionType.decoded(rawValue: type),
       categoryId: categoryId,
       earmarkId: earmarkId

@@ -24,6 +24,7 @@ struct TransactionLegRow {
     case sortOrder = "sort_order"
     case encodedSystemFields = "encoded_system_fields"
     case externalId = "external_id"
+    case counterpartyAddress = "counterparty_address"
   }
 
   enum CodingKeys: String, CodingKey {
@@ -39,6 +40,7 @@ struct TransactionLegRow {
     case sortOrder = "sort_order"
     case encodedSystemFields = "encoded_system_fields"
     case externalId = "external_id"
+    case counterpartyAddress = "counterparty_address"
   }
 
   var id: UUID
@@ -61,6 +63,12 @@ struct TransactionLegRow {
   /// `(account_id, external_id)` for non-NULL values. Defaulted to
   /// `nil` so existing memberwise-init call sites continue to compile.
   var externalId: String?
+  /// On-chain counterparty address (lowercased) for wallet-imported
+  /// legs. `nil` for non-crypto legs, gas legs, and self-sends. No
+  /// CHECK in the schema — the importer enforces shape upstream so
+  /// non-EVM chains can land without a migration. Defaulted to `nil`
+  /// so existing memberwise-init call sites continue to compile.
+  var counterpartyAddress: String?
 }
 
 extension TransactionLegRow: Codable {}

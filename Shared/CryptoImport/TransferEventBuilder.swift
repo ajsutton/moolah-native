@@ -17,11 +17,14 @@ import os
 ///   `BuiltTransaction`s and the gas leg is added once that client method
 ///   lands.
 ///
-/// Each leg's `externalId` is set to the event's `hash`. NFT categories
-/// are filtered upstream at the request level; if one slips through (the
-/// decoder's lenient `.unknown` case) the builder skips it with a
-/// `Logger.notice` and continues so a single bad row doesn't fail the
-/// whole sync.
+/// Each leg's `externalId` is set to the event's `hash`. The `counterpartyAddress`
+/// is the lowercased on-chain address on the *other* side of the transfer:
+/// the `to` address for outbound legs, the `from` address for inbound legs,
+/// and `nil` for self-sends (where both sides are this wallet) and unknown
+/// directions. NFT categories are filtered upstream at the request level; if
+/// one slips through (the decoder's lenient `.unknown` case) the builder
+/// skips it with a `Logger.notice` and continues so a single bad row doesn't
+/// fail the whole sync.
 struct TransferEventBuilder: Sendable {
   /// Shared static `Logger` — `Logger` is `Sendable`, so this is safe
   /// across actor boundaries without per-instance allocation.
@@ -204,25 +207,46 @@ struct TransferEventBuilder: Sendable {
     }
 
     let instrument = try await resolveInstrument(event: event, context: context)
-
-    let signedQuantity: Decimal
-    switch direction {
-    case .outbound:
-      signedQuantity = -unsignedQuantity
-    case .inbound, .selfSend:
-      signedQuantity = unsignedQuantity
-    case .unrelated:
-      // Already handled above; unreachable here. `precondition` would be
-      // overkill for a defensive branch, so re-route to nil.
+    guard
+      let resolution = signAndCounterparty(
+        direction: direction, event: event, magnitude: unsignedQuantity)
+    else {
       return nil
     }
 
     return TransactionLeg(
       accountId: context.account.id,
       instrument: instrument,
-      quantity: signedQuantity,
+      quantity: resolution.signedQuantity,
       externalId: event.hash,
+      counterpartyAddress: resolution.counterpartyAddress,
       type: .transfer)
+  }
+
+  /// Resolves a transfer's direction into the leg's signed quantity and
+  /// `counterpartyAddress`. Returns `nil` for `.unrelated`, which the
+  /// caller has already rejected; included so the function is total.
+  ///
+  /// The counterparty rule is the four-quadrant truth table from the
+  /// builder header: outbound = `to`, inbound = `from`, self-send = nil.
+  /// Lowercased everywhere for canonical comparison.
+  private func signAndCounterparty(
+    direction: TransferDirection,
+    event: AlchemyTransfer,
+    magnitude: Decimal
+  ) -> SignAndCounterparty? {
+    switch direction {
+    case .outbound:
+      return SignAndCounterparty(
+        signedQuantity: -magnitude, counterpartyAddress: event.to?.lowercased())
+    case .inbound:
+      return SignAndCounterparty(
+        signedQuantity: magnitude, counterpartyAddress: event.from.lowercased())
+    case .selfSend:
+      return SignAndCounterparty(signedQuantity: magnitude, counterpartyAddress: nil)
+    case .unrelated:
+      return nil
+    }
   }
 
   /// Resolves the leg's `Instrument`. For native transfers (`.external`,
@@ -313,6 +337,14 @@ private struct BuildContext: Sendable {
   let chain: ChainConfig
   let discovery: CryptoTokenDiscoveryService
   let importOrigin: ImportOrigin
+}
+
+/// Result of mapping a transfer's direction onto a leg's sign + the
+/// other-party address. Lives outside the builder so the helper that
+/// produces it stays small enough for SwiftLint's body-length budget.
+private struct SignAndCounterparty {
+  let signedQuantity: Decimal
+  let counterpartyAddress: String?
 }
 
 /// Direction a single Alchemy transfer takes relative to the synced
