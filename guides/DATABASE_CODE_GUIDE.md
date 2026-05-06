@@ -106,7 +106,22 @@ Forbidden without an inline justification comment naming the lifted guarantee. T
 
 ### `ValueObservation`
 
-**Not adopted at this time.** Stores reload on explicit triggers (init, store actions, post-CKSyncEngine notifications via `ProfileSession`). Re-evaluate after Slice 1 ships if reactive pulses prove painful in SwiftUI. Adopting `ValueObservation` requires a guide update and is not a per-feature decision.
+**Adopted for reactive store updates** (per `plans/2026-05-06-reactive-sync-refresh-design.md`, lifted 2026-05-06).
+
+Conventions, all enforced by `database-code-review`:
+
+1. **Tracking closure form.** Use `ValueObservation.tracking { db in … }` for queries that fetch concrete data; GRDB infers the region from the SQL/table accesses. **Empty-table caveat:** region inference only registers a table if at least one row is touched during the first fetch (SQLite's `SQLITE_READ` authorizer fires on row access, not on `SELECT 1 FROM empty_table LIMIT 1` returning zero rows). For tracking closures that may run against empty tables — most notably `Void`-emitting tick streams over cache tables — use the explicit-region form `ValueObservation.tracking(regions: [Table("name1"), Table("name2"), ...]) { _ in () }` so the regions are registered unconditionally.
+2. **`.removeDuplicates()` is the default** for every `observe…` method that emits a value type (relies on the row decoder being `Equatable`). **Carve-out:** streams that emit `Void` (e.g. `InstrumentConversionService.observeRates()`) MUST NOT apply `removeDuplicates` — `Void == Void` would suppress every emission.
+3. **Scheduling.** `.values(in: writer)` with no explicit `scheduling:` argument. The default `.task` scheduler (cooperative thread pool) is correct for `AsyncSequence` consumption inside a Swift `Task`. Do not override with a `DispatchQueue`-targeting scheduler (`.async(...)` factories on `DispatchQueue` or the `.mainActorQueued` style); those exist for the Combine `publisher(in:scheduling:)` and callback `start(in:scheduling:onError:onChange:)` paths, and using them with `.values(in:)` causes a redundant dispatch hop when the consuming `Task` is already actor-isolated.
+4. **AsyncStream bridge.** All domain protocols return `AsyncStream<T>` (Foundation, `Sendable`). The bridge lives at `Backends/GRDB/Observation/ValueObservation+AsyncStream.swift` and MUST wire `continuation.onTermination` to cancel the underlying observation `Task`. Without this, an `AsyncStream` consumer that cancels its `Task` would not propagate cancellation to GRDB and the observation would leak.
+5. **Errors — categorise.** The bridge's `onError:` callback distinguishes:
+   - **Programmer bugs** (`SQLITE_ERROR` / malformed SQL / missing tables) — assert/`fatalError` in debug; in release, surface to the store via the repository's `observeErrors()` channel and complete both streams.
+   - **Transient I/O** (`SQLITE_FULL`, `SQLITE_IOERR`) — log at `error` level; restart the observation with backoff (1 s, 5 s, 30 s, capped).
+   - **Retry budget exhaustion** (5 consecutive transient failures) — surface the most recent error to `observeErrors()`, complete both streams.
+6. **Logging contract.** Every error log includes the repository name, method name, and underlying error. Format: `GRDB observation error in <Repo>.<method>: <error>`. No bare `print()` or `logger.error("\(error)")`.
+7. **Stream completion.** After the bridge surfaces an error to the store (programmer bug or budget exhausted), both `observeAll()` and `observeErrors()` complete (`continuation.finish()`). The store's `TaskGroup` child tasks exit naturally; the `TaskGroup` returns; teardown is clean.
+
+Stores subscribe in `init` with strong `self` (the store is `@MainActor`; the task already holds an implicit strong reference). `stopObserving()` (called from `ProfileSession.cleanupSync`) cancels the observation; a `deinit { observationTask?.cancel() }` safety net protects against missed `cleanupSync` calls.
 
 ---
 
