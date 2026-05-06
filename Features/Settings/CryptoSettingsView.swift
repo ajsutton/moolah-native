@@ -1,15 +1,52 @@
 // Features/Settings/CryptoSettingsView.swift
 import SwiftUI
 
+/// Crypto preferences tab. Surfaces every user-facing control for the
+/// wallet auto-import: Alchemy API key, CoinGecko API key, the list of
+/// registered tokens, the list of crypto accounts (with last-sync
+/// timestamps + per-account "Sync now"), the Discovered Tokens inbox
+/// and the Spam tokens management view.
+///
+/// `cryptoSyncStore` and `tokenDiscovery` are optional so the view can
+/// still render in degraded launches (preview / no `instrumentRegistry`)
+/// where the wallet-import feature is unavailable. Sections that depend
+/// on them (the accounts list, the inbox actions) hide themselves when
+/// the dependency is missing.
 struct CryptoSettingsView: View {
   @Bindable var store: CryptoTokenStore
-  @State private var showAddToken = false
-  @State private var apiKeyInput = ""
+  let cryptoSyncStore: CryptoSyncStore?
+  let tokenDiscovery: CryptoTokenDiscoveryService?
+  let accountStore: AccountStore?
+
+  // Module-internal so the sibling extension file
+  // `CryptoSettingsView+TokenList.swift` can read / mutate the same
+  // local UI state. Not part of the public surface.
+  @State var coinGeckoApiKeyInput = ""
+  @State var alchemyApiKeyInput = ""
+  @State var showAddToken = false
+
+  init(
+    store: CryptoTokenStore,
+    cryptoSyncStore: CryptoSyncStore? = nil,
+    tokenDiscovery: CryptoTokenDiscoveryService? = nil,
+    accountStore: AccountStore? = nil
+  ) {
+    self.store = store
+    self.cryptoSyncStore = cryptoSyncStore
+    self.tokenDiscovery = tokenDiscovery
+    self.accountStore = accountStore
+  }
 
   var body: some View {
     Form {
+      alchemyApiKeySection
+      if let accountStore, let cryptoSyncStore {
+        CryptoAccountsListSection(
+          accountStore: accountStore, syncStore: cryptoSyncStore)
+      }
+      tokenInboxNavigationSection
       tokenListSection
-      apiKeySection
+      coinGeckoApiKeySection
     }
     .formStyle(.grouped)
     .navigationTitle("Crypto Tokens")
@@ -22,162 +59,162 @@ struct CryptoSettingsView: View {
     }
   }
 
-  // MARK: - Token List
+  // MARK: - Alchemy API Key
+  //
+  // Status precedence (most-specific wins):
+  //
+  // 1. `globalError == .invalidApiKey` — key was rejected by Alchemy.
+  //    Show "Invalid" with a red exclamation mark.
+  // 2. Key configured (`hasAlchemyApiKey == true`) and no global error
+  //    — show "Configured" with a green checkmark.
+  // 3. No key — show "Not set" with a neutral icon. The footer copy
+  //    nudges the user to add one.
+  //
+  // `globalError == .missingApiKey` is folded into case 3 since the
+  // store will set it whenever a sync runs without a key configured.
 
-  @ViewBuilder private var tokenListSection: some View {
+  @ViewBuilder private var alchemyApiKeySection: some View {
     Section {
-      if store.isLoading && store.registrations.isEmpty {
-        HStack {
-          Spacer()
-          ProgressView()
-          Spacer()
-        }
-      } else if store.registrations.isEmpty {
-        ContentUnavailableView(
-          "No Tokens",
-          systemImage: "bitcoinsign.circle",
-          description: Text("Add crypto tokens to track their prices.")
-        )
-        .frame(maxWidth: .infinity)
+      if store.hasAlchemyApiKey {
+        configuredAlchemyRow
       } else {
-        ForEach(store.registrations) { registration in
-          registrationRow(registration)
-        }
-        .onDelete { indexSet in
-          Task {
-            for index in indexSet {
-              await store.removeRegistration(store.registrations[index])
-            }
-          }
-        }
+        alchemyEntryRow
       }
+      Link(
+        "How to get an Alchemy API key",
+        destination: alchemySignupURL
+      )
+      .font(.caption)
     } header: {
       HStack {
-        Text("Registered Tokens")
+        Text("Alchemy")
         Spacer()
-        Button {
-          showAddToken = true
-        } label: {
-          Image(systemName: "plus")
-        }
-        .buttonStyle(.borderless)
-        .accessibilityLabel("Add token")
-        .accessibilityIdentifier(UITestIdentifiers.CryptoSettings.addTokenButton)
+        alchemyStatusBadge
       }
-    }
-  }
-
-  private func registrationRow(_ registration: CryptoRegistration) -> some View {
-    let instrument = registration.instrument
-    let mapping = registration.mapping
-    return HStack {
-      VStack(alignment: .leading, spacing: 2) {
-        Text(instrument.ticker ?? instrument.name)
-          .font(.headline)
-        Text(instrument.name)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
-      Spacer()
-      Text(Instrument.chainName(for: instrument.chainId ?? 0))
-        .font(.caption)
-        .foregroundStyle(.secondary)
-      providerIndicators(for: mapping)
-    }
-    .accessibilityElement(children: .combine)
-    .accessibilityIdentifier(UITestIdentifiers.CryptoSettings.registrationRow(registration.id))
-    .accessibilityLabel(
-      "\(instrument.ticker ?? instrument.name), \(instrument.name), "
-        + "\(Instrument.chainName(for: instrument.chainId ?? 0))"
-        + providersAccessibilityFragment(for: mapping)
-    )
-    .contextMenu {
-      Button(role: .destructive) {
-        Task { await store.removeRegistration(registration) }
-      } label: {
-        Label("Remove", systemImage: "trash")
-      }
-    }
-  }
-
-  /// VoiceOver fragment listing the active price providers for a mapping.
-  /// The visual `CG`/`CC`/`BN` badges in `providerIndicators` would otherwise
-  /// be silent — a combined-element row reads only the outer label, so each
-  /// badge's individual `accessibilityLabel` doesn't surface.
-  private func providersAccessibilityFragment(for mapping: CryptoProviderMapping) -> String {
-    let names: [String] = [
-      mapping.coingeckoId != nil ? "CoinGecko" : nil,
-      mapping.cryptocompareSymbol != nil ? "CryptoCompare" : nil,
-      mapping.binanceSymbol != nil ? "Binance" : nil,
-    ].compactMap { $0 }
-    return names.isEmpty ? "" : ", priced via " + names.joined(separator: ", ")
-  }
-
-  private func providerIndicators(for mapping: CryptoProviderMapping) -> some View {
-    HStack(spacing: 4) {
-      if mapping.coingeckoId != nil {
-        Text("CG")
-          .font(.caption2)
-          .padding(.horizontal, 4)
-          .padding(.vertical, 1)
-          .background(.fill, in: RoundedRectangle(cornerRadius: 3))
-          .accessibilityLabel("CoinGecko")
-      }
-      if mapping.cryptocompareSymbol != nil {
-        Text("CC")
-          .font(.caption2)
-          .padding(.horizontal, 4)
-          .padding(.vertical, 1)
-          .background(.fill, in: RoundedRectangle(cornerRadius: 3))
-          .accessibilityLabel("CryptoCompare")
-      }
-      if mapping.binanceSymbol != nil {
-        Text("BN")
-          .font(.caption2)
-          .padding(.horizontal, 4)
-          .padding(.vertical, 1)
-          .background(.fill, in: RoundedRectangle(cornerRadius: 3))
-          .accessibilityLabel("Binance")
-      }
-    }
-  }
-
-  // MARK: - API Key
-
-  private var apiKeySection: some View {
-    Section {
-      if store.hasApiKey {
-        HStack {
-          Label("CoinGecko API Key", systemImage: "key")
-          Spacer()
-          Text("Configured")
-            .foregroundStyle(.secondary)
-          Button("Remove", role: .destructive) {
-            store.clearApiKey()
-          }
-          .buttonStyle(.bordered)
-          .controlSize(.small)
-        }
-      } else {
-        HStack {
-          SecureField("CoinGecko API Key", text: $apiKeyInput)
-          Button("Save") {
-            let trimmed = apiKeyInput.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.isEmpty else { return }
-            store.saveApiKey(trimmed)
-            apiKeyInput = ""
-          }
-          .buttonStyle(.bordered)
-          .controlSize(.small)
-          .disabled(apiKeyInput.trimmingCharacters(in: .whitespaces).isEmpty)
-        }
-      }
-    } header: {
-      Text("CoinGecko")
     } footer: {
       Text(
-        "Optional. Enables CoinGecko as the highest-priority price provider. Requires a free Demo API key from coingecko.com."
+        "Required to auto-import on-chain transactions for crypto wallet accounts. "
+          + "A free Alchemy key is sufficient for personal use."
       )
     }
   }
+
+  @ViewBuilder private var configuredAlchemyRow: some View {
+    HStack {
+      Label("Alchemy API Key", systemImage: "key")
+      Spacer()
+      Text("Configured")
+        .foregroundStyle(.secondary)
+      Button("Remove", role: .destructive) {
+        store.clearAlchemyApiKey()
+      }
+      .buttonStyle(.bordered)
+      .controlSize(.small)
+      .accessibilityIdentifier(UITestIdentifiers.CryptoSettings.alchemyApiKeyRemoveButton)
+    }
+  }
+
+  @ViewBuilder private var alchemyEntryRow: some View {
+    HStack {
+      SecureField("Alchemy API Key", text: $alchemyApiKeyInput)
+        .accessibilityIdentifier(UITestIdentifiers.CryptoSettings.alchemyApiKeyField)
+      Button("Save") {
+        let trimmed = alchemyApiKeyInput.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        store.saveAlchemyApiKey(trimmed)
+        alchemyApiKeyInput = ""
+      }
+      .buttonStyle(.bordered)
+      .controlSize(.small)
+      .disabled(alchemyApiKeyInput.trimmingCharacters(in: .whitespaces).isEmpty)
+      .accessibilityIdentifier(UITestIdentifiers.CryptoSettings.alchemyApiKeySaveButton)
+    }
+  }
+
+  /// Coloured status indicator next to the section header. Encodes the
+  /// status precedence described in the comment above
+  /// `alchemyApiKeySection`. Returned as `some View` rather than three
+  /// inline branches so the header layout stays readable.
+  @ViewBuilder private var alchemyStatusBadge: some View {
+    if cryptoSyncStore?.globalError == .invalidApiKey {
+      Label("Invalid", systemImage: "exclamationmark.circle.fill")
+        .labelStyle(.titleAndIcon)
+        .foregroundStyle(.red)
+        .font(.caption)
+    } else if store.hasAlchemyApiKey {
+      Label("Configured", systemImage: "checkmark.circle.fill")
+        .labelStyle(.titleAndIcon)
+        .foregroundStyle(.green)
+        .font(.caption)
+    } else {
+      Label("Not set", systemImage: "circle")
+        .labelStyle(.titleAndIcon)
+        .foregroundStyle(.secondary)
+        .font(.caption)
+    }
+  }
+
+  /// Alchemy's free-tier signup landing page. Hard-coded constant rather
+  /// than environment / config because the URL is a public resource and
+  /// keeping it inline keeps the link a one-line `Link(...)` call.
+  /// `URL(string:)`'s force-unwrap is gated by a known-good literal so a
+  /// `nil` here is a programmer error, not a runtime failure mode.
+  private var alchemySignupURL: URL {
+    guard let url = URL(string: "https://www.alchemy.com/pricing") else {
+      preconditionFailure("CryptoSettingsView: malformed Alchemy signup URL literal")
+    }
+    return url
+  }
+
+  // MARK: - Token inbox navigation
+
+  @ViewBuilder private var tokenInboxNavigationSection: some View {
+    Section {
+      discoveredTokensNavigationLink
+      spamTokensNavigationLink
+    } header: {
+      Text("Token Management")
+    }
+  }
+
+  @ViewBuilder private var discoveredTokensNavigationLink: some View {
+    NavigationLink {
+      DiscoveredTokensInboxView(store: store, tokenDiscovery: tokenDiscovery)
+    } label: {
+      HStack {
+        Label("Discovered Tokens", systemImage: "tray")
+        Spacer()
+        if store.unpricedCount > 0 {
+          Text("\(store.unpricedCount)")
+            .font(.caption)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(.tint, in: Capsule())
+            .foregroundStyle(.white)
+        }
+      }
+    }
+    .accessibilityIdentifier(UITestIdentifiers.CryptoSettings.discoveredTokensRow)
+  }
+
+  @ViewBuilder private var spamTokensNavigationLink: some View {
+    NavigationLink {
+      SpamTokensView(store: store)
+    } label: {
+      HStack {
+        Label("Spam Tokens", systemImage: "trash")
+        Spacer()
+        if !store.spamRegistrations.isEmpty {
+          Text("\(store.spamRegistrations.count)")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+      }
+    }
+    .accessibilityIdentifier(UITestIdentifiers.CryptoSettings.spamTokensRow)
+  }
+
+  // The "Registered Tokens" + "CoinGecko API Key" sections live in
+  // `CryptoSettingsView+TokenList.swift` so this file stays under
+  // SwiftLint's `type_body_length` and `file_length` thresholds.
 }

@@ -51,13 +51,22 @@
           // `UITestIdentifiers.Settings.cryptoTabTitle` so there is one
           // source of truth.
           Tab(UITestIdentifiers.Settings.cryptoTabTitle, systemImage: "bitcoinsign.circle") {
-            CryptoSettingsView(store: store)
+            // Wrap in a NavigationStack so the Discovered Tokens inbox
+            // and Spam Tokens views can be pushed via NavigationLink.
+            NavigationStack {
+              CryptoSettingsView(
+                store: store,
+                cryptoSyncStore: session.cryptoSyncStore,
+                tokenDiscovery: session.cryptoTokenDiscovery,
+                accountStore: session.accountStore
+              )
               // The embedded `AddTokenSheet` opens an `InstrumentPickerSheet`
               // whose callback variant pulls its search service, registry,
               // and resolution client from `@Environment(ProfileSession.self)`.
               // Without this injection the picker silently falls back to
               // the static fiat list and crypto search returns no results.
               .environment(session)
+            }
           }
         }
         // macOS Settings tabs host the Form / List directly — the window

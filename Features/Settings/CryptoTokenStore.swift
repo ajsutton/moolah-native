@@ -19,18 +19,77 @@ final class CryptoTokenStore {
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "CryptoTokenStore")
 
-  private let apiKeyStore = KeychainStore(
-    service: "com.moolah.api-keys", account: "coingecko", synchronizable: true
-  )
+  private let apiKeyStore: KeychainStore
 
+  /// Keychain entry for the Alchemy API key, used by the crypto-wallet
+  /// auto-import (Stage 9 onward). Service / account strings match
+  /// `plans/2026-05-05-crypto-wallet-import-design.md` §"API key
+  /// management" so reads from `ProfileSession+CryptoSync` pick up the
+  /// value the settings UI writes here. Production wires this to the
+  /// iCloud-synced keychain (`synchronizable: true`); tests inject a
+  /// non-synced `KeychainStore` since the test runner cannot write to
+  /// the synced keychain in CI.
+  private let alchemyKeyStore: KeychainStore
+
+  /// Designated initialiser — accepts the keychain stores explicitly.
+  /// Production constructs both stores against the iCloud-synced
+  /// keychain at the canonical service / account ids (see the
+  /// `convenience init` below). Tests inject non-synchronisable
+  /// instances since the macOS test runner cannot write to the synced
+  /// keychain. Internal access (not `private`) so tests in the same
+  /// module can reach it; the production convenience initialiser stays
+  /// the public surface.
   init(
     registry: any InstrumentRegistryRepository,
     cryptoPriceService: CryptoPriceService,
-    conversionService: any InstrumentConversionService
+    conversionService: any InstrumentConversionService,
+    apiKeyStore: KeychainStore,
+    alchemyKeyStore: KeychainStore
   ) {
     self.registry = registry
     self.cryptoPriceService = cryptoPriceService
     self.conversionService = conversionService
+    self.apiKeyStore = apiKeyStore
+    self.alchemyKeyStore = alchemyKeyStore
+  }
+
+  /// Production convenience initialiser — wires both keychain stores
+  /// to the iCloud-synced keychain at the canonical service / account
+  /// ids. The shape mirrors `ProfileSession.resolveAlchemyApiKey()`'s
+  /// keychain coordinates so a write from settings is picked up by
+  /// the next sync cycle without further plumbing.
+  convenience init(
+    registry: any InstrumentRegistryRepository,
+    cryptoPriceService: CryptoPriceService,
+    conversionService: any InstrumentConversionService
+  ) {
+    self.init(
+      registry: registry,
+      cryptoPriceService: cryptoPriceService,
+      conversionService: conversionService,
+      apiKeyStore: KeychainStore(
+        service: "com.moolah.api-keys", account: "coingecko", synchronizable: true),
+      alchemyKeyStore: KeychainStore(
+        service: "com.moolah.api-keys", account: "alchemy", synchronizable: true)
+    )
+  }
+
+  // MARK: - Filtered registrations
+
+  /// Subset of `registrations` with `pricingStatus == .unpriced`. Drives
+  /// the Discovered Tokens inbox row count + the sidebar badge.
+  var unpricedRegistrations: [CryptoRegistration] {
+    registrations.filter { $0.pricingStatus == .unpriced }
+  }
+
+  /// Convenience for the sidebar / preferences badge — number of
+  /// unresolved tokens awaiting user attention.
+  var unpricedCount: Int { unpricedRegistrations.count }
+
+  /// Subset of `registrations` with `pricingStatus == .spam`. Drives the
+  /// Spam tokens management list.
+  var spamRegistrations: [CryptoRegistration] {
+    registrations.filter { $0.pricingStatus == .spam }
   }
 
   func loadRegistrations() async {
@@ -101,7 +160,7 @@ final class CryptoTokenStore {
     }
   }
 
-  // MARK: - API Key
+  // MARK: - CoinGecko API Key
 
   var hasApiKey: Bool {
     do {
@@ -122,5 +181,44 @@ final class CryptoTokenStore {
 
   func clearApiKey() {
     apiKeyStore.clear()
+  }
+
+  // MARK: - Alchemy API Key
+  //
+  // The Alchemy key drives the wallet auto-import (Stage 9 onward).
+  // `ProfileSession.resolveAlchemyApiKey()` reads from the same
+  // `(service, account)` keychain entry, so a write here is picked up
+  // by the next sync cycle without further plumbing. Privacy: never
+  // logged. Failures surface via the store's `error` string only —
+  // the underlying `OSStatus` never appears in `os.Logger`.
+
+  /// `true` when an Alchemy API key is configured in the synced
+  /// Keychain. Read on every UI render to drive the status badge —
+  /// the keychain read is cheap (~µs) and consulting a cached `Bool`
+  /// would require an explicit invalidation hook on save / clear.
+  var hasAlchemyApiKey: Bool {
+    do {
+      return try alchemyKeyStore.restoreString() != nil
+    } catch {
+      logger.error("keychain read failed: \(error.localizedDescription)")
+      return false
+    }
+  }
+
+  /// Persists the Alchemy API key to the synced Keychain. Sets
+  /// `error` (without logging the key) on failure.
+  func saveAlchemyApiKey(_ key: String) {
+    do {
+      try alchemyKeyStore.saveString(key)
+    } catch {
+      self.error = "Failed to save Alchemy API key: \(error.localizedDescription)"
+    }
+  }
+
+  /// Removes the Alchemy API key from the synced Keychain. Subsequent
+  /// sync cycles will produce `WalletSyncError.missingApiKey` until a
+  /// new key is saved.
+  func clearAlchemyApiKey() {
+    alchemyKeyStore.clear()
   }
 }
