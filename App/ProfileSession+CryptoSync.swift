@@ -15,9 +15,21 @@ extension ProfileSession {
     return try? store.restoreString()
   }
 
-  /// Builds the `CryptoSyncStore` for a profile. Returns `nil` when the
-  /// profile has no `instrumentRegistry` (preview / degraded launches);
-  /// the wallet-import feature is unavailable in that mode.
+  /// Output of `makeCryptoSyncWiring`. The discovery actor is plumbed
+  /// out alongside the store so the Stage 11 Discovered Tokens inbox
+  /// can drive `reResolve(_:chain:)` on the same actor instance the
+  /// sync engine uses — this preserves the in-flight coalescer's
+  /// "one round-trip per `(chainId, contractAddress)`" guarantee
+  /// across the manual + automatic re-resolution paths.
+  struct CryptoSyncWiring {
+    let store: CryptoSyncStore
+    let discovery: CryptoTokenDiscoveryService
+  }
+
+  /// Builds the `CryptoSyncStore` (and exposes the underlying
+  /// `CryptoTokenDiscoveryService`) for a profile. Returns `nil` when
+  /// the profile has no `instrumentRegistry` (preview / degraded
+  /// launches); the wallet-import feature is unavailable in that mode.
   ///
   /// Live wiring uses:
   ///
@@ -37,11 +49,11 @@ extension ProfileSession {
   /// them to set the key. This avoids a `nil`-AlchemyClient branch that
   /// would silently skip every crypto account.
   @MainActor
-  static func makeCryptoSyncStore(
+  static func makeCryptoSyncWiring(
     backend: BackendProvider,
     registry: (any InstrumentRegistryRepository)?,
     cryptoPriceService: CryptoPriceService
-  ) -> CryptoSyncStore? {
+  ) -> CryptoSyncWiring? {
     guard let registry else { return nil }
 
     let rateLimiter = RateLimiter(permitsPerSecond: 25)
@@ -67,10 +79,11 @@ extension ProfileSession {
       transactions: backend.transactions,
       walletSyncState: backend.walletSyncState,
       importRules: NoOpWalletImportRulesEngine())
-    return CryptoSyncStore(
+    let store = CryptoSyncStore(
       walletSyncEngine: walletSyncEngine,
       walletApplyEngine: walletApplyEngine,
       walletSyncState: backend.walletSyncState,
       accounts: backend.accounts)
+    return CryptoSyncWiring(store: store, discovery: discovery)
   }
 }

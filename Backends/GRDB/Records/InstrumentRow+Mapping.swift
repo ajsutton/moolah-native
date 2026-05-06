@@ -87,4 +87,17 @@ extension InstrumentRow {
       cryptocompareSymbol: cryptocompareSymbol,
       binanceSymbol: binanceSymbol)
   }
+
+  /// All-nil `CryptoProviderMapping` for the row's id. Used by the
+  /// inbox / spam paths in `allCryptoRegistrations()` so a `.unpriced`
+  /// or `.spam` row without any resolved provider is still surfaceable
+  /// in the Discovered Tokens UI. Matches the `emptyMapping(_:)` shape
+  /// the discovery service writes on these rows.
+  func emptyCryptoMapping() -> CryptoProviderMapping {
+    CryptoProviderMapping(
+      instrumentId: id,
+      coingeckoId: nil,
+      cryptocompareSymbol: nil,
+      binanceSymbol: nil)
+  }
 }

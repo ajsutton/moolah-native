@@ -5,10 +5,8 @@ import GRDB
 
 extension GRDBInstrumentRegistryRepository {
   /// Looks up a single crypto registration by id. Mirrors the row-shape
-  /// projection in `allCryptoRegistrations()` — rows whose three provider
-  /// columns are all `nil` (e.g. a CSV-imported placeholder that never
-  /// went through the picker) project to `nil` here, matching the
-  /// `cryptoMapping() != nil` filter on the bulk read.
+  /// projection in `allCryptoRegistrations()` — see `project(row:)`
+  /// below for the rule set.
   ///
   /// Lives in a sibling extension file so the main repository class body
   /// stays under SwiftLint's `type_body_length` and `file_length` budgets.
@@ -22,13 +20,33 @@ extension GRDBInstrumentRegistryRepository {
           .filter(InstrumentRow.Columns.kind == cryptoKind)
           .fetchOne(database)
       else { return nil }
-      guard let mapping = row.cryptoMapping() else { return nil }
-      let status =
-        TokenPricingStatus(rawValue: row.pricingStatus) ?? .priced
-      return CryptoRegistration(
-        instrument: try row.toDomain(),
-        mapping: mapping,
-        pricingStatus: status)
+      return try Self.project(row: row)
     }
+  }
+
+  /// Projects an `InstrumentRow` to a `CryptoRegistration`, applying the
+  /// inbox / spam visibility rules:
+  ///
+  /// - Rows with a recorded provider mapping return a registration with
+  ///   that mapping (regardless of status).
+  /// - Rows with no provider mapping but a non-`.priced` status (i.e.
+  ///   the discovery actor's `.unpriced` / `.spam` writes) return a
+  ///   registration with an all-nil mapping so the Discovered Tokens
+  ///   inbox + Spam Tokens management UI can render and act on them,
+  ///   and so the discovery actor's "is this row already registered?"
+  ///   fast path does not re-resolve them every cycle.
+  /// - Rows with no provider mapping AND default `.priced` status are
+  ///   legacy CSV-import placeholders (`ensureInstrument` auto-inserts
+  ///   from before the user resolved a mapping) and project to `nil`.
+  static func project(row: InstrumentRow) throws -> CryptoRegistration? {
+    let status =
+      TokenPricingStatus(rawValue: row.pricingStatus) ?? .priced
+    let mapping = row.cryptoMapping() ?? row.emptyCryptoMapping()
+    let hasMapping = row.cryptoMapping() != nil
+    guard hasMapping || status != .priced else { return nil }
+    return CryptoRegistration(
+      instrument: try row.toDomain(),
+      mapping: mapping,
+      pricingStatus: status)
   }
 }

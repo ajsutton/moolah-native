@@ -270,6 +270,61 @@ public enum UITestIdentifiers {
     public static func registrationRow(_ id: String) -> String {
       "crypto.settings.registration.\(id)"
     }
+
+    /// Secure field for the Alchemy API key. Pinned so a UI test can
+    /// drive the Stage 11 settings flow end-to-end.
+    public static let alchemyApiKeyField = "crypto.settings.alchemy.field"
+
+    /// "Save" button next to the Alchemy API key entry field.
+    public static let alchemyApiKeySaveButton = "crypto.settings.alchemy.save"
+
+    /// "Remove" button shown when an Alchemy key is already configured.
+    public static let alchemyApiKeyRemoveButton = "crypto.settings.alchemy.remove"
+
+    /// A crypto account row in the accounts list. Qualifier is the
+    /// `Account.id` UUID.
+    public static func accountRow(_ id: UUID) -> String {
+      "crypto.settings.account.\(id.uuidString)"
+    }
+
+    /// Per-row "Sync now" button. Qualifier is the `Account.id` UUID.
+    public static func syncNowButton(_ id: UUID) -> String {
+      "crypto.settings.account.sync.\(id.uuidString)"
+    }
+
+    /// Navigation row that opens the Discovered Tokens inbox.
+    public static let discoveredTokensRow = "crypto.settings.discoveredTokens"
+
+    /// Navigation row that opens the Spam Tokens management view.
+    public static let spamTokensRow = "crypto.settings.spamTokens"
+
+    /// A row inside the Discovered Tokens inbox. Qualifier is the
+    /// `CryptoRegistration.id`.
+    public static func discoveredRow(_ id: String) -> String {
+      "crypto.settings.discovered.\(id)"
+    }
+
+    /// "Mark as spam" button on a Discovered Tokens row.
+    public static func markSpamButton(_ id: String) -> String {
+      "crypto.settings.discovered.spam.\(id)"
+    }
+
+    /// "Re-resolve" button on a Discovered Tokens row.
+    public static func reResolveButton(_ id: String) -> String {
+      "crypto.settings.discovered.reresolve.\(id)"
+    }
+
+    /// A row inside the Spam Tokens management view. Qualifier is the
+    /// `CryptoRegistration.id`.
+    public static func spamRow(_ id: String) -> String {
+      "crypto.settings.spam.\(id)"
+    }
+
+    /// "Restore" button on a Spam Tokens row — flips status back to
+    /// `.unpriced` so the row returns to the Discovered Tokens inbox.
+    public static func restoreButton(_ id: String) -> String {
+      "crypto.settings.spam.restore.\(id)"
+    }
   }
 
   public enum EditAccount {

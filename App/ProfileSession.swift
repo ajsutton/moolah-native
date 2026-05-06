@@ -38,8 +38,15 @@ final class ProfileSession: Identifiable {
   let coinGeckoCatalog: (any CoinGeckoCatalog)?
   let tokenResolutionClient: (any TokenResolutionClient)?
   /// Orchestrator for crypto-wallet auto-import. `nil` when the profile
-  /// has no `instrumentRegistry` (preview / degraded launches).
-  let cryptoSyncStore: CryptoSyncStore?
+  /// has no `instrumentRegistry` (preview / degraded launches). Set
+  /// once in `finishInit` after `init` returns; effectively `let` from
+  /// the consumer's perspective. `private(set)` so callers cannot
+  /// reassign.
+  private(set) var cryptoSyncStore: CryptoSyncStore?
+
+  /// Token resolver shared with the inbox UI. Nil with `cryptoSyncStore`.
+  /// Same lifecycle pattern as `cryptoSyncStore`.
+  private(set) var cryptoTokenDiscovery: CryptoTokenDiscoveryService?
   let importStore: ImportStore
   let importRuleStore: ImportRuleStore
   let importPreferences: ImportPreferences
@@ -172,21 +179,28 @@ final class ProfileSession: Identifiable {
     self.folderScanner = importPipeline.scanner
     self.folderWatcher = importPipeline.watcher
 
-    // Crypto-wallet auto-import. Lifecycle hooks live in
-    // `MoolahApp+Lifecycle` and `cleanupSync`.
-    self.cryptoSyncStore = Self.makeCryptoSyncStore(
-      backend: backend,
-      registry: registryWiring.registry,
+    finishInit(
+      syncCoordinator: syncCoordinator,
+      cryptoRegistry: registryWiring.registry,
       cryptoPriceService: services.cryptoPrice)
-
-    finishInit(syncCoordinator: syncCoordinator)
   }
 
   /// Tail of the initialiser — kept as a separate method so `init`
   /// stays under SwiftLint's `function_body_length` threshold. Wires
-  /// cross-store side effects, registers with the sync coordinator,
-  /// and starts the hourly `PRAGMA optimize` tick (issue #576).
-  private func finishInit(syncCoordinator: SyncCoordinator?) {
+  /// the crypto-wallet sync stores, cross-store side effects, the
+  /// sync coordinator, and starts the hourly `PRAGMA optimize` tick
+  /// (issue #576).
+  private func finishInit(
+    syncCoordinator: SyncCoordinator?,
+    cryptoRegistry: (any InstrumentRegistryRepository)?,
+    cryptoPriceService: CryptoPriceService
+  ) {
+    let cryptoWiring = Self.makeCryptoSyncWiring(
+      backend: backend,
+      registry: cryptoRegistry,
+      cryptoPriceService: cryptoPriceService)
+    self.cryptoSyncStore = cryptoWiring?.store
+    self.cryptoTokenDiscovery = cryptoWiring?.discovery
     wireCrossStoreSideEffects()
     registerWithSyncCoordinator(syncCoordinator)
     startPeriodicPragmaOptimize()
@@ -378,23 +392,7 @@ final class ProfileSession: Identifiable {
     try await task.value
   }
 
-  /// Runs `ValuationModeMigration` for this profile. Non-fatal: any
-  /// thrown error is logged but does not surface to the caller because
-  /// auto-detect read sites are still in place at this rollout stage.
-  /// Called from `setUp()` after the SwiftData → GRDB migration so the
-  /// account / investment-value rows are visible to GRDB-backed
-  /// repositories.
-  private func runValuationModeMigration() async {
-    let migration = ValuationModeMigration(
-      profileId: profile.id,
-      accountRepository: backend.accounts,
-      userDefaults: .standard)
-    do {
-      try await migration.run()
-    } catch {
-      logger.error(
-        "ValuationModeMigration failed: \(error.localizedDescription, privacy: .public)")
-    }
-  }
-
+  // `runValuationModeMigration` lives in
+  // `ProfileSession+ValuationMigration.swift` so this file stays under
+  // SwiftLint's `file_length` threshold.
 }

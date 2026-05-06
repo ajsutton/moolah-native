@@ -122,13 +122,18 @@
       {
         Section {
           NavigationLink {
-            CryptoSettingsView(store: store)
-              // The embedded `AddTokenSheet` opens an `InstrumentPickerSheet`
-              // whose callback variant pulls its search service, registry,
-              // and resolution client from `@Environment(ProfileSession.self)`.
-              // Without this injection the picker silently falls back to the
-              // static fiat list and crypto search returns no results.
-              .environment(session)
+            CryptoSettingsView(
+              store: store,
+              cryptoSyncStore: session.cryptoSyncStore,
+              tokenDiscovery: session.cryptoTokenDiscovery,
+              accountStore: session.accountStore
+            )
+            // The embedded `AddTokenSheet` opens an `InstrumentPickerSheet`
+            // whose callback variant pulls its search service, registry,
+            // and resolution client from `@Environment(ProfileSession.self)`.
+            // Without this injection the picker silently falls back to the
+            // static fiat list and crypto search returns no results.
+            .environment(session)
           } label: {
             Label("Crypto Tokens", systemImage: "bitcoinsign.circle")
           }
