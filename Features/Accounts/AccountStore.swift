@@ -68,6 +68,15 @@ final class AccountStore {
   let testObservationTickStream: AsyncStream<Void>
   private let testObservationTickContinuation: AsyncStream<Void>.Continuation
 
+  /// Cumulative wall-clock time (in nanoseconds) consumed by the
+  /// `apply(accounts:)` body since the store was constructed. Sampled
+  /// by `SyncReactivityBenchmarks` (also `@MainActor`) to verify the
+  /// Layer 7 acceptance criterion "main-thread time < 50 ms cumulative"
+  /// without standing up an `OSSignpostListener` (which needs
+  /// Instruments tooling and doesn't work cleanly inside an XCTest
+  /// harness). The production app never reads it.
+  private(set) var testApplyMainThreadNanos: UInt64 = 0
+
   init(
     repository: AccountRepository,
     conversionService: any InstrumentConversionService,
@@ -150,14 +159,20 @@ final class AccountStore {
     }
   }
 
-  /// Applies a fresh accounts snapshot from `observeAll()`. Preloads
-  /// investment values, then triggers a balance recompute. Both steps
-  /// run on `@MainActor` so the publish order is deterministic.
+  /// Applies a fresh accounts snapshot from `observeAll()`. Wrapped in
+  /// the Layer 7 signpost 4 interval so `SyncReactivityBenchmarks` and
+  /// Instruments traces can attribute `mainThreadMs` to this method.
+  /// The nested `recomputeConvertedTotals` call has its own signpost;
+  /// the outer interval includes both bodies plus `preloadInvestmentValues`.
   private func apply(accounts fresh: [Account]) async {
-    self.accounts = Accounts(from: fresh)
-    await preloadInvestmentValues()
-    await recomputeConvertedTotals()
-    testObservationTickContinuation.yield(())
+    await withReactiveStoreSignpost("account-store-apply") {
+      let started = ContinuousClock.now
+      self.accounts = Accounts(from: fresh)
+      await preloadInvestmentValues()
+      await recomputeConvertedTotals()
+      testObservationTickContinuation.yield(())
+      testApplyMainThreadNanos &+= nanoseconds(since: started)
+    }
   }
 
   private func surface(error: any Error) {
@@ -250,9 +265,17 @@ final class AccountStore {
   /// either source would otherwise reset the clock and a profile with
   /// frequent unrelated rate ticks could delay recovery indefinitely.
   private func recomputeConvertedTotals() async {
-    let snapshot = await computeBalanceSnapshot()
-    publishSnapshot(snapshot)
-    testObservationTickContinuation.yield(())
+    // Layer 7 signpost 4 (recompute path). Region covers the balance
+    // compute + main-thread publish; the retry-loop spawn that follows
+    // on failure is outside the region (background work). When called
+    // from `apply(accounts:)`, this region nests inside the outer
+    // `account-store-apply` interval.
+    let snapshot = await withReactiveStoreSignpost("account-store-recompute") {
+      let snap = await computeBalanceSnapshot()
+      publishSnapshot(snap)
+      testObservationTickContinuation.yield(())
+      return snap
+    }
     if !snapshot.anyFailed {
       // Success — kill any in-flight retry; nothing left to retry.
       conversionTask?.cancel()

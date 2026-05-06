@@ -1,5 +1,6 @@
 // Backends/GRDB/Observation/AsyncValueObservation+AsyncStream.swift
 import GRDB
+import os
 
 extension AsyncValueObservation where Element: Sendable {
 
@@ -52,7 +53,21 @@ extension AsyncValueObservation where Element: Sendable {
         do {
           for try await value in self {
             if Task.isCancelled { break }
+            // Per `plans/2026-05-06-reactive-sync-refresh-design.md`
+            // Section 2 Layer 7 (signposts 2 + 3): mark the moment the
+            // bridge receives a value from GRDB through to handing it
+            // off to the consumer. The interval covers the per-iteration
+            // hop only; the gap from the preceding `GRDBWrite` event to
+            // this region's `.begin` is GRDB's own re-fetch cost.
+            // `os_signpost(.begin, …)` followed by an explicit `.end`
+            // is cheaper than a `defer` here because the body is a
+            // single yield (BENCHMARKING_GUIDE.md: signposts must be
+            // cheap; nanoseconds, not milliseconds).
+            let log = Signposts.grdbObservation
+            let spid = OSSignpostID(log: log)
+            os_signpost(.begin, log: log, name: "observation-fetch", signpostID: spid)
             continuation.yield(value)
+            os_signpost(.end, log: log, name: "observation-fetch", signpostID: spid)
           }
           continuation.finish()
         } catch {
