@@ -32,8 +32,14 @@ final class AccountStore {
   private let repository: AccountRepository
   private let conversionService: any InstrumentConversionService
   private let targetInstrument: Instrument
-  private let investmentValueCache: InvestmentValueCache
-  private let balanceCalculator: AccountBalanceCalculator
+  /// Read-through cache of externally-set investment values. `internal`
+  /// (rather than `private`) so the `+ConvertedTotals.swift` extension
+  /// file can pass it to the balance calculator without a wrapper.
+  let investmentValueCache: InvestmentValueCache
+  /// `internal` so the `+ConvertedTotals.swift` extension can call the
+  /// calculator directly. Stays `let` — mutating it externally would
+  /// invalidate the retry loop's invariants.
+  let balanceCalculator: AccountBalanceCalculator
   /// Delay between retry attempts after a conversion failure. Production
   /// uses ~30s; tests pass a small value to keep retries snappy.
   private let retryDelay: Duration
@@ -134,6 +140,19 @@ final class AccountStore {
       for: account, investmentValue: investmentValueCache.value(for: accountId))
   }
 
+  /// Whether the sidebar should show "Not set" instead of `$0` for an
+  /// investment account in `.recordedValue` mode (no snapshot recorded;
+  /// initial conversion already completed). See
+  /// `INSTRUMENT_CONVERSION_GUIDE.md` Rule 11 — `$0` would otherwise roll
+  /// into net-worth as a real number.
+  func hasUnrecordedValue(_ account: Account) -> Bool {
+    guard hasCompletedInitialConversion else { return false }
+    guard account.type == .investment, account.valuationMode == .recordedValue else {
+      return false
+    }
+    return investmentValueCache.value(for: account.id) == nil
+  }
+
   /// Whether an account can be deleted (all positions are zero or empty).
   func canDelete(_ accountId: UUID) -> Bool {
     guard let account = accounts.by(id: accountId) else { return false }
@@ -143,33 +162,6 @@ final class AccountStore {
   /// Positions for a given account. Returns empty array if not loaded.
   func positions(for accountId: UUID) -> [Position] {
     accounts.by(id: accountId)?.positions ?? []
-  }
-
-  /// Total value of `accountList` in `target`, summing positions directly.
-  func computeConvertedTotal(for accountList: [Account], in target: Instrument) async throws
-    -> InstrumentAmount
-  {
-    try await balanceCalculator.totalConverted(for: accountList, to: target)
-  }
-
-  /// Total value of current accounts in `target`.
-  func computeConvertedCurrentTotal(in target: Instrument) async throws -> InstrumentAmount {
-    try await balanceCalculator.totalConverted(for: currentAccounts, to: target)
-  }
-
-  /// Total value of investment accounts in `target`. Uses cached external
-  /// values when present; otherwise sums positions. Single-pass to avoid
-  /// the double-conversion a two-phase approach would chain.
-  func computeConvertedInvestmentTotal(in target: Instrument) async throws -> InstrumentAmount {
-    try await balanceCalculator.totalConverted(
-      for: investmentAccounts, to: target, using: investmentValueCache)
-  }
-
-  /// Net worth (current + investment) in `target`.
-  func computeConvertedNetWorth(in target: Instrument) async throws -> InstrumentAmount {
-    let current = try await computeConvertedCurrentTotal(in: target)
-    let investment = try await computeConvertedInvestmentTotal(in: target)
-    return current + investment
   }
 
   /// Recompute per-account balances and aggregate totals via

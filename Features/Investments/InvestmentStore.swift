@@ -120,9 +120,18 @@ final class InvestmentStore {
     accountPerformance = nil  // clear stale data immediately
     switch account.valuationMode {
     case .recordedValue:
-      await loadValues(accountId: account.id)
-      guard !Task.isCancelled else { return }
-      await loadDailyBalances(accountId: account.id, hostCurrency: profileCurrency)
+      // `loadValues` and `loadDailyBalances` each paginate against the
+      // backend (potentially many round-trips on accounts with long
+      // history) and write disjoint state (`self.values` vs
+      // `self.dailyBalances`). Running them in parallel turns the
+      // wall-clock latency from `t(values) + t(balances)` to `max(...)`
+      // — measurable on accounts with multi-page history. Both methods
+      // are `@MainActor`-isolated, so the actual writes still serialise
+      // on the main actor.
+      async let loadedValues: Void = loadValues(accountId: account.id)
+      async let loadedBalances: Void = loadDailyBalances(
+        accountId: account.id, hostCurrency: profileCurrency)
+      _ = await (loadedValues, loadedBalances)
       guard !Task.isCancelled else { return }
       accountPerformance = AccountPerformanceCalculator.computeLegacy(
         dailyBalances: dailyBalances,
@@ -365,35 +374,7 @@ extension InvestmentStore {
   }
 }
 
-// MARK: - Computed Properties
-
-// Hoisted into an extension so the `InvestmentStore` class body stays
-// under the type_body_length budget; the computed properties are pure
-// reads and need no privileged access to `private(set)` setters.
-extension InvestmentStore {
-  /// Investment values filtered by the selected time period.
-  var filteredValues: [InvestmentValue] {
-    guard let startDate = selectedPeriod.startDate else { return values }
-    return values.filter { $0.date >= startDate }
-  }
-
-  /// Daily balances filtered by the selected time period.
-  var filteredBalances: [AccountDailyBalance] {
-    guard let startDate = selectedPeriod.startDate else { return dailyBalances }
-    return dailyBalances.filter { $0.date >= startDate }
-  }
-
-  /// Merged chart data points combining values and balances.
-  /// Follows the web app's algorithm: merge by date, forward-fill gaps, compute profit/loss.
-  var chartDataPoints: [InvestmentChartDataPoint] {
-    InvestmentChartData.merge(
-      values: values,
-      balances: dailyBalances,
-      period: selectedPeriod
-    )
-  }
-}
-
-// `InvestmentChartData` (the merge + forward-fill helpers used by
-// `chartDataPoints`) lives in `InvestmentChartData.swift` so this file
-// stays under the file_length budget.
+// `chartDataPoints` and the other pure-read computed properties live in
+// `InvestmentStore+ComputedProperties.swift`. `InvestmentChartData` (merge +
+// forward-fill helpers) lives in `InvestmentChartData.swift`. Both are
+// extracted so this file stays under the file_length budget.

@@ -1,6 +1,28 @@
 import OSLog
 import SwiftUI
 
+/// Anchor `@AccessibilityFocusState` reads/writes inside
+/// `InvestmentAccountView`. File-private so the type's body stays focused
+/// on layout; only one case is required because every relayout target is
+/// the same logical "content has just (re-)mounted" event.
+private enum InvestmentAccountFocusAnchor: Hashable {
+  case content
+}
+
+/// Enforces Apple's iOS HIG 44×44 pt minimum touch target on the
+/// time-period picker buttons. macOS uses pointer precision so the
+/// modifier is a no-op there; the wrapping lets the call site stay
+/// declarative without `#if` clutter.
+private struct TimePeriodHitTarget: ViewModifier {
+  func body(content: Content) -> some View {
+    #if os(iOS)
+      content.frame(minHeight: 44).contentShape(Rectangle())
+    #else
+      content
+    #endif
+  }
+}
+
 /// Combined investment account view showing summary panels, chart with valuations list,
 /// and an embedded transaction list.
 struct InvestmentAccountView: View {
@@ -40,17 +62,18 @@ struct InvestmentAccountView: View {
   /// (e.g. Test Profile → Crypto).
   @State private var initialLoadComplete = false
 
-  /// The profile's reporting currency — used for valuing positions and the
-  /// chart series. NOT the account's own instrument: an investment account
-  /// can be denominated in a non-fiat instrument (e.g., a crypto wallet),
-  /// but valuations should always roll up into the user's fiat currency.
-  private var profileCurrencyInstrument: Instrument {
-    session.profile.instrument
-  }
+  /// Anchor VoiceOver moves to whenever the layout changes — initial-load
+  /// completion or a switch between `recordedValue` / `calculatedFromTrades`.
+  /// Without this, focus lingers on a button or row from the previous layout
+  /// and reads back unrelated content.
+  @AccessibilityFocusState private var focusAnchor: InvestmentAccountFocusAnchor?
 
-  /// Embedded transaction list for this account. Factored out because three
-  /// layout branches reuse it verbatim.
-  @ViewBuilder private var accountTransactionList: some View {
+  /// Embedded transaction list for this account. Each call site builds a
+  /// fresh `TransactionListView`; this is a method (not a `@ViewBuilder`
+  /// computed property) so the per-call instantiation is explicit at the
+  /// call site rather than masquerading as a stable view value.
+  @ViewBuilder
+  private func makeAccountTransactionList() -> some View {
     TransactionListView(
       title: "",
       filter: TransactionFilter(accountId: account.id),
@@ -67,7 +90,7 @@ struct InvestmentAccountView: View {
   /// the host's already-visible account balance (see `shouldHide`).
   @ViewBuilder private var positionTrackedLayout: some View {
     if positionsInput.shouldHide && !isLoadingPositions {
-      accountTransactionList
+      makeAccountTransactionList()
     } else {
       PositionsTransactionsSplit(
         defaultTab: .positions,
@@ -88,7 +111,7 @@ struct InvestmentAccountView: View {
           PositionsView(input: positionsInput, range: $positionsRange)
         }
       } transactions: {
-        accountTransactionList
+        makeAccountTransactionList()
       }
     }
   }
@@ -98,7 +121,7 @@ struct InvestmentAccountView: View {
       legacySummary
       legacyChartAndValuations
       Divider()
-      accountTransactionList
+      makeAccountTransactionList()
     }
   }
 
@@ -162,6 +185,7 @@ struct InvestmentAccountView: View {
         }
       }
     }
+    .accessibilityFocused($focusAnchor, equals: .content)
     .transactionInspector(
       selectedTransaction: $selectedTransaction,
       accounts: accounts,
@@ -177,21 +201,11 @@ struct InvestmentAccountView: View {
     }
     .task(id: LoadKey(id: account.id, mode: account.valuationMode)) {
       initialLoadComplete = false
-      isLoadingPositions = true
-      defer { isLoadingPositions = false }
-      do {
-        positionsInput = try await investmentStore.loadAndBuildPositionsInput(
-          account: account,
-          profileCurrency: profileCurrencyInstrument,
-          range: positionsRange)
-      } catch is CancellationError {
-        return
-      } catch {
-        Self.logger.error(
-          "Unexpected error from positionsViewInput: \(error.localizedDescription, privacy: .public)"
-        )
-      }
+      await reloadPositions()
       initialLoadComplete = true
+      // Move VoiceOver focus to the now-rendered content layout once the
+      // initial-load gate flips. Mirrored on layout-mode flips below.
+      focusAnchor = .content
     }
     .task(id: positionsRange) {
       // Skip until loadAllData has populated the store; the .task(id:) keyed
@@ -209,21 +223,16 @@ struct InvestmentAccountView: View {
         )
       }
     }
+    .onChange(of: account.valuationMode) {
+      // Layout-mode flip: reanchor VoiceOver after the new layout mounts.
+      // The `.task(id:)` above also fires (LoadKey carries `mode`), so
+      // `focusAnchor = .content` is set there once the data load
+      // completes — but the reassignment here additionally guarantees a
+      // focus move when the data load is a no-op (already cached).
+      focusAnchor = .content
+    }
     .refreshable {
-      isLoadingPositions = true
-      defer { isLoadingPositions = false }
-      do {
-        positionsInput = try await investmentStore.loadAndBuildPositionsInput(
-          account: account,
-          profileCurrency: profileCurrencyInstrument,
-          range: positionsRange)
-      } catch is CancellationError {
-        return
-      } catch {
-        Self.logger.error(
-          "Unexpected error from positionsViewInput: \(error.localizedDescription, privacy: .public)"
-        )
-      }
+      await reloadPositions()
     }
   }
 
@@ -248,6 +257,10 @@ struct InvestmentAccountView: View {
           .labelStyle(.iconOnly)
       }
       .help("Record Value")
+      // `.iconOnly` style hides the title from screen readers on iOS, which
+      // then announce the SF Symbol name ("plus") instead of the action.
+      // Pin the action label explicitly so VoiceOver reads "Record Value".
+      .accessibilityLabel("Record Value")
     }
     .padding(.horizontal)
     .padding(.vertical, 12)
@@ -295,6 +308,7 @@ struct InvestmentAccountView: View {
                   : Color.clear
               )
               .cornerRadius(8)
+              .modifier(TimePeriodHitTarget())
           }
           .buttonStyle(.plain)
           .accessibilityLabel("Show \(period.label) history")
@@ -302,6 +316,38 @@ struct InvestmentAccountView: View {
             investmentStore.selectedPeriod == period ? .isSelected : [])
         }
       }
+    }
+  }
+}
+
+// MARK: - Private helpers
+
+extension InvestmentAccountView {
+  /// The profile's reporting currency — used for valuing positions and the
+  /// chart series. NOT the account's own instrument: an investment account
+  /// can be denominated in a non-fiat instrument (e.g., a crypto wallet),
+  /// but valuations should always roll up into the user's fiat currency.
+  private var profileCurrencyInstrument: Instrument {
+    session.profile.instrument
+  }
+
+  /// Drives the full `loadAllData → positionsViewInput` rebuild used by
+  /// both `.task(id:)` and `.refreshable`. Sets `isLoadingPositions`
+  /// across the work so progress UI binds correctly.
+  private func reloadPositions() async {
+    isLoadingPositions = true
+    defer { isLoadingPositions = false }
+    do {
+      positionsInput = try await investmentStore.loadAndBuildPositionsInput(
+        account: account,
+        profileCurrency: profileCurrencyInstrument,
+        range: positionsRange)
+    } catch is CancellationError {
+      return
+    } catch {
+      Self.logger.error(
+        "Unexpected error from positionsViewInput: \(error.localizedDescription, privacy: .public)"
+      )
     }
   }
 }

@@ -28,6 +28,18 @@ protocol TransactionRepository: Sendable {
   /// it. The schema's partial unique index on
   /// `(account_id, external_id)` keeps this lookup cheap.
   func legs(matchingExternalId externalId: String) async throws -> [TransactionLeg]
+  /// Returns every transaction that has at least one leg whose
+  /// `external_id` matches any value in `externalIds`, with full leg
+  /// payloads loaded. Used by `CrossDeviceLegDeduper` to scope its post-
+  /// CKSyncEngine sweep to transactions that the just-applied fetch could
+  /// have touched — the deduper needs each leg's parent `Transaction.id`
+  /// to know which row to route through `delete(id:)`. Empty input
+  /// returns an empty result without hitting the database. The schema's
+  /// partial unique index `leg_dedup_by_account_external` covers the
+  /// underlying leg-side `IN` predicate, so even thousand-id sweeps stay
+  /// cheap.
+  func transactions(touchingExternalIds externalIds: Set<String>) async throws
+    -> [Transaction]
   /// `true` iff the wallet importer has already persisted a leg keyed by
   /// `(accountId, externalId)`. Used by the per-leg dedup step of the
   /// apply pass — re-fetches that span the reorg window cover already-

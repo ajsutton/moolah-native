@@ -85,6 +85,11 @@ extension ProfileSession {
   /// directory in the tmp dir (which cannot fail in practice on Apple
   /// platforms) if the real directory can't be opened, so the pipeline
   /// remains functional in the degraded mode.
+  ///
+  /// The tmp-dir fallback is itself fallible; if it raises (unwritable system
+  /// tmp directory or sandbox denial that also denies the fallback), the
+  /// failure is logged at fault level and the app crashes — there is no
+  /// further degradation path that keeps the user's data safe.
   static func makeImportStore(
     backend: BackendProvider,
     stagingDirectory: URL,
@@ -97,14 +102,17 @@ extension ProfileSession {
     } catch {
       let fallback = FileManager.default.temporaryDirectory
         .appendingPathComponent("csv-staging-fallback-\(profileId.uuidString)")
-      // Fallback in a tmp dir cannot fail in practice on Apple platforms.
-      // swiftlint:disable:next force_try
-      let staging = try! ImportStagingStore(directory: fallback)
-      let errDesc = error.localizedDescription
       let stagingPath = stagingDirectory.path
       logger.error(
-        "Failed to open CSV import staging at \(stagingPath, privacy: .public): \(errDesc, privacy: .public). Falling back to tmp."
+        "Failed to open CSV import staging at \(stagingPath, privacy: .public): \(error.localizedDescription, privacy: .public). Falling back to tmp."
       )
+      guard let staging = try? ImportStagingStore(directory: fallback) else {
+        logger.fault(
+          "Failed to open CSV import staging fallback at \(fallback.path, privacy: .public). Profile \(profileId, privacy: .public)."
+        )
+        fatalError(
+          "ImportStagingStore failed to open at both primary and tmp fallback paths.")
+      }
       return ImportStore(backend: backend, staging: staging)
     }
   }

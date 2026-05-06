@@ -61,6 +61,9 @@ actor CancellablePagingTransactionRepository: TransactionRepository {
     prefix: String, excludingTransactionId: UUID?
   ) async throws -> [String] { [] }
   func legs(matchingExternalId externalId: String) async throws -> [TransactionLeg] { [] }
+  func transactions(touchingExternalIds externalIds: Set<String>) async throws -> [Transaction] {
+    []
+  }
   func legExists(accountId: UUID, externalId: String) async throws -> Bool { false }
 }
 

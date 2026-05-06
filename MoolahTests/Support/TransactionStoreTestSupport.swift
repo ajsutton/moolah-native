@@ -135,6 +135,10 @@ struct FailingTransactionRepository: TransactionRepository {
     throw BackendError.networkUnavailable
   }
 
+  func transactions(touchingExternalIds externalIds: Set<String>) async throws -> [Transaction] {
+    throw BackendError.networkUnavailable
+  }
+
   func legExists(accountId: UUID, externalId: String) async throws -> Bool {
     throw BackendError.networkUnavailable
   }
