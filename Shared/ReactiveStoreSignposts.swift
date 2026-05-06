@@ -1,16 +1,17 @@
-// Features/Accounts/AccountStore+Signposts.swift
+// Shared/ReactiveStoreSignposts.swift
 
 import Foundation
 import os.signpost
 
-// File-scope helpers used by the Layer 7 signpost / main-thread-time
-// instrumentation in `AccountStore`. Lives in a companion file so the
-// helpers do not push `AccountStore.swift` past SwiftLint's
-// `file_length` warning threshold (400 lines), and so future reactive
-// stores (Earmark, Transaction, …) can adopt the same primitives.
+// File-scope helpers used by every reactive store's Layer 7 signpost /
+// main-thread-time instrumentation. Originally lived in
+// `Features/Accounts/AccountStore+Signposts.swift`; lifted to `Shared/`
+// once a second reactive store (`EarmarkStore`) needed the same
+// primitives. Keeps each store's `+Signposts.swift` companion file from
+// duplicating the same five-line helper.
 //
-// See `plans/2026-05-06-reactive-sync-refresh-design.md` Section 2
-// Layer 7 and `guides/BENCHMARKING_GUIDE.md` "Adding Signposts".
+// Pairs with `Shared/Signposts.swift`, which declares the
+// `Signposts.reactiveStore` `OSLog` consumed by `withReactiveStoreSignpost`.
 
 /// Wall-clock nanoseconds elapsed since `start`. Truncates sub-ns
 /// precision (fine — benchmark thresholds are in ms) and saturates
@@ -23,10 +24,9 @@ func nanoseconds(since start: ContinuousClock.Instant) -> UInt64 {
 }
 
 /// Wraps `body` in a `Signposts.reactiveStore` `.begin` / `.end` pair
-/// keyed by `name`. Returns whatever `body` returns. Used by the
-/// reactive store apply / recompute paths so the call sites stay one
-/// line each instead of three (signpost-id, `.begin`, `.end`) — keeps
-/// `AccountStore.swift` under SwiftLint's `file_length` ceiling.
+/// keyed by `name`. Returns whatever `body` returns. Used by every
+/// reactive store's apply / recompute paths so the call sites stay one
+/// line each instead of three (signpost-id, `.begin`, `.end`).
 @discardableResult
 @MainActor
 func withReactiveStoreSignpost<T>(

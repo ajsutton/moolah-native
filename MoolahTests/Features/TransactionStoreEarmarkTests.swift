@@ -41,10 +41,16 @@ struct TransactionStoreEarmarkTests {
     )
     _ = await store.create(transaction)
 
-    // Earmark spent should increase (balance decreases for expense)
+    // EarmarkStore is reactive — wait for the observation to settle
+    // on the post-create state (spent = 50). This both lets the
+    // applyDelta + observation race converge and asserts the final
+    // converged value rather than whichever transient mid-state
+    // happens to be visible synchronously.
+    try await earmarkStore.waitForNextEmission(
+      matching: { $0.earmarks.by(id: earmarkId)?.spentPositions.first?.quantity == Decimal(50) },
+      description: "earmark spent settled at 50"
+    )
     let updatedEarmark = earmarkStore.earmarks.by(id: earmarkId)
-    #expect(updatedEarmark != nil)
-    // Expense of -50 against earmark: spent increases by 50
     #expect(updatedEarmark?.spentPositions.first?.quantity == Decimal(50))
   }
 
@@ -95,10 +101,15 @@ struct TransactionStoreEarmarkTests {
     ]
     await store.update(updated)
 
-    // Earmark 1 should have spent reversed (50 - 50 = 0)
+    // EarmarkStore is reactive — wait for the observation to settle
+    // on the post-update state. Earmark1 should have spent reversed
+    // (transaction moved away) and earmark2 should have spent=50.
+    try await earmarkStore.waitForNextEmission(
+      matching: { $0.earmarks.by(id: earmarkId2)?.spentPositions.first?.quantity == Decimal(50) },
+      description: "earmark2 spent settled at 50"
+    )
     let updatedEarmark1 = earmarkStore.earmarks.by(id: earmarkId1)
     #expect(updatedEarmark1?.spentPositions.first?.quantity ?? 0 == Decimal(0))
-    // Earmark 2 should have spent increased (0 + 50 = 50)
     let updatedEarmark2 = earmarkStore.earmarks.by(id: earmarkId2)
     #expect(updatedEarmark2?.spentPositions.first?.quantity == Decimal(50))
   }

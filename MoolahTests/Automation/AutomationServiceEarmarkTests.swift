@@ -22,14 +22,16 @@ struct AutomationServiceEarmarkTests {
       Issue.record("expected .ready")
       throw OpenSessionFailed()
     }
-    await session.earmarkStore.load()
+    // EarmarkStore is reactive — wait for the first emission so any
+    // pre-seeded earmarks are visible.
+    try? await session.earmarkStore.waitForFirstEmission()
     let service = AutomationService(sessionManager: sessionManager)
     return (service, session)
   }
 
   @Test("createEarmark creates and lists earmarks")
   func createAndListEarmarks() async throws {
-    let (service, _) = try await makeServiceWithSession()
+    let (service, session) = try await makeServiceWithSession()
 
     let earmark = try await service.createEarmark(
       profileIdentifier: "Test",
@@ -40,6 +42,13 @@ struct AutomationServiceEarmarkTests {
     #expect(earmark.name == "Holiday Fund")
     #expect(earmark.savingsGoal?.quantity == 5000)
 
+    // EarmarkStore is reactive — the new earmark is observable via
+    // observeAll() shortly after the GRDB write commits, not synchronously.
+    try? await session.earmarkStore.waitForNextEmission(
+      matching: { $0.earmarks.contains { $0.name == "Holiday Fund" } },
+      description: "new earmark observable"
+    )
+
     let earmarks = try service.listEarmarks(profileIdentifier: "Test")
     #expect(earmarks.count == 1)
     #expect(earmarks.first?.name == "Holiday Fund")
@@ -47,11 +56,16 @@ struct AutomationServiceEarmarkTests {
 
   @Test("resolveEarmark finds earmark case-insensitively")
   func resolveEarmarkCaseInsensitive() async throws {
-    let (service, _) = try await makeServiceWithSession()
+    let (service, session) = try await makeServiceWithSession()
 
     _ = try await service.createEarmark(
       profileIdentifier: "Test",
       name: "Emergency Fund"
+    )
+
+    try? await session.earmarkStore.waitForNextEmission(
+      matching: { $0.earmarks.contains { $0.name == "Emergency Fund" } },
+      description: "new earmark observable"
     )
 
     let resolved = try service.resolveEarmark(named: "emergency fund", profileIdentifier: "Test")

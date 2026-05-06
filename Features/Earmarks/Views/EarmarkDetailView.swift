@@ -238,7 +238,7 @@ private func seedEarmarkDetailPreview(
           accountId: accountId, instrument: .AUD, quantity: 500, type: .income,
           earmarkId: earmark.id)
       ]))
-  await earmarkStore.load()
+  // No `earmarkStore.load()` — the reactive store subscribes in init.
   await store.load(filter: TransactionFilter(earmarkId: earmark.id))
 }
 

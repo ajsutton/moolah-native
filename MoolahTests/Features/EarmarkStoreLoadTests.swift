@@ -19,7 +19,10 @@ struct EarmarkStoreLoadTests {
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.count == 1 },
+      description: "seeded earmark observed"
+    )
 
     #expect(store.earmarks.count == 1)
     #expect(store.earmarks.first?.name == "Holiday Fund")
@@ -42,7 +45,10 @@ struct EarmarkStoreLoadTests {
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.count == 2 },
+      description: "both seeded earmarks observed"
+    )
 
     #expect(store.earmarks.count == 2)
     #expect(store.earmarks[0].name == "E2")
@@ -71,7 +77,10 @@ struct EarmarkStoreLoadTests {
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.count == 2 },
+      description: "both seeded earmarks observed"
+    )
 
     #expect(store.earmarks.count == 2)
     #expect(store.earmarks[0].instrument == Instrument.defaultTestInstrument)

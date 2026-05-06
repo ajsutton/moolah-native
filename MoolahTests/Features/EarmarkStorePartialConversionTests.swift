@@ -58,9 +58,13 @@ struct EarmarkStorePartialConversionTests {
       targetInstrument: aud,
       retryDelay: .seconds(60))
 
-    // `load()` awaits the first conversion pass inline, so after it returns
-    // the partial-failure state is published deterministically — no polling.
-    await store.load()
+    // The reactive store publishes the partial-failure state on the
+    // first emission; awaiting an emission where the healthy earmark's
+    // balance is populated is sufficient to assert convergence.
+    try await store.waitForNextEmission(
+      matching: { $0.convertedBalance(for: healthyEarmark.id)?.quantity == 300 },
+      description: "healthy earmark balance settled"
+    )
 
     #expect(store.convertedBalance(for: healthyEarmark.id)?.quantity == 300)
     #expect(store.convertedBalance(for: mixedEarmark.id) == nil)
@@ -106,9 +110,13 @@ struct EarmarkStorePartialConversionTests {
       targetInstrument: aud,
       retryDelay: .milliseconds(20))
 
-    // `load()` awaits the first pass; since EUR fails we land in the
-    // partial-failure state with a retry loop running in the background.
-    await store.load()
+    // Wait for the first conversion pass; since EUR fails we land in
+    // the partial-failure state with a retry loop running in the
+    // background.
+    try await store.waitForNextEmission(
+      matching: { $0.convertedBalance(for: audEarmark.id)?.quantity == 400 },
+      description: "AUD earmark balance settled"
+    )
 
     // Aggregate cannot be computed (EUR → AUD fails). Per-earmark balances
     // are still displayed in their own currency where no conversion is

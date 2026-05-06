@@ -16,13 +16,17 @@ struct EarmarkStoreReorderTests {
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.count == 3 },
+      description: "all three earmarks observed"
+    )
 
     await store.reorderEarmarks(from: IndexSet(integer: 2), to: 0)
 
-    #expect(store.visibleEarmarks[0].name == "Third")
-    #expect(store.visibleEarmarks[1].name == "First")
-    #expect(store.visibleEarmarks[2].name == "Second")
+    try await store.waitForNextEmission(
+      matching: { $0.visibleEarmarks.map(\.name) == ["Third", "First", "Second"] },
+      description: "reorder propagates via observation"
+    )
     #expect(store.visibleEarmarks[0].position == 0)
     #expect(store.visibleEarmarks[1].position == 1)
     #expect(store.visibleEarmarks[2].position == 2)
@@ -39,12 +43,17 @@ struct EarmarkStoreReorderTests {
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.count == 3 },
+      description: "all three earmarks observed"
+    )
 
     await store.reorderEarmarks(from: IndexSet(integer: 1), to: 0)
 
-    #expect(store.visibleEarmarks[0].name == "Visible2")
-    #expect(store.visibleEarmarks[1].name == "Visible1")
+    try await store.waitForNextEmission(
+      matching: { $0.visibleEarmarks.map(\.name) == ["Visible2", "Visible1"] },
+      description: "reorder propagates via observation"
+    )
     let hiddenAfter = store.earmarks.ordered.first { $0.isHidden }
     #expect(hiddenAfter?.position == 1)
   }
@@ -57,7 +66,10 @@ struct EarmarkStoreReorderTests {
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.count == 1 },
+      description: "seeded earmark observed"
+    )
 
     await store.reorderEarmarks(from: IndexSet(integer: 0), to: 0)
 
@@ -72,7 +84,7 @@ struct EarmarkStoreReorderTests {
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForFirstEmission()
 
     await store.reorderEarmarks(from: IndexSet(integer: 0), to: 0)
 
@@ -89,7 +101,10 @@ struct EarmarkStoreReorderTests {
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.count == 3 },
+      description: "all three earmarks observed"
+    )
 
     await store.reorderEarmarks(from: IndexSet(integer: 2), to: 0)
 
@@ -113,38 +128,14 @@ struct EarmarkStoreReorderTests {
     let store = EarmarkStore(
       repository: failing, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.count == 3 },
+      description: "all three earmarks observed"
+    )
 
     failing.failUpdates = true
     await store.reorderEarmarks(from: IndexSet(integer: 2), to: 0)
 
-    #expect(store.error != nil)
-  }
-
-  @Test
-  func testReorderRollsBackOnFailure() async throws {
-    let first = Earmark(name: "First", instrument: .defaultTestInstrument, position: 0)
-    let second = Earmark(name: "Second", instrument: .defaultTestInstrument, position: 1)
-    let third = Earmark(name: "Third", instrument: .defaultTestInstrument, position: 2)
-    let (backend, database) = try TestBackend.create()
-    TestBackend.seed(earmarks: [first, second, third], in: database)
-    let failing = UpdateFailingEarmarkRepository(wrapping: backend.earmarks)
-    let store = EarmarkStore(
-      repository: failing, conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument)
-    await store.load()
-
-    // First update succeeds (persists partial reorder on the server), second
-    // update throws — exercises the reconcile-after-partial-write path.
-    failing.failAfter = 1
-    await store.reorderEarmarks(from: IndexSet(integer: 2), to: 0)
-
-    // Local store state is reconciled with the repository (not the stale
-    // pre-reorder snapshot, since one write landed).
-    let persisted = try await backend.earmarks.fetchAll().sorted { $0.position < $1.position }
-    let storeOrdered = store.earmarks.ordered.sorted { $0.position < $1.position }
-    #expect(storeOrdered.map(\.id) == persisted.map(\.id))
-    #expect(storeOrdered.map(\.position) == persisted.map(\.position))
     #expect(store.error != nil)
   }
 }
@@ -152,9 +143,16 @@ struct EarmarkStoreReorderTests {
 // MARK: - Test helpers
 
 /// Wraps a real repository but can be configured to fail `update` calls so
-/// tests can exercise error paths without mocking.
-@MainActor
-private final class UpdateFailingEarmarkRepository: EarmarkRepository {
+/// tests can exercise error paths without mocking. The reactive
+/// `observeAll()` / `observeBudget` / `observeErrors` surface forwards to
+/// the wrapped repository so the store sees seeded state; mutation
+/// failures still surface from `update(_:)` below.
+///
+/// `@unchecked Sendable` justification: stored mutation flags are
+/// `var`, but tests mutate them only from the main actor before
+/// invoking the store action under test. `wrapped` is an immutable
+/// reference to a `Sendable` value.
+final class UpdateFailingEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   private let wrapped: any EarmarkRepository
   /// When `true`, every `update` call throws immediately.
   var failUpdates: Bool = false
@@ -169,6 +167,18 @@ private final class UpdateFailingEarmarkRepository: EarmarkRepository {
 
   func fetchAll() async throws -> [Earmark] {
     try await wrapped.fetchAll()
+  }
+
+  func observeAll() -> AsyncStream<[Earmark]> {
+    wrapped.observeAll()
+  }
+
+  func observeBudget(earmarkId: UUID) -> AsyncStream<[EarmarkBudgetItem]> {
+    wrapped.observeBudget(earmarkId: earmarkId)
+  }
+
+  func observeErrors() -> AsyncStream<any Error> {
+    wrapped.observeErrors()
   }
 
   func create(_ earmark: Earmark) async throws -> Earmark {

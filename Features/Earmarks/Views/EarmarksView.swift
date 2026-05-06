@@ -151,17 +151,14 @@ struct EarmarksView: View {
         }
       }
     }
-    .task {
-      await earmarkStore.load()
-    }
-    .refreshable {
-      await earmarkStore.load()
-    }
     .searchable(text: $searchText, prompt: "Search earmarks")
     .overlay {
-      if earmarkStore.isLoading && earmarkStore.earmarks.ordered.isEmpty {
-        ProgressView()
-      } else if !earmarkStore.isLoading && earmarkStore.earmarks.ordered.isEmpty {
+      // EarmarkStore is reactive — it subscribes via observeAll() in
+      // init, so the list populates without an explicit `.task` /
+      // `.refreshable` reload here. The empty-state view briefly
+      // appears before the first emission lands; that window is
+      // typically a single GRDB read off MainActor.
+      if earmarkStore.earmarks.ordered.isEmpty {
         ContentUnavailableView(
           "No Earmarks",
           systemImage: "bookmark.fill",
@@ -276,16 +273,16 @@ struct EarmarksView: View {
     )
     .environment(session)
   }
-  .task { await seedEarmarksPreview(backend: backend, earmarkStore: earmarkStore) }
+  .task { await seedEarmarksPreview(backend: backend) }
 }
 
 @MainActor
-private func seedEarmarksPreview(backend: any BackendProvider, earmarkStore: EarmarkStore) async {
+private func seedEarmarksPreview(backend: any BackendProvider) async {
+  // No `earmarkStore.load()` — the reactive store subscribes in init.
   _ = try? await backend.earmarks.create(
     Earmark(
       name: "Holiday Fund",
       instrument: .AUD,
       savingsGoal: InstrumentAmount(quantity: 5000, instrument: .AUD)))
   _ = try? await backend.earmarks.create(Earmark(name: "Emergency Fund", instrument: .AUD))
-  await earmarkStore.load()
 }

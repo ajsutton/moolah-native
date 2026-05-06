@@ -88,10 +88,10 @@ enum TransactionStoreTestSupport {
       conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument
     )
-    // `AccountStore` is reactive — wait for an observation emission
-    // that contains the seeded accounts before any TransactionStore code
-    // path that depends on them being visible runs. Without seeded
-    // accounts, the first emission is enough.
+    // `AccountStore` and `EarmarkStore` are both reactive — wait for an
+    // observation emission that contains the seeded rows before any
+    // TransactionStore code path that depends on them being visible
+    // runs. Without seeded entries the first emission is enough.
     if accounts.isEmpty {
       try? await accountStore.waitForFirstEmission()
     } else {
@@ -101,7 +101,15 @@ enum TransactionStoreTestSupport {
         description: "seeded accounts observable"
       )
     }
-    await earmarkStore.load()
+    if earmarks.isEmpty {
+      try? await earmarkStore.waitForFirstEmission()
+    } else {
+      let expectedCount = earmarks.count
+      try? await earmarkStore.waitForNextEmission(
+        matching: { $0.earmarks.count == expectedCount },
+        description: "seeded earmarks observable"
+      )
+    }
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),

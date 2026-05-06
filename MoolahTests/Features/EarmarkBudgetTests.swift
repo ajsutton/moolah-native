@@ -20,7 +20,7 @@ struct EarmarkBudgetTests {
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForFirstEmission()
     return (store, backend)
   }
 

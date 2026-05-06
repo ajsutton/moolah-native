@@ -120,16 +120,15 @@ struct ProfileSessionTests {
     #expect(plan.isEmpty)
   }
 
-  @Test("TransactionLegRecord change reloads earmarks but NOT accounts")
-  func transactionLegRecordReloadsOnlyEarmarks() {
-    // Regression for issue #76 (post-reactive-migration): leg-only remote
-    // changes (e.g. category or earmark reassignment on another device) must
-    // trigger an earmark reload — `EarmarkStore` is still imperative and
-    // migrates in commit 7. AccountStore is reactive so accounts are
-    // explicitly NOT in the plan.
+  @Test("TransactionLegRecord change does NOT enqueue an account or earmark reload")
+  func transactionLegRecordDoesNotEnqueueReactiveStores() {
+    // Both AccountStore and EarmarkStore are reactive (subscribe to
+    // `observeAll()` in `init`); leg-only remote changes (e.g. category
+    // or earmark reassignment on another device) propagate via the
+    // observation streams without an explicit reload entry.
     let plan = ProfileSession.storesToReload(for: [TransactionLegRow.recordType])
     #expect(!plan.contains(.accounts))
-    #expect(plan.contains(.earmarks))
+    #expect(!plan.contains(.earmarks))
     #expect(!plan.contains(.categories))
   }
 
@@ -139,16 +138,22 @@ struct ProfileSessionTests {
     #expect(plan == .categories)
   }
 
-  @Test("EarmarkRecord change reloads the earmark store")
-  func earmarkRecordReloadsEarmarks() {
+  @Test("EarmarkRecord change does NOT enqueue an earmark reload")
+  func earmarkRecordDoesNotReloadEarmarks() {
+    // EarmarkStore is reactive — `EarmarkRepository.observeAll()` re-emits
+    // when earmark rows change, so the legacy `.earmarks` reload path is
+    // intentionally not taken.
     let plan = ProfileSession.storesToReload(for: [EarmarkRow.recordType])
-    #expect(plan == .earmarks)
+    #expect(plan.isEmpty)
   }
 
-  @Test("EarmarkBudgetItemRecord change reloads the earmark store")
-  func earmarkBudgetItemRecordReloadsEarmarks() {
+  @Test("EarmarkBudgetItemRecord change does NOT enqueue an earmark reload")
+  func earmarkBudgetItemRecordDoesNotReloadEarmarks() {
+    // Budget UI subscribes via `EarmarkRepository.observeBudget(earmarkId:)`
+    // (or fetches on demand). Either way, no store-level reload is triggered
+    // by a remote budget-item change.
     let plan = ProfileSession.storesToReload(for: [EarmarkBudgetItemRow.recordType])
-    #expect(plan == .earmarks)
+    #expect(plan.isEmpty)
   }
 
   @Test("Unknown record types do not trigger any reload")
@@ -163,17 +168,17 @@ struct ProfileSessionTests {
     #expect(plan.isEmpty)
   }
 
-  @Test("Mixed record types combine reload plans (accounts excluded — reactive)")
+  @Test("Mixed record types combine reload plans (accounts/earmarks excluded — reactive)")
   func mixedRecordTypesCombineReloadPlans() {
     let plan = ProfileSession.storesToReload(
       for: [
         TransactionLegRow.recordType,
         CategoryRow.recordType,
       ])
-    // AccountStore is reactive (commit 5) — accounts are not in the
-    // reload plan, even when leg or transaction changes arrive.
+    // AccountStore and EarmarkStore are reactive — neither is in the
+    // reload plan, even when leg / transaction / earmark changes arrive.
     #expect(!plan.contains(.accounts))
-    #expect(plan.contains(.earmarks))
+    #expect(!plan.contains(.earmarks))
     #expect(plan.contains(.categories))
   }
 }

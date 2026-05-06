@@ -37,7 +37,10 @@ struct EarmarkStoreConvertedBalanceTests {
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { !$0.earmarks.ordered.isEmpty },
+      description: "seeded earmarks observed"
+    )
 
     #expect(store.convertedTotalBalance?.quantity == 500)
   }
@@ -68,7 +71,10 @@ struct EarmarkStoreConvertedBalanceTests {
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { !$0.earmarks.ordered.isEmpty },
+      description: "seeded earmarks observed"
+    )
 
     // Individual balances should reflect true values
     #expect(store.convertedBalance(for: positiveId)?.quantity == 500)
@@ -96,8 +102,10 @@ struct EarmarkStoreConvertedBalanceTests {
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
-    #expect(store.convertedTotalBalance?.quantity == 500)
+    try await store.waitForNextEmission(
+      matching: { $0.convertedTotalBalance?.quantity == 500 },
+      description: "seeded earmark balance settled"
+    )
 
     await store.applyDelta(
       earmarkDeltas: [earmarkId: [instrument: -100]],
@@ -129,7 +137,10 @@ struct EarmarkStoreConvertedBalanceTests {
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { !$0.earmarks.ordered.isEmpty },
+      description: "seeded earmarks observed"
+    )
 
     #expect(store.convertedBalance(for: earmarkId)?.quantity == 500)
     #expect(store.convertedSaved(for: earmarkId)?.quantity == 500)
@@ -154,8 +165,10 @@ struct EarmarkStoreConvertedBalanceTests {
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
-    #expect(store.convertedBalance(for: earmarkId)?.quantity == 500)
+    try await store.waitForNextEmission(
+      matching: { $0.convertedBalance(for: earmarkId)?.quantity == 500 },
+      description: "seeded earmark balance settled"
+    )
 
     await store.applyDelta(
       earmarkDeltas: [earmarkId: [instrument: -100]],

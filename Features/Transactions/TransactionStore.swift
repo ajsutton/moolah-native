@@ -243,12 +243,16 @@ final class TransactionStore {
     if !delta.accountDeltas.isEmpty {
       await accountStore?.applyDelta(delta.accountDeltas)
     }
-    if delta.hasEarmarkChanges {
-      await earmarkStore?.applyDelta(
-        earmarkDeltas: delta.earmarkDeltas,
-        savedDeltas: delta.earmarkSavedDeltas,
-        spentDeltas: delta.earmarkSpentDeltas)
-    }
+    // Earmark state is delivered exclusively by `EarmarkRepository.observeAll()`
+    // — the reactive observation IS the update. Calling `applyDelta` here
+    // alongside the observation would race: when the observation fires
+    // before applyDelta on MainActor, the delta double-applies (e.g.
+    // an empty earmark gains spent=50 from observation and then another
+    // +50 from applyDelta). Account state happens to be deterministic
+    // because account-balance reads are async (`await displayBalance`)
+    // and naturally drain pending observation work; earmark reads are
+    // sync against the published `earmarks` collection and surface the
+    // race directly.
   }
 
   private func fetchPage() async {

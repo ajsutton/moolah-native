@@ -24,7 +24,10 @@ struct EarmarkStoreApplyDeltaTests {
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.by(id: earmarkId) != nil },
+      description: "seeded earmark observed"
+    )
 
     await store.applyDelta(
       earmarkDeltas: [earmarkId: [instrument: -100]],
@@ -55,7 +58,10 @@ struct EarmarkStoreApplyDeltaTests {
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.by(id: earmarkId) != nil },
+      description: "seeded earmark observed"
+    )
 
     await store.applyDelta(
       earmarkDeltas: [earmarkId: [instrument: 200]],
@@ -92,7 +98,10 @@ struct EarmarkStoreApplyDeltaTests {
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.count == 2 },
+      description: "both seeded earmarks observed"
+    )
 
     await store.applyDelta(
       earmarkDeltas: [
