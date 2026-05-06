@@ -40,7 +40,7 @@ Before opening a profile, detect that its data format is newer than this build s
 
 ### 1. The version constant and the rubric
 
-New file `Domain/Models/DataFormatVersion.swift`:
+New file `Domain/Models/DataFormatVersion.swift`. `DataFormatVersion` is a case-less enum used as a namespace — not instantiable, just a home for the constant:
 
 ```swift
 enum DataFormatVersion {
@@ -60,11 +60,10 @@ enum DataFormatVersion {
   ///   4. New CKSyncEngine zone introduced.
   ///   5. Any change explicitly tagged "forward-incompatible" in its
   ///      PR description / commit message.
-  ///   6. A field on a synced record type marked DEPRECATED in
-  ///      `schema.ckdb` (causing the wire-struct generator to drop it)
-  ///      where older builds still write a non-nil value newer builds
-  ///      rely on. The rename is the trigger; the bump fences off the
-  ///      "deprecated field is suddenly invisible" race.
+  ///   6. A field on a synced record type marked `// DEPRECATED` in
+  ///      `schema.ckdb` (the wire-struct generator drops it; older builds
+  ///      still write it). The rename is the trigger; the bump fences off
+  ///      the "deprecated field is suddenly invisible" race.
   ///
   /// History (newest first):
   /// - 1: gate introduced alongside the crypto-wallet foundation.
@@ -81,20 +80,20 @@ enum DataFormatVersion {
 }
 ```
 
-**The compatibility predicate lives at the App layer, not on `Profile`.** `Domain/` must not know about build-side constants — the model carries the integer; `SessionManager` does the comparison. Inline at the gate site:
+**The compatibility predicate lives at the App layer, not on `Profile`.** `Domain/` must not know about build-side constants — the model carries the integer; `SessionManager` does the comparison. Inline at the gate site (and at the picker badge site — two callers, one trivial expression, no helper warranted):
 
 ```swift
 profile.dataFormatVersion <= DataFormatVersion.current
 ```
 
-**Sync-boundary enum marker.** Every domain enum whose values cross the sync boundary gets a `// SyncBoundary —` doc comment line immediately above its declaration:
+**Sync-boundary enum marker.** Every domain enum whose values cross the sync boundary gets a `// SyncBoundary —` doc-comment line *immediately above* its declaration:
 
 ```swift
 // SyncBoundary — adding a case requires bumping DataFormatVersion.current.
 enum AccountType: String, Codable, Sendable { ... }
 ```
 
-This is the deterministic substrate for the §7 reviewer check (which greps for `SyncBoundary` in the diff context). Initial set as of v1: `AccountType`, `Transaction.TransactionType`, `RecurPeriod`, plus any other enum that appears in `CloudKit/schema.ckdb` field types. The marker is added to each in this PR.
+This marker is the deterministic substrate for the §7 reviewer check (which greps for `SyncBoundary` in the diff context, then narrows to enum-case additions inside marker-tagged enums — see §7 for the exact patterns and false-positive guard). Initial set as of v1: `AccountType`, `Transaction.TransactionType`, `RecurPeriod`, plus any other enum that appears in `CloudKit/schema.ckdb` field types. The marker is added to each in this PR.
 
 Cosmetic / additive changes that older builds preserve correctly (a new field with truly null-as-default semantics, a new index, a new derived cache table) do not require a bump.
 
@@ -112,7 +111,7 @@ Older builds read this field by reflective `record["dataFormatVersion"] as? Int6
 
 `just generate` regenerates `Backends/CloudKit/Sync/Generated/ProfileRecordCloudKitFields.swift`. The generated wire struct's memberwise init is fully `= nil`-defaulted, so existing call sites compile unchanged — but they will silently send `nil` for the new field unless updated. See §2.3.
 
-#### 2.2. `profile-index.sqlite` schema
+#### 2.2. `profile-index.sqlite` schema and migration timing
 
 Append migration `v2_data_format_version` to `Backends/GRDB/ProfileIndexSchema.swift`. The full registration (placed after `eraseDatabaseOnSchemaChange` and after the `v1_initial` registration):
 
@@ -141,14 +140,16 @@ Bump `ProfileIndexSchema.version` from `1` to `2` in the same file (the integer 
 /// `v2_data_format_version` — adds `data_format_version INTEGER NOT NULL DEFAULT 0`.
 ```
 
+**Migration sequencing.** `profile-index.sqlite` is opened and migrated at app start in `MoolahApp+Setup.swift` (`profileIndexDatabase = try ProfileIndexDatabase.open(...)` runs the migrator before any view appears). `SessionManager` is constructed only after that succeeds. Therefore every call to `session(for:)` reads from a profile-index queue whose migrations have completed; the §3.2 re-read sees the backfilled `0` for any pre-existing row and the gate is consistent on first launch. The implementation must preserve this ordering — do not move the profile-index open to lazy initialisation.
+
 #### 2.3. Plumbing chain — exact files and shapes
 
-`dataFormatVersion: Int` must thread through every layer between CloudKit and the domain model. The full list of file changes:
+`dataFormatVersion: Int` must thread through every layer between CloudKit and the domain model. Every struct/class added below uses a `= 0` default on the new property so existing memberwise constructions keep compiling without a same-PR mass-update:
 
 | Layer | File | Change |
 | --- | --- | --- |
-| Domain model | `Domain/Models/Profile.swift` | Add `var dataFormatVersion: Int = 0`. Defaulted so existing call sites compile unchanged. |
-| GRDB row | `Backends/GRDB/Records/ProfileRow.swift` | Add `var dataFormatVersion: Int`. Add `dataFormatVersion = "data_format_version"` to both `Columns` and `CodingKeys`. (Codable + GRDB will decode-fail on `SELECT *` if absent.) |
+| Domain model | `Domain/Models/Profile.swift` | Add `var dataFormatVersion: Int = 0`. |
+| GRDB row | `Backends/GRDB/Records/ProfileRow.swift` | Add `var dataFormatVersion: Int = 0`. Add `dataFormatVersion = "data_format_version"` to both `Columns` and `CodingKeys`. (Codable + GRDB will decode-fail on `SELECT *` if absent.) |
 | GRDB row mapping | `Backends/GRDB/Records/ProfileRow+Mapping.swift` | Propagate `dataFormatVersion` through `init(domain:)` and `toDomain()`. |
 | GRDB ↔ CK mapping | `Backends/GRDB/Sync/ProfileRow+CloudKit.swift` | `toCKRecord`: pass `dataFormatVersion: Int64(row.dataFormatVersion)` to `ProfileRecordCloudKitFields(...)`. `fieldValues(from:)`: read `Int(fields.dataFormatVersion ?? 0)` and populate the returned `ProfileRow`. |
 | Legacy SwiftData record | `Backends/CloudKit/Models/ProfileRecord.swift` | Add `var dataFormatVersion: Int = 0`. Propagate through `toProfile()` and `from(profile:)`. |
@@ -157,15 +158,50 @@ Bump `ProfileIndexSchema.version` from `1` to `2` in the same file (the integer 
 
 Without each of these, a profile bumped on this device uploads `dataFormatVersion = nil` (which a remote device reads as `0`), or a profile fetched from a newer device has its `dataFormatVersion` silently reset to `0` on local write. Either case is the silent-downgrade corruption this gate is meant to prevent.
 
-#### 2.4. Conflict resolution — `max(local, remote)` on `.serverRecordChanged`
+#### 2.4. New repository surface
+
+`GRDBProfileIndexRepository` gains two new methods (used by §3.2 and §2.5):
+
+```swift
+/// Async single-profile fetch. Used by the gate site to re-read the
+/// profile-index row immediately before the compatibility check, so a
+/// stale in-memory snapshot can't bypass the gate.
+func profile(forID id: UUID) async throws -> Profile?
+
+/// Synchronous field-only update of `data_format_version`. Used by
+/// `ProfileIndexSyncHandler` from the conflict-resolution path so the
+/// merged value reaches disk before `buildCKRecord` re-reads the row to
+/// reconstruct the upload.
+func setDataFormatVersionSync(id: UUID, value: Int) throws
+```
+
+Both follow the existing async/sync naming split in the repository (cf. `fetchAll()` async, `fetchAllSync()` sync). `setDataFormatVersionSync` does **not** trigger the `pending_change` queue — it's called from inside the conflict resolver, which then re-queues the save as part of the CKSyncEngine retry path.
+
+#### 2.5. Conflict resolution — `max(local, remote)` on `.serverRecordChanged`
 
 The existing `ProfileIndexSyncHandler.handleSentRecordZoneChanges` updates the local row's `encoded_system_fields` from the server record on `.serverRecordChanged` but does **not** merge field values back into the local row. Re-queuing a save then rebuilds the CKRecord from the local row's stale field values, which would overwrite a *higher* server-side `dataFormatVersion` with a *lower* local value — breaking the monotonic invariant.
 
-Add to `ProfileIndexSyncHandler` (or the existing per-record conflict resolver it delegates to) a `dataFormatVersion`-specific merge: before re-queuing, set the local row's `dataFormatVersion = max(localRow.dataFormatVersion, serverRecord["dataFormatVersion"] as? Int64 ?? 0)`. Then the re-queued save uploads the maximum, and the field is monotonic across both directions.
+Inside `ProfileIndexSyncHandler.handleSentRecordZoneChanges`, after `resolveSystemFields(for: failures)` and *before* re-queuing the save, add a `dataFormatVersion`-specific merge for each `.serverRecordChanged` failure carrying a server record:
+
+```swift
+let local = try repository.fetchRowSync(id: profileId)?.dataFormatVersion ?? 0
+let remote = (serverRecord["dataFormatVersion"] as? Int64).map(Int.init) ?? 0
+let merged = max(local, remote)
+if merged != local {
+  try repository.setDataFormatVersionSync(id: profileId, value: merged)
+}
+```
+
+Then re-queue. This makes the field monotonic in *both* write directions:
+
+- **Server-higher case:** the bump from another device wins; local row updates and re-queued upload contains the higher value.
+- **Server-lower case:** local is authoritative (a legitimately-reachable state if both devices bumped concurrently and CloudKit picked the other one for the conflict response). Re-queued upload still contains the local value, server eventually accepts it.
+
+In-flight `sentRecordZoneChanges` for the profile-index zone are safe: the only writes the handler performs back into `profile-index.sqlite` are the system-fields blob (idempotent — opaque tag bytes that the next upload uses as base) and now `setDataFormatVersionSync` (which only ever raises). Per-profile `ProfileDataSyncHandler` writes back `encoded_system_fields` blobs into `data.sqlite`; those are also idempotent and continue safely after the per-profile handler is evicted (§4.2) because the eviction precedes any further send-batch dispatch.
 
 Test coverage: see §6 (`ProfileIndexConflictResolutionTests`).
 
-#### 2.5. Implementation checklist
+#### 2.6. Implementation checklist
 
 Pre-PR steps the implementer must run (and the reviewer must verify ran):
 
@@ -179,9 +215,9 @@ Pre-PR steps the implementer must run (and the reviewer must verify ran):
 
 #### 3.1. Where it lives
 
-The bump runs in `SessionManager`, not inside `ProfileSession.setUp()`. `setUp()` knows nothing about the app-scoped `profile-index.sqlite`; only `SessionManager` holds the `GRDBProfileIndexRepository` reference.
+The bump runs in `SessionManager`, not inside `ProfileSession.setUp()`. `setUp()` knows nothing about the app-scoped `profile-index.sqlite`; only `SessionManager` holds (or has access to) the `GRDBProfileIndexRepository` reference. `SessionManager` gains a stored property `let profileIndexRepository: GRDBProfileIndexRepository` (passed via init from `MoolahApp+Setup.swift`, which already constructs the repository for the profile-index sync wiring).
 
-`SessionManager.session(for:)` today schedules `setUp()` as a fire-and-forget `Task`. The bump must run after a *successful* `setUp()`, so the bottleneck signature changes: `session(for:)` becomes `async` and `await`s `setUp()` before applying the bump. Callers (`ProfileWindowView`, `ProfileRootView`, `ImportProfileCommand`, etc. — see §4.2 for the full list) already exist inside SwiftUI `Task { ... }` or async-context closures and can `await` the open.
+`SessionManager.session(for:)` today schedules `setUp()` as a fire-and-forget `Task`. The bump must run after a *successful* `setUp()`, so the bottleneck signature changes: `session(for:)` becomes `async` and `await`s `setUp()` before applying the bump. See §4.1 for the full caller migration.
 
 #### 3.2. The bump itself
 
@@ -190,7 +226,9 @@ After `setUp()` succeeds and before `session(for:)` returns `.ready(...)`:
 ```swift
 // Re-read the profile-index row so we don't act on a stale in-memory snapshot.
 let current = try await profileIndexRepository.profile(forID: profile.id) ?? profile
-guard current.dataFormatVersion < DataFormatVersion.current else { return .ready(session) }
+guard current.dataFormatVersion < DataFormatVersion.current else {
+  return .ready(session)
+}
 
 var bumped = current
 bumped.dataFormatVersion = DataFormatVersion.current
@@ -199,11 +237,27 @@ session.updateProfile(bumped)                     // keep session.profile consis
 return .ready(session)
 ```
 
-Direct mutation of the `var`-friendly `Profile` struct — no new `with(...)` factory needed. `session.updateProfile` is a small new method on `ProfileSession` that swaps `self.profile = bumped` and notifies any observers (the value is `@Observable` already through the session).
+`Profile` is a `var`-friendly struct, so direct mutation (`var bumped = current; bumped.dataFormatVersion = ...`) — no factory needed.
+
+`session.updateProfile` is a small new method on `ProfileSession`. To support it, `ProfileSession.profile` is changed from `let` to `var`:
+
+```swift
+@MainActor
+final class ProfileSession: Identifiable {
+  var profile: Profile           // was: let
+  // ...
+  func updateProfile(_ updated: Profile) {
+    precondition(updated.id == profile.id, "updateProfile must not change identity")
+    self.profile = updated
+  }
+}
+```
+
+The `precondition` is defence-in-depth — `Profile.id` is the session key in `SessionManager.sessions`; an identity swap would orphan the session reference. Existing `session.profile` reads observe the new value through `@Observable`; no callers rely on `profile` being immutable for correctness.
 
 Two invariants this satisfies:
 
-1. **Monotonic.** We only ever raise the number — never lower it. Combined with the §2.4 merge step, the field is monotonic in both write directions.
+1. **Monotonic.** We only ever raise the number — never lower it. Combined with the §2.5 merge step, the field is monotonic in both write directions.
 2. **Migration-gated.** The bump is *after* `setUp()` succeeds, so the published claim is only made once the matching `data.sqlite` is on disk. Acceptance criterion: "first-launch migration that bumps `dataFormatVersion` is gated on a successful build → schema match".
 
 #### 3.3. Failure modes
@@ -216,31 +270,43 @@ The `upsert` queues a `pending_change` and pushes via the existing profile-index
 
 #### 4.1. The contract
 
-`SessionManager.session(for:)` is the sole entry point. The contract changes:
+`SessionOpenResult` and its companion `IncompatibleProfileInfo` live in their own file `App/SessionOpenResult.swift` (per CODE_GUIDE.md §2 — `SessionManager.swift` already houses its primary type):
 
 ```swift
 struct IncompatibleProfileInfo: Equatable, Sendable {
   let profileLabel: String
-  let profileVersion: Int
-  let buildVersion: Int
+  let profileVersion: Int       // the profile's dataFormatVersion (source of truth for the gate integer)
+  let buildVersion: Int         // DataFormatVersion.current at the time the gate fired
 }
 
 enum SessionOpenResult {
   case ready(ProfileSession)
   case incompatible(IncompatibleProfileInfo)
 }
+```
 
+`buildVersion` is the integer gate value. The human-readable app version (`CFBundleShortVersionString`) is sourced separately by the view from `AppVersion.shortVersionString` and is not carried on `IncompatibleProfileInfo`.
+
+`SessionManager.session(for:)` becomes the sole entry point:
+
+```swift
 func session(for profile: Profile) async -> SessionOpenResult { ... }
 ```
 
-The pre-existing synchronous `session(for:)` is removed (no `fatalError`-trapping wrapper). Every caller migrates to the async form and switches on the result. The full caller inventory (from `grep -rn 'sessionManager\.session\|SessionManager.*session(for'`):
+The pre-existing synchronous `session(for:)` is removed (no `fatalError`-trapping wrapper). `rebuildSession(for:)` becomes `async` too and returns `SessionOpenResult` (it currently `fatalError`s on a GRDB-open failure; that hard-crash path is replaced by surfacing the throw to the caller as a `SessionOpenResult.incompatible`-like terminal — see below).
 
-- `App/ProfileWindowView.swift` — switches on the result inside its `body`'s `Task { ... }`.
-- `App/ProfileRootView.swift` — `updateSession(for:)` already async; switches on the result.
-- `App/SessionRootView.swift` — switches on the result.
-- `App/SessionManager.swift` — `rebuildSession(for:)` becomes async; gates on `.ready` (rebuild only fires for already-open sessions, which by definition were `.ready`).
-- `Features/Imports/ImportProfileCommand.swift` — translates `.incompatible` to `AutomationError.operationFailed("Profile is incompatible with this build")`.
-- All test harnesses that use `TestBackend` — profiles always have `dataFormatVersion = 0`, so they always hit `.ready`. Tests that need direct `ProfileSession` access add a `try #require(session) = .ready(...)` guard.
+The full caller inventory (from `grep -rn 'sessionManager\.session\|sessionManager\.rebuildSession\|SessionManager.*session(for'`):
+
+| Site | Today | After |
+| --- | --- | --- |
+| `App/ProfileWindowView.swift:40` (`var body`'s computed open) | `let session = sessionManager.session(for: profile)` | Wrapped in a `Task { switch await sessionManager.session(for: profile) { ... } }`. The view stores `@State var sessionResult: SessionOpenResult?` and renders by `switch`ing on it (or shows `ProgressView` while nil). |
+| `App/ProfileWindowView.swift:43-44` (`.onChange(of: profile.label)`) | `sessionManager.rebuildSession(for: profile)` | Wrapped in `Task { _ = await sessionManager.rebuildSession(for: profile) }`. |
+| `App/ProfileRootView.swift:80` (`updateSession(for:)` async path) | `activeSession = sessionManager.session(for: profile)` | `switch await sessionManager.session(for: profile) { case .ready(let s): activeSession = s; case .incompatible(let info): incompatibleInfo = info }`. |
+| `App/ProfileRootView.swift:89` (`rebuildSessionIfNeeded()` synchronous path) | `sessionManager.rebuildSession(for: profile); activeSession = sessionManager.session(for: profile)` | The whole method becomes `func rebuildSessionIfNeeded() { Task { await applyOpenResult(sessionManager.session(for: profile)) } }`, awaiting both calls. |
+| `App/SessionRootView.swift` (entry-point routing) | calls `session(for:)` | switches on `SessionOpenResult` (see §5.3). |
+| `App/SessionManager.swift` (`rebuildSession(for:)`) | `fatalError` on init failure | `async`, surfaces failures via `SessionOpenResult.incompatible` for the data-format case; for the `try ProfileSession(...)` GRDB-open failure case, the spec keeps the existing crash semantics (out of scope for this gate — disk-full / permissions issues weren't a pre-existing crash because of compatibility). The remaining `fatalError` for unrelated DB-open failures is acceptable — it's the same failure mode as before. |
+| `Automation/AppleScript/Commands/ImportProfileCommand.swift` | constructs a session synchronously as part of import | translates `.incompatible` to `AutomationError.operationFailed("Profile is incompatible with this build")`. |
+| All test harnesses that use `TestBackend` | profiles always have `dataFormatVersion = 0` | always hit `.ready`; tests that need direct `ProfileSession` access add a `try #require(case .ready(let session) = await sessionManager.session(for: profile))` guard. |
 
 If the gate fires (`.incompatible`), no `ProfileSession` is constructed:
 
@@ -252,22 +318,28 @@ The app-scoped `profile-index.sqlite` and its CKSyncEngine are unaffected. They 
 
 #### 4.2. Mid-session arrival of a remote bump
 
-If a profile's `dataFormatVersion` is bumped on another device while this build has the session open, `ProfileIndexSyncHandler.applyRemoteChanges` writes the new value into `profile-index.sqlite` and notifies the existing index observers (`SyncCoordinator.notifyIndexObservers`). We add one `SessionManager`-level observer that, for any profile whose bumped version exceeds `DataFormatVersion.current`:
+`SessionManager` installs a single index observer on `SyncCoordinator` at construction time (added next to the existing wiring in `MoolahApp+Setup.swift`). The observer fires after every `ProfileIndexSyncHandler.applyRemoteChanges` batch and inspects each changed profile.
 
-1. Calls `cleanupSync` on the existing session (cancels `syncReloadTask`, `catalogRefreshTask`, `pragmaOptimizeTask`, etc.) so no *new* `pending_change` rows are inserted by the doomed session.
-2. Removes the per-profile `ProfileDataSyncHandler` from `SyncCoordinator.dataHandlers` (a small extension to the existing `cleanupSync` path: see §6 for the assertion). This stops `SyncCoordinator` from delegating future fetched changes for that zone to a stale handler.
-3. Sets `incompatibleProfiles[profile.id] = info` on `SessionManager` (a new `private(set) var incompatibleProfiles: [UUID: IncompatibleProfileInfo] = [:]`) — this is the state slot the routing layer observes to flip into the incompatible view.
-4. Calls `sessions.removeValue(forKey: profile.id)`.
+For each profile whose new `dataFormatVersion` exceeds `DataFormatVersion.current`:
+
+1. **If a session is currently open** (`sessions[profileID] != nil`):
+   1. Call `cleanupSync` on the session — cancels `syncReloadTask`, `catalogRefreshTask`, `pragmaOptimizeTask`, etc.; no *new* `pending_change` rows are inserted by the doomed session.
+   2. Call a new `SyncCoordinator.removeDataHandler(for profileID: UUID)` — synchronously removes the entry from `dataHandlers` so `SyncCoordinator` no longer routes fetched changes for the per-profile zone to a stale handler. Eviction must happen before any further send-batch dispatch; the route check at delegate entry is sufficient.
+   3. Set `incompatibleProfiles[profileID] = info` (a new `private(set) var incompatibleProfiles: [UUID: IncompatibleProfileInfo] = [:]` on `SessionManager`).
+   4. `sessions.removeValue(forKey: profileID)`.
+2. **If no session is open** (the bump arrived before the user ever opened that profile on this device): just set `incompatibleProfiles[profileID] = info`. The picker badge (§4.3) and the next `session(for:)` call (§3.2 re-read sees the bumped row → returns `.incompatible`) handle the rest.
+
+**Eviction of stale `incompatibleProfiles` entries.** When `session(for:)` returns `.ready` for a given profile id, `incompatibleProfiles.removeValue(forKey: profileID)` runs as part of the same code path. This prevents a split-brain after an app update where `sessions[id]` is non-nil but `incompatibleProfiles[id]` is also non-nil. (After an app update, the user's first `session(for:)` call against a previously-incompatible profile sees a higher `DataFormatVersion.current` and returns `.ready`; the eviction fires and the routing layer naturally falls through to the session view.)
 
 **Narrowed safety claim.** This does *not* prevent in-flight per-profile GRDB writes initiated *before* the teardown decision from completing — the `DatabaseQueue` is released when the session deallocates, after view references release it. The meaningful guarantee is:
 
 > No new CKSyncEngine `pending_change` rows are inserted from this device for the profile after `cleanupSync` fires, and no further fetched changes for the per-profile zone are applied locally.
 
-In-flight user-driven writes that have already reached the GRDB queue complete. They are the user's own data on the user's own device; the failure mode the gate is preventing is *cross-device* corruption (an older build round-tripping a record from a newer build), which the absence of new `pending_change` rows fences off.
+In-flight user-driven writes that have already reached the GRDB queue complete. They are the user's own data on the user's own device; the failure mode the gate is preventing is *cross-device* corruption (an older build round-tripping a record from a newer build), which the absence of new `pending_change` rows fences off. In-flight `sentRecordZoneChanges` for the per-profile zone that complete after eviction write only opaque `encoded_system_fields` bytes (idempotent) — those writes don't change record content and cannot cause downgrade corruption.
 
 #### 4.3. Picker-side display
 
-In the existing profile-list view, append a small "Update required" indicator on rows where `profile.dataFormatVersion > DataFormatVersion.current`. The compatibility check is inlined at the picker site (same one-liner as the gate — no domain pollution). Clicking the row still navigates — into the incompatible view rather than a session.
+In the existing profile-list view, append a small "Update required" indicator on rows where `profile.dataFormatVersion > DataFormatVersion.current` *or* `sessionManager.incompatibleProfiles[profile.id] != nil` (the OR catches profiles whose `profile-index` row hasn't refreshed but whose mid-session bump is already known). Clicking the row still navigates — into the incompatible view rather than a session.
 
 ### 5. The UI surface
 
@@ -298,7 +370,7 @@ struct IncompatibleProfileView: View {
 }
 ```
 
-`IncompatibleProfileInfo` (defined alongside `SessionOpenResult` in `App/SessionManager.swift`) is the single carrier — there is no separate "ViewModel" wrapper.
+`IncompatibleProfileInfo` (defined in `App/SessionOpenResult.swift`) is the single carrier — there is no separate "ViewModel" wrapper.
 
 **Layout.** Centred panel, system iconography (`Image(systemName: "arrow.up.circle.fill").foregroundStyle(.tint)`), one heading, one body paragraph, two buttons:
 
@@ -342,7 +414,7 @@ All new tests run under `MoolahTests_iOS` and `MoolahTests_macOS` against `TestB
 - `test_session_returnsIncompatible_whenProfileVersionAboveBuild`
 - `test_session_doesNotOpenDatabase_whenIncompatible` (assert no `data.sqlite` in the temp profile dir)
 - `test_session_doesNotRegisterWithSyncCoordinator_whenIncompatible`
-- `test_session_rereadsProfileFromRepository_beforeGate` — the gate uses the freshly-fetched `profile-index` row, not a stale in-memory snapshot.
+- `test_session_rereadsProfileFromRepository_beforeGate` — seed the repository with `dataFormatVersion = current + 1` and pass an in-memory `Profile` with `dataFormatVersion = 0`; assert the gate returns `.incompatible`.
 
 #### `DataFormatVersionBumpTests` — the bump path
 
@@ -352,18 +424,20 @@ All new tests run under `MoolahTests_iOS` and `MoolahTests_macOS` against `TestB
 - `test_session_bumpIsRetried_whenUpsertFails` — wrap `GRDBProfileIndexRepository` in a stub that throws once on `upsert`; assert the next `session(for:)` invocation succeeds and the `profile-index` row reaches `current`.
 - `test_signOutSignIn_reUploadsDataFormatVersion` — after a `.switchAccounts` cycle wipes `profile-index.sqlite` and re-fetches, the next `session(for:)` correctly reads the server's stored version (no spurious downgrade or re-bump).
 
-#### `ProfileIndexConflictResolutionTests` — `max(local, remote)` (§2.4)
+#### `ProfileIndexConflictResolutionTests` — `max(local, remote)` (§2.5)
 
 - `test_serverRecordChanged_promotesLocalDataFormatVersion_whenServerIsHigher` — local row at `current - 1`, server returns `.serverRecordChanged` with a record at `current`; after resolution, local row reads `current` and re-queued save uploads `current`.
-- `test_serverRecordChanged_keepsLocalDataFormatVersion_whenLocalIsHigher` — opposite direction (theoretically reachable if a remote device with a stale fetch overwrites; the merge keeps the higher local value).
+- `test_serverRecordChanged_keepsLocalDataFormatVersion_whenServerIsLower` — local row at `current`, server returns `.serverRecordChanged` with a record at `current - 1`; local is authoritative; re-queued save still uploads `current` (no downgrade).
 
 #### `ProfileIndexCompatibilityRemoteChangeTests` — mid-session arrival
 
 - `test_remoteVersionBumpAboveBuild_tearsDownActiveSession` — open a session at `current`, deliver a remote change setting `current + 1`. Assert:
   - `sessionManager.sessions[id]` becomes `nil`.
   - `cleanupSync` ran on the prior session (observed via a test hook that flips a flag).
-  - The per-profile `ProfileDataSyncHandler` is no longer present in `SyncCoordinator.dataHandlers`.
+  - The per-profile `ProfileDataSyncHandler` is no longer present in `SyncCoordinator.dataHandlers` (`SyncCoordinator` exposes a `dataHandler(forProfile:)` test accessor).
   - `sessionManager.incompatibleProfiles[id]` is populated with the right info.
+- `test_remoteVersionBumpAboveBuild_withNoOpenSession_recordsIncompatibleEntryOnly` — never opened the session locally; deliver the remote bump; assert `sessions[id]` stays `nil`, `incompatibleProfiles[id]` is populated, no crash.
+- `test_appUpdate_clearsStaleIncompatibleEntry` — start with `incompatibleProfiles[id]` populated and the profile-index row at `current - 1`; bump `DataFormatVersion.current` (test-only override) so the profile is now compatible; call `session(for:)`; assert `.ready` and `incompatibleProfiles[id]` is removed.
 
 #### UI test
 
@@ -387,19 +461,20 @@ Append a new section to `.claude/agents/database-schema-review.md`, alongside th
 >
 > - **Critical:** New `RECORD TYPE` added to `CloudKit/schema.ckdb`.
 > - **Critical:** New CKSyncEngine zone introduced (a `CKRecordZone.ID(zoneName:)` literal not previously present).
-> - **Critical:** New non-defaulted field added to a synced record type — any field where an older build's `nil` decode would mis-classify the record. (Detection: any `+`-line in `CloudKit/schema.ckdb` that adds a field declaration to an existing `RECORD TYPE`, excluding lines that contain `// DEPRECATED`.)
-> - **Critical:** New case added to an enum marked `// SyncBoundary —` in its source file. (Detection: `git diff main -- 'Domain/Models/*.swift' 'Domain/**/*.swift'` and look for `+ case` lines in files / contexts that contain the `// SyncBoundary —` marker.)
+> - **Critical:** New non-defaulted field added to a synced record type — any `+`-line in `CloudKit/schema.ckdb` that adds a field declaration to an existing `RECORD TYPE`. Exclude fields whose *immediately-preceding diff line* is `+ +// DEPRECATED` (those are covered by the deprecation bullet below; they are renames, not net-new fields).
+> - **Critical:** New case added to an enum marked `// SyncBoundary —` in its source file. Detection requires two passes: list files containing the marker, then look for new enum cases in those files. False-positive guard: a `+ case` line inside a `switch { }` body (not inside an `enum { ... }` body) must NOT be flagged. The agent must inspect the surrounding context lines to confirm the `+ case` line is inside an enum declaration before raising the finding.
 > - **Critical:** A field on a synced record type marked `// DEPRECATED` in `schema.ckdb` (the wire-struct generator drops it; older builds still write it; rubric bullet 6).
 >
 > Cosmetic / additive changes that older builds preserve correctly do not require a bump and should not be flagged. The doc-comment block on `DataFormatVersion.current` lists the rubric and prior bumps; cite a specific bullet from the rubric in the finding.
 >
-> Greppable patterns to run:
+> Greppable patterns to run (run all from the repo root):
 >
 > - `git diff main -- CloudKit/schema.ckdb | rg '^\+ +RECORD TYPE'` — new record type.
-> - `git diff main -- CloudKit/schema.ckdb | rg '^\+ +DEPRECATED'` — newly-deprecated field.
-> - `git -C . grep -l 'SyncBoundary' -- 'Domain/**/*.swift'` then `git diff main -- <listed files> | rg '^\+\s+case '` — new enum case in a sync-boundary enum.
-> - `rg 'static let current\s*=\s*(\d+)' Domain/Models/DataFormatVersion.swift` — read the current value directly from the file (for inspection).
-> - `git diff main -- Domain/Models/DataFormatVersion.swift | rg '^\+ +static let current'` — confirm the constant was *changed* in this PR. Absence of this match alongside a triggering change above is the Critical finding.
+> - `git diff main -- CloudKit/schema.ckdb | rg '^\+ +// DEPRECATED'` — newly-deprecated field. (The marker is a comment line above the field, not on the field line itself; the parser at `tools/CKDBSchemaGen/Sources/CKDBSchemaGen/Parser.swift:56` matches it via `line.hasPrefix("//") && line.contains("DEPRECATED")`.)
+> - `git diff main -- '**/*.swift' | rg '^\+.*CKRecordZone\.ID\(zoneName:'` — new CKSyncEngine zone literal.
+> - `rg -l 'SyncBoundary' Domain/` — list files with the marker. Then for each: `git diff main -- <file> | rg '^\+\s+case '` and inspect the diff context to confirm the `+ case` is inside an `enum { ... }` body, not a `switch { }` body.
+> - `rg 'static let current\s*=\s*(\d+)' Domain/Models/DataFormatVersion.swift` — read the current value directly (for inspection / report).
+> - `git diff main -- Domain/Models/DataFormatVersion.swift | rg '^\+ +static let current'` — confirm the constant was *changed* in this PR. Absence of this match alongside any triggering pattern above is the Critical finding.
 >
 > Absence of a bump alongside a triggering change is a **Critical** finding because the failure mode is silent data corruption on downgrade.
 
