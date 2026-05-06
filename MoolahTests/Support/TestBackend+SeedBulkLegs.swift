@@ -31,12 +31,17 @@ extension TestBackend {
     instrument: Instrument = .defaultTestInstrument
   ) throws {
     precondition(!accountIds.isEmpty, "seedBulkTransactionLegs requires at least one accountId")
+    // Capture `now` once at the boundary so all 50k rows share a single
+    // Date() instance — per CODE_GUIDE.md "Date() only at boundaries" and
+    // the data-seeding rule "use deterministic data".
+    let now = Date()
     try database.write { database in
       for i in 0..<count {
         try insertBulkLeg(
           index: i,
           accountId: accountIds[i % accountIds.count],
           instrument: instrument,
+          date: now,
           database: database)
       }
     }
@@ -49,13 +54,14 @@ extension TestBackend {
     index i: Int,
     accountId: UUID,
     instrument: Instrument,
+    date: Date,
     database: Database
   ) throws {
     let txnId = UUID()
     let txnRow = TransactionRow(
       id: txnId,
       recordName: TransactionRow.recordName(for: txnId),
-      date: Date(),
+      date: date,
       payee: "Bulk \(i)",
       notes: nil,
       recurPeriod: nil,

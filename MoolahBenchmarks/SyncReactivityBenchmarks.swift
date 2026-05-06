@@ -22,13 +22,14 @@ final class SyncReactivityBenchmarks: XCTestCase {
   /// Drives the apply path through TestBackend's GRDB queue, then waits
   /// for the AccountStore to settle.
   ///
-  /// Uses `measure(metrics:)` with `XCTClockMetric` so the wall-clock is
-  /// surfaced in `xcresult` and Instruments rather than swallowed in
-  /// stdout. Per `guides/BENCHMARKING_GUIDE.md`.
+  /// Uses `measure(metrics:)` with `XCTClockMetric` and `XCTMemoryMetric`
+  /// so wall-clock and peak-memory are surfaced in `xcresult` and
+  /// Instruments rather than swallowed in stdout.
+  /// Per `guides/BENCHMARKING_GUIDE.md` rules 1 and 2.
   func testBulkSyncRefresh() {
-    let metrics: [any XCTMetric] = [XCTClockMetric()]
+    let metrics: [any XCTMetric] = [XCTClockMetric(), XCTMemoryMetric()]
     let options = XCTMeasureOptions()
-    options.iterationCount = 3
+    options.iterationCount = 10
     measure(metrics: metrics, options: options) {
       // Each iteration: fresh backend, fresh store, bulk write, await
       // settle. The XCTClockMetric records the wall-clock per iteration.
