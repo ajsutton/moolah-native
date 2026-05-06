@@ -36,6 +36,9 @@ extension CryptoSettingsView {
     } else {
       ForEach(pricedRegistrations) { registration in
         CryptoRegistrationRow(registration: registration)
+          .accessibilityIdentifier(
+            UITestIdentifiers.CryptoSettings.registrationRow(registration.id)
+          )
           .contextMenu {
             Button(role: .destructive) {
               Task { await store.removeRegistration(registration) }
