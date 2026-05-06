@@ -28,5 +28,16 @@ struct SessionRootView: View {
         )
         .interactiveDismissDisabled()
       }
+      .task(id: session.id) {
+        // Crypto-wallet auto-import bootstrap: hydrate observable
+        // checkpoint state from disk, then run the launch-time stale
+        // sync. Cancellation of this `.task` fires when the session
+        // changes (the `.id(session.id)` modifier forces a rebuild on
+        // profile switch); the store's per-account work cooperatively
+        // cancels via `Task.checkCancellation` inside the engines.
+        guard let cryptoSyncStore = session.cryptoSyncStore else { return }
+        await cryptoSyncStore.loadInitialState()
+        await cryptoSyncStore.syncStaleAccounts()
+      }
   }
 }
