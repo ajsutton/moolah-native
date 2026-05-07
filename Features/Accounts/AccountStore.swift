@@ -126,7 +126,7 @@ final class AccountStore {
   }
 
   var investmentAccounts: [Account] {
-    accounts.filter { $0.type == .investment && (showHidden || !$0.isHidden) }
+    accounts.filter { $0.type.isInvestmentLike && (showHidden || !$0.isHidden) }
   }
 
   /// The display balance for an account in its own instrument. Forwards to
