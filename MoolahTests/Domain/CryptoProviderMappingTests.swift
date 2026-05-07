@@ -59,13 +59,21 @@ struct CryptoProviderMappingTests {
   // MARK: - Built-in presets
 
   @Test
-  func builtInPresetsContainExpectedTokens() {
+  func builtInPresetsContainExpectedTokens() throws {
     let presets = CryptoProviderMapping.builtInPresets
-    #expect(presets.count == 5)
 
-    let btc = presets.first { $0.instrumentId == "0:native" }!
+    let btc = try #require(presets.first { $0.instrumentId == "0:native" })
     #expect(btc.coingeckoId == "bitcoin")
     #expect(btc.cryptocompareSymbol == "BTC")
     #expect(btc.binanceSymbol == "BTCUSDT")
+
+    // Every chain native gas instrument carries a real provider
+    // mapping so transaction detail / running-balance / aggregation
+    // resolves them from session start (issue #791).
+    for id in ["1:native", "10:native", "137:native", "8453:native"] {
+      let preset = try #require(presets.first { $0.instrumentId == id })
+      #expect(preset.cryptocompareSymbol != nil, "missing CC mapping for \(id)")
+      #expect(preset.binanceSymbol != nil, "missing Binance mapping for \(id)")
+    }
   }
 }
