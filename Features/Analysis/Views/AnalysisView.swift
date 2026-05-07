@@ -65,15 +65,22 @@ struct AnalysisView: View {
       }
     }
     .task {
-      // Win the SwiftData SQL connection race for the upcoming-card data
-      // before the heavier analysis loads start, so the visible card paints
-      // in well under a second on cold launch. The previous `async let`
-      // form started both concurrently, which let AccountStore's
-      // 20k-leg full-table scan steal the SQL connection ahead of the
-      // 36-row scheduled-only fetch. See
+      // The upcoming card displays scheduled transactions. Wins the
+      // SwiftData SQL connection race for the upcoming-card data before
+      // the heavier analysis loads start so the visible card paints in
+      // well under a second on cold launch. See
       // `plans/2026-04-27-upcoming-card-cold-load-plan.md`.
       await transactionStore.load(filter: TransactionFilter(scheduled: .scheduledOnly))
       await store.loadAll()
+    }
+    .task {
+      // Long-lived reactive subscription for the upcoming card. Runs
+      // alongside the priming `.task` above; the prior `load(filter:)`
+      // sets `currentFilter` so the inner subscription cycle sees the
+      // matching state and the rate-tick path keeps the running balances
+      // fresh on remote sync. The surrounding `.task` cancels this on
+      // view unmount.
+      await transactionStore.observe(filter: TransactionFilter(scheduled: .scheduledOnly))
     }
     .onChange(of: store.historyMonths) { _, _ in
       Task { await store.loadAll() }

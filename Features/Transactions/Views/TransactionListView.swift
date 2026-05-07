@@ -227,11 +227,12 @@ struct TransactionListView: View {
   /// Mirror of `RecentlyAddedView.ingestDroppedURLs` but with a forced
   /// account. Kept here so the view can hand off to `ImportStore`
   /// directly; logic is intentionally minimal (security-scope → read
-  /// bytes → ingest → reload list).
+  /// bytes → ingest).
   ///
-  /// `ImportStore` writes via `backend.transactions.create(_:)` but does
-  /// not signal `TransactionStore`; without an explicit reload here the
-  /// account's list keeps showing its pre-import snapshot.
+  /// `ImportStore` writes via `backend.transactions.create(_:)`. The
+  /// view's reactive subscription on `transactionStore.observe(filter:)`
+  /// will see the writes via `repository.observe(...)` and refresh the
+  /// list automatically — no explicit reload is needed here.
   private func ingestDroppedURLs(_ urls: [URL], forcedAccountId: UUID) async {
     for url in urls {
       guard url.pathExtension.lowercased() == "csv" || url.pathExtension.isEmpty else {
@@ -246,7 +247,6 @@ struct TransactionListView: View {
         data: data,
         source: .droppedFile(url: url, forcedAccountId: forcedAccountId))
     }
-    await transactionStore.load(filter: filter)
   }
 
   func createNewTransaction() {

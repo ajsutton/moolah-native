@@ -91,28 +91,19 @@ extension TransactionListView {
         }
       )
     }
-    .task(id: baseFilter) {
-      // Always reset the applied filter so the toolbar reflects the current
-      // context, even on a spurious re-mount that short-circuits below.
-      activeFilter = baseFilter
-      // SwiftUI re-mounts `TransactionListView` during some navigations (see
-      // #372) and fires `.task` again with the same `baseFilter`. When the
-      // store already has — or is still fetching — data for this filter, skip
-      // the redundant fetch. Toolbar Refresh and pull-to-refresh bypass this
-      // by calling `load(filter:)` directly.
-      guard !transactionStore.isLoaded(for: baseFilter) else { return }
-      // Genuine context change (or a first mount after a failed fetch):
-      // clear any stale selection from the previous context and load.
+    .onChange(of: baseFilter) { _, newBase in
+      // Genuine context change (e.g. user navigated from one account to
+      // another): clear any stale selection and reset the user-applied
+      // filter so the toolbar reflects the new context.
       selectedTransaction = nil
-      await transactionStore.load(
-        filter: baseFilter)
+      activeFilter = newBase
     }
     .task(id: activeFilter) {
-      // Reload when user applies a filter
-      if activeFilter != baseFilter {
-        await transactionStore.load(
-          filter: activeFilter)
-      }
+      // The view-driven reactive subscription. `observe(filter:)` runs
+      // the for-await loop until this `.task` is cancelled (filter change
+      // or unmount). The for-await body lives in the store, not here
+      // (per the thin-view rule from spec Section 5).
+      await transactionStore.observe(filter: activeFilter)
     }
     // Composite id: re-fire when the raw positions list changes, AND
     // when the registry version bumps (e.g. user marks a token as

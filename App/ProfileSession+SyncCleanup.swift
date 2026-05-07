@@ -87,14 +87,14 @@ extension ProfileSession {
     setUpTask = nil
 
     // Tear down reactive observation. MUST run AFTER any GRDB wipes so
-    // the observation emits the empty-state transition before the task
-    // is cancelled. See `signOutTeardownOrdering` in
-    // `AccountStoreSyncRefreshTests` / `EarmarkStoreSyncRefreshTests` /
-    // `CategoryStoreSyncRefreshTests` / `ImportRuleStoreSyncRefreshTests`.
+    // the empty-state transition reaches subscribed views before the
+    // task is cancelled. See `signOutTeardownOrdering` tests across the
+    // per-store sync-refresh test suites.
     accountStore.stopObserving()
     earmarkStore.stopObserving()
     categoryStore.stopObserving()
     importRuleStore.stopObserving()
+    transactionStore.stopObserving()
   }
 
   // MARK: - Profile Update

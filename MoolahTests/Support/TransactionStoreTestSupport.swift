@@ -119,6 +119,36 @@ enum TransactionStoreTestSupport {
   }
 }
 
+/// Test-only helpers for awaiting the reactive observation tick after a
+/// mutation. Mutations are pass-through under the reactive design, so
+/// the store doesn't update its `transactions` array until the next
+/// `repository.observe(...)` emission lands. Existing pre-migration
+/// tests assumed synchronous local state; these helpers bridge that
+/// gap by awaiting the next emission.
+extension TransactionStore {
+  /// Awaits the next observation emission and asserts no timeout. Used
+  /// by tests that want a one-line "do mutation; await emission"
+  /// pattern rather than calling `waitForNextEmission(matching:)` with
+  /// a custom predicate.
+  func awaitNextSyncRefresh(timeout: Duration = .seconds(2)) async throws {
+    try await waitForFirstEmission(timeout: timeout)
+  }
+
+  /// Convenience for "do mutation, then await an emission whose
+  /// `transactions.count` matches `expected`". Useful for the most
+  /// common test shape after a create/update/delete.
+  func awaitTransactionCount(
+    _ expected: Int, timeout: Duration = .seconds(2)
+  ) async throws {
+    if transactions.count == expected { return }
+    try await waitForNextEmission(
+      matching: { $0.transactions.count == expected },
+      description: "transactions.count == \(expected)",
+      timeout: timeout
+    )
+  }
+}
+
 /// In-memory `TransactionRepository` whose every method throws, used by
 /// createDefault tests that exercise the failure path. Lives in support so it
 /// can be shared across split suites.

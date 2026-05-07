@@ -230,59 +230,8 @@ struct TransactionStoreEarmarkTests {
     #expect(balance.quantity == Decimal(500))
   }
 
-  @Test
-  func testRunningBalancesUpdateAfterAmountChange() async throws {
-    let salary = Transaction(
-      date: try TransactionStoreTestSupport.makeDate("2024-01-01"),
-      payee: "Salary",
-      legs: [
-        TransactionLeg(
-          accountId: accountId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(100000) / 100,
-          type: .income
-        )
-      ]
-    )
-    let coffee = Transaction(
-      date: try TransactionStoreTestSupport.makeDate("2024-01-15"),
-      payee: "Coffee",
-      legs: [
-        TransactionLeg(
-          accountId: accountId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-3000) / 100,
-          type: .expense
-        )
-      ]
-    )
-    let (backend, database) = try TestBackend.create()
-    TestBackend.seed(transactions: [salary, coffee], in: database)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
-
-    await store.load(filter: TransactionFilter(accountId: accountId))
-    #expect(store.transactions.count == 2)
-    #expect(store.transactions[0].balance?.quantity == Decimal(97000) / 100)  // After Coffee
-    #expect(store.transactions[1].balance?.quantity == Decimal(100000) / 100)  // After Salary
-
-    // Update Coffee amount to -5000
-    var updated = coffee
-    updated.legs = [
-      TransactionLeg(
-        accountId: accountId,
-        instrument: Instrument.defaultTestInstrument,
-        quantity: Decimal(-5000) / 100,
-        type: .expense
-      )
-    ]
-    await store.update(updated)
-
-    #expect(store.transactions.count == 2)
-    #expect(store.transactions[0].balance?.quantity == Decimal(95000) / 100)  // After updated Coffee
-    #expect(store.transactions[1].balance?.quantity == Decimal(100000) / 100)  // After Salary (unchanged)
-  }
+  // `testRunningBalancesUpdateAfterAmountChange` was moved to
+  // `TransactionStoreRunningBalanceTests.swift` so this file's
+  // type body stays under the SwiftLint length budget after the
+  // reactive migration's emission-await call was added.
 }

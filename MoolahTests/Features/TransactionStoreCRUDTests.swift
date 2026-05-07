@@ -36,6 +36,7 @@ struct TransactionStoreCRUDTests {
       ]
     )
     _ = await store.create(transaction)
+    try await store.awaitTransactionCount(1)
 
     #expect(store.transactions.count == 1)
     #expect(store.transactions[0].transaction.payee == "Coffee Shop")
@@ -74,6 +75,7 @@ struct TransactionStoreCRUDTests {
     )
 
     let created = await store.create(placeholder)
+    try await store.awaitTransactionCount(1)
 
     #expect(created?.id == placeholderId)
     #expect(store.transactions.count == 1)
@@ -116,6 +118,10 @@ struct TransactionStoreCRUDTests {
       )
     ]
     await store.update(updated)
+    try await store.waitForNextEmission(
+      matching: { $0.transactions.first?.transaction.payee == "Fancy Coffee" },
+      description: "update is observable"
+    )
 
     #expect(store.transactions.count == 1)
     #expect(store.transactions[0].transaction.payee == "Fancy Coffee")
@@ -149,6 +155,7 @@ struct TransactionStoreCRUDTests {
     #expect(store.transactions.count == 1)
 
     await store.delete(id: transaction.id)
+    try await store.awaitTransactionCount(0)
 
     #expect(store.transactions.isEmpty)
     #expect(store.error == nil)
@@ -179,6 +186,7 @@ struct TransactionStoreCRUDTests {
       ]
     )
     _ = await store.create(transaction)
+    try await store.awaitTransactionCount(1)
     #expect(store.transactions.count == 1)
 
     // Update
@@ -192,104 +200,19 @@ struct TransactionStoreCRUDTests {
       )
     ]
     await store.update(modified)
+    try await store.waitForNextEmission(
+      matching: { $0.transactions.first?.displayAmount?.quantity == Decimal(110000) / 100 },
+      description: "update is observable"
+    )
     #expect(store.transactions.count == 1)
     #expect(store.transactions[0].displayAmount?.quantity == Decimal(110000) / 100)
 
     // Delete
     await store.delete(id: transaction.id)
+    try await store.awaitTransactionCount(0)
     #expect(store.transactions.isEmpty)
   }
 
-  @Test
-  func testRunningBalancesUpdateAfterCreate() async throws {
-    let existing = Transaction(
-      date: try TransactionStoreTestSupport.makeDate("2024-01-01"),
-      payee: "Initial",
-      legs: [
-        TransactionLeg(
-          accountId: accountId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(100000) / 100,
-          type: .income
-        )
-      ]
-    )
-    let (backend, database) = try TestBackend.create()
-    TestBackend.seed(transactions: [existing], in: database)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
-
-    await store.load(filter: TransactionFilter(accountId: accountId))
-    #expect(store.transactions[0].balance?.quantity == Decimal(100000) / 100)
-
-    // Add a newer expense
-    let expense = Transaction(
-      date: try TransactionStoreTestSupport.makeDate("2024-01-15"),
-      payee: "Coffee",
-      legs: [
-        TransactionLeg(
-          accountId: accountId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-3000) / 100,
-          type: .expense
-        )
-      ]
-    )
-    _ = await store.create(expense)
-
-    // Newest first: expense (balance 97000), then income (balance 100000)
-    #expect(store.transactions.count == 2)
-    #expect(store.transactions[0].transaction.payee == "Coffee")
-    #expect(store.transactions[0].balance?.quantity == Decimal(97000) / 100)
-    #expect(store.transactions[1].transaction.payee == "Initial")
-    #expect(store.transactions[1].balance?.quantity == Decimal(100000) / 100)
-  }
-
-  @Test
-  func testRunningBalancesUpdateAfterDelete() async throws {
-    let salary = Transaction(
-      date: try TransactionStoreTestSupport.makeDate("2024-01-01"),
-      payee: "Salary",
-      legs: [
-        TransactionLeg(
-          accountId: accountId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(100000) / 100,
-          type: .income
-        )
-      ]
-    )
-    let coffee = Transaction(
-      date: try TransactionStoreTestSupport.makeDate("2024-01-15"),
-      payee: "Coffee",
-      legs: [
-        TransactionLeg(
-          accountId: accountId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-3000) / 100,
-          type: .expense
-        )
-      ]
-    )
-    let (backend, database) = try TestBackend.create()
-    TestBackend.seed(transactions: [salary, coffee], in: database)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
-
-    await store.load(filter: TransactionFilter(accountId: accountId))
-    #expect(store.transactions.count == 2)
-    #expect(store.transactions[0].balance?.quantity == Decimal(97000) / 100)  // After Coffee
-
-    // Delete the expense — balance should revert
-    await store.delete(id: coffee.id)
-    #expect(store.transactions.count == 1)
-    #expect(store.transactions[0].balance?.quantity == Decimal(100000) / 100)  // Only Salary remains
-  }
-
+  // Running-balance recompute tests live in
+  // `TransactionStoreRunningBalanceTests.swift`.
 }
