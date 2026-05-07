@@ -141,12 +141,17 @@ struct WalletAccountHeaderView: View {
       Text("Add an Alchemy key in Crypto preferences to enable sync.")
         .font(.caption)
         .foregroundStyle(.secondary)
-      SettingsLink {
-        Text("Open preferences")
-      }
-      .buttonStyle(.borderless)
-      .controlSize(.small)
-      .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.missingApiKeyHintLink)
+      // `SettingsLink` is macOS-only. iOS users navigate to Crypto
+      // preferences from the app's settings tab; the hint copy alone
+      // is enough on that platform — no inline link.
+      #if os(macOS)
+        SettingsLink {
+          Text("Open preferences")
+        }
+        .buttonStyle(.borderless)
+        .controlSize(.small)
+        .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.missingApiKeyHintLink)
+      #endif
       Spacer()
     }
     .accessibilityElement(children: .combine)
