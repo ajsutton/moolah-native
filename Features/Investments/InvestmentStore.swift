@@ -210,6 +210,16 @@ final class InvestmentStore {
       accountId: account.id, profileCurrency: profileCurrency)
   }
 
+  /// Re-runs `valuatePositions` against the most recently loaded
+  /// account. `ProfileSession` calls this from
+  /// `CryptoTokenStore.onRegistrationsChanged` so a freshly-marked
+  /// `.spam` token drops out of `valuedPositions` without the user
+  /// having to navigate away and back. Issue #790.
+  func revaluateLoadedPositions() async {
+    guard let profileCurrency = loadedHostCurrency else { return }
+    await valuatePositions(profileCurrency: profileCurrency, on: Date())
+  }
+
   func setValue(accountId: UUID, date: Date, value: InstrumentAmount) async {
     error = nil
     do {
@@ -286,14 +296,12 @@ final class InvestmentStore {
     }
   }
 
-  /// Valuate all loaded positions using current market prices.
-  ///
-  /// Per Rule 11 in `guides/INSTRUMENT_CONVERSION_GUIDE.md`: if any
-  /// position's conversion fails, the aggregate `totalPortfolioValue`
-  /// is marked unavailable (`nil`) and `error` is set so the view can
-  /// surface a retry affordance. Per-position `ValuedPosition`s still
-  /// render individually — the failing position appears with a `nil`
-  /// `value` and sibling positions with their successful values.
+  /// Valuate all loaded positions using current market prices. Per
+  /// Rule 11 in `guides/INSTRUMENT_CONVERSION_GUIDE.md`: a failed
+  /// conversion marks the aggregate `totalPortfolioValue` unavailable
+  /// and sets `error`; sibling rows still render with their successful
+  /// values. `.knownZero` positions drop out of `valuedPositions`
+  /// entirely (issue #790).
   func valuatePositions(profileCurrency: Instrument, on date: Date) async {
     var valued: [ValuedPosition] = []
     var total: Decimal = 0
@@ -302,10 +310,12 @@ final class InvestmentStore {
     for position in positions {
       let (entry, outcome) = await valuate(
         position: position, profileCurrency: profileCurrency, on: date)
-      valued.append(entry)
+      if let entry { valued.append(entry) }
       switch outcome {
       case .success(let value):
         total += value
+      case .knownZero:
+        continue
       case .failure(let error):
         if firstFailure == nil { firstFailure = error }
       }
@@ -329,12 +339,15 @@ final class InvestmentStore {
 extension InvestmentStore {
   private enum ValuationOutcome {
     case success(Decimal)
+    /// `.unpriced` / `.spam` crypto source — drop the position from
+    /// `valuedPositions`. Issue #790.
+    case knownZero
     case failure(Error)
   }
 
   private func valuate(
     position: Position, profileCurrency: Instrument, on date: Date
-  ) async -> (ValuedPosition, ValuationOutcome) {
+  ) async -> (ValuedPosition?, ValuationOutcome) {
     if position.instrument.id == profileCurrency.id {
       let entry = ValuedPosition(
         instrument: position.instrument,
@@ -345,20 +358,27 @@ extension InvestmentStore {
       return (entry, .success(position.quantity))
     }
     do {
-      let value = try await conversionService.convert(
-        position.quantity, from: position.instrument, to: profileCurrency, on: date
-      )
-      let unit =
-        position.quantity == 0
-        ? nil
-        : InstrumentAmount(quantity: value / position.quantity, instrument: profileCurrency)
-      let entry = ValuedPosition(
-        instrument: position.instrument,
-        quantity: position.quantity,
-        unitPrice: unit,
-        costBasis: nil,
-        value: InstrumentAmount(quantity: value, instrument: profileCurrency))
-      return (entry, .success(value))
+      let amount = InstrumentAmount(
+        quantity: position.quantity, instrument: position.instrument)
+      let result = try await conversionService.convertResult(
+        amount, to: profileCurrency, on: date)
+      switch result {
+      case .knownZero:
+        return (nil, .knownZero)
+      case .value(let converted):
+        let value = converted.quantity
+        let unit =
+          position.quantity == 0
+          ? nil
+          : InstrumentAmount(quantity: value / position.quantity, instrument: profileCurrency)
+        let entry = ValuedPosition(
+          instrument: position.instrument,
+          quantity: position.quantity,
+          unitPrice: unit,
+          costBasis: nil,
+          value: converted)
+        return (entry, .success(value))
+      }
     } catch {
       logger.warning(
         "Failed to valuate position \(position.instrument.id, privacy: .public): \(error.localizedDescription, privacy: .public)"

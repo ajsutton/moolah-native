@@ -84,16 +84,25 @@ struct TransactionPage: Sendable {
 
   /// Outcome of a single per-instrument rate prefetch. Sendable so it can
   /// flow out of a `TaskGroup` child task.
+  ///
+  /// `knownZero` is distinct from `failure`: it means the conversion
+  /// service intentionally resolved the source instrument to a zero
+  /// contribution (e.g. an `.unpriced` or `.spam` crypto registration —
+  /// see `ConversionResult.knownZero`). A `failure` is a transient
+  /// rate-source outage that must blank the running balance per Rule 11
+  /// of `guides/INSTRUMENT_CONVERSION_GUIDE.md`.
   private enum RatePrefetch: Sendable {
     case rate(Decimal)
+    case knownZero
     case failure(String)
   }
 
-  /// Fetched rates and per-instrument failures, keyed by source instrument.
-  /// Returned by `prefetchRates(...)` and consumed by
-  /// `accumulateRunningBalances(...)`.
+  /// Fetched rates, intentional-zero instruments, and per-instrument
+  /// failures, keyed by source instrument. Returned by `prefetchRates(...)`
+  /// and consumed by `accumulateRunningBalances(...)`.
   private struct PrefetchedRates {
     let rates: [Instrument: Decimal]
+    let knownZero: Set<Instrument>
     let failures: [Instrument: String]
   }
 
@@ -109,38 +118,69 @@ struct TransactionPage: Sendable {
         sources.insert(leg.instrument)
       }
     }
-    if sources.isEmpty { return PrefetchedRates(rates: [:], failures: [:]) }
+    if sources.isEmpty {
+      return PrefetchedRates(rates: [:], knownZero: [], failures: [:])
+    }
 
     let asOf = Date()
     return await withTaskGroup(of: (Instrument, RatePrefetch).self) { group in
       for instrument in sources {
         group.addTask {
-          do {
-            let rate = try await conversionService.convert(
-              Decimal(1), from: instrument, to: targetInstrument, on: asOf)
-            return (instrument, .rate(rate))
-          } catch {
-            transactionLogger.warning(
-              """
-              Failed to fetch rate \(instrument.id, privacy: .public) → \
-              \(targetInstrument.id, privacy: .public): \
-              \(error.localizedDescription, privacy: .public). Every \
-              transaction with a \(instrument.id, privacy: .public) leg will \
-              have an unavailable running balance until the rate source recovers.
-              """)
-            return (instrument, .failure(error.localizedDescription))
-          }
+          let outcome = await fetchOneRate(
+            for: instrument,
+            targetInstrument: targetInstrument,
+            asOf: asOf,
+            conversionService: conversionService)
+          return (instrument, outcome)
         }
       }
       var rates: [Instrument: Decimal] = [:]
+      var knownZero: Set<Instrument> = []
       var failures: [Instrument: String] = [:]
       for await (instrument, outcome) in group {
         switch outcome {
         case .rate(let rate): rates[instrument] = rate
+        case .knownZero: knownZero.insert(instrument)
         case .failure(let description): failures[instrument] = description
         }
       }
-      return PrefetchedRates(rates: rates, failures: failures)
+      return PrefetchedRates(rates: rates, knownZero: knownZero, failures: failures)
+    }
+  }
+
+  /// Fetch the conversion outcome for a single source instrument. Use
+  /// `convertResult` rather than `convert` so the `.knownZero` outcome
+  /// (an `.unpriced` / `.spam` crypto token) is preserved as an
+  /// intentional zero rather than being misapplied as a real rate or
+  /// thrown as a failure. Issue #790: a spam ERC-20 with a copied
+  /// ticker must contribute zero to the running balance, not poison it.
+  private static func fetchOneRate(
+    for instrument: Instrument,
+    targetInstrument: Instrument,
+    asOf: Date,
+    conversionService: InstrumentConversionService
+  ) async -> RatePrefetch {
+    do {
+      let result = try await conversionService.convertResult(
+        InstrumentAmount(quantity: Decimal(1), instrument: instrument),
+        to: targetInstrument,
+        on: asOf)
+      switch result {
+      case .value(let amount):
+        return .rate(amount.quantity)
+      case .knownZero:
+        return .knownZero
+      }
+    } catch {
+      transactionLogger.warning(
+        """
+        Failed to fetch rate \(instrument.id, privacy: .public) → \
+        \(targetInstrument.id, privacy: .public): \
+        \(error.localizedDescription, privacy: .public). Every \
+        transaction with a \(instrument.id, privacy: .public) leg will \
+        have an unavailable running balance until the rate source recovers.
+        """)
+      return .failure(error.localizedDescription)
     }
   }
 
@@ -212,6 +252,12 @@ struct TransactionPage: Sendable {
   /// Apply prefetched rates to each leg of `transaction`. Returns
   /// `.failure` on the first leg whose source instrument has no rate
   /// (failed prefetch) so the caller can mark the row unavailable.
+  ///
+  /// Legs whose source instrument resolved to `.knownZero` (an
+  /// `.unpriced` / `.spam` crypto registration) fold to a zero
+  /// `convertedAmount` in the target instrument — the leg keeps its
+  /// native quantity for display but contributes zero to the running
+  /// balance, per issue #790.
   private static func convert(
     legsOf transaction: Transaction,
     targetInstrument: Instrument,
@@ -225,6 +271,9 @@ struct TransactionPage: Sendable {
       } else if let rate = prefetched.rates[leg.instrument] {
         let amount = InstrumentAmount(
           quantity: leg.amount.quantity * rate, instrument: targetInstrument)
+        legs.append(ConvertedTransactionLeg(leg: leg, convertedAmount: amount))
+      } else if prefetched.knownZero.contains(leg.instrument) {
+        let amount = InstrumentAmount.zero(instrument: targetInstrument)
         legs.append(ConvertedTransactionLeg(leg: leg, convertedAmount: amount))
       } else {
         let description =

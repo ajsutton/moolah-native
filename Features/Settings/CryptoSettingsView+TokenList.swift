@@ -35,25 +35,11 @@ extension CryptoSettingsView {
       .frame(maxWidth: .infinity)
     } else {
       ForEach(pricedRegistrations) { registration in
-        CryptoRegistrationRow(registration: registration)
-          .accessibilityIdentifier(
-            UITestIdentifiers.CryptoSettings.registrationRow(registration.id)
-          )
-          .contextMenu {
-            Button(role: .destructive) {
-              Task { await store.removeRegistration(registration) }
-            } label: {
-              Label("Remove", systemImage: "trash")
-            }
-          }
-      }
-      .onDelete { indexSet in
-        let visible = pricedRegistrations
-        Task {
-          for index in indexSet {
-            await store.removeRegistration(visible[index])
-          }
-        }
+        // `showsContractAddress: true` — wallets with copied tickers
+        // (issue #790) need the truncated address visible so a
+        // legitimate token can be told apart from a spam contract
+        // claiming the same symbol.
+        registrationRow(for: registration)
       }
     }
   }
@@ -79,6 +65,44 @@ extension CryptoSettingsView {
   /// inbox + spam views can also read.
   var pricedRegistrations: [CryptoRegistration] {
     store.registrations.filter { $0.pricingStatus == .priced }
+  }
+
+  /// One row in the Registered Tokens list, with an inline ellipsis
+  /// `Menu` carrying both per-row actions. The earlier `.contextMenu`
+  /// + `.swipeActions` + `.onDelete` stack triggered a SwiftUI
+  /// `ForEachState` crash on macOS — a single inline `Menu` is the
+  /// proven primitive used elsewhere in the app's Form-style preferences.
+  ///
+  /// "Mark as Spam" calls the same `setStatus(.spam, for:)` plumbing
+  /// the Discovered Tokens inbox uses. It exists here so the user can
+  /// un-poison registrations the pre-#790 broken resolver wrote as
+  /// `.priced` with a spoofed mapping.
+  @ViewBuilder
+  func registrationRow(for registration: CryptoRegistration) -> some View {
+    HStack {
+      CryptoRegistrationRow(registration: registration, showsContractAddress: true)
+      Menu {
+        Button(role: .destructive) {
+          Task { await store.setStatus(.spam, for: registration) }
+        } label: {
+          Label("Mark as Spam", systemImage: "trash")
+        }
+        .accessibilityIdentifier(
+          UITestIdentifiers.CryptoSettings.markSpamButton(registration.id))
+        Button(role: .destructive) {
+          Task { await store.removeRegistration(registration) }
+        } label: {
+          Label("Remove", systemImage: "minus.circle")
+        }
+      } label: {
+        Image(systemName: "ellipsis.circle")
+          .accessibilityLabel("Token actions")
+      }
+      .menuStyle(.borderlessButton)
+      .fixedSize()
+    }
+    .accessibilityIdentifier(
+      UITestIdentifiers.CryptoSettings.registrationRow(registration.id))
   }
 
   // MARK: - CoinGecko API Key

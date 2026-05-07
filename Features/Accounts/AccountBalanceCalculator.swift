@@ -93,6 +93,11 @@ struct AccountBalanceCalculator {
   /// zero when none is set); every other account sums positions directly to
   /// `target` in one pass — avoiding the double-conversion a naive
   /// `positions → account instrument → target` implementation would incur.
+  ///
+  /// Positions whose conversion resolves to `.knownZero` (an `.unpriced`
+  /// / `.spam` crypto registration) contribute zero to the total; a
+  /// thrown conversion error still propagates as before, marking the
+  /// total unavailable per Rule 11. See issue #790.
   func totalConverted(
     for accounts: [Account],
     to target: Instrument,
@@ -118,8 +123,11 @@ struct AccountBalanceCalculator {
         if position.amount.instrument == target {
           total += position.amount
         } else {
-          total += try await conversionService.convertAmount(
+          let result = try await conversionService.convertResult(
             position.amount, to: target, on: date)
+          if case .value(let converted) = result {
+            total += converted
+          }
         }
         try Task.checkCancellation()
       }
@@ -131,6 +139,11 @@ struct AccountBalanceCalculator {
   /// accounts in `recordedValue` mode return the externally-provided
   /// snapshot (or zero when absent); all other accounts sum every position
   /// converted via the conversion service.
+  ///
+  /// Positions whose conversion resolves to `.knownZero` (an `.unpriced`
+  /// / `.spam` crypto registration) contribute zero to the displayed
+  /// balance; a thrown conversion error still propagates so the balance
+  /// is marked unavailable per Rule 11. See issue #790.
   ///
   /// Pass `date` to share a conversion timestamp across a multi-account
   /// pass; defaults to `Date()` for one-shot callers.
@@ -145,8 +158,11 @@ struct AccountBalanceCalculator {
       if position.amount.instrument == account.instrument {
         total += position.amount
       } else {
-        total += try await conversionService.convertAmount(
+        let result = try await conversionService.convertResult(
           position.amount, to: account.instrument, on: date)
+        if case .value(let converted) = result {
+          total += converted
+        }
       }
       try Task.checkCancellation()
     }

@@ -114,7 +114,12 @@ extension TransactionListView {
           filter: activeFilter)
       }
     }
-    .task(id: positions) {
+    // Composite id: re-fire when the raw positions list changes, AND
+    // when the registry version bumps (e.g. user marks a token as
+    // `.spam`). Without the version dimension a spam flip in
+    // preferences leaves a stale `valuedPositions` on screen until the
+    // user navigates away and back. Issue #790.
+    .task(id: PositionsTaskKey(positions: positions, registrationsVersion: registrationsVersion)) {
       guard let conversionService, !positions.isEmpty else {
         positionsInput = nil
         return
@@ -291,4 +296,13 @@ struct TransactionListCSVImportAddons: ViewModifier {
         return !urls.isEmpty
       }
   }
+}
+
+/// Composite id for the position-valuation `.task(id:)`. Rebuilds the
+/// valued rows when either the raw positions list changes OR the
+/// crypto registry version bumps (a `.spam` flip in preferences).
+/// Issue #790.
+private struct PositionsTaskKey: Hashable {
+  let positions: [Position]
+  let registrationsVersion: Int
 }

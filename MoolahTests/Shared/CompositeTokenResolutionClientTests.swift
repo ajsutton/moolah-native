@@ -143,6 +143,70 @@ struct CompositeTokenResolutionClientTests {
     #expect(result.cryptocompareSymbol == "UNI")
   }
 
+  /// Issue #790: a spam ERC-20 whose user-supplied ticker collides with a
+  /// real token on Binance must NOT inherit that token's `<TICKER>USDT`
+  /// pair. The resolver's contract-based providers (CryptoCompare's
+  /// SmartContractAddress index, CoinGecko's `(platform, contract)`
+  /// lookup) are the only authority for ERC-20 identity; ticker-only
+  /// matches against Binance are forbidden.
+  @Test
+  func resolve_spamErc20WithCopiedTicker_doesNotInheritBinancePair() async throws {
+    // CryptoCompare lists the legitimate OP contract on OP-mainnet. The
+    // spam contract is intentionally absent.
+    let ccCoinList = Data(
+      """
+      {
+          "Data": {
+              "OP": {
+                  "Symbol": "OP",
+                  "CoinName": "Optimism",
+                  "SmartContractAddress": "0x4200000000000000000000000000000000000042"
+              }
+          }
+      }
+      """.utf8)
+
+    // Binance lists OPUSDT — the legitimate trading pair the spam token
+    // must not inherit.
+    let binanceInfo = Data(
+      """
+      {
+          "symbols": [
+              { "symbol": "OPUSDT", "baseAsset": "OP", "quoteAsset": "USDT", "status": "TRADING" }
+          ]
+      }
+      """.utf8)
+
+    let client = CompositeTokenResolutionClient(
+      coinListData: ccCoinList,
+      exchangeInfoData: binanceInfo,
+      coinGeckoApiKey: nil
+    )
+
+    // The spam contract from the issue's repro wallet, sharing ticker
+    // "OP" with the legitimate token.
+    let spam = try await client.resolve(
+      chainId: 10,
+      contractAddress: "0x7e087b1c173441f6c96b00231c1eab9e59f9a5a7",
+      symbol: "OP",
+      isNative: false
+    )
+    #expect(spam.cryptocompareSymbol == nil)
+    #expect(spam.binanceSymbol == nil)
+    #expect(spam.coingeckoId == nil)
+    #expect(!spam.hasAnyProviderId)
+
+    // Sanity: the legitimate contract still resolves cleanly.
+    let real = try await client.resolve(
+      chainId: 10,
+      contractAddress: "0x4200000000000000000000000000000000000042",
+      symbol: "OP",
+      isNative: false
+    )
+    #expect(real.cryptocompareSymbol == "OP")
+    #expect(real.binanceSymbol == "OPUSDT")
+  }
+
   @Test
   func resolve_nativeOnDifferentChainsAreDistinct() async throws {
     // Resolving native tokens on two different chainIds should not conflate them —

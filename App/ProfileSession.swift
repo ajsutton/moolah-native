@@ -227,11 +227,24 @@ final class ProfileSession: Identifiable {
   /// Wires the investment-store -> account-store callback. The spawned
   /// Task is appended to `crossStoreUpdateTasks` so `cleanupSync` can
   /// cancel in-flight updates if the session is torn down.
+  ///
+  /// Also wires the crypto-token-store -> investment-store hook: when a
+  /// registration's `pricingStatus` flips (e.g. user marks a token as
+  /// `.spam` from preferences), the loaded investment account
+  /// re-valuates so the spam position drops out of `valuedPositions`
+  /// without the user having to navigate away and back. Issue #790.
   private func wireCrossStoreSideEffects() {
     let accountStore = self.accountStore
     self.investmentStore.onInvestmentValueChanged = { [weak self] accountId, latestValue in
       let task = Task { @MainActor in
         await accountStore.updateInvestmentValue(accountId: accountId, value: latestValue)
+      }
+      self?.crossStoreUpdateTasks.append(task)
+    }
+    let investmentStore = self.investmentStore
+    self.cryptoTokenStore?.onRegistrationsChanged = { [weak self] in
+      let task = Task { @MainActor in
+        await investmentStore.revaluateLoadedPositions()
       }
       self?.crossStoreUpdateTasks.append(task)
     }

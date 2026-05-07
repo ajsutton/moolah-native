@@ -31,7 +31,10 @@ struct CompositeTokenResolutionClient: TokenResolutionClient, Sendable {
   ) async throws -> TokenResolutionResult {
     var result = TokenResolutionResult()
 
-    // 1. CryptoCompare coin list
+    // 1. CryptoCompare coin list — natives match by symbol; ERC-20s match
+    //    only by `(chainId, contractAddress)`. The user-supplied ticker is
+    //    untrusted for ERC-20s (a spam contract can claim any ticker), so a
+    //    ticker-only fallback is intentionally excluded.
     let coinListData = try await fetchCoinListData()
     if isNative, let symbol {
       let nativeSymbols = try CryptoCompareClient.parseNativeSymbols(coinListData)
@@ -47,16 +50,9 @@ struct CompositeTokenResolutionClient: TokenResolutionClient, Sendable {
       }
     }
 
-    // 2. Binance exchange info
-    let exchangeInfoData = try await fetchExchangeInfoData()
-    let pairs = try BinanceClient.parseExchangeInfoResponse(exchangeInfoData)
-    let pairSymbol = (result.resolvedSymbol ?? symbol ?? "").uppercased()
-    let candidate = "\(pairSymbol)USDT"
-    if pairs.contains(candidate) {
-      result.binanceSymbol = candidate
-    }
-
-    // 3. CoinGecko (only with API key, only for contract tokens)
+    // 2. CoinGecko — contract-based lookup for ERC-20s only. Runs before
+    //    Binance so a CG-confirmed symbol can authorise the Binance pair
+    //    attribution (issue #790).
     if let apiKey = coinGeckoApiKey, !apiKey.isEmpty, !isNative, let contractAddress {
       do {
         let platformMapping = try await fetchAssetPlatforms(apiKey: apiKey)
@@ -77,6 +73,26 @@ struct CompositeTokenResolutionClient: TokenResolutionClient, Sendable {
         }
       } catch {
         // CoinGecko resolution is best-effort
+      }
+    }
+
+    // 3. Binance exchange info. Binance has no notion of `(chainId,
+    //    contractAddress)`, so for ERC-20s we only attempt the lookup when
+    //    a contract-based provider (CryptoCompare or CoinGecko) has
+    //    already confirmed the symbol's identity for this exact contract.
+    //    Without that gate, a spam ERC-20 with a copied ticker (e.g. a
+    //    fake "OP" on OP-mainnet) inherits the legitimate token's
+    //    `OPUSDT` mapping and poisons the running balance — see issue
+    //    #790. Native tokens may fall back to the input symbol because
+    //    `(chainId, isNative)` already pins identity.
+    let pairSymbolBase: String? =
+      isNative ? (result.resolvedSymbol ?? symbol) : result.resolvedSymbol
+    if let baseSymbol = pairSymbolBase?.uppercased(), !baseSymbol.isEmpty {
+      let exchangeInfoData = try await fetchExchangeInfoData()
+      let pairs = try BinanceClient.parseExchangeInfoResponse(exchangeInfoData)
+      let candidate = "\(baseSymbol)USDT"
+      if pairs.contains(candidate) {
+        result.binanceSymbol = candidate
       }
     }
 
