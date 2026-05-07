@@ -132,10 +132,13 @@ struct ProfileSessionTests {
     #expect(!plan.contains(.categories))
   }
 
-  @Test("CategoryRecord change reloads only the category store")
-  func categoryRecordReloadsCategories() {
+  @Test("CategoryRecord change does NOT enqueue a category reload")
+  func categoryRecordDoesNotReloadCategories() {
+    // CategoryStore is reactive — `CategoryRepository.observeAll()` re-emits
+    // when category rows change, so the legacy `.categories` reload path is
+    // intentionally not taken.
     let plan = ProfileSession.storesToReload(for: [CategoryRow.recordType])
-    #expect(plan == .categories)
+    #expect(plan.isEmpty)
   }
 
   @Test("EarmarkRecord change does NOT enqueue an earmark reload")
@@ -168,17 +171,21 @@ struct ProfileSessionTests {
     #expect(plan.isEmpty)
   }
 
-  @Test("Mixed record types combine reload plans (accounts/earmarks excluded — reactive)")
+  @Test("Mixed record types combine reload plans (reactive stores excluded)")
   func mixedRecordTypesCombineReloadPlans() {
     let plan = ProfileSession.storesToReload(
       for: [
         TransactionLegRow.recordType,
         CategoryRow.recordType,
+        ImportRuleRow.recordType,
       ])
-    // AccountStore and EarmarkStore are reactive — neither is in the
-    // reload plan, even when leg / transaction / earmark changes arrive.
+    // AccountStore, EarmarkStore, and CategoryStore are all reactive —
+    // none of them appear in the reload plan, even when leg /
+    // transaction / earmark / category changes arrive. Only the
+    // still-imperative `.importRules` slot remains.
     #expect(!plan.contains(.accounts))
     #expect(!plan.contains(.earmarks))
-    #expect(plan.contains(.categories))
+    #expect(!plan.contains(.categories))
+    #expect(plan.contains(.importRules))
   }
 }

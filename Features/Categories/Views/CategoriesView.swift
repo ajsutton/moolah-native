@@ -158,13 +158,6 @@ struct CategoriesView: View {
     #endif
     .profileNavigationTitle("Categories")
     .toolbar {
-      if categoryStore.isLoading && !categoryStore.categories.roots.isEmpty {
-        ToolbarItem(placement: .automatic) {
-          ProgressView()
-            .controlSize(.small)
-            .accessibilityLabel("Refreshing categories")
-        }
-      }
       ToolbarItem(placement: .primaryAction) {
         Button {
           showCreateSheet = true
@@ -173,17 +166,13 @@ struct CategoriesView: View {
         }
       }
     }
-    .task {
-      await categoryStore.load()
-    }
-    .refreshable {
-      await categoryStore.load()
-    }
+    // No `.task { categoryStore.load() }` — the reactive store
+    // subscribes to `repository.observeAll()` in init. No
+    // `.refreshable` — pull-to-refresh would be a no-op against a live
+    // observation.
     .searchable(text: $searchText, prompt: "Search categories")
     .overlay {
-      if categoryStore.isLoading && categoryStore.categories.roots.isEmpty {
-        ProgressView()
-      } else if !categoryStore.isLoading && categoryStore.categories.roots.isEmpty {
+      if categoryStore.categories.roots.isEmpty {
         ContentUnavailableView(
           "No Categories",
           systemImage: "tag",
@@ -296,6 +285,7 @@ private struct CreateCategorySheet: View {
     ] {
       _ = try? await backend.categories.create(cat)
     }
-    await store.load()
+    // CategoryStore is reactive — it'll see the seeded categories via
+    // `observeAll()` without an explicit load() call.
   }
 }

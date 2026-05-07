@@ -22,11 +22,11 @@ struct AutomationServiceTransactionTests {
       Issue.record("expected .ready")
       throw OpenSessionFailed()
     }
-    // AccountStore and EarmarkStore are reactive — wait for the first
-    // emission so any pre-seeded rows are visible.
+    // AccountStore, EarmarkStore, and CategoryStore are all reactive
+    // — wait for the first emission so any pre-seeded rows are visible.
     try? await session.accountStore.waitForFirstEmission()
     try? await session.earmarkStore.waitForFirstEmission()
-    await session.categoryStore.load()
+    try? await session.categoryStore.waitForFirstEmission()
     let service = AutomationService(sessionManager: sessionManager)
     return (service, session)
   }

@@ -14,20 +14,19 @@ extension ProfileSession {
   /// Exposed as a pure static function so the reload-mapping policy can be
   /// unit-tested without driving the debounced async task.
   ///
-  /// AccountStore and EarmarkStore are reactive — they subscribe to their
-  /// repositories' `observeAll()` streams in `init`, so account /
-  /// transaction / transaction-leg / earmark / earmark-budget-item
-  /// changes propagate without an explicit reload entry here.
+  /// AccountStore, EarmarkStore, and CategoryStore are reactive — they
+  /// subscribe to their repositories' `observeAll()` streams in `init`,
+  /// so account / transaction / transaction-leg / earmark /
+  /// earmark-budget-item / category changes propagate without an
+  /// explicit reload entry here.
   static func storesToReload(for changedTypes: Set<String>) -> StoreReloadPlan {
     var plan: StoreReloadPlan = []
-    // .accounts and .earmarks no longer needed — both stores are reactive.
-    // Account / Transaction / TransactionLeg / Earmark / EarmarkBudgetItem
-    // changes propagate via AccountRepository.observeAll() and
-    // EarmarkRepository.observeAll(), with rate-cache changes folded in
-    // via InstrumentConversionService.observeRates().
-    if changedTypes.contains(CategoryRow.recordType) {
-      plan.insert(.categories)
-    }
+    // .accounts, .earmarks, and .categories no longer needed — all
+    // three stores are reactive. Account / Transaction / TransactionLeg
+    // / Earmark / EarmarkBudgetItem / Category changes propagate via
+    // AccountRepository.observeAll() / EarmarkRepository.observeAll()
+    // / CategoryRepository.observeAll(), with rate-cache changes folded
+    // in via InstrumentConversionService.observeRates().
     if changedTypes.contains(ImportRuleRow.recordType) {
       plan.insert(.importRules)
     }

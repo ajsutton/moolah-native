@@ -46,14 +46,10 @@ extension ProfileSession {
       let reloadStart = ContinuousClock.now
       logger.debug("Reloading stores after CloudKit sync: \(types)")
       let plan = Self.storesToReload(for: types)
-      // AccountStore and EarmarkStore are reactive — they propagate
-      // remote sync writes via their observeAll() subscriptions, so
-      // `.accounts` and `.earmarks` are intentionally absent from the
-      // reload plan.
-      guard !Task.isCancelled else { return }
-      if plan.contains(.categories) {
-        await categoryStore.reloadFromSync()
-      }
+      // AccountStore, EarmarkStore, and CategoryStore are reactive —
+      // they propagate remote sync writes via their observeAll()
+      // subscriptions, so `.accounts`, `.earmarks`, and `.categories`
+      // are intentionally absent from the reload plan.
       guard !Task.isCancelled else { return }
       if plan.contains(.importRules) {
         await importRuleStore.reloadFromSync()
@@ -97,9 +93,11 @@ extension ProfileSession {
     // Tear down reactive observation. MUST run AFTER any GRDB wipes so
     // the observation emits the empty-state transition before the task
     // is cancelled. See `signOutTeardownOrdering` in
-    // `AccountStoreSyncRefreshTests` / `EarmarkStoreSyncRefreshTests`.
+    // `AccountStoreSyncRefreshTests` / `EarmarkStoreSyncRefreshTests` /
+    // `CategoryStoreSyncRefreshTests`.
     accountStore.stopObserving()
     earmarkStore.stopObserving()
+    categoryStore.stopObserving()
   }
 
   // MARK: - Profile Update

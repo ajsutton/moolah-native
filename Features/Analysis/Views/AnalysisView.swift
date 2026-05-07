@@ -191,8 +191,7 @@ struct ForecastPicker: View {
 
 @MainActor
 private func seedAnalysisPreview(
-  backend: any BackendProvider,
-  categoryStore: CategoryStore
+  backend: any BackendProvider
 ) async {
   let account = Account(id: UUID(), name: "Checking", type: .bank, instrument: .AUD)
   _ = try? await backend.accounts.create(account)
@@ -215,7 +214,8 @@ private func seedAnalysisPreview(
           )
         ]))
   }
-  await categoryStore.load()
+  // CategoryStore is reactive — it'll see the seeded category via
+  // `observeAll()` without an explicit load() call.
 }
 
 #Preview {
@@ -242,7 +242,7 @@ private func seedAnalysisPreview(
       .environment(earmarkStore)
       .environment(transactionStore)
       .task {
-        await seedAnalysisPreview(backend: backend, categoryStore: categoryStore)
+        await seedAnalysisPreview(backend: backend)
       }
   }
 }

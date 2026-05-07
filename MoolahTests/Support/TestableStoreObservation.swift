@@ -194,3 +194,10 @@ extension EarmarkStore: TestableStoreObservation {
   /// snapshot is the store itself.
   var snapshot: EarmarkStore { self }
 }
+
+extension CategoryStore: TestableStoreObservation {
+  var observationTicks: AsyncStream<Void> { testObservationTickStream }
+  /// Tests assert directly against published `@Observable` state; the
+  /// snapshot is the store itself.
+  var snapshot: CategoryStore { self }
+}
