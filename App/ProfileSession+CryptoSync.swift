@@ -9,7 +9,13 @@ extension ProfileSession {
   /// strings match `plans/2026-05-05-crypto-wallet-import-design.md`
   /// §"API key management" so the eventual write side targets the same
   /// keychain entry.
-  static func resolveAlchemyApiKey() -> String? {
+  ///
+  /// `nonisolated` so it can be called from the `@Sendable` closure that
+  /// `LiveAlchemyClient` uses to resolve the key per-request — the work
+  /// itself is just a synchronous Keychain read, so it doesn't need
+  /// `@MainActor` isolation that the surrounding `ProfileSession`
+  /// extension inherits.
+  nonisolated static func resolveAlchemyApiKey() -> String? {
     let store = KeychainStore(
       service: "com.moolah.api-keys", account: "alchemy", synchronizable: true)
     return try? store.restoreString()
@@ -57,9 +63,14 @@ extension ProfileSession {
     guard let registry else { return nil }
 
     let rateLimiter = RateLimiter(permitsPerSecond: 25)
-    let apiKey = resolveAlchemyApiKey() ?? ""
+    // Pass a closure rather than a resolved value so a key added in the
+    // settings UI *after* this wiring is built is visible on the next
+    // sync cycle, and so the key is never retained on the client itself
+    // — it lives only on the local stack frame of each in-flight
+    // request.
     let alchemy: any AlchemyClient = LiveAlchemyClient(
-      apiKey: apiKey, rateLimiter: rateLimiter)
+      apiKeyProvider: { ProfileSession.resolveAlchemyApiKey() },
+      rateLimiter: rateLimiter)
     let discovery = CryptoTokenDiscoveryService(
       registry: registry, resolver: cryptoPriceService, alchemy: alchemy)
     let importOriginFactory: @Sendable (UUID) -> ImportOrigin = { accountId in

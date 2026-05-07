@@ -78,23 +78,32 @@ extension AlchemyTokenMetadata {
 /// addresses → `.private`; the API key is never logged.
 struct LiveAlchemyClient: AlchemyClient {
   private let session: URLSession
-  private let apiKey: String
+  /// Closure that yields the current Alchemy API key, or `nil` when the
+  /// keychain has none. Resolved per-request inside each public method
+  /// so a key added in settings *after* the client was constructed is
+  /// visible on the next call, and so the client never retains the key
+  /// in an instance-level field. The resolved key only lives in the
+  /// local stack frame of the in-flight request.
+  private let apiKeyProvider: @Sendable () -> String?
   private let rateLimiter: RateLimiter
   private let logger: Logger
 
   /// - Parameters:
   ///   - session: `URLSession` for HTTP requests. Default is `.shared`;
   ///     tests inject an ephemeral session backed by `URLProtocol`.
-  ///   - apiKey: Alchemy API key. Never logged.
+  ///   - apiKeyProvider: Closure invoked at the start of every network
+  ///     method. Reads the keychain on each call so a freshly-added key
+  ///     is visible without rebuilding the client; never caches the
+  ///     value on the struct. Never logged.
   ///   - rateLimiter: Shared `RateLimiter` actor — caller is responsible
   ///     for sizing it to the Alchemy plan in use (25 req/s on free tier).
   init(
     session: URLSession = .shared,
-    apiKey: String,
+    apiKeyProvider: @escaping @Sendable () -> String?,
     rateLimiter: RateLimiter
   ) {
     self.session = session
-    self.apiKey = apiKey
+    self.apiKeyProvider = apiKeyProvider
     self.rateLimiter = rateLimiter
     self.logger = Logger(subsystem: "com.moolah.app", category: "AlchemyClient")
   }
@@ -104,7 +113,7 @@ struct LiveAlchemyClient: AlchemyClient {
     walletAddress: String,
     fromBlock: UInt64
   ) async throws -> [AlchemyTransfer] {
-    try requireApiKey()
+    let apiKey = try resolveApiKey()
     let signpostID = OSSignpostID(log: Signposts.cryptoSync)
     os_signpost(
       .begin,
@@ -126,7 +135,8 @@ struct LiveAlchemyClient: AlchemyClient {
         chain: chain,
         address: walletAddress,
         isFromAddress: true,
-        fromBlock: fromBlock
+        fromBlock: fromBlock,
+        apiKey: apiKey
       )
     )
     transfers.append(
@@ -134,7 +144,8 @@ struct LiveAlchemyClient: AlchemyClient {
         chain: chain,
         address: walletAddress,
         isFromAddress: false,
-        fromBlock: fromBlock
+        fromBlock: fromBlock,
+        apiKey: apiKey
       )
     )
     return transfers
@@ -144,13 +155,13 @@ struct LiveAlchemyClient: AlchemyClient {
     chain: ChainConfig,
     contractAddress: String
   ) async throws -> AlchemyTokenMetadata {
-    try requireApiKey()
+    let apiKey = try resolveApiKey()
     try await rateLimiter.acquire()
     let body = AlchemyJSONRPCRequest<AlchemyJSONRPCParams>(
       method: "alchemy_getTokenMetadata",
       params: .tokenMetadata(contractAddress: contractAddress)
     )
-    let request = try buildRequest(chain: chain, body: body)
+    let request = try buildRequest(chain: chain, body: body, apiKey: apiKey)
     logger.debug(
       "Alchemy token metadata: chain \(chain.chainId, privacy: .public) contract \(contractAddress, privacy: .private)"
     )
@@ -173,7 +184,7 @@ struct LiveAlchemyClient: AlchemyClient {
     chain: ChainConfig,
     hash: String
   ) async throws -> AlchemyTransactionReceipt {
-    try requireApiKey()
+    let apiKey = try resolveApiKey()
     let signpostID = OSSignpostID(log: Signposts.cryptoSync)
     os_signpost(
       .begin,
@@ -194,7 +205,7 @@ struct LiveAlchemyClient: AlchemyClient {
       method: "eth_getTransactionReceipt",
       params: .transactionReceipt(hash: hash)
     )
-    let request = try buildRequest(chain: chain, body: body)
+    let request = try buildRequest(chain: chain, body: body, apiKey: apiKey)
     // Hash is `.private` in logs — pairing a tx hash with the device
     // identifies wallet activity even though the chain itself is public.
     logger.debug(
@@ -228,24 +239,30 @@ struct LiveAlchemyClient: AlchemyClient {
 
   // MARK: - Internals
 
-  /// Pre-flight guard for every public method. The wiring at
-  /// `ProfileSession.makeCryptoSyncWiring` resolves the keychain key
-  /// best-effort and falls back to an empty string when nothing is
-  /// configured; without this guard the empty key would slot into the
-  /// URL path (`…/v2/`), Alchemy would respond 401, and the validator
-  /// would mis-classify the failure as `.invalidApiKey`. Surfacing
-  /// `.missingApiKey` here keeps the wiring's "construct unconditionally"
-  /// pattern intact while telling the user the truth — the key is
-  /// missing, not invalid — without a network round-trip.
-  private func requireApiKey() throws {
-    guard !apiKey.isEmpty else { throw WalletSyncError.missingApiKey }
+  /// Resolves the current API key from the closure provider and rejects
+  /// missing / empty values with `.missingApiKey`. Called at the top of
+  /// every public method; the returned string is held only on the local
+  /// stack frame and passed down to `fetchTransfers` / `buildRequest`.
+  /// The client never stores the resolved value on `self`.
+  ///
+  /// The wiring at `ProfileSession.makeCryptoSyncWiring` reads the
+  /// keychain on each call (rather than at construction) so a key added
+  /// in settings *after* the client was built is visible on the next
+  /// request. Without this freshness guarantee the user sees Sync now
+  /// 401 with a stale empty-string key even after configuring a valid
+  /// one.
+  private func resolveApiKey() throws -> String {
+    let key = apiKeyProvider() ?? ""
+    guard !key.isEmpty else { throw WalletSyncError.missingApiKey }
+    return key
   }
 
   private func fetchTransfers(
     chain: ChainConfig,
     address: String,
     isFromAddress: Bool,
-    fromBlock: UInt64
+    fromBlock: UInt64,
+    apiKey: String
   ) async throws -> [AlchemyTransfer] {
     try await rateLimiter.acquire()
 
@@ -267,7 +284,7 @@ struct LiveAlchemyClient: AlchemyClient {
         )
       )
     )
-    let request = try buildRequest(chain: chain, body: body)
+    let request = try buildRequest(chain: chain, body: body, apiKey: apiKey)
     logger.debug(
       """
       Alchemy getAssetTransfers: chain \(chain.chainId, privacy: .public) \
@@ -308,7 +325,8 @@ struct LiveAlchemyClient: AlchemyClient {
 
   private func buildRequest<Params: Encodable>(
     chain: ChainConfig,
-    body: AlchemyJSONRPCRequest<Params>
+    body: AlchemyJSONRPCRequest<Params>,
+    apiKey: String
   ) throws -> URLRequest {
     let urlString = "https://\(chain.alchemyNetworkSlug).g.alchemy.com/v2/\(apiKey)"
     guard let url = URL(string: urlString) else {
