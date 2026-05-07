@@ -116,7 +116,7 @@ struct AlchemyTransferDecodingTests {
         "asset": null,
         "category": "external",
         "rawContract": {
-          "rawValue": "0x0",
+          "value": "0x0",
           "address": null,
           "decimal": null
         },
@@ -139,6 +139,68 @@ struct AlchemyTransferDecodingTests {
   }
 
   @Test
+  func rawContractValueDecodesFromAlchemyKeyValue() throws {
+    // Regression: the JSON key for the precise integer-units transfer
+    // amount is `value` (inside `rawContract`). An earlier wire format
+    // hand-rolled the key as `rawValue` to match the Swift property
+    // name, which silently produced `rawDecimalValue == nil` against
+    // every real Alchemy response and broke the importer end-to-end —
+    // every transfer dropped at `TransferEventBuilder.scaledQuantity`
+    // with no user-visible error. This test pins the canonical
+    // wire-format key so the regression cannot recur invisibly.
+    let json = Data(
+      """
+      {
+        "blockNum": "0x100",
+        "uniqueId": "0xcafe:log:0",
+        "hash": "0xcafe",
+        "from": "0x1111111111111111111111111111111111111111",
+        "to": "0x2222222222222222222222222222222222222222",
+        "value": 0.5,
+        "asset": "ETH",
+        "category": "external",
+        "rawContract": {
+          "value": "0xb1a2bc2ec50000",
+          "address": null,
+          "decimal": "0x12"
+        },
+        "metadata": { "blockTimestamp": "2024-09-12T12:34:56.000Z" }
+      }
+      """.utf8)
+    let transfer = try JSONDecoder().decode(AlchemyTransfer.self, from: json)
+    #expect(transfer.rawContract.rawDecimalValue == Decimal(0x00b1_a2bc_2ec5_0000))
+    #expect(transfer.rawContract.decimalsValue == 18)
+  }
+
+  @Test
+  func rawContractValueIgnoresLegacyRawValueKey() throws {
+    // Defensive: a fixture or upstream wrapper that still emits the old
+    // `rawValue` key must NOT be silently parsed — otherwise the bug
+    // could hide again behind divergent producer/consumer schemas.
+    let json = Data(
+      """
+      {
+        "blockNum": "0x100",
+        "uniqueId": "0xbabe:log:0",
+        "hash": "0xbabe",
+        "from": "0x1111111111111111111111111111111111111111",
+        "to": "0x2222222222222222222222222222222222222222",
+        "value": null,
+        "asset": null,
+        "category": "external",
+        "rawContract": {
+          "rawValue": "0xb1a2bc2ec50000",
+          "address": null,
+          "decimal": "0x12"
+        },
+        "metadata": { "blockTimestamp": null }
+      }
+      """.utf8)
+    let transfer = try JSONDecoder().decode(AlchemyTransfer.self, from: json)
+    #expect(transfer.rawContract.rawDecimalValue == nil)
+  }
+
+  @Test
   func malformedHexFieldsReturnNilInsteadOfThrowing() throws {
     let json = Data(
       """
@@ -150,7 +212,7 @@ struct AlchemyTransferDecodingTests {
         "to": "0x2",
         "category": "erc20",
         "rawContract": {
-          "rawValue": "0xZZZ",
+          "value": "0xZZZ",
           "address": "0xabc",
           "decimal": "not-hex"
         },

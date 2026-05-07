@@ -59,8 +59,8 @@ struct TransferEventBuilderGasLegTests {
       candidate.transaction.legs.first(where: { $0.type == .transfer }))
     let gasLeg = try #require(
       candidate.transaction.legs.first(where: { $0.type == .expense }))
-    #expect(transferLeg.externalId == "0xeth-send")
-    #expect(gasLeg.externalId == "0xeth-send")
+    #expect(transferLeg.externalId == "0xeth-send:0")
+    #expect(gasLeg.externalId == "0xeth-send:gas")
     #expect(gasLeg.instrument == ChainConfig.ethereum.nativeInstrument)
     #expect(gasLeg.quantity == -Self.expectedFeeEth)
     #expect(gasLeg.accountId == account.id)
@@ -112,7 +112,8 @@ struct TransferEventBuilderGasLegTests {
     #expect(transferLeg.instrument.contractAddress == Self.usdcAddress.lowercased())
     #expect(gasLeg.instrument == ChainConfig.ethereum.nativeInstrument)
     #expect(gasLeg.quantity == -Self.expectedFeeEth)
-    #expect(gasLeg.externalId == "0xerc20-send")
+    #expect(gasLeg.externalId == "0xerc20-send:gas")
+    #expect(transferLeg.externalId == "0xerc20-send:0")
   }
 
   // MARK: - Inbound never gets a gas leg
@@ -221,11 +222,11 @@ struct TransferEventBuilderGasLegTests {
     #expect(built.count == 2)
     let goodCandidate = try #require(
       built.first { candidate in
-        candidate.transaction.legs.contains { $0.externalId == "0xgood" }
+        candidate.transaction.legs.contains { $0.externalId == "0xgood:0" }
       })
     let badCandidate = try #require(
       built.first { candidate in
-        candidate.transaction.legs.contains { $0.externalId == "0xbad" }
+        candidate.transaction.legs.contains { $0.externalId == "0xbad:0" }
       })
     // Good event keeps both legs.
     #expect(goodCandidate.transaction.legs.count == 2)

@@ -48,7 +48,7 @@ struct TransferEventBuilderTests {
     let leg = try #require(candidate.transaction.legs.first)
     #expect(leg.type == .transfer)
     #expect(leg.accountId == account.id)
-    #expect(leg.externalId == "0xeth-send")
+    #expect(leg.externalId == "0xeth-send:0")
     #expect(leg.instrument == ChainConfig.ethereum.nativeInstrument)
     // 1 ETH outbound → -1
     #expect(leg.quantity == Decimal(-1))
@@ -89,7 +89,7 @@ struct TransferEventBuilderTests {
     #expect(candidate.transaction.legs.count == 1)
     let leg = try #require(candidate.transaction.legs.first)
     #expect(leg.type == .transfer)
-    #expect(leg.externalId == "0xerc20-send")
+    #expect(leg.externalId == "0xerc20-send:0")
     #expect(leg.instrument.kind == .cryptoToken)
     #expect(leg.instrument.contractAddress == Self.usdcAddress.lowercased())
     #expect(leg.instrument.decimals == 6)
@@ -123,7 +123,7 @@ struct TransferEventBuilderTests {
     let leg = try #require(candidate.transaction.legs.first)
     #expect(leg.type == .transfer)
     #expect(leg.quantity == Decimal(1))
-    #expect(leg.externalId == "0xreceive")
+    #expect(leg.externalId == "0xreceive:0")
   }
 
   // MARK: - Coincident events on same hash
@@ -145,7 +145,8 @@ struct TransferEventBuilderTests {
       asset: "USDC",
       contractAddress: Self.usdcAddress,
       decimalsHex: "0x6",
-      rawValueHex: "0x5f5e100")
+      rawValueHex: "0x5f5e100",
+      uniqueIdSuffix: "log:5")
     let second = makeAlchemyTransfer(
       hash: "0xcomplex",
       from: Self.counterparty,
@@ -155,7 +156,8 @@ struct TransferEventBuilderTests {
       contractAddress: Self.usdcAddress,
       decimalsHex: "0x6",
       // 25 USDC in raw integer units
-      rawValueHex: "0x17d7840")
+      rawValueHex: "0x17d7840",
+      uniqueIdSuffix: "log:8")
 
     let built = try await TransferEventBuilder().build(
       transfers: [first, second],
@@ -170,7 +172,7 @@ struct TransferEventBuilderTests {
     let candidate = try #require(built.first)
     #expect(candidate.transaction.legs.count == 2)
     let externalIds = Set(candidate.transaction.legs.compactMap(\.externalId))
-    #expect(externalIds == ["0xcomplex"])
+    #expect(externalIds == ["0xcomplex:log:5", "0xcomplex:log:8"])
     let signs = candidate.transaction.legs.map { $0.quantity.sign }
     #expect(signs.contains(.minus))
     #expect(signs.contains(.plus))
@@ -194,7 +196,7 @@ struct TransferEventBuilderTests {
         "asset": null,
         "category": "erc721",
         "rawContract": {
-          "rawValue": "0x0",
+          "value": "0x0",
           "address": "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
           "decimal": null
         },

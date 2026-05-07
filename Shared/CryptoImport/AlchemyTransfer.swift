@@ -16,10 +16,13 @@ import Foundation
 /// - `rawContract.address` — `nil` for native transfers; the ERC-20
 ///   contract address otherwise. Used as part of the instrument key.
 /// - `rawContract.decimal` — token decimals as a 0x-prefixed hex string.
-///   Required to convert `rawValue` into a human-scaled `Decimal`.
-/// - `rawContract.rawValue` — exact integer-units value as a 0x-prefixed
-///   hex string. Source-of-truth for arithmetic; the JSON `value` field
-///   is a lossy IEEE-754 representation that rounds large amounts.
+///   Required to convert the raw value into a human-scaled `Decimal`.
+/// - `rawContract.value` — exact integer-units value as a 0x-prefixed
+///   hex string. Source-of-truth for arithmetic; the top-level `value`
+///   field on the transfer is a lossy IEEE-754 representation that
+///   rounds large amounts. Mapped onto the Swift property `rawValue`
+///   via `CodingKeys` so the local name doesn't shadow the
+///   `RawRepresentable.rawValue` requirement on neighbouring enums.
 /// - `metadata.blockTimestamp` — ISO-8601 timestamp of the block that
 ///   contains this transfer. Used for the transaction date.
 /// - `blockNum` — 0x-prefixed hex block number; persisted as the
@@ -47,7 +50,10 @@ struct AlchemyTransfer: Sendable, Hashable, Decodable {
     /// be missing on native transfers — Alchemy then omits the field.
     let decimal: String?
     /// 0x-prefixed hex of the integer-units transfer amount. Always
-    /// present for transfers Alchemy returns.
+    /// present for transfers Alchemy returns. Decoded from JSON key
+    /// `value` (the wire-format name) but bound to a Swift property
+    /// called `rawValue` to keep call sites unambiguous next to `decimal`
+    /// and to avoid shadowing the IEEE-754 top-level `value` field.
     let rawValue: String?
 
     /// Parses `decimal` from 0x-hex into an `Int`. Returns `nil` if the
@@ -71,6 +77,34 @@ struct AlchemyTransfer: Sendable, Hashable, Decodable {
     /// ISO-8601 block timestamp (e.g. `"2024-09-12T12:34:56.000Z"`).
     let blockTimestamp: String?
   }
+}
+
+extension AlchemyTransfer.RawContract {
+  /// Custom decoder so `rawValue` (the Swift property) reads from the
+  /// `value` JSON key (Alchemy's actual wire-format name). The earlier
+  /// auto-synthesised conformance read JSON key `rawValue`, which is
+  /// what `RawRepresentable` enums use but not what Alchemy emits — so
+  /// every real response decoded with `rawValue == nil` and the
+  /// importer dropped every transfer at
+  /// `TransferEventBuilder.scaledQuantity`. Defined out-of-line so
+  /// `RawContractCodingKeys` lives at file scope and stays inside
+  /// SwiftLint's `nesting` budget (max one level deep).
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: RawContractCodingKeys.self)
+    self.address = try container.decodeIfPresent(String.self, forKey: .address)
+    self.decimal = try container.decodeIfPresent(String.self, forKey: .decimal)
+    self.rawValue = try container.decodeIfPresent(String.self, forKey: .rawValue)
+  }
+}
+
+/// Coding keys for `AlchemyTransfer.RawContract`. Lives at file scope
+/// rather than nested inside the struct so the type-nesting depth
+/// stays at one — SwiftLint's `nesting` rule rejects two-deep nested
+/// types here.
+private enum RawContractCodingKeys: String, CodingKey {
+  case address
+  case decimal
+  case rawValue = "value"
 }
 
 /// Subset of Alchemy's transfer categories we accept.

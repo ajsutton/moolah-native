@@ -13,7 +13,7 @@
         "asset": "USDC",
         "category": "erc20",
         "rawContract": {
-          "rawValue": "0x3b9bca00",
+          "value": "0x3b9bca00",
           "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
           "decimal": "0x6"
         },
@@ -31,7 +31,7 @@
         "asset": "ETH",
         "category": "internal",
         "rawContract": {
-          "rawValue": "0x0",
+          "value": "0x0",
           "address": null,
           "decimal": "0x12"
         },

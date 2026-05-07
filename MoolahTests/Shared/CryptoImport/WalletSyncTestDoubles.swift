@@ -186,7 +186,10 @@ final class RecordingWalletSyncStateRepository: WalletSyncStateRepository, @unch
 /// Constructs an `AlchemyTransfer` with the fields tests inspect — `hash`,
 /// `from`, `to`, `category`, `asset`, contract address / decimals, raw
 /// hex amount. Defaults match a typical native ETH send so cases that
-/// only change one or two fields read concisely.
+/// only change one or two fields read concisely. `uniqueIdSuffix` lets
+/// tests model multiple events on a single hash without colliding on
+/// `uniqueId` (production uses Alchemy's `:log:N` index — tests just
+/// need any distinct suffix per event).
 func makeAlchemyTransfer(
   hash: String,
   from: String,
@@ -197,11 +200,12 @@ func makeAlchemyTransfer(
   decimalsHex: String? = "0x12",  // 18
   rawValueHex: String = "0x0de0b6b3a7640000",  // 1.0 * 10^18
   blockTimestamp: String? = "2024-09-12T12:34:56.000Z",
-  blockNum: String = "0x12d4f0a"
+  blockNum: String = "0x12d4f0a",
+  uniqueIdSuffix: String = "0"
 ) -> AlchemyTransfer {
   AlchemyTransfer(
     hash: hash,
-    uniqueId: "\(hash):0",
+    uniqueId: "\(hash):\(uniqueIdSuffix)",
     from: from,
     to: to,
     category: category,

@@ -13,7 +13,7 @@
         "asset": "VISIT-AIRDROP-SITE.COM",
         "category": "erc20",
         "rawContract": {
-          "rawValue": "0xd3c21bcecceda1000000",
+          "value": "0xd3c21bcecceda1000000",
           "address": "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
           "decimal": "0x12"
         },
@@ -31,7 +31,7 @@
         "asset": "Spam NFT",
         "category": "specialnft",
         "rawContract": {
-          "rawValue": "0x1",
+          "value": "0x1",
           "address": "0xcafebabecafebabecafebabecafebabecafebabe",
           "decimal": null
         },

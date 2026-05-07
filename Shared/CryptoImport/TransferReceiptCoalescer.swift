@@ -137,7 +137,18 @@ enum TransferReceiptCoalescer {
       accountId: accountId,
       instrument: chain.nativeInstrument,
       quantity: -gasFeeNative,
-      externalId: receipt.hash,
+      externalId: Self.gasLegExternalId(hash: receipt.hash),
       type: .expense)
+  }
+
+  /// Builds the gas-leg's `externalId` from the transaction hash. The
+  /// `":gas"` suffix is intentional — every transfer leg already uses
+  /// Alchemy's `uniqueId` (`"<hash>:<category>:<index>"`), so the gas
+  /// leg needs its own tag to share the namespace without colliding
+  /// on the schema's partial unique index `(accountId, externalId)`.
+  /// Exposed so the deduper / merger tests can build the same string
+  /// without re-deriving the format.
+  static func gasLegExternalId(hash: String) -> String {
+    "\(hash):gas"
   }
 }
