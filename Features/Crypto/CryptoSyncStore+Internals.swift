@@ -220,22 +220,19 @@ extension CryptoSyncStore {
   }
 
   /// Hourly stale-check loop. Foreground only — entry/exit is gated by
-  /// `handleScenePhaseChange`. The loop checks `Task.isCancelled`
-  /// immediately after every `Task.sleep` suspension and before
-  /// dispatching the next sync, so a cancelled task exits without
-  /// writing state.
+  /// `handleScenePhaseChange`. `Task.sleep` itself throws on cancellation;
+  /// the explicit `Task.checkCancellation()` between sleep and dispatch
+  /// catches a late cancellation that arrives in the gap so a cancelled
+  /// task exits without leaking a fetch.
   func runTimerLoop() async {
     while !Task.isCancelled {
       do {
         try await Task.sleep(for: timerInterval)
-      } catch is CancellationError {
-        return
+        try Task.checkCancellation()
       } catch {
         return
       }
-      if Task.isCancelled { return }
       await syncStaleAccounts()
-      if Task.isCancelled { return }
     }
   }
 

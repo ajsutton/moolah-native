@@ -30,14 +30,14 @@ final class WalletApplyEngine {
   private let transactions: any TransactionRepository
   private let walletSyncState: any WalletSyncStateRepository
   private let importRules: any WalletImportRulesEngine
-  private let merger: CrossAccountTransferMerger
+  private let merger: any CrossAccountTransferMerger
   private let clock: @Sendable () -> Date
 
   init(
     transactions: any TransactionRepository,
     walletSyncState: any WalletSyncStateRepository,
     importRules: any WalletImportRulesEngine,
-    merger: CrossAccountTransferMerger = CrossAccountTransferMerger(),
+    merger: any CrossAccountTransferMerger = LiveCrossAccountTransferMerger(),
     clock: @Sendable @escaping () -> Date = { Date() }
   ) {
     self.transactions = transactions

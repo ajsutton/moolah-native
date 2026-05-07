@@ -8,13 +8,12 @@ import os
 /// after Stage 6's parallel build TaskGroup has fully completed — no
 /// concurrent path can produce duplicate merged transactions.
 ///
-/// Pure / `Sendable` — no repository writes; no shared state. The single
-/// source of truth for the same-`externalId` channel from
-/// `plans/2026-04-18-transfer-detection-design.md` (Extension B): when
-/// the transfer-detection engine eventually runs, it shares this same
-/// merger rather than reimplementing the predicate.
-struct CrossAccountTransferMerger: Sendable {
-
+/// The protocol exists so tests can substitute a recording wrapper that
+/// asserts the merger ran exactly once with both accounts' candidates,
+/// proving the structural property (apply runs after parallel-build
+/// TaskGroup completion) rather than just the merged-shape outcome. v1
+/// ships `LiveCrossAccountTransferMerger` plus per-test recorders.
+protocol CrossAccountTransferMerger: Sendable {
   /// Returns the input set with same-`externalId` opposing-leg pairs
   /// collapsed into single multi-leg transactions whose legs union both
   /// sides. Gas / fee legs preserved on the merged transaction. Pairs
@@ -27,6 +26,19 @@ struct CrossAccountTransferMerger: Sendable {
   ///     can also pair against legs already persisted on prior cycles.
   ///     The lookup key is the leg's `externalId`. Callers in production
   ///     route this through `TransactionRepository.legs(matchingExternalId:)`.
+  func merge(
+    candidates: [BuiltTransaction],
+    existingLegLookup: @Sendable (_ externalId: String) async throws -> [TransactionLeg]
+  ) async throws -> [BuiltTransaction]
+}
+
+/// Live cross-account merger. Pure / `Sendable` — no repository writes;
+/// no shared state. The single source of truth for the same-`externalId`
+/// channel from `plans/2026-04-18-transfer-detection-design.md`
+/// (Extension B): when the transfer-detection engine eventually runs, it
+/// shares this same merger rather than reimplementing the predicate.
+struct LiveCrossAccountTransferMerger: CrossAccountTransferMerger {
+
   func merge(
     candidates: [BuiltTransaction],
     existingLegLookup: @Sendable (_ externalId: String) async throws -> [TransactionLeg]
