@@ -58,10 +58,6 @@ final class ProfileSession: Identifiable {
   /// (see issue #359). `nil` when idle so the sheet dismisses automatically.
   var activeExport: ActiveExport?
 
-  /// Observer token for sync coordinator notifications. Module-internal
-  /// because `cleanupSync` lives in `ProfileSession+SyncCleanup.swift`.
-  var syncObserverToken: SyncCoordinator.ObserverToken?
-
   /// Stable profile identity captured at init time so the nonisolated
   /// `id` accessor (used by `Identifiable` conformance / SwiftUI diffing)
   /// does not have to read the main-actor-isolated `profile` property.
@@ -76,11 +72,6 @@ final class ProfileSession: Identifiable {
   /// `ProfileSession+DatabaseMaintenance.swift` can log without needing
   /// their own Logger instances.
   let logger = Logger(subsystem: "com.moolah.app", category: "ProfileSession")
-  // Module-internal so `ProfileSession+SyncCleanup.swift` can drive the
-  // debounced reload + cancel the in-flight task on teardown.
-  var syncReloadTask: Task<Void, Never>?
-  var pendingChangedTypes = Set<String>()
-  var lastSyncEventTime: ContinuousClock.Instant?
   /// Background task handle for the once-per-session CoinGecko
   /// `refreshIfStale()` kick-off. Tracked so it can be cancelled in
   /// `cleanupSync(coordinator:)` if the session is torn down before the
@@ -200,23 +191,22 @@ final class ProfileSession: Identifiable {
     self.folderWatcher = importPipeline.watcher
 
     finishInit(
-      syncCoordinator: syncCoordinator,
       cryptoRegistry: registryWiring.registry,
       cryptoPriceService: services.cryptoPrice)
   }
 
   /// Tail of the initialiser — kept as a separate method so `init`
   /// stays under SwiftLint's `function_body_length` threshold. Wires
-  /// the crypto-wallet sync stores, the sync coordinator, and starts
-  /// the hourly `PRAGMA optimize` tick (issue #576).
+  /// the crypto-wallet sync stores and starts the hourly
+  /// `PRAGMA optimize` tick (issue #576).
   ///
-  /// Cross-store side effects between InvestmentStore and AccountStore
-  /// are handled reactively now: AccountStore subscribes to
-  /// `investmentRepository.observeAllValues()` and refreshes its cache
-  /// directly, so a remote-sync write to `investment_value` reaches the
-  /// sidebar without a callback.
+  /// Cross-store propagation is handled reactively: every store
+  /// subscribes to its repository's GRDB `ValueObservation` stream in
+  /// `init`, so remote-sync writes (and local writes) reach views
+  /// without an explicit reload step. The session no longer needs a
+  /// reference to `SyncCoordinator` here — apply still drives GRDB
+  /// writes and the observation streams take it from there.
   private func finishInit(
-    syncCoordinator: SyncCoordinator?,
     cryptoRegistry: (any InstrumentRegistryRepository)?,
     cryptoPriceService: CryptoPriceService
   ) {
@@ -228,7 +218,6 @@ final class ProfileSession: Identifiable {
     self.cryptoTokenDiscovery = cryptoWiring?.discovery
     seedBuiltInCryptoPresets(registry: cryptoRegistry)
     wireCrossStoreSideEffects()
-    registerWithSyncCoordinator(syncCoordinator)
     startPeriodicPragmaOptimize()
   }
 
@@ -274,24 +263,8 @@ final class ProfileSession: Identifiable {
     }
   }
 
-  /// Registers the session with the `SyncCoordinator`:
-  /// installs the per-profile reload observer and wires the repository
-  /// sync callbacks for the profile's zone. Logs a warning when the
-  /// coordinator is unavailable.
-  private func registerWithSyncCoordinator(_ coordinator: SyncCoordinator?) {
-    let profileId = profile.id
-    guard let coordinator else {
-      logger.warning("CloudKit not available — profile sync disabled for \(profileId)")
-      return
-    }
-    logger.info("Registering profile \(profileId) with sync coordinator")
-    self.syncObserverToken = coordinator.addObserver(for: profileId) { [weak self] changedTypes in
-      self?.scheduleReloadFromSync(changedTypes: changedTypes)
-    }
-  }
-
-  // CloudKit-sync reload debouncing, `cleanupSync(coordinator:)`, and
-  // `updateProfile(_:)` live in `ProfileSession+SyncCleanup.swift`.
+  // `cleanupSync(coordinator:)` and `updateProfile(_:)` live in
+  // `ProfileSession+SyncCleanup.swift`.
 
   // MARK: - Folder watch
 

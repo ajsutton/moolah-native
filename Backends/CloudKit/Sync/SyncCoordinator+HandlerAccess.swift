@@ -59,8 +59,7 @@ extension SyncCoordinator {
   /// Registers the per-profile closure fired by the data handler whenever a
   /// remote pull touches an `InstrumentRecord` row. The closure is captured
   /// by `ProfileDataSyncHandler` at handler-construction time, so callers
-  /// MUST register it before the first sync session for the profile (in
-  /// practice, from `ProfileSession.registerWithSyncCoordinator`).
+  /// MUST register it before the first sync session for the profile.
   /// Re-registering for a profile whose handler is already cached is a no-op
   /// — `dataHandlers` is not cleared by `stop()`, so the cached handler
   /// retains its original `nonisolated let` closure for its full lifetime.

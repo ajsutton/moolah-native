@@ -314,12 +314,11 @@ extension SyncCoordinator {
 
   func beginFetchingChanges() {
     if isFetchingChanges {
-      // Prior session ended abnormally — flush accumulated changes
+      // Prior session ended abnormally — flush any pending index notification.
       logger.warning("Prior fetch session ended abnormally — flushing accumulated changes")
-      flushFetchSessionChanges()
+      flushFetchSessionIndexChange()
     }
     isFetchingChanges = true
-    fetchSessionChangedTypes.removeAll()
     fetchSessionIndexChanged = false
     fetchSessionTouchedIndexZone = false
     progress.beginReceiving()
@@ -344,14 +343,10 @@ extension SyncCoordinator {
 
   func endFetchingChanges() {
     isFetchingChanges = false
-    let profileCount = fetchSessionChangedTypes.filter { !$0.value.isEmpty }.count
-    let totalTypes = fetchSessionChangedTypes.values.reduce(into: Set<String>()) {
-      $0.formUnion($1)
-    }
     logger.info(
-      "Fetch session complete: \(profileCount) profiles changed, types: \(totalTypes), indexChanged: \(self.fetchSessionIndexChanged)"
+      "Fetch session complete: indexChanged: \(self.fetchSessionIndexChanged)"
     )
-    flushFetchSessionChanges()
+    flushFetchSessionIndexChange()
     if fetchSessionTouchedIndexZone && !profileIndexFetchedAtLeastOnce {
       profileIndexFetchedAtLeastOnce = true
       logger.info("profileIndexFetchedAtLeastOnce flipped true")
@@ -360,14 +355,14 @@ extension SyncCoordinator {
     progress.endReceiving(now: Date())
   }
 
-  private func flushFetchSessionChanges() {
-    for (profileId, types) in fetchSessionChangedTypes where !types.isEmpty {
-      notifyObservers(for: profileId, changedTypes: types)
-    }
+  /// Fires the index-observer callbacks if the profile-index zone changed
+  /// during the current fetch session, then resets the flag. Profile-data
+  /// changes propagate to stores via GRDB `ValueObservation` streams in the
+  /// repositories — there is no per-profile observer chain to flush here.
+  private func flushFetchSessionIndexChange() {
     if fetchSessionIndexChanged {
       notifyIndexObservers()
     }
-    fetchSessionChangedTypes.removeAll()
     fetchSessionIndexChanged = false
   }
 }
