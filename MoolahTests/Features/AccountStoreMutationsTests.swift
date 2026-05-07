@@ -76,8 +76,8 @@ struct AccountStoreMutationsTests {
   func investmentAccountsIncludesCrypto() async throws {
     // Sidebar feeds its "Investments" section from `investmentAccounts`. A
     // strict `type == .investment` filter would silently drop newly-created
-    // crypto wallets — the Stage 1 acceptance criterion is to use
-    // `isInvestmentLike` so both kinds appear together.
+    // crypto wallets — the acceptance criterion is to use `isInvestmentLike`
+    // so both kinds appear together.
     let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
       name: "Brokerage", type: .investment, balance: 0, in: database)
@@ -88,7 +88,17 @@ struct AccountStoreMutationsTests {
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    try await store.waitForFirstEmission()
+    // `waitForFirstEmission()` would race the rate-tick recompute (which
+    // `FixedConversionService.observeRates()` fires synchronously on
+    // subscription) against the accounts observation — the first tick
+    // can arrive before `apply(accounts:)` has run, so `store.accounts`
+    // is still empty. Predicate-match on the accounts snapshot to wait
+    // for the emission that actually carries the seeded rows, mirroring
+    // the other tests in this suite.
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.count == 2 },
+      description: "both seeded accounts are observed"
+    )
 
     #expect(store.investmentAccounts.map(\.name).sorted() == ["Brokerage", "ETH Wallet"])
   }
