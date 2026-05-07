@@ -8,7 +8,9 @@ import Testing
 struct SessionManagerAutomationTests {
   private func makeManager() throws -> SessionManager {
     let containerManager = try ProfileContainerManager.forTesting()
-    return SessionManager(containerManager: containerManager)
+    return SessionManager(
+      containerManager: containerManager,
+      profileIndexRepository: containerManager.profileIndexRepositoryForTesting)
   }
 
   private func makeProfile(label: String = "Personal") -> Profile {
@@ -20,10 +22,10 @@ struct SessionManagerAutomationTests {
   }
 
   @Test("session(named:) finds session by exact profile name")
-  func findSessionByProfileName() throws {
+  func findSessionByProfileName() async throws {
     let manager = try makeManager()
     let profile = makeProfile(label: "Personal")
-    _ = manager.session(for: profile)
+    _ = await manager.session(for: profile)
 
     let found = manager.session(named: "Personal")
 
@@ -32,10 +34,10 @@ struct SessionManagerAutomationTests {
   }
 
   @Test("session(named:) finds session case-insensitively")
-  func findSessionByProfileNameCaseInsensitive() throws {
+  func findSessionByProfileNameCaseInsensitive() async throws {
     let manager = try makeManager()
     let profile = makeProfile(label: "Personal")
-    _ = manager.session(for: profile)
+    _ = await manager.session(for: profile)
 
     let found = manager.session(named: "personal")
 
@@ -44,10 +46,10 @@ struct SessionManagerAutomationTests {
   }
 
   @Test("session(named:) returns nil when no session matches")
-  func findSessionByProfileNameReturnsNilWhenNotFound() throws {
+  func findSessionByProfileNameReturnsNilWhenNotFound() async throws {
     let manager = try makeManager()
     let profile = makeProfile(label: "Personal")
-    _ = manager.session(for: profile)
+    _ = await manager.session(for: profile)
 
     let found = manager.session(named: "Business")
 
@@ -55,10 +57,10 @@ struct SessionManagerAutomationTests {
   }
 
   @Test("session(forID:) finds session by UUID")
-  func findSessionByUUID() throws {
+  func findSessionByUUID() async throws {
     let manager = try makeManager()
     let profile = makeProfile()
-    _ = manager.session(for: profile)
+    _ = await manager.session(for: profile)
 
     let found = manager.session(forID: profile.id)
 
@@ -76,12 +78,12 @@ struct SessionManagerAutomationTests {
   }
 
   @Test("openProfiles returns all sessions")
-  func openProfilesReturnsAllSessions() throws {
+  func openProfilesReturnsAllSessions() async throws {
     let manager = try makeManager()
     let profile1 = makeProfile(label: "Personal")
     let profile2 = makeProfile(label: "Business")
-    _ = manager.session(for: profile1)
-    _ = manager.session(for: profile2)
+    _ = await manager.session(for: profile1)
+    _ = await manager.session(for: profile2)
 
     let open = manager.openProfiles
 

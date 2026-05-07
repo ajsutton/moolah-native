@@ -23,6 +23,7 @@ extension ProfileRow: CloudKitRecordConvertible {
     ProfileRecordCloudKitFields(
       createdAt: createdAt,
       currencyCode: currencyCode,
+      dataFormatVersion: Int64(dataFormatVersion),
       financialYearStartMonth: Int64(financialYearStartMonth),
       label: label
     ).write(to: record)
@@ -52,7 +53,8 @@ extension ProfileRow: CloudKitRecordConvertible {
       createdAt: fields.createdAt ?? Date(),
       // Stamped post-upsert by ProfileIndexSyncHandler; never read from
       // the CKRecord itself.
-      encodedSystemFields: nil
+      encodedSystemFields: nil,
+      dataFormatVersion: fields.dataFormatVersion.map(Int.init) ?? 0
     )
   }
 }

@@ -21,6 +21,7 @@ private let welcomeLogger = Logger(subsystem: "com.moolah.app", category: "Welco
 struct WelcomeView: View {
   @Environment(ProfileStore.self) private var profileStore
   @Environment(SyncCoordinator.self) private var syncCoordinator
+  @Environment(SessionManager.self) private var sessionManager
 
   @State private var phase: ProfileStore.WelcomePhase = .landing
   @State private var bannerDismissed = false
@@ -172,6 +173,7 @@ struct WelcomeView: View {
     ICloudProfilePickerView(
       profiles: profileStore.profiles,
       accountCounts: [:],
+      incompatibleProfileIDs: Set(sessionManager.incompatibleProfiles.keys),
       selectAction: { profile in profileStore.setActiveProfile(profile.id) },
       createNewAction: {
         phase = .creating

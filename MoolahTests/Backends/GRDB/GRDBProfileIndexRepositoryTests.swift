@@ -250,4 +250,57 @@ struct GRDBProfileIndexRepositoryTests {
     _ = try await repo.delete(id: UUID())
     #expect(deletedCount.get() == 1)
   }
+
+  // MARK: - 8. profile(forID:) lookups
+
+  @Test("profile(forID:) returns nil for unknown id")
+  func profileForUnknownIdReturnsNil() async throws {
+    let repository = try makeRepo()
+    let result = try await repository.profile(forID: UUID())
+    #expect(result == nil)
+  }
+
+  @Test("profile(forID:) returns the profile with its dataFormatVersion")
+  func profileForKnownIdReturnsValue() async throws {
+    let repository = try makeRepo()
+    let id = UUID()
+    try await repository.upsert(Profile(id: id, label: "Stored", dataFormatVersion: 1))
+
+    let result = try await repository.profile(forID: id)
+    #expect(result?.id == id)
+    #expect(result?.dataFormatVersion == 1)
+  }
+
+  // MARK: - 9. mergeDataFormatVersionSync
+
+  @Test("mergeDataFormatVersionSync promotes when remote is higher")
+  func mergeDataFormatVersionSyncPromotes() async throws {
+    let repository = try makeRepo()
+    let id = UUID()
+    try await repository.upsert(Profile(id: id, label: "Stored", dataFormatVersion: 0))
+
+    try repository.mergeDataFormatVersionSync(id: id, remoteValue: 1)
+
+    let result = try await repository.profile(forID: id)
+    #expect(result?.dataFormatVersion == 1)
+  }
+
+  @Test("mergeDataFormatVersionSync keeps local when remote is lower — local is authoritative")
+  func mergeDataFormatVersionSyncKeepsLocal() async throws {
+    let repository = try makeRepo()
+    let id = UUID()
+    try await repository.upsert(Profile(id: id, label: "Stored", dataFormatVersion: 1))
+
+    try repository.mergeDataFormatVersionSync(id: id, remoteValue: 0)
+
+    let result = try await repository.profile(forID: id)
+    #expect(result?.dataFormatVersion == 1)
+  }
+
+  @Test("mergeDataFormatVersionSync is a no-op for unknown id")
+  func mergeDataFormatVersionSyncNoOpForUnknownId() throws {
+    let repository = try makeRepo()
+    // Should not throw; no row is created.
+    try repository.mergeDataFormatVersionSync(id: UUID(), remoteValue: 1)
+  }
 }

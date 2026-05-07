@@ -27,6 +27,7 @@ extension ProfileRow {
     self.financialYearStartMonth = profile.financialYearStartMonth
     self.createdAt = profile.createdAt
     self.encodedSystemFields = nil
+    self.dataFormatVersion = profile.dataFormatVersion
   }
 
   /// No data is transformed or synthesised at the mapping boundary —
@@ -38,6 +39,7 @@ extension ProfileRow {
       label: label,
       currencyCode: currencyCode,
       financialYearStartMonth: financialYearStartMonth,
-      createdAt: createdAt)
+      createdAt: createdAt,
+      dataFormatVersion: dataFormatVersion)
   }
 }

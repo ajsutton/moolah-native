@@ -10,6 +10,7 @@ import SwiftUI
 struct ICloudProfilePickerView: View {
   let profiles: [Profile]
   let accountCounts: [UUID: Int]
+  let incompatibleProfileIDs: Set<UUID>
   let selectAction: (Profile) -> Void
   let createNewAction: () -> Void
 
@@ -81,6 +82,16 @@ struct ICloudProfilePickerView: View {
           .foregroundStyle(.secondary)
       }
       Spacer()
+      if profile.dataFormatVersion > DataFormatVersion.current
+        || incompatibleProfileIDs.contains(profile.id)
+      {
+        Text("Update required", comment: "Profile picker badge for incompatible profiles")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .padding(.horizontal, 6)
+          .padding(.vertical, 2)
+          .background(.secondary.opacity(0.15), in: Capsule())
+      }
       Image(systemName: "chevron.right")
         .foregroundStyle(.tertiary)
         .font(.caption)
@@ -113,6 +124,7 @@ struct ICloudProfilePickerView: View {
       Profile(label: "Side business", currencyCode: "AUD"),
     ],
     accountCounts: [:],
+    incompatibleProfileIDs: [],
     selectAction: { _ in },
     createNewAction: {}
   )
@@ -125,6 +137,7 @@ struct ICloudProfilePickerView: View {
   ICloudProfilePickerView(
     profiles: [household, business],
     accountCounts: [household.id: 12, business.id: 3],
+    incompatibleProfileIDs: [],
     selectAction: { _ in },
     createNewAction: {}
   )
@@ -137,9 +150,23 @@ struct ICloudProfilePickerView: View {
   ICloudProfilePickerView(
     profiles: [household],
     accountCounts: [household.id: 12],
+    incompatibleProfileIDs: [],
     selectAction: { _ in },
     createNewAction: {}
   )
   .frame(width: 600, height: 800)
   .dynamicTypeSize(.accessibility5)
+}
+
+#Preview("Incompatible badge") {
+  let household = Profile(label: "Household", currencyCode: "AUD")
+  let business = Profile(label: "Side business", currencyCode: "AUD")
+  ICloudProfilePickerView(
+    profiles: [household, business],
+    accountCounts: [household.id: 12, business.id: 3],
+    incompatibleProfileIDs: [business.id],
+    selectAction: { _ in },
+    createNewAction: {}
+  )
+  .frame(width: 480, height: 520)
 }

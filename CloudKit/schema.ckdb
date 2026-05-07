@@ -158,6 +158,7 @@ DEFINE SCHEMA
         "___recordID"           REFERENCE QUERYABLE,
         createdAt               TIMESTAMP QUERYABLE SORTABLE,
         currencyCode            STRING QUERYABLE SEARCHABLE SORTABLE,
+        dataFormatVersion       INT64 QUERYABLE SORTABLE,
         financialYearStartMonth INT64 QUERYABLE SORTABLE,
         label                   STRING QUERYABLE SEARCHABLE SORTABLE,
         GRANT WRITE TO "_creator",

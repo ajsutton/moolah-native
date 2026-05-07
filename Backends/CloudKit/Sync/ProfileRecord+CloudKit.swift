@@ -13,6 +13,7 @@ extension ProfileRecord: CloudKitRecordConvertible {
     ProfileRecordCloudKitFields(
       createdAt: createdAt,
       currencyCode: currencyCode,
+      dataFormatVersion: Int64(dataFormatVersion),
       financialYearStartMonth: Int64(financialYearStartMonth),
       label: label
     ).write(to: record)
@@ -27,7 +28,8 @@ extension ProfileRecord: CloudKitRecordConvertible {
       label: fields.label ?? "",
       currencyCode: fields.currencyCode ?? "",
       financialYearStartMonth: Int(fields.financialYearStartMonth ?? 7),
-      createdAt: fields.createdAt ?? Date()
+      createdAt: fields.createdAt ?? Date(),
+      dataFormatVersion: fields.dataFormatVersion.map(Int.init) ?? 0
     )
   }
 }

@@ -345,9 +345,15 @@ extension SyncCoordinator {
 
   /// Pushes the live `pendingRecordZoneChanges.count` into `progress`.
   /// Called after every send event and after queueing changes.
+  ///
+  /// No-ops when `syncEngine` is nil (engine not yet started, or running
+  /// under `--ui-testing` where the coordinator is never started). Reading
+  /// `?? 0` from a nil engine would falsely report zero pending uploads,
+  /// collapsing any seed-set `pendingUploads` count and incorrectly
+  /// triggering a settle to `.upToDate`.
   @MainActor
   func refreshPendingUploadsMirror() {
-    let count = syncEngine?.state.pendingRecordZoneChanges.count ?? 0
-    progress.updatePendingUploads(count)
+    guard let syncEngine else { return }
+    progress.updatePendingUploads(syncEngine.state.pendingRecordZoneChanges.count)
   }
 }

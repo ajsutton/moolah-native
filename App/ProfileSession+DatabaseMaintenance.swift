@@ -2,12 +2,6 @@ import Foundation
 import GRDB
 import OSLog
 
-/// Local logger for database-maintenance work — scoped here so the
-/// extension does not need access to `ProfileSession`'s private `logger`
-/// instance. Same subsystem/category for log-stream continuity.
-private let maintenanceLogger = Logger(
-  subsystem: "com.moolah.app", category: "ProfileSession")
-
 // `PRAGMA optimize` cadence per `guides/DATABASE_SCHEMA_GUIDE.md` §5,
 // extracted from the main `ProfileSession` body so it stays under
 // SwiftLint's `type_body_length` and `file_length` thresholds.
@@ -36,7 +30,7 @@ extension ProfileSession {
         try database.execute(sql: "PRAGMA optimize")
       }
     } catch {
-      maintenanceLogger.warning(
+      logger.warning(
         "PRAGMA optimize failed for profile \(self.profile.id): \(error.localizedDescription, privacy: .public)"
       )
     }

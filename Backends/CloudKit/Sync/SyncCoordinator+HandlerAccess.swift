@@ -99,4 +99,25 @@ extension SyncCoordinator {
     dataHandlers.removeValue(forKey: profileId)
     cachedGRDBRepositories.removeValue(forKey: profileId)
   }
+
+  /// Removes the per-profile `ProfileDataSyncHandler` from `dataHandlers`.
+  /// Called by `SessionManager` on mid-session teardown when a remote bump
+  /// pushes the profile's `dataFormatVersion` above
+  /// `DataFormatVersion.current`, so `SyncCoordinator` stops routing
+  /// further fetched changes for the per-profile zone — see
+  /// data-format-gate spec §4.2.
+  ///
+  /// Idempotent; a no-op for an unknown profile id.
+  func removeDataHandler(for profileId: UUID) {
+    dataHandlers.removeValue(forKey: profileId)
+  }
+
+  #if DEBUG
+    /// Test-only: report whether a handler is currently registered for the
+    /// given profile id. Guarded by `#if DEBUG` so it is not part of the
+    /// production API surface.
+    func hasDataHandler(forProfile profileId: UUID) -> Bool {
+      dataHandlers[profileId] != nil
+    }
+  #endif
 }

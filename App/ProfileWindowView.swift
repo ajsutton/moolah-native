@@ -15,6 +15,8 @@
 
     @Environment(\.dismiss) private var dismiss
 
+    @State private var sessionResult: SessionOpenResult?
+
     /// Resolve the profile to display: the window's profileID if it matches a
     /// known profile, otherwise the active profile. Falls back to the single
     /// profile only when exactly one exists — with 2+ profiles and nothing
@@ -36,13 +38,8 @@
 
     var body: some View {
       Group {
-        if let profile = resolvedProfile {
-          let session = sessionManager.session(for: profile)
-          SessionRootView(session: session)
-            .environment(profileStore)
-            .onChange(of: profile.label) { _, _ in
-              sessionManager.rebuildSession(for: profile)
-            }
+        if let resolved = resolvedProfile {
+          sessionContent(for: resolved)
         } else if profileID != nil {
           // This window was opened for a specific profile that no longer
           // exists. Close it — the user will land on whichever window
@@ -69,6 +66,26 @@
         }
       }
       .background(tagHostingWindow)
+      .task(id: resolvedProfile?.id) {
+        // Resolve the session for the resolved profile. `.task(id:)`
+        // re-runs whenever the profile id changes (window reopened
+        // against a different profile, or the active profile flips
+        // mid-session).
+        if let profile = resolvedProfile {
+          sessionResult = await sessionManager.session(for: profile)
+        } else {
+          sessionResult = nil
+        }
+      }
+      .onChange(of: resolvedProfile?.label) { _, _ in
+        // Label edits flow through `rebuildSession(for:)` so the cached
+        // session picks up the new value (and the gate re-fires in case
+        // a remote profile-version bump arrived alongside the rename).
+        guard let profile = resolvedProfile else { return }
+        Task {
+          sessionResult = await sessionManager.rebuildSession(for: profile)
+        }
+      }
       .task {
         // Register in-process entry points for AppleScript/App Intents so
         // `NavigateCommand` / `OpenAccountIntent` don't need to round-trip
@@ -82,6 +99,39 @@
         NavigationBridge.setPendingNavigation = { nav in
           pendingBinding?.wrappedValue = nav
         }
+      }
+    }
+
+    /// Renders the per-session content area: the live session, the
+    /// stop-the-world incompatible-profile screen, or a brief progress
+    /// indicator while the open is in flight. Extracted so the `body`
+    /// closure stays under the SwiftLint `closure_body_length` cap.
+    @ViewBuilder
+    private func sessionContent(for resolved: Profile) -> some View {
+      switch sessionResult {
+      case .ready(let session):
+        SessionRootView(session: session)
+          .environment(profileStore)
+      case .incompatible(let info):
+        IncompatibleProfileView(
+          info: info,
+          onCheckForUpdates: {
+            NSWorkspace.shared.open(AppStoreURL.update)
+          },
+          onSwitchProfile: {
+            // Pop back to the picker. Clearing the active profile
+            // routes to `WelcomeView` on the next render via the
+            // top-level `else` branch; closing this window also
+            // returns the user to whichever window SwiftUI brings
+            // forward.
+            if profileStore.activeProfileID == resolved.id {
+              profileStore.activeProfileID = nil
+            }
+            dismiss()
+          }
+        )
+      case .none:
+        ProgressView()
       }
     }
 

@@ -38,7 +38,8 @@ enum UITestSeedCryptoOverrides {
       .sidebarFooterUpToDate,
       .sidebarFooterReceiving,
       .sidebarFooterSending,
-      .tradeReady:
+      .tradeReady,
+      .incompatibleProfile:
       return nil
     }
   }

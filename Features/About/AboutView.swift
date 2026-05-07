@@ -25,8 +25,7 @@
     // MARK: - Version Info
 
     private var versionString: String {
-      let version =
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+      let version = AppVersion.shortVersionString
       let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
       return "\(version) \u{00B7} Build \(build)"
     }

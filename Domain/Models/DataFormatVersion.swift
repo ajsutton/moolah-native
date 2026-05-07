@@ -1,0 +1,37 @@
+/// Highest profile data-format version this build can safely read and write.
+///
+/// `DataFormatVersion` is a case-less enum used as a namespace — not
+/// instantiable, just a home for the constant.
+///
+/// Bump `current` whenever you ship a forward-incompatible change to the
+/// profile data — anything an older build can't faithfully read,
+/// round-trip, or sync without silent data loss / corruption.
+///
+/// Forward-incompatible rubric (any one of these requires a bump):
+///   1. New record type added to `CloudKit/schema.ckdb`.
+///   2. New non-defaulted field on a synced record type, where an older
+///      build's nil decode would mis-classify the record.
+///   3. New case added to a `// SyncBoundary —` marked enum where older
+///      builds have a defensive fallback (e.g. unknown AccountType → .asset).
+///   4. New CKSyncEngine zone introduced.
+///   5. Any change explicitly tagged "forward-incompatible" in its PR
+///      description / commit message.
+///   6. A field on a synced record type marked `// DEPRECATED` in
+///      `schema.ckdb` (the wire-struct generator drops it; older builds
+///      still write it). The rename is the trigger; the bump fences off
+///      the "deprecated field is suddenly invisible" race.
+///
+/// History (newest first):
+/// - 1: gate introduced alongside the crypto-wallet foundation.
+///      `AccountType.crypto`, `Account.walletAddress` and `chainId`,
+///      `TransactionLeg.externalId`, `WalletSyncState`. Older builds
+///      (which also predate the gate) decode `AccountType.crypto` as
+///      `.asset` and lose chain metadata on round-trip; the gate
+///      protects future downgrades from this build forward.
+///
+/// `0` is the implicit pre-gate baseline: any profile that exists in the
+/// cloud without a `dataFormatVersion` field reads as `0` and is
+/// trivially compatible with any v1+ build.
+enum DataFormatVersion {
+  static let current: Int = 1
+}

@@ -119,17 +119,8 @@ struct MoolahApp: App {
       isUITesting: uiTestingSeed != nil,
       profileIndexMigrationTask: profileIndexMigrationTask)
 
-    let sessionManager = SessionManager(
-      containerManager: setup.manager, syncCoordinator: coordinator)
-    // Clean up cached sessions and the coordinator's per-profile bundle
-    // cache when a profile is removed (locally or via remote sync).
-    // `containerManager.deleteStore` is about to invalidate the
-    // per-profile `DatabaseQueue`; the coordinator's cached handler /
-    // bundle would otherwise outlive it.
-    store.onProfileRemoved = { [weak sessionManager, weak coordinator] profileID in
-      sessionManager?.removeSession(for: profileID)
-      coordinator?.evictCachedState(for: profileID)
-    }
+    let sessionManager = Self.makeSessionManager(
+      setup: setup, store: store, coordinator: coordinator)
     Self.configureAutomationService(
       store: store,
       sessionManager: sessionManager,

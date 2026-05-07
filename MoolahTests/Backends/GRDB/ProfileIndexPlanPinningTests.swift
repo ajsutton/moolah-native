@@ -16,6 +16,10 @@ import Testing
 /// 1. `profile.created_at` ascending — the canonical fetch order used
 ///    by `GRDBProfileIndexRepository.fetchAll()` and the profile picker.
 ///    Must hit `profile_by_created_at` and avoid a temp B-tree sort.
+/// 2. `profile.id` lookup — primary-key search used by
+///    `GRDBProfileIndexRepository.profile(forID:)` (every session-open)
+///    and `mergeDataFormatVersionSync` (every sync-merge). Must use the
+///    table's primary key.
 @Suite("Profile-index GRDB query plans")
 struct ProfileIndexPlanPinningTests {
   /// `PlanPinningTestHelpers.makeDatabase` opens the per-profile
@@ -47,5 +51,28 @@ struct ProfileIndexPlanPinningTests {
     // is using the index for ordering rather than a transient sort.
     #expect(detail.contains("USING INDEX profile_by_created_at"))
     #expect(!detail.contains("USE TEMP B-TREE"))
+  }
+
+  @Test("filter by id uses primary key index")
+  func profileFilterByIdUsesPrimaryKey() throws {
+    let database = try makeDatabase()
+    let detail = try PlanPinningTestHelpers.planDetail(
+      database,
+      query: """
+        SELECT id FROM profile WHERE id = ?
+        """,
+      arguments: [UUID()])
+    // BLOB PRIMARY KEY columns surface as
+    // `SEARCH … USING INDEX sqlite_autoindex_profile_1`. Pin the exact
+    // auto-index name so a future change that drops the PK declaration
+    // (and silently reverts to a SCAN) fails this test rather than
+    // passing on a `SEARCH` against any other index.
+    //
+    // `profile(forID:)` runs on every session-open and
+    // `mergeDataFormatVersionSync` runs on every sync-merge — both
+    // perf-sensitive paths that DATABASE_CODE_GUIDE.md §6 requires we
+    // pin.
+    #expect(detail.contains("sqlite_autoindex_profile_1"))
+    #expect(!detail.contains("SCAN"))
   }
 }

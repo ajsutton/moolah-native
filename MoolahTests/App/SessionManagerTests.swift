@@ -6,44 +6,59 @@ import Testing
 @Suite("SessionManager")
 @MainActor
 struct SessionManagerTests {
+  private struct OpenSessionFailed: Error {}
+
   private func makeManager() throws -> SessionManager {
     let containerManager = try ProfileContainerManager.forTesting()
-    return SessionManager(containerManager: containerManager)
+    return SessionManager(
+      containerManager: containerManager,
+      profileIndexRepository: containerManager.profileIndexRepositoryForTesting)
   }
 
   private func makeProfile(label: String = "Test") -> Profile {
     Profile(label: label)
   }
 
+  private func openSession(_ manager: SessionManager, for profile: Profile) async throws
+    -> ProfileSession
+  {
+    let result = await manager.session(for: profile)
+    guard case .ready(let session) = result else {
+      Issue.record("expected .ready, got \(result)")
+      throw OpenSessionFailed()
+    }
+    return session
+  }
+
   @Test("session(for:) creates a new session for unknown profile")
-  func createsNewSession() throws {
+  func createsNewSession() async throws {
     let manager = try makeManager()
     let profile = makeProfile()
 
-    let session = manager.session(for: profile)
+    let session = try await openSession(manager, for: profile)
 
     #expect(session.profile.id == profile.id)
     #expect(manager.sessions.count == 1)
   }
 
   @Test("session(for:) returns existing session for known profile")
-  func reusesExistingSession() throws {
+  func reusesExistingSession() async throws {
     let manager = try makeManager()
     let profile = makeProfile()
 
-    let session1 = manager.session(for: profile)
-    let session2 = manager.session(for: profile)
+    let session1 = try await openSession(manager, for: profile)
+    let session2 = try await openSession(manager, for: profile)
 
     #expect(session1 === session2)
     #expect(manager.sessions.count == 1)
   }
 
   @Test("removeSession removes the session")
-  func removesSession() throws {
+  func removesSession() async throws {
     let manager = try makeManager()
     let profile = makeProfile()
 
-    _ = manager.session(for: profile)
+    _ = try await openSession(manager, for: profile)
     #expect(manager.sessions.count == 1)
 
     manager.removeSession(for: profile.id)
@@ -51,12 +66,12 @@ struct SessionManagerTests {
   }
 
   @Test("rebuildSession replaces existing session with new instance")
-  func rebuildsSession() throws {
+  func rebuildsSession() async throws {
     let manager = try makeManager()
     let profile = makeProfile()
 
-    let original = manager.session(for: profile)
-    manager.rebuildSession(for: profile)
+    let original = try await openSession(manager, for: profile)
+    _ = await manager.rebuildSession(for: profile)
     let rebuilt = manager.sessions[profile.id]
 
     #expect(rebuilt !== original)
@@ -65,13 +80,13 @@ struct SessionManagerTests {
   }
 
   @Test("multiple profiles get independent sessions")
-  func independentSessions() throws {
+  func independentSessions() async throws {
     let manager = try makeManager()
     let profile1 = makeProfile(label: "One")
     let profile2 = makeProfile(label: "Two")
 
-    let session1 = manager.session(for: profile1)
-    let session2 = manager.session(for: profile2)
+    let session1 = try await openSession(manager, for: profile1)
+    let session2 = try await openSession(manager, for: profile2)
 
     #expect(session1 !== session2)
     #expect(session1.profile.id != session2.profile.id)

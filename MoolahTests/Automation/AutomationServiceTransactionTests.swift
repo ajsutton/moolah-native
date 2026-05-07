@@ -6,15 +6,22 @@ import Testing
 @Suite("AutomationService Transaction Operations")
 @MainActor
 struct AutomationServiceTransactionTests {
+  private struct OpenSessionFailed: Error {}
+
   private func makeServiceWithSession() async throws -> (AutomationService, ProfileSession) {
     let containerManager = try ProfileContainerManager.forTesting()
-    let sessionManager = SessionManager(containerManager: containerManager)
+    let sessionManager = SessionManager(
+      containerManager: containerManager,
+      profileIndexRepository: containerManager.profileIndexRepositoryForTesting)
     let profile = Profile(
       label: "Test",
       currencyCode: "AUD",
       financialYearStartMonth: 7
     )
-    let session = sessionManager.session(for: profile)
+    guard case .ready(let session) = await sessionManager.session(for: profile) else {
+      Issue.record("expected .ready")
+      throw OpenSessionFailed()
+    }
     await session.accountStore.load()
     await session.categoryStore.load()
     await session.earmarkStore.load()

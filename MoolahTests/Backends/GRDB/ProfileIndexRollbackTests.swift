@@ -115,6 +115,49 @@ struct ProfileIndexRollbackTests {
     #expect(try repo.allRowIdsSync() == [priorId])
   }
 
+  // MARK: - mergeDataFormatVersionSync
+
+  @Test
+  func mergeDataFormatVersionSyncRollsBackOnUpdateFailure() async throws {
+    let database = try ProfileIndexDatabase.openInMemory()
+    let repo = GRDBProfileIndexRepository(database: database)
+    let id = UUID()
+    try await repo.upsert(
+      Profile(
+        id: id,
+        label: "stable",
+        currencyCode: "AUD",
+        financialYearStartMonth: 7,
+        createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+        dataFormatVersion: 0))
+
+    // `mergeDataFormatVersionSync` runs fetchOne + conditional updateAll
+    // inside a single `database.write`. A `BEFORE UPDATE OF
+    // data_format_version` trigger that aborts forces the update half to
+    // throw — the surrounding write closure must roll back so the
+    // pre-existing `data_format_version = 0` survives byte-equal.
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER fail_version_update
+          BEFORE UPDATE OF data_format_version ON profile
+          BEGIN
+              SELECT RAISE(ABORT, 'forced failure for rollback test');
+          END;
+          """)
+    }
+
+    do {
+      try repo.mergeDataFormatVersionSync(id: id, remoteValue: 99)
+      Issue.record("mergeDataFormatVersionSync should have thrown but did not")
+    } catch {
+      // Expected — trigger raises ABORT.
+    }
+
+    let surviving = try await repo.profile(forID: id)
+    #expect(surviving?.dataFormatVersion == 0)
+  }
+
   // MARK: - Helpers
 
   private func makeRow(id: UUID, label: String) -> ProfileRow {

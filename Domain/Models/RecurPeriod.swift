@@ -1,5 +1,6 @@
 import Foundation
 
+// SyncBoundary — adding a case requires bumping DataFormatVersion.current.
 enum RecurPeriod: String, Codable, Sendable, CaseIterable {
   case once = "ONCE"
   case day = "DAY"

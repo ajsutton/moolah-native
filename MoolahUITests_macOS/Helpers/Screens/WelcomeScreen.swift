@@ -98,4 +98,18 @@ struct WelcomeScreen {
     app.element(for: UITestIdentifiers.Welcome.createProfileButton).click()
     expectHeroAbsent()
   }
+
+  /// Taps the multi-profile picker row for the given profile id. Used
+  /// by tests that pre-seed two or more profiles and need to select
+  /// one.
+  func tapPickerRow(forProfile id: UUID, timeout: TimeInterval = 3) {
+    Trace.record(detail: "id=\(id.uuidString.lowercased())")
+    let row = app.element(for: UITestIdentifiers.Welcome.pickerRow(id))
+    if !row.waitForExistence(timeout: timeout) {
+      Trace.recordFailure("picker row \(id) did not appear")
+      XCTFail("Picker row \(id) did not appear within \(timeout)s")
+      return
+    }
+    row.click()
+  }
 }

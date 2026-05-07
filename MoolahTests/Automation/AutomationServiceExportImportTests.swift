@@ -21,7 +21,9 @@
 
     private func makeHarness() throws -> Harness {
       let containerManager = try ProfileContainerManager.forTesting()
-      let sessionManager = SessionManager(containerManager: containerManager)
+      let sessionManager = SessionManager(
+        containerManager: containerManager,
+        profileIndexRepository: containerManager.profileIndexRepositoryForTesting)
       let defaults = try #require(UserDefaults(suiteName: "test-\(UUID().uuidString)"))
       let profileStore = ProfileStore(
         defaults: defaults,
@@ -44,7 +46,11 @@
         currencyCode: "AUD",
         financialYearStartMonth: 7
       )
-      let session = harness.sessionManager.session(for: profile)
+      guard case .ready(let session) = await harness.sessionManager.session(for: profile)
+      else {
+        Issue.record("expected .ready")
+        return
+      }
       await session.accountStore.load()
 
       _ = try await harness.service.createAccount(
@@ -89,7 +95,13 @@
         currencyCode: "AUD",
         financialYearStartMonth: 7
       )
-      let sourceSession = harness.sessionManager.session(for: sourceProfile)
+      guard
+        case .ready(let sourceSession) = await harness.sessionManager.session(
+          for: sourceProfile)
+      else {
+        Issue.record("expected .ready")
+        return
+      }
       await sourceSession.accountStore.load()
       _ = try await harness.service.createAccount(
         profileIdentifier: "Source Profile",
@@ -113,7 +125,13 @@
       #expect(imported.currencyCode == "AUD")
       #expect(imported.id != sourceProfile.id)
 
-      let importedSession = harness.sessionManager.session(for: imported)
+      guard
+        case .ready(let importedSession) = await harness.sessionManager.session(
+          for: imported)
+      else {
+        Issue.record("expected .ready")
+        return
+      }
       await importedSession.accountStore.load()
       #expect(importedSession.accountStore.accounts.contains { $0.name == "Savings" })
     }
@@ -137,7 +155,9 @@
     @Test("importProfile throws when profile store is not configured")
     func importThrowsWithoutProfileStore() async throws {
       let containerManager = try ProfileContainerManager.forTesting()
-      let sessionManager = SessionManager(containerManager: containerManager)
+      let sessionManager = SessionManager(
+        containerManager: containerManager,
+        profileIndexRepository: containerManager.profileIndexRepositoryForTesting)
       let service = AutomationService(sessionManager: sessionManager)
 
       let tempURL = makeTempFileURL()

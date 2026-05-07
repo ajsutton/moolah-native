@@ -238,6 +238,17 @@ final class ProfileContainerManager {
     }
   }
 
+  #if DEBUG
+    /// Test-only: expose the profile-index repository as the protocol
+    /// type used by `SessionManager`. Production code constructs the
+    /// concrete `GRDBProfileIndexRepository` in `MoolahApp+Setup.swift`
+    /// and passes it through; tests can reach for the same surface
+    /// through this accessor without depending on `Backends/GRDB/`.
+    var profileIndexRepositoryForTesting: any ProfileIndexRepository {
+      profileIndexRepository
+    }
+  #endif
+
   /// Creates a test-only manager with in-memory stores.
   static func forTesting() throws -> ProfileContainerManager {
     let indexSchema = Schema([ProfileRecord.self])

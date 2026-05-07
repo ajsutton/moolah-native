@@ -185,7 +185,8 @@ extension MoolahApp {
       .welcomeSingleCloudProfile,
       .welcomeMultipleCloudProfiles,
       .cryptoCatalogPreloaded,
-      .tradeReady:
+      .tradeReady,
+      .incompatibleProfile:
       break
     case .welcomeDownloading:
       // Override iCloudAvailability to `.available` so the WelcomeStateResolver
@@ -213,6 +214,37 @@ extension MoolahApp {
       coordinator.progress.beginReceiving()
       coordinator.progress.endReceiving(now: Date())
     }
+  }
+
+  /// Build the `SessionManager` and wire its `onProfileRemoved` cleanup
+  /// hook. Extracted from `MoolahApp.init` so the initializer body
+  /// stays under SwiftLint's `function_body_length` threshold; the
+  /// hook closure captures the manager and coordinator weakly so a
+  /// cleanup hop after profile deletion doesn't keep them alive past
+  /// the app's lifetime.
+  static func makeSessionManager(
+    setup: ContainerSetup, store: ProfileStore, coordinator: SyncCoordinator
+  ) -> SessionManager {
+    let sessionManager = SessionManager(
+      containerManager: setup.manager,
+      profileIndexRepository: setup.manager.profileIndexRepository,
+      syncCoordinator: coordinator)
+    // Wire the mid-session bump-arrival observer: when a remote
+    // profile-index batch raises a profile's `dataFormatVersion`
+    // above `DataFormatVersion.current`, the observer evicts the
+    // active session (if any) and records an `IncompatibleProfileInfo`
+    // so routing flips to the incompatible view (issue #764).
+    sessionManager.installIndexObserver()
+    // Clean up cached sessions and the coordinator's per-profile bundle
+    // cache when a profile is removed (locally or via remote sync).
+    // `containerManager.deleteStore` is about to invalidate the
+    // per-profile `DatabaseQueue`; the coordinator's cached handler /
+    // bundle would otherwise outlive it.
+    store.onProfileRemoved = { [weak sessionManager, weak coordinator] profileID in
+      sessionManager?.removeSession(for: profileID)
+      coordinator?.evictCachedState(for: profileID)
+    }
+    return sessionManager
   }
 
   /// Configure the automation service locator. On macOS this also sets up
