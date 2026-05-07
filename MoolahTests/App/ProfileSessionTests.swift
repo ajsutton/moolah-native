@@ -171,7 +171,16 @@ struct ProfileSessionTests {
     #expect(plan.isEmpty)
   }
 
-  @Test("Mixed record types combine reload plans (reactive stores excluded)")
+  @Test("ImportRuleRecord change does NOT enqueue an import-rule reload")
+  func importRuleRecordDoesNotReloadImportRules() {
+    // ImportRuleStore is reactive — `ImportRuleRepository.observeAll()`
+    // re-emits when import-rule rows change, so the legacy
+    // `.importRules` reload path is intentionally not taken.
+    let plan = ProfileSession.storesToReload(for: [ImportRuleRow.recordType])
+    #expect(plan.isEmpty)
+  }
+
+  @Test("Mixed record types combine reload plans (every store is reactive)")
   func mixedRecordTypesCombineReloadPlans() {
     let plan = ProfileSession.storesToReload(
       for: [
@@ -179,13 +188,10 @@ struct ProfileSessionTests {
         CategoryRow.recordType,
         ImportRuleRow.recordType,
       ])
-    // AccountStore, EarmarkStore, and CategoryStore are all reactive —
-    // none of them appear in the reload plan, even when leg /
-    // transaction / earmark / category changes arrive. Only the
-    // still-imperative `.importRules` slot remains.
-    #expect(!plan.contains(.accounts))
-    #expect(!plan.contains(.earmarks))
-    #expect(!plan.contains(.categories))
-    #expect(plan.contains(.importRules))
+    // AccountStore, EarmarkStore, CategoryStore, and ImportRuleStore
+    // are all reactive — none of them appear in the reload plan, even
+    // when leg / transaction / earmark / category / import-rule
+    // changes arrive together.
+    #expect(plan.isEmpty)
   }
 }

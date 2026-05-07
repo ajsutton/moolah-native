@@ -201,3 +201,10 @@ extension CategoryStore: TestableStoreObservation {
   /// snapshot is the store itself.
   var snapshot: CategoryStore { self }
 }
+
+extension ImportRuleStore: TestableStoreObservation {
+  var observationTicks: AsyncStream<Void> { testObservationTickStream }
+  /// Tests assert directly against published `@Observable` state; the
+  /// snapshot is the store itself.
+  var snapshot: ImportRuleStore { self }
+}
