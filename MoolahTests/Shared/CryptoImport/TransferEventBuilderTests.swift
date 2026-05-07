@@ -46,7 +46,11 @@ struct TransferEventBuilderTests {
     #expect(candidate.originAccountId == account.id)
     #expect(candidate.transaction.legs.count == 1)
     let leg = try #require(candidate.transaction.legs.first)
-    #expect(leg.type == .transfer)
+    // Outbound external transfer to a non-moolah address: from this
+    // account's perspective the wallet paid out (= `.expense`). The
+    // cross-account merger promotes paired (.income, .expense) shapes
+    // when the counterparty *is* a moolah-tracked account.
+    #expect(leg.type == .expense)
     #expect(leg.accountId == account.id)
     #expect(leg.externalId == "0xeth-send:0")
     #expect(leg.instrument == ChainConfig.ethereum.nativeInstrument)
@@ -88,7 +92,7 @@ struct TransferEventBuilderTests {
     let candidate = try #require(built.first)
     #expect(candidate.transaction.legs.count == 1)
     let leg = try #require(candidate.transaction.legs.first)
-    #expect(leg.type == .transfer)
+    #expect(leg.type == .expense)
     #expect(leg.externalId == "0xerc20-send:0")
     #expect(leg.instrument.kind == .cryptoToken)
     #expect(leg.instrument.contractAddress == Self.usdcAddress.lowercased())
@@ -121,7 +125,8 @@ struct TransferEventBuilderTests {
     let candidate = try #require(built.first)
     #expect(candidate.transaction.legs.count == 1)
     let leg = try #require(candidate.transaction.legs.first)
-    #expect(leg.type == .transfer)
+    // Inbound from a non-moolah address: the wallet received (= `.income`).
+    #expect(leg.type == .income)
     #expect(leg.quantity == Decimal(1))
     #expect(leg.externalId == "0xreceive:0")
   }

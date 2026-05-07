@@ -95,7 +95,10 @@ enum CrossDeviceLegDeduperTestSupport {
     externalId: String,
     quantity: Decimal = -1
   ) -> Transaction {
-    Transaction(
+    // Mirror `TransferEventBuilder`'s per-account types: positive
+    // quantity → `.income`, negative → `.expense`.
+    let legType: TransactionType = quantity >= 0 ? .income : .expense
+    return Transaction(
       id: id,
       date: Self.date,
       legs: [
@@ -103,7 +106,7 @@ enum CrossDeviceLegDeduperTestSupport {
           accountId: accountId,
           quantity: quantity,
           externalId: externalId,
-          type: .transfer)
+          type: legType)
       ])
   }
 

@@ -55,12 +55,15 @@ struct TransferEventBuilderGasLegTests {
 
     let candidate = try #require(built.first)
     #expect(candidate.transaction.legs.count == 2)
+    // Outbound + gas: both legs are `.expense` per the wallet
+    // importer's per-account types — disambiguate by the gas leg's
+    // `:gas` `externalId` suffix.
     let transferLeg = try #require(
-      candidate.transaction.legs.first(where: { $0.type == .transfer }))
+      candidate.transaction.legs.first(where: { $0.externalId == "0xeth-send:0" }))
     let gasLeg = try #require(
-      candidate.transaction.legs.first(where: { $0.type == .expense }))
-    #expect(transferLeg.externalId == "0xeth-send:0")
-    #expect(gasLeg.externalId == "0xeth-send:gas")
+      candidate.transaction.legs.first(where: { $0.externalId == "0xeth-send:gas" }))
+    #expect(transferLeg.type == .expense)
+    #expect(gasLeg.type == .expense)
     #expect(gasLeg.instrument == ChainConfig.ethereum.nativeInstrument)
     #expect(gasLeg.quantity == -Self.expectedFeeEth)
     #expect(gasLeg.accountId == account.id)
@@ -106,14 +109,14 @@ struct TransferEventBuilderGasLegTests {
     let candidate = try #require(built.first)
     #expect(candidate.transaction.legs.count == 2)
     let transferLeg = try #require(
-      candidate.transaction.legs.first(where: { $0.type == .transfer }))
+      candidate.transaction.legs.first(where: { $0.externalId == "0xerc20-send:0" }))
     let gasLeg = try #require(
-      candidate.transaction.legs.first(where: { $0.type == .expense }))
+      candidate.transaction.legs.first(where: { $0.externalId == "0xerc20-send:gas" }))
+    #expect(transferLeg.type == .expense)
+    #expect(gasLeg.type == .expense)
     #expect(transferLeg.instrument.contractAddress == Self.usdcAddress.lowercased())
     #expect(gasLeg.instrument == ChainConfig.ethereum.nativeInstrument)
     #expect(gasLeg.quantity == -Self.expectedFeeEth)
-    #expect(gasLeg.externalId == "0xerc20-send:gas")
-    #expect(transferLeg.externalId == "0xerc20-send:0")
   }
 
   // MARK: - Inbound never gets a gas leg
@@ -141,13 +144,15 @@ struct TransferEventBuilderGasLegTests {
 
     let candidate = try #require(built.first)
     #expect(candidate.transaction.legs.count == 1)
-    #expect(candidate.transaction.legs.allSatisfy { $0.type == .transfer })
+    // Inbound from a non-moolah address: the leg is `.income`, not
+    // `.transfer` — `.transfer` is reserved for cross-account pairs.
+    #expect(candidate.transaction.legs.allSatisfy { $0.type == .income })
     #expect(alchemy.recordedReceiptCalls.isEmpty)
   }
 
   // MARK: - Self-send still pays gas
 
-  @Test("Self-send → transfer leg + gas leg (gas is paid even on self-send)")
+  @Test("Self-send → income leg + gas leg (gas is paid even on self-send)")
   func selfSendStillProducesGasLeg() async throws {
     let subject = makeDiscoverySubject()
     let alchemy = RecordingAlchemyClientStub()
@@ -179,7 +184,9 @@ struct TransferEventBuilderGasLegTests {
 
     let candidate = try #require(built.first)
     let types = candidate.transaction.legs.map(\.type)
-    #expect(types.filter { $0 == .transfer }.count == 1)
+    // Self-send: value leg is typed `.income` (positive quantity), gas
+    // leg is `.expense`.
+    #expect(types.filter { $0 == .income }.count == 1)
     #expect(types.filter { $0 == .expense }.count == 1)
   }
 
@@ -228,13 +235,13 @@ struct TransferEventBuilderGasLegTests {
       built.first { candidate in
         candidate.transaction.legs.contains { $0.externalId == "0xbad:0" }
       })
-    // Good event keeps both legs.
+    // Good event keeps both legs (value + gas, both `.expense`).
     #expect(goodCandidate.transaction.legs.count == 2)
-    #expect(goodCandidate.transaction.legs.contains { $0.type == .expense })
-    // Bad event keeps the transfer leg but skips gas — receipt failure
+    #expect(goodCandidate.transaction.legs.allSatisfy { $0.type == .expense })
+    // Bad event keeps the value leg but skips gas — receipt failure
     // must not corrupt the account-level result.
     #expect(badCandidate.transaction.legs.count == 1)
-    #expect(badCandidate.transaction.legs.allSatisfy { $0.type == .transfer })
+    #expect(badCandidate.transaction.legs.allSatisfy { $0.type == .expense })
   }
 
 }

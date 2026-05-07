@@ -143,7 +143,11 @@ struct TransferEventBuilderGasCoalescingTests {
 
     #expect(alchemy.recordedReceiptCalls == ["0xmulti"])
     let candidate = try #require(built.first)
-    let gasLegs = candidate.transaction.legs.filter { $0.type == .expense }
+    // Filter by the gas leg's `:gas` `externalId` suffix; outbound value
+    // legs are now `.expense` too, so type alone no longer disambiguates.
+    let gasLegs = candidate.transaction.legs.filter {
+      $0.externalId?.hasSuffix(":gas") == true
+    }
     #expect(gasLegs.count == 1)
   }
 }

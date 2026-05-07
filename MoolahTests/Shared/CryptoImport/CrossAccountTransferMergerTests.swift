@@ -105,24 +105,26 @@ struct CrossAccountTransferMergerTests {
   @Test("Fee legs from both sides are preserved on the merged transaction")
   func preservesFeeLegsOnMerge() async throws {
     let gasInstrument = TestInstruments.ethereum
+    // Fee legs use the `:gas` `externalId` suffix per
+    // `TransferReceiptCoalescer.gasLegExternalId(hash:)` so they're
+    // distinguishable from the value-bearing leg by externalId alone —
+    // both legs are `.expense`-typed when the value side is outbound.
     let outboundFee = TransactionLeg(
       accountId: Self.accountA,
       instrument: gasInstrument,
       quantity: try #require(Decimal(string: "-0.001")),
-      externalId: Self.hash,
+      externalId: "\(Self.hash):gas",
       type: .expense)
     let outbound = makeBuiltTransaction(
       accountId: Self.accountA, hash: Self.hash,
       instrument: gasInstrument, quantity: -1,
       extraLegs: [outboundFee])
 
-    // Inbound side — different chain native, different fee instrument
-    // to keep the value vs. fee distinction obvious.
     let inboundFee = TransactionLeg(
       accountId: Self.accountB,
       instrument: gasInstrument,
       quantity: try #require(Decimal(string: "-0.0005")),
-      externalId: Self.hash,
+      externalId: "\(Self.hash):gas",
       type: .expense)
     let inbound = makeBuiltTransaction(
       accountId: Self.accountB, hash: Self.hash,
@@ -135,7 +137,12 @@ struct CrossAccountTransferMergerTests {
 
     #expect(merged.count == 1)
     let result = try #require(merged.first)
-    let feeLegs = result.transaction.legs.filter { $0.type == .expense }
+    // Filter by the `:gas` `externalId` suffix; value-bearing
+    // outbound legs are now `.expense` too, so type alone no longer
+    // disambiguates fee from value.
+    let feeLegs = result.transaction.legs.filter {
+      $0.externalId?.hasSuffix(":gas") == true
+    }
     #expect(feeLegs.count == 2)
   }
 
@@ -143,12 +150,15 @@ struct CrossAccountTransferMergerTests {
 
   @Test("In-batch candidate pairs against a leg already persisted on a prior cycle")
   func mergesAgainstExistingPersistedLeg() async throws {
+    // Prior-cycle outbound leg, persisted by an earlier sync. The
+    // wallet importer would have written this as `.expense` per its
+    // per-account type rule.
     let priorCycleLeg = TransactionLeg(
       accountId: Self.accountA,
       instrument: TestInstruments.ethereum,
       quantity: -1,
       externalId: Self.hash,
-      type: .transfer)
+      type: .expense)
 
     let inbound = makeBuiltTransaction(
       accountId: Self.accountB, hash: Self.hash,
@@ -217,12 +227,16 @@ struct CrossAccountTransferMergerTests {
     date: Date = Date(timeIntervalSince1970: 1_700_000_000),
     extraLegs: [TransactionLeg] = []
   ) -> BuiltTransaction {
+    // Wallet importer types: outbound (negative qty) → `.expense`,
+    // inbound (positive qty) → `.income`. The merger then pairs
+    // (.income, .expense) tuples on opposing-sign quantities.
+    let legType: TransactionType = quantity >= 0 ? .income : .expense
     let transferLeg = TransactionLeg(
       accountId: accountId,
       instrument: instrument,
       quantity: quantity,
       externalId: hash,
-      type: .transfer)
+      type: legType)
     let transaction = Transaction(
       date: date,
       legs: [transferLeg] + extraLegs,
