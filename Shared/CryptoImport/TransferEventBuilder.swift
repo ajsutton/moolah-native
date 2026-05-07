@@ -103,6 +103,7 @@ struct TransferEventBuilder: Sendable {
       chain: chain,
       discovery: discovery,
       importOrigin: importOrigin)
+    try await Self.preregisterChainNativeInstrument(chain: chain, discovery: discovery)
 
     // Stable order: group preserves first-seen order so test fixtures
     // and signposts are deterministic.

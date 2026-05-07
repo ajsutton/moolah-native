@@ -171,4 +171,49 @@ struct FullConversionServiceConvertResultTests {
 
     #expect(result == .value(InstrumentAmount(quantity: dec("100") * dec("1.58"), instrument: aud)))
   }
+
+  // MARK: - Native gas instruments — issue #791
+
+  /// Pins the `(.cryptoToken, .fiatCurrency)` dispatch for an Optimism
+  /// native ETH (`10:native`) → AUD conversion through `convertResult`,
+  /// covering the full `.priced` branch — `convertResult` is the
+  /// aggregation entry point on which downstream callers depend per
+  /// `INSTRUMENT_CONVERSION_GUIDE.md` Rule 11.
+  ///
+  /// The bug in #791 surfaced because wallet sync inserted a
+  /// `10:native` row without a provider mapping (`hasMapping=false`,
+  /// default `pricingStatus=.priced`), which `allCryptoRegistrations()`
+  /// projects to nil — so `cryptoUsdPrice` then threw
+  /// `ConversionError.noProviderMapping`. The fix lives in
+  /// `TransferEventBuilder.build(...)`; this test pins the
+  /// FullConversionService side of the contract.
+  @Test
+  func nativeGasInstrumentConvertsToFiat() async throws {
+    let optimismEth = Instrument.crypto(
+      chainId: 10, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
+    let registration = CryptoRegistration(
+      instrument: optimismEth,
+      mapping: CryptoProviderMapping(
+        instrumentId: "10:native",
+        coingeckoId: nil,
+        cryptocompareSymbol: "ETH",
+        binanceSymbol: "ETHUSDT"),
+      pricingStatus: .priced)
+    let bundle = try makeService(
+      cryptoPrices: ["10:native": ["2026-04-10": dec("1623.45")]],
+      exchangeRates: ["2026-04-10": ["AUD": dec("1.58")]],
+      registrations: [registration]
+    )
+    let amount = InstrumentAmount(quantity: dec("0.5"), instrument: optimismEth)
+
+    let result = try await bundle.service.convertResult(
+      amount, to: aud, on: try date("2026-04-10"))
+
+    // 0.5 ETH * 1623.45 USD/ETH * 1.58 AUD/USD
+    #expect(
+      result
+        == .value(
+          InstrumentAmount(
+            quantity: dec("0.5") * dec("1623.45") * dec("1.58"), instrument: aud)))
+  }
 }
