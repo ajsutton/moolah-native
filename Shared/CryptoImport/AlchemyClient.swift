@@ -104,6 +104,7 @@ struct LiveAlchemyClient: AlchemyClient {
     walletAddress: String,
     fromBlock: UInt64
   ) async throws -> [AlchemyTransfer] {
+    try requireApiKey()
     let signpostID = OSSignpostID(log: Signposts.cryptoSync)
     os_signpost(
       .begin,
@@ -143,6 +144,7 @@ struct LiveAlchemyClient: AlchemyClient {
     chain: ChainConfig,
     contractAddress: String
   ) async throws -> AlchemyTokenMetadata {
+    try requireApiKey()
     try await rateLimiter.acquire()
     let body = AlchemyJSONRPCRequest<AlchemyJSONRPCParams>(
       method: "alchemy_getTokenMetadata",
@@ -171,6 +173,7 @@ struct LiveAlchemyClient: AlchemyClient {
     chain: ChainConfig,
     hash: String
   ) async throws -> AlchemyTransactionReceipt {
+    try requireApiKey()
     let signpostID = OSSignpostID(log: Signposts.cryptoSync)
     os_signpost(
       .begin,
@@ -224,6 +227,19 @@ struct LiveAlchemyClient: AlchemyClient {
   }
 
   // MARK: - Internals
+
+  /// Pre-flight guard for every public method. The wiring at
+  /// `ProfileSession.makeCryptoSyncWiring` resolves the keychain key
+  /// best-effort and falls back to an empty string when nothing is
+  /// configured; without this guard the empty key would slot into the
+  /// URL path (`…/v2/`), Alchemy would respond 401, and the validator
+  /// would mis-classify the failure as `.invalidApiKey`. Surfacing
+  /// `.missingApiKey` here keeps the wiring's "construct unconditionally"
+  /// pattern intact while telling the user the truth — the key is
+  /// missing, not invalid — without a network round-trip.
+  private func requireApiKey() throws {
+    guard !apiKey.isEmpty else { throw WalletSyncError.missingApiKey }
+  }
 
   private func fetchTransfers(
     chain: ChainConfig,

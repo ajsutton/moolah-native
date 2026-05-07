@@ -79,17 +79,73 @@ struct WalletAccountHeaderViewLogicTests {
 
   // MARK: - Sync-now enabled state
 
-  @Test("Sync-now button enabled when account is not in flight")
+  @Test("Sync-now button enabled when account is not in flight and a key is configured")
   func syncEnabledWhenNotInFlight() {
     let id = UUID()
-    #expect(WalletAccountHeaderLogic.isSyncEnabled(accountId: id, inProgress: []))
     #expect(
-      WalletAccountHeaderLogic.isSyncEnabled(accountId: id, inProgress: [UUID()]))
+      WalletAccountHeaderLogic.isSyncEnabled(
+        accountId: id, inProgress: [], hasApiKey: true))
+    #expect(
+      WalletAccountHeaderLogic.isSyncEnabled(
+        accountId: id, inProgress: [UUID()], hasApiKey: true))
   }
 
   @Test("Sync-now button disabled while account is in flight")
   func syncDisabledWhenInFlight() {
     let id = UUID()
-    #expect(!WalletAccountHeaderLogic.isSyncEnabled(accountId: id, inProgress: [id]))
+    #expect(
+      !WalletAccountHeaderLogic.isSyncEnabled(
+        accountId: id, inProgress: [id], hasApiKey: true))
+  }
+
+  @Test("Sync-now button disabled when no Alchemy key is configured")
+  func syncDisabledWhenNoApiKey() {
+    let id = UUID()
+    // Even idle and otherwise eligible, no key → no sync.
+    #expect(
+      !WalletAccountHeaderLogic.isSyncEnabled(
+        accountId: id, inProgress: [], hasApiKey: false))
+    // And in-flight + no key still resolves to disabled.
+    #expect(
+      !WalletAccountHeaderLogic.isSyncEnabled(
+        accountId: id, inProgress: [id], hasApiKey: false))
+  }
+
+  // MARK: - Inline error caption
+
+  @Test("Nil lastError yields no inline error caption")
+  func errorCaptionAbsentWhenNoError() {
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    let state = WalletSyncState(
+      id: UUID(),
+      lastSyncedBlockNumber: 100,
+      lastSyncedAt: now.addingTimeInterval(-60),
+      lastError: nil)
+    #expect(WalletAccountHeaderLogic.errorCaption(for: state) == nil)
+    #expect(WalletAccountHeaderLogic.errorCaption(for: nil) == nil)
+  }
+
+  @Test(".invalidApiKey produces a non-empty user-facing caption")
+  func invalidApiKeyProducesCaption() {
+    let state = WalletSyncState(
+      id: UUID(),
+      lastSyncedBlockNumber: 0,
+      lastSyncedAt: .distantPast,
+      lastError: .invalidApiKey)
+    let caption = WalletAccountHeaderLogic.errorCaption(for: state)
+    #expect(caption != nil)
+    #expect(caption?.isEmpty == false)
+  }
+
+  @Test(".missingApiKey produces a non-empty user-facing caption")
+  func missingApiKeyProducesCaption() {
+    let state = WalletSyncState(
+      id: UUID(),
+      lastSyncedBlockNumber: 0,
+      lastSyncedAt: .distantPast,
+      lastError: .missingApiKey)
+    let caption = WalletAccountHeaderLogic.errorCaption(for: state)
+    #expect(caption != nil)
+    #expect(caption?.isEmpty == false)
   }
 }

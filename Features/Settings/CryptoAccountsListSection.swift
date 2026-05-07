@@ -127,24 +127,11 @@ struct CryptoAccountsListSection: View {
     return "Synced \(relative)"
   }
 
+  /// Delegates to `WalletAccountHeaderLogic.errorCaption(for:)` so the
+  /// settings pane and the wallet header surface identical copy for
+  /// the same `WalletSyncError`. Keeping the formatter in one place
+  /// avoids drift if the wording changes.
   private func errorCaption(for error: WalletSyncError) -> String {
-    switch error {
-    case .missingApiKey:
-      return "Add an Alchemy API key to enable sync."
-    case .invalidApiKey:
-      return "Alchemy rejected the API key."
-    case .rateLimited(let retryAfter):
-      if let retryAfter {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return
-          "Rate-limited. Retry \(formatter.localizedString(for: retryAfter, relativeTo: Date()))."
-      }
-      return "Rate-limited. Retry shortly."
-    case .network(let underlying):
-      return "Network error: \(underlying)"
-    case .providerMalformedResponse(let stage):
-      return "Provider returned a malformed response (\(stage))."
-    }
+    WalletAccountHeaderLogic.errorCaption(for: error)
   }
 }

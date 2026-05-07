@@ -325,6 +325,10 @@ struct CryptoSyncStoreTests {
     #expect(fixture.alchemy.recordedCalls.isEmpty)
   }
 
+  // The global-error-banner tests live in
+  // `CryptoSyncStoreGlobalErrorTests.swift` so this file stays under
+  // SwiftLint's `file_length` and `type_body_length` budgets.
+
   // MARK: - No background tasks
   //
   // The design explicitly excludes `BackgroundTasks` / `BGAppRefreshTask`.
