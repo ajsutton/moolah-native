@@ -39,7 +39,7 @@ struct CrossAccountTransferMergerTests {
       quantity: 1,
       date: Self.dateB)
 
-    let merged = try await CrossAccountTransferMerger().merge(
+    let merged = try await LiveCrossAccountTransferMerger().merge(
       candidates: [outbound, inbound],
       existingLegLookup: { _ in [] })
 
@@ -61,7 +61,7 @@ struct CrossAccountTransferMergerTests {
       accountId: Self.accountB, hash: Self.hash,
       instrument: TestInstruments.ethereum, quantity: 1)
 
-    let merged = try await CrossAccountTransferMerger().merge(
+    let merged = try await LiveCrossAccountTransferMerger().merge(
       candidates: [firstInbound, secondInbound],
       existingLegLookup: { _ in [] })
 
@@ -77,7 +77,7 @@ struct CrossAccountTransferMergerTests {
       accountId: Self.accountB, hash: Self.hash,
       instrument: TestInstruments.polygon, quantity: 1)
 
-    let merged = try await CrossAccountTransferMerger().merge(
+    let merged = try await LiveCrossAccountTransferMerger().merge(
       candidates: [outbound, inbound],
       existingLegLookup: { _ in [] })
 
@@ -93,7 +93,7 @@ struct CrossAccountTransferMergerTests {
       accountId: Self.accountA, hash: Self.hash,
       instrument: TestInstruments.ethereum, quantity: 1)
 
-    let merged = try await CrossAccountTransferMerger().merge(
+    let merged = try await LiveCrossAccountTransferMerger().merge(
       candidates: [outbound, inbound],
       existingLegLookup: { _ in [] })
 
@@ -129,7 +129,7 @@ struct CrossAccountTransferMergerTests {
       instrument: gasInstrument, quantity: 1,
       extraLegs: [inboundFee])
 
-    let merged = try await CrossAccountTransferMerger().merge(
+    let merged = try await LiveCrossAccountTransferMerger().merge(
       candidates: [outbound, inbound],
       existingLegLookup: { _ in [] })
 
@@ -154,7 +154,7 @@ struct CrossAccountTransferMergerTests {
       accountId: Self.accountB, hash: Self.hash,
       instrument: TestInstruments.ethereum, quantity: 1)
 
-    let merged = try await CrossAccountTransferMerger().merge(
+    let merged = try await LiveCrossAccountTransferMerger().merge(
       candidates: [inbound],
       existingLegLookup: { externalId in
         externalId == Self.hash ? [priorCycleLeg] : []
@@ -182,7 +182,7 @@ struct CrossAccountTransferMergerTests {
       accountId: Self.accountA, hash: Self.hash,
       instrument: TestInstruments.ethereum, quantity: 1, date: Self.dateA)
 
-    let merged = try await CrossAccountTransferMerger().merge(
+    let merged = try await LiveCrossAccountTransferMerger().merge(
       candidates: [outbound, inbound],
       existingLegLookup: { _ in [] })
 
@@ -199,7 +199,7 @@ struct CrossAccountTransferMergerTests {
       accountId: Self.accountB, hash: Self.hash,
       instrument: TestInstruments.ethereum, quantity: 1, date: Self.dateA)
 
-    let merged = try await CrossAccountTransferMerger().merge(
+    let merged = try await LiveCrossAccountTransferMerger().merge(
       candidates: [outbound, inbound],
       existingLegLookup: { _ in [] })
 

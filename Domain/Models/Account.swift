@@ -91,14 +91,18 @@ extension Account: Codable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decode(UUID.self, forKey: .id)
     name = try container.decode(String.self, forKey: .name)
-    // Defensive decode for `type`: an older build receiving an Account
-    // record from a newer device (e.g. with `type = "crypto"` before this
-    // build added the case, or any future type after) falls back to
-    // `.asset` rather than throwing — so archive/preview paths don't
-    // break on encountering a future type. The wire-layer mapper applies
-    // the same fallback for sync correctness.
-    let typeRaw = try container.decode(String.self, forKey: .type)
-    type = AccountType(rawValue: typeRaw) ?? .asset
+    // Strict decode for `type`: throws on unknown raw values. The
+    // forward-compat path for an older build encountering a future
+    // `AccountType` is the `Profile.dataFormatVersion` gate
+    // (`Domain/Models/DataFormatVersion.swift`) — a newer client must
+    // bump that field before writing records that use the new type, so
+    // an older build refuses to open the profile rather than silently
+    // misclassifying records. The wire-layer apply path
+    // (`AccountRow.safeAccountTypeRaw`) keeps a `"asset"` fallback to
+    // unblock GRDB persistence between record-arrival ordering, but
+    // the in-memory domain decode (used by tests, exports, archives)
+    // is strict.
+    type = try container.decode(AccountType.self, forKey: .type)
     instrument = try container.decodeIfPresent(Instrument.self, forKey: .instrument) ?? .AUD
     // positions are not persisted via Codable — they are computed by the
     // repository layer from transaction legs and injected at fetch time.

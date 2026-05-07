@@ -52,4 +52,20 @@ struct AccountTests {
     #expect(decoded.walletAddress == nil)
     #expect(decoded.chainId == nil)
   }
+
+  @Test
+  func unknownAccountTypeIsRejectedByCodable() {
+    // Forward-compat is the `Profile.dataFormatVersion` gate's job — a
+    // newer client must bump the gate before writing records that use a
+    // future `AccountType`. The in-memory `Account.Codable` decode is
+    // strict and throws on unknown values rather than silently
+    // misclassifying them as `.asset`.
+    let json = Data(
+      """
+      {"id":"\(UUID().uuidString)","name":"Future","type":"future-type","instrument":{"id":"AUD","kind":"fiatCurrency","name":"AUD","decimals":2},"position":0,"hidden":false}
+      """.utf8)
+    #expect(throws: DecodingError.self) {
+      _ = try JSONDecoder().decode(Account.self, from: json)
+    }
+  }
 }
