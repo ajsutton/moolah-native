@@ -54,13 +54,14 @@ struct WalletApplyEngineTests {
     let hash = "0xseen-before"
 
     // Pre-seed a transaction with the same `(accountId, externalId)`
-    // pair so the dedup step has something to find.
+    // pair so the dedup step has something to find. Wallet importer's
+    // per-account leg type is `.expense` for outbound (negative qty).
     let priorLeg = TransactionLeg(
       accountId: accountA.id,
       instrument: ChainConfig.ethereum.nativeInstrument,
       quantity: -1,
       externalId: hash,
-      type: .transfer)
+      type: .expense)
     _ = try await setup.backend.transactions.create(
       Transaction(
         date: Self.pinnedNow.addingTimeInterval(-3_600),
@@ -186,12 +187,15 @@ struct WalletApplyEngineTests {
     hash: String,
     quantity: Decimal
   ) -> BuiltTransaction {
+    // Mirror `TransferEventBuilder`'s per-account types: positive
+    // quantity (inbound) → `.income`, negative (outbound) → `.expense`.
+    let legType: TransactionType = quantity >= 0 ? .income : .expense
     let leg = TransactionLeg(
       accountId: accountId,
       instrument: ChainConfig.ethereum.nativeInstrument,
       quantity: quantity,
       externalId: hash,
-      type: .transfer)
+      type: legType)
     let transaction = Transaction(
       date: Self.pinnedNow,
       legs: [leg],

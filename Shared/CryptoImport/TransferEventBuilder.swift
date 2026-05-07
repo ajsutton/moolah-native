@@ -266,7 +266,7 @@ struct TransferEventBuilder: Sendable {
       quantity: resolution.signedQuantity,
       externalId: event.uniqueId,
       counterpartyAddress: resolution.counterpartyAddress,
-      type: .transfer)
+      type: TransferEventBuilder.legType(for: direction))
   }
 
   /// Resolves a transfer's direction into the leg's signed quantity and

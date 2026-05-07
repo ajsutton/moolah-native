@@ -36,14 +36,19 @@ struct TransactionDetailAccountSection: View {
         }
       }
 
-      if draft.type == .transfer {
-        transferRows
+      if draft.type == .transfer, let counterpartIndex = draft.counterpartLegIndex {
+        transferRows(counterpartIndex: counterpartIndex)
       }
     }
   }
 
-  @ViewBuilder private var transferRows: some View {
-    let counterpartIndex = draft.relevantLegIndex == 0 ? 1 : 0
+  /// Renders the counterpart-account picker (and, when cross-currency,
+  /// the converted-amount row) for a two-leg transfer. Wallet-imported
+  /// transfers have only one leg (the counterparty is an external
+  /// chain address, not a moolah account), so the call site guards on
+  /// `counterpartLegIndex != nil` before invoking — see issue #791.
+  @ViewBuilder
+  private func transferRows(counterpartIndex: Int) -> some View {
     let toAccountLabel = draft.showFromAccount ? "From Account" : "To Account"
     let currentAccountId = draft.legDrafts[draft.relevantLegIndex].accountId
     let counterpartId = draft.legDrafts[counterpartIndex].accountId

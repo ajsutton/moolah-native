@@ -107,20 +107,25 @@ struct LiveCrossAccountTransferMerger: CrossAccountTransferMerger {
 
   // MARK: - Pairing predicate
 
-  /// Both legs are `.transfer`, share an `externalId`, share an
-  /// instrument, sit on different accounts, and carry equal-magnitude
-  /// opposite-sign quantities. Strict equality on magnitude — if a real
-  /// decimal-precision-drift case arises a small epsilon could be added,
-  /// but ETH / ERC-20 amounts are exact decimals reconstructed from the
-  /// same hex value on each side, so drift is not expected.
+  /// One leg is `.income`, the other is `.expense` (the per-account
+  /// types that `TransferEventBuilder` emits before pairing). Both
+  /// share an `externalId`, share an instrument, sit on different
+  /// accounts, and carry equal-magnitude opposite-sign quantities.
+  /// Strict equality on magnitude — if a real decimal-precision-drift
+  /// case arises a small epsilon could be added, but ETH / ERC-20
+  /// amounts are exact decimals reconstructed from the same hex value
+  /// on each side, so drift is not expected.
   ///
   /// Magnitude comparison uses `abs` only on the *comparison* of
-  /// quantities; the original signs are preserved on the merged legs.
-  /// Per-project convention `.trade` legs preserve user-entered signs;
-  /// here we're working with `.transfer` legs and the rule is the same —
+  /// quantities; the original signs are preserved on the merged legs
+  /// (which `merge(...)` then promotes to `.transfer`). Per-project
+  /// convention `.trade` legs preserve user-entered signs; here we're
+  /// working with the wallet importer's legs and the rule is the same —
   /// don't normalise.
   static func isPair(_ leg: TransactionLeg, _ other: TransactionLeg) -> Bool {
-    guard leg.type == .transfer, other.type == .transfer else { return false }
+    guard pairableTypes.contains(leg.type), pairableTypes.contains(other.type) else {
+      return false
+    }
     guard let legId = leg.externalId, let otherId = other.externalId else { return false }
     guard legId == otherId else { return false }
     guard leg.instrument == other.instrument else { return false }
@@ -131,6 +136,12 @@ struct LiveCrossAccountTransferMerger: CrossAccountTransferMerger {
     guard legSign != 0, otherSign != 0, legSign != otherSign else { return false }
     return abs(leg.quantity) == abs(other.quantity)
   }
+
+  /// Leg types `TransferEventBuilder` emits per account before pairing.
+  /// `.income` (inbound) and `.expense` (outbound) — a cross-account
+  /// moolah-tracked transfer surfaces as one of each, paired by
+  /// `externalId` and opposing-sign quantities.
+  private static let pairableTypes: Set<TransactionType> = [.income, .expense]
 
   // MARK: - Search
 
@@ -259,16 +270,21 @@ struct LiveCrossAccountTransferMerger: CrossAccountTransferMerger {
 
   // MARK: - Helpers
 
-  /// The single value-bearing transfer leg, when this candidate is
-  /// shaped for cross-account pairing — exactly one `.transfer` leg
-  /// whose `externalId` keys the on-chain hash. Returns `nil` for
-  /// trades or already-merged multi-transfer-leg transactions; the
-  /// merger leaves those untouched.
+  /// The single value-bearing leg, when this candidate is shaped for
+  /// cross-account pairing — exactly one `.income` or `.expense` leg
+  /// whose `externalId` keys the on-chain hash. Skips the gas leg
+  /// (whose `externalId` carries the `":gas"` suffix per
+  /// `TransferReceiptCoalescer.gasLegExternalId(hash:)`). Returns nil
+  /// for trades, gas-only candidates, or already-paired transactions
+  /// carrying multiple value legs; the merger leaves those untouched.
   private static func valueBearingTransferLeg(
     of candidate: BuiltTransaction
   ) -> TransactionLeg? {
-    let transferLegs = candidate.transaction.legs.filter { $0.type == .transfer }
-    return transferLegs.count == 1 ? transferLegs.first : nil
+    let valueLegs = candidate.transaction.legs.filter { leg in
+      guard pairableTypes.contains(leg.type), let id = leg.externalId else { return false }
+      return !id.hasSuffix(":gas")
+    }
+    return valueLegs.count == 1 ? valueLegs.first : nil
   }
 
   /// `1` for positive, `-1` for negative, `0` for zero. Local helper so
