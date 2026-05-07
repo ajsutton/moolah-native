@@ -18,6 +18,20 @@ enum AlchemyTestSupport {
     permitsPerSecond: Double = 1_000,
     handler: @escaping @Sendable (URLRequest) throws -> (HTTPURLResponse, Data)
   ) -> LiveAlchemyClient {
+    makeClient(
+      apiKeyProvider: { apiKey },
+      permitsPerSecond: permitsPerSecond,
+      handler: handler)
+  }
+
+  /// Variant that takes a `@Sendable` closure provider so tests can mutate
+  /// the returned key between calls (covering the key-set-after-launch
+  /// case where `LiveAlchemyClient` was previously stale).
+  static func makeClient(
+    apiKeyProvider: @escaping @Sendable () -> String?,
+    permitsPerSecond: Double = 1_000,
+    handler: @escaping @Sendable (URLRequest) throws -> (HTTPURLResponse, Data)
+  ) -> LiveAlchemyClient {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [AlchemyURLProtocolStub.self]
     let session = URLSession(configuration: config)
@@ -25,7 +39,8 @@ enum AlchemyTestSupport {
     AlchemyURLProtocolStub.lastBodyJSON = [:]
     AlchemyURLProtocolStub.requestHandler = handler
     let limiter = RateLimiter(permitsPerSecond: permitsPerSecond)
-    return LiveAlchemyClient(session: session, apiKey: apiKey, rateLimiter: limiter)
+    return LiveAlchemyClient(
+      session: session, apiKeyProvider: apiKeyProvider, rateLimiter: limiter)
   }
 
   /// Build a 200 OK JSON response for the URL of an inbound request. The
