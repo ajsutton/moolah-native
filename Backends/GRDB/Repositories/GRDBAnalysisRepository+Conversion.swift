@@ -73,6 +73,12 @@ extension GRDBAnalysisRepository {
   /// `TransactionLeg` because rows arrive as already-summed
   /// `(storageValue, instrumentId)` tuples from the GROUP BY — no leg
   /// is available to project from.
+  ///
+  /// `.knownZero` source instruments (`.unpriced` / `.spam` crypto
+  /// registrations) fold to `.zero(target)` rather than failing the
+  /// row, so income/expense, breakdown and category aggregations omit
+  /// the unpriced contribution but still render the rest of the day.
+  /// Issue #790. A real provider error still throws.
   @concurrent
   static func convertedQuantity(
     storageValue: Int64,
@@ -85,8 +91,10 @@ extension GRDBAnalysisRepository {
     if instrument.id == target.id {
       return amount
     }
-    let converted = try await conversionService.convert(
-      amount.quantity, from: instrument, to: target, on: day)
-    return InstrumentAmount(quantity: converted, instrument: target)
+    let result = try await conversionService.convertResult(amount, to: target, on: day)
+    switch result {
+    case .value(let converted): return converted
+    case .knownZero: return .zero(instrument: target)
+    }
   }
 }

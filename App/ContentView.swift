@@ -366,7 +366,10 @@ extension ContentView {
             positions: accountStore.positions(for: account.id),
             positionsHostCurrency: account.instrument,
             positionsTitle: account.name,
-            conversionService: session.backend.conversionService)
+            conversionService: session.backend.conversionService,
+            // Drives a re-fire of the per-row valuator when the user
+            // marks a token as `.spam` from preferences — issue #790.
+            registrationsVersion: session.cryptoTokenStore?.registrationsVersion ?? 0)
         }
       }
     }

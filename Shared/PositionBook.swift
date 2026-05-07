@@ -262,10 +262,11 @@ struct PositionBook: Equatable, Sendable {
   /// using the conversion service for non-target instruments. Single-instrument
   /// positions skip the conversion call.
   ///
-  /// Per-failure diagnostics: callers that swallow the thrown error (e.g. the
-  /// analysis pipeline skipping a day's balance) leave no trail of which
-  /// instrument/date failed. Log here so production diagnosis can identify
-  /// the offending conversion before re-throwing.
+  /// `.knownZero` source instruments (`.unpriced` / `.spam` crypto
+  /// registrations) contribute zero rather than failing the day's
+  /// aggregation — issue #790. Real provider errors keep their
+  /// per-instrument/date diagnostic log here (callers swallow the
+  /// thrown error in the analysis pipeline) before re-throwing.
   private func convert(
     _ positions: [Instrument: Decimal],
     to target: Instrument,
@@ -276,20 +277,25 @@ struct PositionBook: Equatable, Sendable {
     for (instrument, quantity) in positions {
       if instrument == target {
         total += quantity
-      } else {
-        do {
-          total += try await service.convert(quantity, from: instrument, to: target, on: date)
-        } catch {
-          logger.warning(
-            """
-            PositionBook conversion failed: \
-            \(quantity, privacy: .public) \(instrument.id, privacy: .public) \
-            → \(target.id, privacy: .public) on \(date, privacy: .public): \
-            \(error.localizedDescription, privacy: .public)
-            """
-          )
-          throw error
+        continue
+      }
+      do {
+        let amount = InstrumentAmount(quantity: quantity, instrument: instrument)
+        let result = try await service.convertResult(amount, to: target, on: date)
+        switch result {
+        case .value(let converted): total += converted.quantity
+        case .knownZero: continue
         }
+      } catch {
+        logger.warning(
+          """
+          PositionBook conversion failed: \
+          \(quantity, privacy: .public) \(instrument.id, privacy: .public) \
+          → \(target.id, privacy: .public) on \(date, privacy: .public): \
+          \(error.localizedDescription, privacy: .public)
+          """
+        )
+        throw error
       }
     }
     return total

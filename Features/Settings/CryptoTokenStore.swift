@@ -13,6 +13,21 @@ final class CryptoTokenStore {
 
   private(set) var error: String?
 
+  /// Fired after a successful registry mutation that may change a
+  /// registration's `pricingStatus` or remove a row. Wired by
+  /// `ProfileSession` to drive the per-store re-aggregation that
+  /// otherwise wouldn't observe registry changes — e.g. so the
+  /// `InvestmentStore`'s `valuedPositions` drops a freshly-marked
+  /// `.spam` token from the account's position list. Issue #790.
+  var onRegistrationsChanged: (@MainActor () -> Void)?
+
+  /// Monotonic version bumped after every successful registry mutation
+  /// (`setStatus`, `removeRegistration`). Views that derive per-account
+  /// valued positions pin a `.task(id:)` against this so a `.spam` flip
+  /// in preferences re-fires the per-row valuator without the user
+  /// having to navigate away. Issue #790.
+  private(set) var registrationsVersion: Int = 0
+
   private let registry: any InstrumentRegistryRepository
   private let cryptoPriceService: CryptoPriceService
   private let conversionService: any InstrumentConversionService
@@ -118,6 +133,8 @@ final class CryptoTokenStore {
       registrations.removeAll { $0.id == registration.id }
       instruments.removeAll { $0.id == registration.id }
       providerMappings.removeValue(forKey: registration.id)
+      registrationsVersion &+= 1
+      onRegistrationsChanged?()
     } catch {
       logger.error("Failed to remove registration: \(error, privacy: .public)")
       self.error = error.localizedDescription
@@ -154,6 +171,8 @@ final class CryptoTokenStore {
         registrations[index] = updated
       }
       error = nil
+      registrationsVersion &+= 1
+      onRegistrationsChanged?()
     } catch {
       logger.error("Failed to set pricing status: \(error, privacy: .public)")
       self.error = error.localizedDescription

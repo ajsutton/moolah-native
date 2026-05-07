@@ -205,8 +205,15 @@ extension GRDBAnalysisRepository {
           total += quantity
           continue
         }
-        total += try await conversionService.convert(
-          quantity, from: instrument, to: profileInstrument, on: date)
+        // `.knownZero` (e.g. an `.unpriced` / `.spam` crypto position)
+        // contributes zero rather than failing the day's investment
+        // aggregation — issue #790.
+        let amount = InstrumentAmount(quantity: quantity, instrument: instrument)
+        let result = try await conversionService.convertResult(
+          amount, to: profileInstrument, on: date)
+        if case .value(let converted) = result {
+          total += converted.quantity
+        }
       }
     }
     return InstrumentAmount(quantity: total, instrument: profileInstrument)

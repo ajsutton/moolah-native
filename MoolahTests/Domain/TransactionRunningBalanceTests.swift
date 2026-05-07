@@ -186,4 +186,74 @@ struct TransactionRunningBalanceTests {
     #expect(error.transactionId == oldestFailingId)
     #expect(error.targetInstrumentId == target.id)
   }
+
+  // MARK: - .knownZero legs (issue #790)
+
+  /// Issue #790: a leg whose conversion resolves to `.knownZero` (an
+  /// `.unpriced` / `.spam` crypto registration) contributes zero to the
+  /// running balance — it does NOT mark the row unavailable. This is
+  /// distinct from a transient rate-source failure, which still blanks
+  /// the row and surfaces an error.
+  @Test
+  func knownZeroLegContributesZeroAndDoesNotBreakBalance() async {
+    let accountId = UUID()
+    let spam = foreign  // pretend `foreign` is the `.unpriced` / `.spam` token
+    // newest → oldest. The middle leg is in the spam instrument and must
+    // contribute zero rather than failing the chain.
+    let transactions = [
+      tx(daysFromEpoch: 3, accountId: accountId, quantity: -30, instrument: target),
+      tx(daysFromEpoch: 2, accountId: accountId, quantity: -20, instrument: spam),
+      tx(daysFromEpoch: 1, accountId: accountId, quantity: -10, instrument: target),
+    ]
+
+    let response = await TransactionPage.withRunningBalances(
+      transactions: transactions,
+      priorBalance: .zero(instrument: target),
+      accountId: accountId,
+      targetInstrument: target,
+      conversionService: FixedConversionService(knownZeroInstrumentIds: [spam.id])
+    )
+
+    #expect(response.rows.count == 3)
+    // No error surfaces — `.knownZero` is intentional, not a failure.
+    #expect(response.firstConversionError == nil)
+    // Every row has a balance — the spam leg folds to zero rather than
+    // breaking the chain.
+    #expect(response.rows.allSatisfy { $0.balance != nil })
+    // Running balance accumulates only the priced contributions:
+    // -10 (oldest) + 0 (spam) + -30 (newest) = -40.
+    let oldestBalance = response.rows.last?.balance?.quantity
+    let middleBalance = response.rows[1].balance?.quantity
+    let newestBalance = response.rows.first?.balance?.quantity
+    #expect(oldestBalance == -10)
+    #expect(middleBalance == -10)  // spam leg contributed zero
+    #expect(newestBalance == -40)
+  }
+
+  /// Issue #790: an account with a `.knownZero` source whose
+  /// account-scoped display amount sits cleanly at zero in the target
+  /// instrument. Per the issue's "or surface them as 'value unknown'"
+  /// permission, zero-contribution is the chosen UX.
+  @Test
+  func knownZeroLeg_displayAmountIsZero() async {
+    let accountId = UUID()
+    let spam = foreign
+    let transactions = [
+      tx(daysFromEpoch: 1, accountId: accountId, quantity: -10, instrument: spam)
+    ]
+
+    let response = await TransactionPage.withRunningBalances(
+      transactions: transactions,
+      priorBalance: .zero(instrument: target),
+      accountId: accountId,
+      targetInstrument: target,
+      conversionService: FixedConversionService(knownZeroInstrumentIds: [spam.id])
+    )
+
+    #expect(response.rows.count == 1)
+    #expect(response.firstConversionError == nil)
+    let row = response.rows[0]
+    #expect(row.balance == .zero(instrument: target))
+    #expect(row.displayAmount == .zero(instrument: target))
+  }
 }

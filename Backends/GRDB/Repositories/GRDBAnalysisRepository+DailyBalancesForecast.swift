@@ -163,8 +163,19 @@ extension GRDBAnalysisRepository {
         convertedLegs.append(leg)
         continue
       }
-      let convertedQty = try await conversionService.convert(
-        leg.quantity, from: leg.instrument, to: instrument, on: date)
+      // `.knownZero` source legs (`.unpriced` / `.spam` crypto) fold to
+      // a zero-quantity leg rather than aborting the forecast day —
+      // issue #790. Real provider errors still throw so a transient
+      // rate failure preserves Rule 11 (mark the day unavailable).
+      let conversionResult = try await conversionService.convertResult(
+        InstrumentAmount(quantity: leg.quantity, instrument: leg.instrument),
+        to: instrument,
+        on: date)
+      let convertedQty: Decimal
+      switch conversionResult {
+      case .value(let amount): convertedQty = amount.quantity
+      case .knownZero: convertedQty = 0
+      }
       convertedLegs.append(
         TransactionLeg(
           accountId: leg.accountId,

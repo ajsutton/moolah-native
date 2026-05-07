@@ -18,6 +18,12 @@ struct TransactionListView: View {
   var positionsHostCurrency: Instrument = .AUD
   var positionsTitle: String = "Balances"
   var conversionService: (any InstrumentConversionService)?
+  /// Bumped on every successful crypto-registration mutation so the
+  /// `.task(id:)` driving the per-row valuator re-fires when the user
+  /// flips a token's `pricingStatus` (e.g. "Mark as Spam"). Drives the
+  /// drop-spam-from-positions UX of issue #790. Optional with a default
+  /// of `0` so non-crypto call sites need not thread it through.
+  var registrationsVersion: Int = 0
 
   /// When non-nil, the parent owns the selection and handles the inspector.
   /// When nil, TransactionListView manages its own selection and inspector.
@@ -72,7 +78,8 @@ struct TransactionListView: View {
     positions: [Position] = [],
     positionsHostCurrency: Instrument = .AUD,
     positionsTitle: String = "Balances",
-    conversionService: (any InstrumentConversionService)? = nil
+    conversionService: (any InstrumentConversionService)? = nil,
+    registrationsVersion: Int = 0
   ) {
     self.title = title
     self.baseFilter = filter
@@ -84,6 +91,7 @@ struct TransactionListView: View {
     self.positionsHostCurrency = positionsHostCurrency
     self.positionsTitle = positionsTitle
     self.conversionService = conversionService
+    self.registrationsVersion = registrationsVersion
     self._externalSelection = nil
     self._activeFilter = State(initialValue: filter)
   }
@@ -100,6 +108,7 @@ struct TransactionListView: View {
     positionsHostCurrency: Instrument = .AUD,
     positionsTitle: String = "Balances",
     conversionService: (any InstrumentConversionService)? = nil,
+    registrationsVersion: Int = 0,
     selectedTransaction: Binding<Transaction?>
   ) {
     self.title = title
@@ -112,6 +121,7 @@ struct TransactionListView: View {
     self.positionsHostCurrency = positionsHostCurrency
     self.positionsTitle = positionsTitle
     self.conversionService = conversionService
+    self.registrationsVersion = registrationsVersion
     self._externalSelection = selectedTransaction
     self._activeFilter = State(initialValue: filter)
   }
