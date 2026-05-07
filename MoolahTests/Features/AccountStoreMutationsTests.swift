@@ -63,6 +63,27 @@ struct AccountStoreMutationsTests {
     #expect(store.investmentAccounts.count == 2)
   }
 
+  @Test("investmentAccounts includes crypto accounts (isInvestmentLike)")
+  func investmentAccountsIncludesCrypto() async throws {
+    // Sidebar feeds its "Investments" section from `investmentAccounts`. A
+    // strict `type == .investment` filter would silently drop newly-created
+    // crypto wallets — the Stage 1 acceptance criterion is to use
+    // `isInvestmentLike` so both kinds appear together.
+    let (backend, database) = try TestBackend.create()
+    _ = AccountStoreTestSupport.seedAccount(
+      name: "Brokerage", type: .investment, balance: 0, in: database)
+    _ = AccountStoreTestSupport.seedAccount(
+      name: "ETH Wallet", type: .crypto,
+      valuationMode: .calculatedFromTrades, in: database)
+    let store = AccountStore(
+      repository: backend.accounts, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
+
+    await store.load()
+
+    #expect(store.investmentAccounts.map(\.name).sorted() == ["Brokerage", "ETH Wallet"])
+  }
+
   // MARK: - Instrument Persistence
 
   @Test

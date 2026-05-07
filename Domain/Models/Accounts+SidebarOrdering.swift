@@ -33,7 +33,7 @@ extension Accounts {
     for account in visible {
       if account.type.isCurrent {
         current.append(account)
-      } else {
+      } else if account.type.isInvestmentLike {
         investment.append(account)
       }
     }

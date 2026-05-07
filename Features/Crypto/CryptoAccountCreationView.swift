@@ -115,6 +115,7 @@ struct CryptoAccountCreationLogic {
       name: trimmedName,
       type: .crypto,
       instrument: chain.nativeInstrument,
+      valuationMode: .calculatedFromTrades,
       walletAddress: walletAddress,
       chainId: chain.chainId
     )

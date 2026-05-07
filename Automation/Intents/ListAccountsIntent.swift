@@ -41,6 +41,7 @@ enum AccountTypeEnum: String, AppEnum {
   case creditCard
   case asset
   case investment
+  case crypto
 
   static let typeDisplayRepresentation = TypeDisplayRepresentation(
     name: "Account Type")
@@ -50,6 +51,7 @@ enum AccountTypeEnum: String, AppEnum {
     .creditCard: "Credit Card",
     .asset: "Asset",
     .investment: "Investment",
+    .crypto: "Crypto Wallet",
   ]
 
   var toDomainType: AccountType {
@@ -58,6 +60,7 @@ enum AccountTypeEnum: String, AppEnum {
     case .creditCard: .creditCard
     case .asset: .asset
     case .investment: .investment
+    case .crypto: .crypto
     }
   }
 }
