@@ -156,28 +156,21 @@ struct AnalysisAggregationPlanPinningTests {
 
   // MARK: - fetchCategoryBalances
 
-  @Test("fetchCategoryBalances SQL uses leg_analysis_by_type_category index")
+  @Test("fetchCategoryBalances SQL uses leg_analysis_by_type_category covering index")
   func fetchCategoryBalancesUsesCategoryIndex() throws {
     let database = try makeDatabase()
     // Mirrors the exact SQL shape used by
     // `GRDBAnalysisRepository.fetchCategoryBalances(...)` with no
     // optional filters set: GROUP BY `(DATE(t.date), category_id,
-    // instrument_id)` restricted to non-scheduled categorised legs of a
-    // given type, in a date range, with the investment-account
-    // exclusion via a LEFT JOIN to `account`.
-    //
-    // Unlike `fetchExpenseBreakdown` we do NOT assert
-    // `USING COVERING INDEX`. The LEFT JOIN to `account` requires
-    // `leg.account_id` to drive the join, but `account_id` is not in
-    // `leg_analysis_by_type_category`'s column list. SQLite therefore
-    // fetches the leg's base row to read `account_id`, which flips the
-    // plan from `USING COVERING INDEX` to plain `USING INDEX`. The
-    // covering miss is unavoidable because the investment-account
-    // exclusion is a semantic requirement (mirrors
-    // `+IncomeExpense.applyByType`'s isInvestmentAccount guard) — it
-    // can't be expressed against the leg side alone, and adding
-    // `account_id` to the composite index would bloat every leg row
-    // for a feature that only matters at read time.
+    // instrument_id)` restricted to non-scheduled categorised legs of
+    // a given type in a date range. The aggregation no longer joins
+    // to `account` — investment-account legs are intentionally
+    // included alongside the rest (matches
+    // `fetchIncomeAndExpense`'s contract). With the LEFT JOIN gone
+    // the plan resolves to `USING COVERING INDEX` on
+    // `leg_analysis_by_type_category` because every leg column
+    // touched (`type`, `category_id`, `instrument_id`,
+    // `transaction_id`, `quantity`) sits in the composite.
     let detail = try planDetail(
       database,
       query: """
@@ -187,41 +180,35 @@ struct AnalysisAggregationPlanPinningTests {
                SUM(leg.quantity)   AS qty
         FROM transaction_leg leg
         JOIN "transaction"    t ON leg.transaction_id = t.id
-        LEFT JOIN account     a ON leg.account_id = a.id
         WHERE t.recur_period IS NULL
           AND t.date >= ? AND t.date <= ?
           AND leg.type = ?
           AND leg.category_id IS NOT NULL
-          AND (a.type IS NULL OR a.type <> 'investment')
         GROUP BY DATE(t.date), leg.category_id, leg.instrument_id
         ORDER BY DATE(t.date) ASC, leg.category_id ASC
         """,
       arguments: [Date(), Date(), "expense"])
     #expect(detail.contains("leg_analysis_by_type_category"))
+    #expect(detail.contains("USING COVERING INDEX"))
     // SQLite emits `SCAN <alias>` for aliased FROM clauses — here
     // `transaction_leg leg`. Pin against the alias rather than the
     // bare table name (which would never match this query's plan and
     // would silently pass even on a full scan).
     #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
-    // The LEFT JOIN to `account` should resolve via the PK
-    // (`sqlite_autoindex_account_1`) or `account_by_type` rather than a
-    // full scan — pin that no `SCAN account` line slips into the plan.
-    #expect(!detail.contains("SCAN account"))
   }
 
   @Test("fetchCategoryBalances with accountId filter consults leg_by_account")
   func fetchCategoryBalancesAccountFilterConsultsAccountIndex() throws {
     let database = try makeDatabase()
     // With the optional `accountId` filter set, the WHERE clause grows
-    // an `AND leg.account_id = ?` predicate. Either of the leg-side
-    // partial indexes — `leg_by_account` or the covering
-    // `leg_analysis_by_type_account` — is acceptable, both let SQLite
-    // narrow to the matching legs without scanning. The composite
-    // `leg_analysis_by_type_category` is still permitted to participate
-    // for the join+grouping side; we don't pin which one wins, only
-    // that one of the account-aware indexes is consulted somewhere in
-    // the plan.
+    // an `AND leg.account_id = ?` predicate. Any of the leg-side
+    // indexes that lets SQLite avoid a full scan is acceptable —
+    // `leg_by_account` or `leg_analysis_by_type_account` (both
+    // account-aware) or `leg_analysis_by_type_category` (which covers
+    // the SELECT and post-filters `account_id` against the base row).
+    // We don't pin which one the planner picks; the SCAN-rejection
+    // assertions below are what catch a regression.
     let detail = try planDetail(
       database,
       query: """
@@ -231,12 +218,10 @@ struct AnalysisAggregationPlanPinningTests {
                SUM(leg.quantity)   AS qty
         FROM transaction_leg leg
         JOIN "transaction"    t ON leg.transaction_id = t.id
-        LEFT JOIN account     a ON leg.account_id = a.id
         WHERE t.recur_period IS NULL
           AND t.date >= ? AND t.date <= ?
           AND leg.type = ?
           AND leg.category_id IS NOT NULL
-          AND (a.type IS NULL OR a.type <> 'investment')
           AND leg.account_id = ?
         GROUP BY DATE(t.date), leg.category_id, leg.instrument_id
         ORDER BY DATE(t.date) ASC, leg.category_id ASC
@@ -251,7 +236,6 @@ struct AnalysisAggregationPlanPinningTests {
     // `transaction_leg leg`. Pin against the alias.
     #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
-    #expect(!detail.contains("SCAN account"))
   }
 
   // MARK: - fetchIncomeAndExpense
@@ -357,12 +341,10 @@ struct AnalysisAggregationPlanPinningTests {
                SUM(leg.quantity)   AS qty
         FROM transaction_leg leg
         JOIN "transaction"    t ON leg.transaction_id = t.id
-        LEFT JOIN account     a ON leg.account_id = a.id
         WHERE t.recur_period IS NULL
           AND t.date >= ? AND t.date <= ?
           AND leg.type = ?
           AND leg.category_id IS NOT NULL
-          AND (a.type IS NULL OR a.type <> 'investment')
           AND leg.earmark_id = ?
         GROUP BY DATE(t.date), leg.category_id, leg.instrument_id
         ORDER BY DATE(t.date) ASC, leg.category_id ASC
@@ -377,6 +359,5 @@ struct AnalysisAggregationPlanPinningTests {
     // `transaction_leg leg`. Pin against the alias.
     #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
-    #expect(!detail.contains("SCAN account"))
   }
 }
