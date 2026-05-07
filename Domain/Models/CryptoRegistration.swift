@@ -39,6 +39,16 @@ struct CryptoRegistration: Codable, Sendable, Hashable, Identifiable {
       try container.decodeIfPresent(TokenPricingStatus.self, forKey: .pricingStatus) ?? .priced
   }
 
+  /// Hand-curated registrations seeded into every profile at session
+  /// startup so common chain native gas tokens (ETH on Ethereum / OP /
+  /// Base; MATIC on Polygon) and well-known ERC-20s (OP, UNI, ENS, plus
+  /// the canonical BTC entry) carry a real provider mapping before any
+  /// transaction references them. Without this seed, wallet sync's
+  /// `ensureInstrumentReadable` would land a placeholder
+  /// `InstrumentRow` with `pricingStatus=.priced` and no mapping —
+  /// which `allCryptoRegistrations()` projects to nil and which
+  /// `cryptoUsdPrice` then can't resolve, throwing
+  /// `ConversionError.noProviderMapping`. See issue #791.
   static let builtInPresets: [CryptoRegistration] = [
     CryptoRegistration(
       instrument: .crypto(
@@ -54,6 +64,30 @@ struct CryptoRegistration: Codable, Sendable, Hashable, Identifiable {
       mapping: CryptoProviderMapping(
         instrumentId: "1:native", coingeckoId: "ethereum",
         cryptocompareSymbol: "ETH", binanceSymbol: "ETHUSDT"
+      )
+    ),
+    CryptoRegistration(
+      instrument: .crypto(
+        chainId: 10, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18),
+      mapping: CryptoProviderMapping(
+        instrumentId: "10:native", coingeckoId: "ethereum",
+        cryptocompareSymbol: "ETH", binanceSymbol: "ETHUSDT"
+      )
+    ),
+    CryptoRegistration(
+      instrument: .crypto(
+        chainId: 8453, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18),
+      mapping: CryptoProviderMapping(
+        instrumentId: "8453:native", coingeckoId: "ethereum",
+        cryptocompareSymbol: "ETH", binanceSymbol: "ETHUSDT"
+      )
+    ),
+    CryptoRegistration(
+      instrument: .crypto(
+        chainId: 137, contractAddress: nil, symbol: "MATIC", name: "Polygon", decimals: 18),
+      mapping: CryptoProviderMapping(
+        instrumentId: "137:native", coingeckoId: "matic-network",
+        cryptocompareSymbol: "MATIC", binanceSymbol: "MATICUSDT"
       )
     ),
     CryptoRegistration(

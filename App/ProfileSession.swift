@@ -219,9 +219,28 @@ final class ProfileSession: Identifiable {
       cryptoPriceService: cryptoPriceService)
     self.cryptoSyncStore = cryptoWiring?.store
     self.cryptoTokenDiscovery = cryptoWiring?.discovery
+    seedBuiltInCryptoPresets(registry: cryptoRegistry)
     wireCrossStoreSideEffects()
     registerWithSyncCoordinator(syncCoordinator)
     startPeriodicPragmaOptimize()
+  }
+
+  /// Fires `registerBuiltInPresetsIfMissing` on the profile's registry
+  /// so chain native gas tokens (ETH on Ethereum / OP / Base; MATIC on
+  /// Polygon) and well-known ERC-20s carry a real provider mapping
+  /// before any conversion path consults the registry. Without this,
+  /// transaction detail / running-balance render fails for crypto legs
+  /// the very first time a profile reads them — issue #791. Tracked in
+  /// `crossStoreUpdateTasks` so `cleanupSync` cancels in-flight seeds
+  /// when the session tears down.
+  private func seedBuiltInCryptoPresets(
+    registry: (any InstrumentRegistryRepository)?
+  ) {
+    guard let registry else { return }
+    let task = Task {
+      await registry.registerBuiltInPresetsIfMissing()
+    }
+    crossStoreUpdateTasks.append(task)
   }
 
   /// Wires the investment-store -> account-store callback. The spawned
