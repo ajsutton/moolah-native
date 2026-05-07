@@ -113,9 +113,7 @@ enum TransactionStoreTestSupport {
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument,
-      accountStore: accountStore,
-      earmarkStore: earmarkStore
+      targetInstrument: .defaultTestInstrument
     )
     return Stores(transactions: store, accounts: accountStore, earmarks: earmarkStore)
   }

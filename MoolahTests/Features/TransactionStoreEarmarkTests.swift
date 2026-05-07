@@ -150,7 +150,10 @@ struct TransactionStoreEarmarkTests {
     ]
     await store.update(updated)
 
-    // Loaded: 950+(-50)=900. Update delta: +50-(-50)=+100. Final: 900+100=1000
+    // AccountStore is reactive — wait for observation to settle (OB 950 + income +50 = 1000).
+    try await accountStore.waitForNextEmission(
+      matching: { $0.accounts.by(id: accountId)?.positions.first?.quantity == Decimal(1000) },
+      description: "account settled at 1000 after expense-to-income update")
     let balance = try await accountStore.displayBalance(for: accountId)
     #expect(balance.quantity == Decimal(1000))
   }
@@ -182,6 +185,10 @@ struct TransactionStoreEarmarkTests {
     await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
     _ = await store.payScheduledTransaction(scheduled)
 
+    // AccountStore is reactive — wait for observation to settle (OB 1000 + paid -2000 = -1000).
+    try await accountStore.waitForNextEmission(
+      matching: { $0.accounts.by(id: accountId)?.positions.first?.quantity == Decimal(-1000) },
+      description: "account settled at -1000 after paying -2000 scheduled expense")
     // Paying a -2000 expense should decrease balance by 2000
     let balance = try await accountStore.displayBalance(for: accountId)
     #expect(balance.quantity == Decimal(-1000))
@@ -214,6 +221,10 @@ struct TransactionStoreEarmarkTests {
     await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
     _ = await store.payScheduledTransaction(scheduled)
 
+    // AccountStore is reactive — wait for observation to settle (OB 1000 + paid -500 = 500).
+    try await accountStore.waitForNextEmission(
+      matching: { $0.accounts.by(id: accountId)?.positions.first?.quantity == Decimal(500) },
+      description: "account settled at 500 after paying -500 one-time expense")
     // Paying a -500 expense should decrease balance by 500
     let balance = try await accountStore.displayBalance(for: accountId)
     #expect(balance.quantity == Decimal(500))

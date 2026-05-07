@@ -16,54 +16,36 @@ struct TransactionStoreTransferTests {
     let savingsId = UUID()
     let checking = TransactionStoreTestSupport.acct(id: accountId, name: "Checking", balance: 900)
     let savings = TransactionStoreTestSupport.acct(id: savingsId, name: "Savings", balance: 1100)
+    let instr = Instrument.defaultTestInstrument
     let transaction = Transaction(
       date: try TransactionStoreTestSupport.makeDate("2024-01-15"),
       payee: "",
       legs: [
-        TransactionLeg(
-          accountId: accountId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-10000) / 100,
-          type: .transfer
-        ),
-        TransactionLeg(
-          accountId: savingsId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(10000) / 100,
-          type: .transfer
-        ),
+        TransactionLeg(accountId: accountId, instrument: instr, quantity: -100, type: .transfer),
+        TransactionLeg(accountId: savingsId, instrument: instr, quantity: 100, type: .transfer),
       ]
     )
     let (backend, database) = try TestBackend.create()
     TestBackend.seed(transactions: [transaction], in: database)
     let stores = await TransactionStoreTestSupport.makeStores(
       backend: backend, database: database, accounts: [checking, savings])
-    let store = stores.transactions
-    let accountStore = stores.accounts
-
+    let (store, accountStore) = (stores.transactions, stores.accounts)
     await store.load(filter: TransactionFilter(accountId: accountId))
 
     // Update transfer amount from 100 to 150
     var updated = transaction
     updated.legs = [
-      TransactionLeg(
-        accountId: accountId,
-        instrument: Instrument.defaultTestInstrument,
-        quantity: Decimal(-15000) / 100,
-        type: .transfer
-      ),
-      TransactionLeg(
-        accountId: savingsId,
-        instrument: Instrument.defaultTestInstrument,
-        quantity: Decimal(15000) / 100,
-        type: .transfer
-      ),
+      TransactionLeg(accountId: accountId, instrument: instr, quantity: -150, type: .transfer),
+      TransactionLeg(accountId: savingsId, instrument: instr, quantity: 150, type: .transfer),
     ]
     await store.update(updated)
 
-    // Loaded: checking=900+(-100)=800, savings=1100+100=1200
-    // Update delta: checking: -150-(-100)=-50, savings: +150-100=+50
-    // Final: checking=800-50=750, savings=1200+50=1250
+    // AccountStore is reactive — wait for observation to settle (OB 900 + -150 = 750).
+    // Loaded: checking=900-100=800, savings=1100+100=1200
+    // Update: checking: -150-(-100)=-50 → 750, savings: +150-100=+50 → 1250
+    try await accountStore.waitForNextEmission(
+      matching: { $0.accounts.by(id: accountId)?.positions.first?.quantity == Decimal(750) },
+      description: "checking settled at 750 after transfer amount increased")
     let checkingBalance = try await accountStore.displayBalance(for: accountId)
     let savingsBalance = try await accountStore.displayBalance(for: savingsId)
     #expect(checkingBalance.quantity == Decimal(750))
@@ -99,10 +81,12 @@ struct TransactionStoreTransferTests {
     ]
     await store.update(updated)
 
-    // Loaded: checking=900+(-100)=800, savings=1100+100=1200, investment=500
-    // Change dest from savings to investment:
-    // checking delta: -100-(-100)=0, savings delta: 0-100=-100, investment delta: +100-0=+100
-    // Final: checking=800, savings=1200-100=1100, investment=500+100=600
+    // AccountStore is reactive — wait for observation to settle (savings: 1200-100=1100).
+    try await accountStore.waitForNextEmission(
+      matching: { $0.accounts.by(id: savingsId)?.positions.first?.quantity == Decimal(1100) },
+      description: "savings settled at 1100 after transfer destination changed")
+    // Loaded: checking=900-100=800, savings=1100+100=1200, investment=500
+    // Change dest from savings→investment: savings -100=1100, investment +100=600
     let checkingBalance = try await accountStore.displayBalance(for: accountId)
     let savingsBalance = try await accountStore.displayBalance(for: savingsId)
     let investmentBalance = try await accountStore.displayBalance(for: investmentId)

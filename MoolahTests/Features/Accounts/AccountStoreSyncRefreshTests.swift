@@ -113,6 +113,76 @@ struct AccountStoreSyncRefreshTests {
     #expect(didEmit == false)
   }
 
+  @Test("mutation via TransactionStore does not double-apply positions to AccountStore")
+  func mutationViaTransactionStoreDoesNotDoubleApply() async throws {
+    // Regression test for the accountStore.applyDelta fan-out race:
+    // 1. transactionStore.create writes a transaction + leg to GRDB.
+    // 2. The GRDB write fires the observation → AccountStore.apply(accounts: fresh)
+    //    runs on MainActor with the authoritative post-write positions.
+    // 3. If applyDelta were still called from applyBalanceDeltas, the delta
+    //    would be applied ON TOP OF already-fresh state, doubling the position.
+    //    This test would see quantity == -100 instead of -50 in that case.
+    let accountId = UUID()
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        (
+          account: Account(
+            id: accountId, name: "Checking", type: .bank,
+            instrument: .defaultTestInstrument),
+          openingBalance: .zero(instrument: .defaultTestInstrument)
+        )
+      ],
+      in: database)
+
+    let accountStore = AccountStore(
+      repository: backend.accounts,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
+    // Wait for the seeded account to be visible before mutating.
+    try await accountStore.waitForNextEmission(
+      matching: { $0.accounts.count == 1 },
+      description: "seeded account visible"
+    )
+
+    let transactionStore = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
+    await transactionStore.load(filter: TransactionFilter(accountId: accountId))
+
+    let transaction = Transaction(
+      date: Date(),
+      payee: "Coffee",
+      legs: [
+        TransactionLeg(
+          accountId: accountId,
+          instrument: .defaultTestInstrument,
+          quantity: Decimal(-5000) / 100,  // -50.00
+          type: .expense
+        )
+      ]
+    )
+    _ = await transactionStore.create(transaction)
+
+    // Wait for the reactive observation to deliver the post-write state.
+    // The predicate checks that positions are non-empty (the -50 leg landed).
+    try await accountStore.waitForNextEmission(
+      matching: { $0.accounts.by(id: accountId)?.positions.isEmpty == false },
+      description: "account positions updated after transaction create"
+    )
+
+    // Read SYNCHRONOUSLY — no await. If applyDelta were still fanned out
+    // from TransactionStore, the position would be -100 (observation applied
+    // -50, then applyDelta applied another -50 on top). Under the reactive-only
+    // design, observation is the single source of truth and the value is -50.
+    let positions = accountStore.accounts.by(id: accountId)?.positions ?? []
+    let qty = positions.first(where: { $0.instrument == .defaultTestInstrument })?.quantity
+    #expect(qty == Decimal(-5000) / 100)
+  }
+
   @Test("GRDB wipes during sign-out reach the store before stopObserving cancels it")
   func signOutTeardownOrdering() async throws {
     let (backend, database) = try TestBackend.create()

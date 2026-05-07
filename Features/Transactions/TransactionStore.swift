@@ -31,8 +31,6 @@ final class TransactionStore {
   /// store aligns to it on the first page fetch.
   private(set) var currentTargetInstrument: Instrument
   private let pageSize: Int
-  private let accountStore: AccountStore?
-  private let earmarkStore: EarmarkStore?
   private let logger = Logger(subsystem: "com.moolah.app", category: "TransactionStore")
   /// Filter that produced the current contents of `transactions`. Exposed so
   /// views sharing the store (Analysis, Upcoming) can ignore stale contents
@@ -60,9 +58,7 @@ final class TransactionStore {
     repository: TransactionRepository,
     conversionService: InstrumentConversionService,
     targetInstrument: Instrument,
-    pageSize: Int = 50,
-    accountStore: AccountStore? = nil,
-    earmarkStore: EarmarkStore? = nil
+    pageSize: Int = 50
   ) {
     self.repository = repository
     self.payeeSuggestionSource = PayeeSuggestionSource(repository: repository)
@@ -70,8 +66,6 @@ final class TransactionStore {
     self.targetInstrument = targetInstrument
     self.currentTargetInstrument = targetInstrument
     self.pageSize = pageSize
-    self.accountStore = accountStore
-    self.earmarkStore = earmarkStore
   }
 
   func load(filter: TransactionFilter) async {
@@ -154,7 +148,6 @@ final class TransactionStore {
         rawTransactions[index] = created
       }
       await recomputeBalances()
-      await applyBalanceDeltas(old: nil, new: created)
       return created
     } catch {
       logger.error("Failed to create transaction: \(error.localizedDescription)")
@@ -168,7 +161,6 @@ final class TransactionStore {
   func update(_ transaction: Transaction) async {
     // Optimistic: replace in local state
     let snapshot = rawTransactions
-    let old = rawTransactions.first { $0.id == transaction.id }
     if let index = rawTransactions.firstIndex(where: { $0.id == transaction.id }) {
       rawTransactions[index] = transaction
       await recomputeBalances()
@@ -180,7 +172,6 @@ final class TransactionStore {
         rawTransactions[index] = updated
       }
       await recomputeBalances()
-      await applyBalanceDeltas(old: old, new: updated)
     } catch {
       logger.error("Failed to update transaction: \(error.localizedDescription)")
       rawTransactions = snapshot
@@ -223,36 +214,17 @@ final class TransactionStore {
   func delete(id: UUID) async {
     // Optimistic: remove from local state
     let snapshot = rawTransactions
-    let removed = rawTransactions.first { $0.id == id }
     rawTransactions.removeAll { $0.id == id }
     await recomputeBalances()
 
     do {
       try await repository.delete(id: id)
-      await applyBalanceDeltas(old: removed, new: nil)
     } catch {
       logger.error("Failed to delete transaction: \(error.localizedDescription)")
       rawTransactions = snapshot
       await recomputeBalances()
       self.error = error
     }
-  }
-
-  private func applyBalanceDeltas(old: Transaction?, new: Transaction?) async {
-    let delta = BalanceDeltaCalculator.deltas(old: old, new: new)
-    if !delta.accountDeltas.isEmpty {
-      await accountStore?.applyDelta(delta.accountDeltas)
-    }
-    // Earmark state is delivered exclusively by `EarmarkRepository.observeAll()`
-    // — the reactive observation IS the update. Calling `applyDelta` here
-    // alongside the observation would race: when the observation fires
-    // before applyDelta on MainActor, the delta double-applies (e.g.
-    // an empty earmark gains spent=50 from observation and then another
-    // +50 from applyDelta). Account state happens to be deterministic
-    // because account-balance reads are async (`await displayBalance`)
-    // and naturally drain pending observation work; earmark reads are
-    // sync against the published `earmarks` collection and surface the
-    // race directly.
   }
 
   private func fetchPage() async {

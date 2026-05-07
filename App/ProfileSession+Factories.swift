@@ -253,9 +253,7 @@ extension ProfileSession {
     let transaction = TransactionStore(
       repository: backend.transactions,
       conversionService: backend.conversionService,
-      targetInstrument: profile.instrument,
-      accountStore: account,
-      earmarkStore: earmark
+      targetInstrument: profile.instrument
     )
     let analysis = AnalysisStore(repository: backend.analysis)
     let investment = InvestmentStore(
