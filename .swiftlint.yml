@@ -5,6 +5,7 @@
 
 excluded:
   - .build
+  - .DerivedData-bench
   - .DerivedData-ios
   - .DerivedData-mac
   - .worktrees
