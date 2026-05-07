@@ -183,6 +183,41 @@ struct AccountStoreSyncRefreshTests {
     #expect(qty == Decimal(-5000) / 100)
   }
 
+  @Test("AccountStore reflects InvestmentValue writes via observeAll")
+  func investmentValueWriteReachesAccountStore() async throws {
+    let (backend, _) = try TestBackend.create()
+    let investmentAccount = try await backend.accounts.create(
+      Account(
+        name: "Brokerage",
+        type: .investment,
+        instrument: .defaultTestInstrument,
+        valuationMode: .recordedValue
+      ),
+      openingBalance: nil
+    )
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: backend.conversionService,
+      targetInstrument: .defaultTestInstrument,
+      investmentRepository: backend.investments
+    )
+    try await store.waitForFirstEmission()
+
+    // Write directly to investment_value via the GRDB layer (simulating
+    // a remote sync update).
+    try await backend.investments.setValue(
+      accountId: investmentAccount.id,
+      date: .now,
+      value: InstrumentAmount(quantity: 12345, instrument: .defaultTestInstrument)
+    )
+
+    try await store.waitForNextEmission(
+      matching: { $0.convertedBalances[investmentAccount.id]?.quantity == 12345 },
+      description: "investment value reaches account store",
+      timeout: .seconds(2)
+    )
+  }
+
   @Test("GRDB wipes during sign-out reach the store before stopObserving cancels it")
   func signOutTeardownOrdering() async throws {
     let (backend, database) = try TestBackend.create()

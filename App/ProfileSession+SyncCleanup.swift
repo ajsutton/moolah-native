@@ -5,8 +5,8 @@ import Foundation
 // the main file stays under SwiftLint's `file_length` threshold.
 // Reaches the session's module-internal sync state
 // (`syncReloadTask`, `pendingChangedTypes`, `lastSyncEventTime`,
-// `syncObserverToken`, `catalogRefreshTask`, `crossStoreUpdateTasks`,
-// `setUpTask`) — those properties are deliberately module-internal in
+// `syncObserverToken`, `catalogRefreshTask`, `setUpTask`) — those
+// properties are deliberately module-internal in
 // `ProfileSession.swift` so this file can manage their lifecycle.
 
 extension ProfileSession {
@@ -79,12 +79,17 @@ extension ProfileSession {
     pragmaOptimizeTask = nil
     periodicPragmaOptimizeTask?.cancel()
     periodicPragmaOptimizeTask = nil
+    setUpTask?.cancel()
+    setUpTask = nil
+
+    // Cancel any in-flight cross-store side-effect work
+    // (`seedBuiltInCryptoPresets`, the cryptoTokenStore ->
+    // `investmentStore.revaluateLoadedPositions` callback). Tasks are
+    // append-only, so draining the array empties future iterations.
     for task in crossStoreUpdateTasks {
       task.cancel()
     }
     crossStoreUpdateTasks.removeAll()
-    setUpTask?.cancel()
-    setUpTask = nil
 
     // Tear down reactive observation. MUST run AFTER any GRDB wipes so
     // the empty-state transition reaches subscribed views before the
@@ -95,6 +100,7 @@ extension ProfileSession {
     categoryStore.stopObserving()
     importRuleStore.stopObserving()
     transactionStore.stopObserving()
+    investmentStore.stopObserving()
   }
 
   // MARK: - Profile Update

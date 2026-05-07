@@ -45,14 +45,11 @@ struct ProfileSessionTests {
     #expect(session1.id != session2.id)
   }
 
-  @Test("onInvestmentValueChanged wiring connects investment store to account store")
-  func onInvestmentValueChangedWiring() throws {
-    let containerManager = try ProfileContainerManager.forTesting()
-    let session = try ProfileSession(
-      profile: makeProfile(), containerManager: containerManager)
-
-    #expect(session.investmentStore.onInvestmentValueChanged != nil)
-  }
+  // The previous `onInvestmentValueChanged` callback wiring has been
+  // removed — `AccountStore` now subscribes directly to
+  // `investmentRepository.observeAllValues()`. End-to-end coverage that
+  // an investment-value write reaches the account store lives in
+  // `AccountStoreSyncRefreshTests.investmentValueWriteReachesAccountStore`.
 
   /// Regression for #102: a CloudKit profile must use `FullConversionService`,
   /// not `FiatConversionService`, so stock and crypto positions can be

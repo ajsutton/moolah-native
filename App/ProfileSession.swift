@@ -108,9 +108,11 @@ final class ProfileSession: Identifiable {
   /// because `runPragmaOptimize` lives in
   /// `ProfileSession+DatabaseMaintenance.swift`; mutated only there.
   var pragmaOptimizeRunCount: Int = 0
-  /// Tasks spawned by the investment-store → account-store bridge, kept
-  /// reachable so `cleanupSync` can cancel in-flight balance updates
-  /// (per `guides/CONCURRENCY_GUIDE.md` §8). Module-internal so
+  /// Tasks spawned by cross-store side effects (e.g.
+  /// `seedBuiltInCryptoPresets`, the `cryptoTokenStore` ->
+  /// `investmentStore.revaluateLoadedPositions` callback). Kept
+  /// reachable so `cleanupSync` can cancel in-flight work (per
+  /// `guides/CONCURRENCY_GUIDE.md` §8). Module-internal so
   /// `ProfileSession+SyncCleanup.swift` can drain the list on teardown.
   var crossStoreUpdateTasks: [Task<Void, Never>] = []
 
@@ -205,9 +207,14 @@ final class ProfileSession: Identifiable {
 
   /// Tail of the initialiser — kept as a separate method so `init`
   /// stays under SwiftLint's `function_body_length` threshold. Wires
-  /// the crypto-wallet sync stores, cross-store side effects, the
-  /// sync coordinator, and starts the hourly `PRAGMA optimize` tick
-  /// (issue #576).
+  /// the crypto-wallet sync stores, the sync coordinator, and starts
+  /// the hourly `PRAGMA optimize` tick (issue #576).
+  ///
+  /// Cross-store side effects between InvestmentStore and AccountStore
+  /// are handled reactively now: AccountStore subscribes to
+  /// `investmentRepository.observeAllValues()` and refreshes its cache
+  /// directly, so a remote-sync write to `investment_value` reaches the
+  /// sidebar without a callback.
   private func finishInit(
     syncCoordinator: SyncCoordinator?,
     cryptoRegistry: (any InstrumentRegistryRepository)?,
@@ -243,23 +250,21 @@ final class ProfileSession: Identifiable {
     crossStoreUpdateTasks.append(task)
   }
 
-  /// Wires the investment-store -> account-store callback. The spawned
-  /// Task is appended to `crossStoreUpdateTasks` so `cleanupSync` can
-  /// cancel in-flight updates if the session is torn down.
-  ///
-  /// Also wires the crypto-token-store -> investment-store hook: when a
+  /// Wires the crypto-token-store -> investment-store hook: when a
   /// registration's `pricingStatus` flips (e.g. user marks a token as
   /// `.spam` from preferences), the loaded investment account
   /// re-valuates so the spam position drops out of `valuedPositions`
   /// without the user having to navigate away and back. Issue #790.
+  ///
+  /// The investment-store -> account-store fan-out (formerly
+  /// `onInvestmentValueChanged`) was removed when AccountStore
+  /// migrated to reactive observation: AccountStore now subscribes to
+  /// `investmentRepository.observeAllValues()` and refreshes its cache
+  /// directly, so a write to `investment_value` reaches the sidebar
+  /// without a callback. The spawned crypto-token Task is tracked in
+  /// `crossStoreUpdateTasks` so `cleanupSync` can cancel in-flight
+  /// revaluations on session teardown.
   private func wireCrossStoreSideEffects() {
-    let accountStore = self.accountStore
-    self.investmentStore.onInvestmentValueChanged = { [weak self] accountId, latestValue in
-      let task = Task { @MainActor in
-        await accountStore.updateInvestmentValue(accountId: accountId, value: latestValue)
-      }
-      self?.crossStoreUpdateTasks.append(task)
-    }
     let investmentStore = self.investmentStore
     self.cryptoTokenStore?.onRegistrationsChanged = { [weak self] in
       let task = Task { @MainActor in

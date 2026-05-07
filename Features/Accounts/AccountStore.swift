@@ -28,9 +28,20 @@ final class AccountStore {
   /// from "conversion ran and produced no balance".
   private(set) var hasCompletedInitialConversion: Bool = false
 
-  private let repository: AccountRepository
-  private let conversionService: any InstrumentConversionService
+  // `repository`, `conversionService`, and `investmentRepository` are
+  // deliberately not `private` so the sibling `+Observation.swift`
+  // extension can subscribe to their reactive streams. Treat them as
+  // private-by-convention from elsewhere in the module.
+  let repository: AccountRepository
+  let conversionService: any InstrumentConversionService
   private let targetInstrument: Instrument
+  /// Investment repository — captured separately from the read-through
+  /// cache so the observation pipeline can subscribe to its
+  /// `observeAllValues()` tick stream. `nil` in tests / previews that
+  /// don't pass an investment repository (no investment-value writes
+  /// will reach the store; `convertedInvestmentTotal` falls back to the
+  /// position sum).
+  let investmentRepository: (any InvestmentRepository)?
   /// Read-through cache of externally-set investment values. `internal`
   /// (rather than `private`) so the `+ConvertedTotals.swift` extension
   /// file can pass it to the balance calculator without a wrapper.
@@ -87,6 +98,7 @@ final class AccountStore {
     self.repository = repository
     self.conversionService = conversionService
     self.targetInstrument = targetInstrument
+    self.investmentRepository = investmentRepository
     self.investmentValueCache = InvestmentValueCache(repository: investmentRepository)
     self.balanceCalculator = AccountBalanceCalculator(
       conversionService: conversionService, targetInstrument: targetInstrument)
@@ -121,42 +133,34 @@ final class AccountStore {
     }
   }
 
-  /// Subscribes to the four reactive streams in parallel via a
-  /// `TaskGroup`. The child tasks run nonisolated; each per-emission
-  /// body awaits a `@MainActor`-isolated method on `self` so state
-  /// assignments happen on the main actor. Capturing the streams
-  /// locally (instead of `self.repository.observeAll()` inside the
-  /// `addTask` closure) lets the region-based isolation checker reason
-  /// about Sendable-ness.
-  private func observe() async {
-    let accountsStream = repository.observeAll()
-    let accountErrors = repository.observeErrors()
-    let rateStream = conversionService.observeRates()
-    let rateErrors = conversionService.observeErrors()
-    await withTaskGroup(of: Void.self) { group in
-      group.addTask { [self] in
-        for await fresh in accountsStream {
-          await self.apply(accounts: fresh)
-        }
-      }
-      group.addTask { [self] in
-        for await error in accountErrors {
-          await self.surface(error: error)
-        }
-      }
-      group.addTask { [self] in
-        for await _ in rateStream {
-          await self.recomputeConvertedTotals()
-        }
-      }
-      group.addTask { [self] in
-        for await error in rateErrors {
-          await self.surface(error: error)
-        }
-      }
-      // Cancellation of `observationTask` cancels the group; the
-      // `for await` loops exit; the group returns naturally.
-    }
+  // MARK: - Observation entry points (driven by `+Observation.swift`)
+
+  /// Per-emission entry point invoked by the `accounts` subscription
+  /// driver in `AccountStore+Observation.swift`. internal so the
+  /// extension's `addTask` body can call into MainActor-isolated state.
+  func applyAccountsSnapshot(_ fresh: [Account]) async {
+    await apply(accounts: fresh)
+  }
+
+  /// Per-emission entry point for the rate-tick subscription. internal
+  /// so `+Observation.swift` can dispatch into MainActor-isolated state.
+  func recomputeForRateTick() async {
+    await recomputeConvertedTotals()
+  }
+
+  /// Re-hydrate `investmentValueCache` from the repository and trigger
+  /// a balance recompute. Driven by `investmentRepository.observeAllValues()`
+  /// so a sync-driven write to `investment_value` reaches this store
+  /// without the cross-store callback path.
+  func refreshInvestmentValuesAndRecompute() async {
+    await preloadInvestmentValues()
+    await recomputeConvertedTotals()
+  }
+
+  /// Surface an observation error onto `self.error`. internal so
+  /// `+Observation.swift` can call it from the per-stream error tasks.
+  func surfaceObservationError(_ error: any Error) {
+    surface(error: error)
   }
 
   /// Applies a fresh accounts snapshot from `observeAll()`. Wrapped in

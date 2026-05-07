@@ -25,13 +25,25 @@ import GRDB
 /// See `guides/CONCURRENCY_GUIDE.md` §2 "False Positives to Avoid",
 /// Carve-out 3 (GRDB repositories).
 final class GRDBInvestmentRepository: InvestmentRepository, @unchecked Sendable {
-  private let database: any DatabaseWriter
+  // `database`, `defaultInstrument`, and `errorChannel` are deliberately
+  // not `private` so the sibling `+Observation.swift` extension can reach
+  // them. Treat them as private-by-convention from elsewhere in the
+  // module.
+  let database: any DatabaseWriter
   /// Used as the labelling instrument on `AccountDailyBalance` rows
   /// returned from `fetchDailyBalances(...)`. Mirrors
   /// `CloudKitInvestmentRepository.instrument`.
-  private let defaultInstrument: Instrument
+  let defaultInstrument: Instrument
   private let onRecordChanged: @Sendable (String, UUID) -> Void
   private let onRecordDeleted: @Sendable (String, UUID) -> Void
+  /// Single shared error channel for every `observeValues(...)` /
+  /// `observeDailyBalances(...)` subscription returned by this repo
+  /// instance. The bridge in
+  /// `Backends/GRDB/Observation/AsyncValueObservation+AsyncStream.swift`
+  /// is single-shot, so once `surfaceAndFinish(_:)` is called the
+  /// channel terminates — subsequent observations from the same repo
+  /// share that fate. Matches `GRDBAccountRepository.errorChannel`.
+  let errorChannel = ObservationErrorChannel()
 
   init(
     database: any DatabaseWriter,
