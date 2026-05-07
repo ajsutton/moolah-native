@@ -45,12 +45,24 @@ import OSLog
 /// See `guides/CONCURRENCY_GUIDE.md` §2 "False Positives to Avoid",
 /// Carve-out 3 (GRDB repositories).
 final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendable {
+  // `database`, `defaultInstrument`, `conversionService`, and
+  // `errorChannel` are deliberately not `private` so the sibling
+  // `+Observation.swift` extension can reach them. Treat them as
+  // private-by-convention from elsewhere in the module.
   let database: any DatabaseWriter
   /// Profile instrument used to label the running balance for global
   /// (non-account-scoped) fetches. Mirrors
   /// `CloudKitTransactionRepository.instrument`.
-  private let defaultInstrument: Instrument
-  private let conversionService: any InstrumentConversionService
+  let defaultInstrument: Instrument
+  let conversionService: any InstrumentConversionService
+  /// Single shared error channel for every observation subscription
+  /// returned by this repo instance. The bridge in
+  /// `Backends/GRDB/Observation/AsyncValueObservation+AsyncStream.swift`
+  /// is single-shot, so once `surfaceAndFinish(_:)` is called the
+  /// channel terminates — subsequent observations from the same repo
+  /// share that fate. This matches the design's "repository instance
+  /// owns the channel" rule.
+  let errorChannel = ObservationErrorChannel()
   /// Receives `(recordType, id)` so legs and parent transactions tag
   /// their own CloudKit `recordName` correctly. The transaction repo
   /// emits both `TransactionRow.recordType` (parent) and

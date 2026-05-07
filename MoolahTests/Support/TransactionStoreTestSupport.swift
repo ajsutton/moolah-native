@@ -131,6 +131,20 @@ struct FailingTransactionRepository: TransactionRepository {
     throw BackendError.networkUnavailable
   }
 
+  func observe(
+    filter: TransactionFilter, page: Int, pageSize: Int
+  ) -> AsyncStream<TransactionPage> {
+    AsyncStream { $0.finish() }
+  }
+
+  func observeAll(filter: TransactionFilter) -> AsyncStream<[Transaction]> {
+    AsyncStream { $0.finish() }
+  }
+
+  func observeErrors() -> AsyncStream<any Error> {
+    AsyncStream { $0.finish() }
+  }
+
   func create(_ transaction: Transaction) async throws -> Transaction {
     throw BackendError.networkUnavailable
   }

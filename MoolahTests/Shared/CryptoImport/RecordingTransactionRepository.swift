@@ -28,6 +28,20 @@ actor RecordingTransactionRepository: TransactionRepository {
     try await wrapped.fetchAll(filter: filter)
   }
 
+  nonisolated func observe(
+    filter: TransactionFilter, page: Int, pageSize: Int
+  ) -> AsyncStream<TransactionPage> {
+    wrapped.observe(filter: filter, page: page, pageSize: pageSize)
+  }
+
+  nonisolated func observeAll(filter: TransactionFilter) -> AsyncStream<[Transaction]> {
+    wrapped.observeAll(filter: filter)
+  }
+
+  nonisolated func observeErrors() -> AsyncStream<any Error> {
+    wrapped.observeErrors()
+  }
+
   func create(_ transaction: Transaction) async throws -> Transaction {
     try await wrapped.create(transaction)
   }

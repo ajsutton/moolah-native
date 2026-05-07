@@ -54,6 +54,17 @@ actor CancellablePagingTransactionRepository: TransactionRepository {
   }
 
   func fetchAll(filter: TransactionFilter) async throws -> [Transaction] { [] }
+  nonisolated func observe(
+    filter: TransactionFilter, page: Int, pageSize: Int
+  ) -> AsyncStream<TransactionPage> {
+    AsyncStream { $0.finish() }
+  }
+  nonisolated func observeAll(filter: TransactionFilter) -> AsyncStream<[Transaction]> {
+    AsyncStream { $0.finish() }
+  }
+  nonisolated func observeErrors() -> AsyncStream<any Error> {
+    AsyncStream { $0.finish() }
+  }
   func create(_ transaction: Transaction) async throws -> Transaction { transaction }
   func update(_ transaction: Transaction) async throws -> Transaction { transaction }
   func delete(id: UUID) async throws {}
