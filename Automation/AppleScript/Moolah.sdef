@@ -232,6 +232,11 @@
       <direct-parameter type="specifier" optional="yes" description="The profile to refresh."/>
     </command>
 
+    <command name="synchronize" code="Moolsync" description="Force a sync of every crypto account in a profile (bypasses the staleness timer).">
+      <cocoa class="Moolah.SyncCryptoCommand"/>
+      <direct-parameter type="specifier" optional="yes" description="The profile whose crypto accounts to sync. Defaults to all open profiles."/>
+    </command>
+
     <command name="navigate to" code="Moolnavt" description="Navigate to an object in the UI.">
       <cocoa class="Moolah.NavigateCommand"/>
       <direct-parameter type="specifier" description="The object to navigate to."/>

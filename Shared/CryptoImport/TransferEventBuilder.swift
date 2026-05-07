@@ -16,7 +16,14 @@ import os
 ///   `txHash` so a single complex transaction with N transfer legs only
 ///   triggers one `eth_getTransactionReceipt` round-trip.
 ///
-/// Each leg's `externalId` is set to the event's `hash`. The `counterpartyAddress`
+/// Each transfer leg's `externalId` is set to the Alchemy `uniqueId`
+/// (`"<hash>:<category>:<index>"`) so a multi-event transaction can
+/// produce multiple legs without colliding on the schema's partial
+/// unique index `UNIQUE(account_id, external_id)`. The gas leg (built
+/// from a single receipt per hash, not from a transfer event) uses
+/// `"<hash>:gas"` for the same reason. The hash itself remains the
+/// `BlockExplorerLink.transactionURL` key, so dedup on `externalId`
+/// and "open in explorer" deliberately differ. The `counterpartyAddress`
 /// is the lowercased on-chain address on the *other* side of the transfer:
 /// the `to` address for outbound legs, the `from` address for inbound legs,
 /// and `nil` for self-sends (where both sides are this wallet) and unknown
@@ -152,8 +159,9 @@ struct TransferEventBuilder: Sendable {
   /// hash, present only when at least one event is an outbound
   /// `external` transfer for this wallet. When present the builder
   /// appends a single `.expense` gas leg in the chain's native token
-  /// using the same `externalId` as the transfer legs, so dedup against
-  /// existing storage stays on `(accountId, externalId)`.
+  /// with `externalId = "<hash>:gas"` — distinct from every transfer
+  /// leg's per-event `uniqueId` so the schema's partial unique index
+  /// on `(accountId, externalId)` doesn't reject the second insert.
   private func buildEvent(
     events: [AlchemyTransfer],
     receipt: AlchemyTransactionReceipt?,
@@ -255,7 +263,7 @@ struct TransferEventBuilder: Sendable {
       accountId: context.account.id,
       instrument: instrument,
       quantity: resolution.signedQuantity,
-      externalId: event.hash,
+      externalId: event.uniqueId,
       counterpartyAddress: resolution.counterpartyAddress,
       type: .transfer)
   }

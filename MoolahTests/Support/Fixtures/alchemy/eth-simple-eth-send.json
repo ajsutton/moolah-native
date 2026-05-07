@@ -13,7 +13,7 @@
         "asset": "ETH",
         "category": "external",
         "rawContract": {
-          "rawValue": "0xb1a2bc2ec50000",
+          "value": "0xb1a2bc2ec50000",
           "address": null,
           "decimal": "0x12"
         },

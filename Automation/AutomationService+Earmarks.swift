@@ -238,4 +238,23 @@ extension AutomationService {
 
     _ = await (accountsLoad, categoriesLoad, earmarksLoad)
   }
+
+  // MARK: - Crypto sync
+
+  /// Forces a sync of every crypto account in the given profile, bypassing
+  /// the staleness check. Used by automation / smoke tests to drive the
+  /// importer end-to-end without waiting for the hourly stale timer or
+  /// scenePhase `.active` trigger. Throws when the profile cannot be
+  /// resolved or when the crypto-sync store is unavailable (degraded
+  /// launches without an instrument registry).
+  func syncCryptoAccounts(profileIdentifier: String) async throws {
+    let session = try resolveSession(for: profileIdentifier)
+    guard let cryptoSyncStore = session.cryptoSyncStore else {
+      throw AutomationError.operationFailed(
+        "Crypto sync is not available for this profile (instrument registry not configured).")
+    }
+    let cryptoAccounts = session.accountStore.accounts.filter { $0.type == .crypto }
+    guard !cryptoAccounts.isEmpty else { return }
+    await cryptoSyncStore.syncAccounts(cryptoAccounts)
+  }
 }

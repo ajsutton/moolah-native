@@ -12,7 +12,12 @@ import OSLog
 /// fetched transfers. When the fetch returns no transfers (e.g. account
 /// has no recent activity), the value falls back to the prior
 /// `lastSyncedBlockNumber` so the next cycle's reorg-window math still
-/// holds, or `0` on a genesis-style fetch.
+/// holds, or `0` on a genesis-style fetch. The watermark is intentionally
+/// advanced even when the builder dropped every transfer — holding it
+/// would make inactive accounts re-query an ever-growing range. The
+/// "raw transfers returned but zero candidates produced" pattern is
+/// instead surfaced as a `warning` log so a wire-format regression is
+/// visible without stranding inactive wallets.
 struct WalletSyncBuildResult: Sendable, Hashable {
   let candidates: [BuiltTransaction]
   let headBlockNumber: UInt64
@@ -113,6 +118,25 @@ struct WalletSyncEngine: Sendable {
       services: BuilderServices(
         chain: chain, discovery: discovery, alchemy: alchemy),
       importOrigin: importOrigin)
+
+    // 6. Observability for wire-format regressions: if Alchemy returned
+    //    rows but every one dropped at the builder, that's the symptom
+    //    of a decoder bug (malformed amount, unknown category…). Log
+    //    loudly so the next regression doesn't recreate the silent
+    //    "synced ok, zero transactions" failure mode that hid the
+    //    `rawContract.value` JSON-key mismatch in production.
+    if !transfers.isEmpty, built.isEmpty {
+      Self.logger.warning(
+        """
+        WalletSyncEngine: builder dropped all \
+        \(transfers.count, privacy: .public) transfers for account \
+        \(account.id, privacy: .public) on chain \
+        \(chain.chainId, privacy: .public) — possible wire-format \
+        regression. Watermark still advances; check earlier \
+        TransferEventBuilder notices for the per-row reason.
+        """
+      )
+    }
     return WalletSyncBuildResult(candidates: built, headBlockNumber: headBlock)
   }
 
