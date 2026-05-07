@@ -353,7 +353,8 @@ extension ContentView {
             WalletAccountHeaderView(
               account: account,
               chain: chain,
-              cryptoSyncStore: cryptoSyncStore)
+              cryptoSyncStore: cryptoSyncStore,
+              hasApiKey: session.cryptoTokenStore?.hasAlchemyApiKey ?? false)
           }
           TransactionListView(
             title: account.name,

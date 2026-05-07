@@ -46,8 +46,11 @@ final class CryptoSyncStore {
 
   /// Banner-level error visible across the crypto-settings UI when a
   /// process-wide failure (`.missingApiKey` / `.invalidApiKey`) means
-  /// no account can sync at all. `nil` once any sync cycle succeeds.
-  /// Per-account network/rate-limit/malformed errors are stored on
+  /// no account can sync at all. Set by `updateGlobalError(from:)`
+  /// after every build phase based on whether any per-account result
+  /// surfaced a process-wide error; cleared back to `nil` on the next
+  /// cycle that has no such failures. Per-account network /
+  /// rate-limit / malformed errors are stored on
   /// `statePerAccount[id].lastError` instead.
   private(set) var globalError: WalletSyncError?
 
@@ -191,11 +194,13 @@ final class CryptoSyncStore {
   /// 2. Run up to `maxConcurrentBuilds` parallel build tasks via
   ///    `withTaskGroup`. Each task either produces a
   ///    `WalletSyncBuildResult` or records a `lastError` on the account's
-  ///    `WalletSyncState` and produces nothing.
-  /// 3. Apply collected results sequentially through `WalletApplyEngine`.
-  /// 4. Refresh `statePerAccount` from the repository so observable view
+  ///    `WalletSyncState` and surfaces a `.failed` outcome.
+  /// 3. Scan the per-account outcomes for process-wide errors
+  ///    (`.missingApiKey` / `.invalidApiKey`) and update `globalError`.
+  /// 4. Apply successful results sequentially through `WalletApplyEngine`.
+  /// 5. Refresh `statePerAccount` from the repository so observable view
   ///    state matches the persisted truth.
-  /// 5. Clear in-flight markers.
+  /// 6. Clear in-flight markers.
   func syncAccounts(_ accountList: [Account]) async {
     let inputs = accountList.filter { account in
       guard account.type == .crypto else { return false }
@@ -229,6 +234,7 @@ final class CryptoSyncStore {
     }
 
     let perAccountResults = await runParallelBuilds(for: inputs)
+    updateGlobalError(from: perAccountResults)
     await runApplyPass(perAccountResults: perAccountResults)
     await refreshStateFromRepository()
   }

@@ -30,6 +30,15 @@ struct WalletAccountHeaderView: View {
   let chain: ChainConfig
   let cryptoSyncStore: CryptoSyncStore
 
+  /// Whether the profile has an Alchemy API key configured. Drives
+  /// the `Sync now` enabled state and the inline "add a key" hint.
+  /// Read by the parent view (`ContentView`) from
+  /// `session.cryptoTokenStore?.hasAlchemyApiKey` because the keychain
+  /// lookup lives on `CryptoTokenStore`, not on `CryptoSyncStore` —
+  /// surfacing it here as a value keeps the header view trivially
+  /// previewable + testable without dragging the token store along.
+  let hasApiKey: Bool
+
   /// Closure used to copy the supplied string to the system pasteboard.
   /// Defaulted to the platform's standard pasteboard so production code
   /// has a single sensible default; tests / previews override.
@@ -46,12 +55,14 @@ struct WalletAccountHeaderView: View {
     account: Account,
     chain: ChainConfig,
     cryptoSyncStore: CryptoSyncStore,
+    hasApiKey: Bool,
     copyToPasteboard: @escaping @MainActor (String) -> Void = WalletAccountHeaderView.defaultCopy,
     openExternalURL: @escaping @MainActor (URL) -> Void = WalletAccountHeaderView.defaultOpen
   ) {
     self.account = account
     self.chain = chain
     self.cryptoSyncStore = cryptoSyncStore
+    self.hasApiKey = hasApiKey
     self.copyToPasteboard = copyToPasteboard
     self.openExternalURL = openExternalURL
   }
@@ -62,36 +73,95 @@ struct WalletAccountHeaderView: View {
     WalletAccountHeaderLogic.truncateAddress(address)
   }
 
+  private var syncState: WalletSyncState? {
+    cryptoSyncStore.statePerAccount[account.id]
+  }
+
   private var lastSyncedText: String {
-    WalletAccountHeaderLogic.lastSyncedText(
-      state: cryptoSyncStore.statePerAccount[account.id], now: Date())
+    WalletAccountHeaderLogic.lastSyncedText(state: syncState, now: Date())
   }
 
   private var isSyncing: Bool {
     cryptoSyncStore.inProgressAccountIds.contains(account.id)
   }
 
+  /// Per-account error caption (red), or `nil` when the most recent
+  /// build phase succeeded.
+  private var errorCaption: String? {
+    WalletAccountHeaderLogic.errorCaption(for: syncState)
+  }
+
   var body: some View {
-    HStack(spacing: 12) {
-      addressSection
-      Spacer(minLength: 12)
-      Text(chain.displayName)
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-        .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.chainName)
-      Text(lastSyncedText)
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-        .monospacedDigit()
-        .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.lastSynced)
-      syncButton
-      overflowMenu
+    VStack(alignment: .leading, spacing: 4) {
+      HStack(spacing: 12) {
+        addressSection
+        Spacer(minLength: 12)
+        Text(chain.displayName)
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.chainName)
+        Text(lastSyncedText)
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .monospacedDigit()
+          .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.lastSynced)
+        syncButton
+        overflowMenu
+      }
+      // Status bar below the header showing whichever of (a) the per-
+      // account sync error and (b) the missing-key hint applies. The
+      // missing-key hint takes precedence: if no key is configured the
+      // user has one fix path (open preferences) and the per-account
+      // error is a downstream consequence — surfacing both would just
+      // duplicate the prompt.
+      if !hasApiKey {
+        missingApiKeyHint
+      } else if let errorCaption {
+        errorCaptionView(errorCaption)
+      }
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
     .background(.regularMaterial)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.container)
+  }
+
+  /// Inline prompt rendered when no Alchemy API key is configured.
+  /// Pairs the explanation with a `SettingsLink` so the user can jump
+  /// straight to Crypto preferences. Uses `SettingsLink` (not a custom
+  /// button) so the link respects the platform's settings-pane
+  /// activation contract — on macOS that surfaces the Settings window
+  /// pre-selected to whatever pane the user was last on, which is
+  /// fine: the Crypto tab is the first row in the settings sidebar.
+  private var missingApiKeyHint: some View {
+    HStack(spacing: 6) {
+      Image(systemName: "key.slash")
+        .foregroundStyle(.secondary)
+      Text("Add an Alchemy key in Crypto preferences to enable sync.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      SettingsLink {
+        Text("Open preferences")
+      }
+      .buttonStyle(.borderless)
+      .controlSize(.small)
+      .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.missingApiKeyHintLink)
+      Spacer()
+    }
+    .accessibilityElement(children: .combine)
+    .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.missingApiKeyHint)
+  }
+
+  /// Inline error caption rendered when `WalletSyncState.lastError`
+  /// is non-nil. Red `.caption` matches the same role on
+  /// `CryptoAccountsListSection` so users see consistent treatment of
+  /// the same underlying error in both surfaces.
+  private func errorCaptionView(_ caption: String) -> some View {
+    Text(caption)
+      .font(.caption)
+      .foregroundStyle(.red)
+      .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.errorCaption)
   }
 
   private var addressSection: some View {
@@ -124,8 +194,13 @@ struct WalletAccountHeaderView: View {
         Label("Sync now", systemImage: "arrow.clockwise")
       }
     }
-    .disabled(isSyncing)
-    .help("Sync wallet now")
+    .disabled(
+      !WalletAccountHeaderLogic.isSyncEnabled(
+        accountId: account.id,
+        inProgress: cryptoSyncStore.inProgressAccountIds,
+        hasApiKey: hasApiKey)
+    )
+    .help(hasApiKey ? "Sync wallet now" : "Add an Alchemy API key to enable sync")
     .accessibilityLabel("Sync wallet now")
     .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.syncButton)
   }
@@ -212,11 +287,56 @@ enum WalletAccountHeaderLogic {
   }
 
   /// Whether the "Sync now" button should be enabled for the given
-  /// account, given the store's in-flight set. Mirrors
-  /// `CryptoSyncStore.syncAccount`'s own guard so the UI agrees with the
-  /// store's behaviour (a tap during sync is a no-op, so the button
-  /// shouldn't pretend otherwise).
-  static func isSyncEnabled(accountId: UUID, inProgress: Set<UUID>) -> Bool {
-    !inProgress.contains(accountId)
+  /// account. The button collapses to disabled when:
+  ///
+  /// - The account is already mid-sync (mirrors
+  ///   `CryptoSyncStore.syncAccount`'s collapse-duplicates guard so a
+  ///   tap during sync isn't a misleading no-op).
+  /// - No Alchemy API key is configured. Per design — "Without a valid
+  ///   key, sync is disabled with an inline prompt to add one." — the
+  ///   button must visibly refuse so the user is steered to the
+  ///   preferences pane instead of staring at a `.missingApiKey`
+  ///   error caption every time they tap.
+  static func isSyncEnabled(
+    accountId: UUID,
+    inProgress: Set<UUID>,
+    hasApiKey: Bool
+  ) -> Bool {
+    guard hasApiKey else { return false }
+    return !inProgress.contains(accountId)
+  }
+
+  /// User-facing string for a `WalletSyncError` persisted on a per-
+  /// account `WalletSyncState`. Returns `nil` when the state has no
+  /// error so callers can skip rendering the caption row entirely.
+  /// Mirrors `CryptoAccountsListSection`'s settings-pane copy so a user
+  /// who looks at both surfaces sees consistent language for the same
+  /// underlying failure.
+  static func errorCaption(for state: WalletSyncState?) -> String? {
+    guard let error = state?.lastError else { return nil }
+    return errorCaption(for: error)
+  }
+
+  /// Branchless variant on the raw error so unit tests can pin the
+  /// message for each case without constructing a `WalletSyncState`.
+  static func errorCaption(for error: WalletSyncError) -> String {
+    switch error {
+    case .missingApiKey:
+      return "Add an Alchemy API key to enable sync."
+    case .invalidApiKey:
+      return "Alchemy rejected the API key."
+    case .rateLimited(let retryAfter):
+      if let retryAfter {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return
+          "Rate-limited. Retry \(formatter.localizedString(for: retryAfter, relativeTo: Date()))."
+      }
+      return "Rate-limited. Retry shortly."
+    case .network(let underlying):
+      return "Network error: \(underlying)"
+    case .providerMalformedResponse(let stage):
+      return "Provider returned a malformed response (\(stage))."
+    }
   }
 }

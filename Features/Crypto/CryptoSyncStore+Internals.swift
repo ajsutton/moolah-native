@@ -52,9 +52,14 @@ extension CryptoSyncStore {
   /// values are stored as-is; unexpected `Error` types are wrapped in
   /// `.network(...)` so the persisted value stays inside the closed
   /// taxonomy `WalletSyncError` defines.
+  ///
+  /// Returns the full `PerAccountBuildResult` set (not just the
+  /// successful inputs) so callers can scan failures for process-wide
+  /// errors (`.missingApiKey` / `.invalidApiKey`) and surface them on
+  /// `globalError`. The apply pass filters to `.success` itself.
   func runParallelBuilds(
     for accountList: [Account]
-  ) async -> [WalletApplyEngine.AccountInput] {
+  ) async -> [PerAccountBuildResult] {
     let limit = maxConcurrentBuilds
     let walletSyncEngine = self.walletSyncEngine
     let walletSyncState = self.walletSyncState
@@ -62,7 +67,7 @@ extension CryptoSyncStore {
 
     return await withTaskGroup(
       of: PerAccountBuildResult.self,
-      returning: [WalletApplyEngine.AccountInput].self
+      returning: [PerAccountBuildResult].self
     ) { group in
       var iterator = accountList.makeIterator()
       var dispatched = 0
@@ -77,14 +82,12 @@ extension CryptoSyncStore {
         }
         dispatched += 1
       }
-      var collected: [WalletApplyEngine.AccountInput] = []
+      var collected: [PerAccountBuildResult] = []
       collected.reserveCapacity(accountList.count)
       // …then add a new task as each finishes so the group never holds
       // more than `limit` in-flight tasks at once.
       while let result = await group.next() {
-        if case let .success(input) = result {
-          collected.append(input)
-        }
+        collected.append(result)
         if let next = iterator.next() {
           group.addTask {
             await Self.buildOne(
@@ -178,24 +181,61 @@ extension CryptoSyncStore {
   // MARK: - Sequential apply
 
   /// Runs the sequential `@MainActor` apply pass over the build-phase
-  /// outputs and updates the global error banner. A throwing apply pass
-  /// is logged but does not surface to callers — per-account errors
-  /// were already persisted in the build phase. `WalletApplyEngine`
-  /// throws repository errors (GRDB / CloudKit), not `WalletSyncError`,
-  /// so we don't try to translate them into the global banner.
+  /// outputs. A throwing apply pass is logged but does not surface to
+  /// callers — per-account errors were already persisted in the build
+  /// phase. `WalletApplyEngine` throws repository errors (GRDB /
+  /// CloudKit), not `WalletSyncError`, so the global banner is driven
+  /// entirely from the build-phase scan in `updateGlobalError(from:)`.
   func runApplyPass(
-    perAccountResults: [WalletApplyEngine.AccountInput]
+    perAccountResults: [PerAccountBuildResult]
   ) async {
+    let inputs: [WalletApplyEngine.AccountInput] = perAccountResults.compactMap {
+      if case let .success(input) = $0 { return input }
+      return nil
+    }
     do {
-      _ = try await walletApplyEngine.apply(perAccount: perAccountResults)
-      // Successful apply implies the configured API key is at least
-      // syntactically valid (the build phase reached Alchemy and was
-      // accepted). Clear any stale banner.
-      setGlobalError(nil)
+      _ = try await walletApplyEngine.apply(perAccount: inputs)
     } catch {
       Self.internalsLogger.warning(
         "WalletApplyEngine apply pass failed: \(error.localizedDescription, privacy: .public)"
       )
+    }
+  }
+
+  /// Updates `globalError` based on the build phase's per-account
+  /// outcomes. The banner is process-wide: an `.invalidApiKey` /
+  /// `.missingApiKey` from any one account implies no account can sync
+  /// (the API key is shared across every wallet), so we only need to
+  /// find the first occurrence — preferring `.missingApiKey` over
+  /// `.invalidApiKey` when both are present because the former gives
+  /// the user a clearer instruction (add a key) than the latter
+  /// (replace a key).
+  ///
+  /// When no process-wide error appears in this cycle's outcomes the
+  /// banner clears. Per-account errors (`.network`, `.rateLimited`,
+  /// `.providerMalformedResponse`) are surfaced via the per-row
+  /// `WalletSyncState.lastError`, not the banner.
+  func updateGlobalError(from results: [PerAccountBuildResult]) {
+    var sawMissing = false
+    var sawInvalid = false
+    for result in results {
+      if case let .failed(_, error) = result {
+        switch error {
+        case .missingApiKey:
+          sawMissing = true
+        case .invalidApiKey:
+          sawInvalid = true
+        default:
+          break
+        }
+      }
+    }
+    if sawMissing {
+      setGlobalError(.missingApiKey)
+    } else if sawInvalid {
+      setGlobalError(.invalidApiKey)
+    } else {
+      setGlobalError(nil)
     }
   }
 

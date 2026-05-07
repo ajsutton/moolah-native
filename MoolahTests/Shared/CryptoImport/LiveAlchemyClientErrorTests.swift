@@ -113,4 +113,83 @@ struct LiveAlchemyClientErrorTests {
       )
     }
   }
+
+  // MARK: - Empty API key pre-flight
+  //
+  // When `ProfileSession.resolveAlchemyApiKey()` returns nil the wiring
+  // passes an empty string into `LiveAlchemyClient`. Without a pre-flight
+  // guard the URL becomes `https://<network>.g.alchemy.com/v2/` (nothing
+  // after the slash), Alchemy returns 401, and the response validator
+  // throws `.invalidApiKey` — misleading because the key is missing, not
+  // invalid. The tests below pin the pre-flight `.missingApiKey` throw
+  // for every public method that hits the network. They use a handler
+  // that records whether the network was touched; on a correct
+  // pre-flight the recorder stays empty.
+
+  @Test
+  func emptyApiKeyShortCircuitsGetAssetTransfersWithMissingApiKey() async throws {
+    let touched = NetworkTouchRecorder()
+    let client = AlchemyTestSupport.makeClient(apiKey: "") { request in
+      touched.markTouched()
+      let response = AlchemyTestSupport.response(for: request, statusCode: 401)
+      return (response, Data())
+    }
+    await #expect(throws: WalletSyncError.missingApiKey) {
+      _ = try await client.getAssetTransfers(
+        chain: .ethereum, walletAddress: "0xabc", fromBlock: 0
+      )
+    }
+    #expect(touched.wasTouched == false)
+  }
+
+  @Test
+  func emptyApiKeyShortCircuitsGetTokenMetadataWithMissingApiKey() async throws {
+    let touched = NetworkTouchRecorder()
+    let client = AlchemyTestSupport.makeClient(apiKey: "") { request in
+      touched.markTouched()
+      let response = AlchemyTestSupport.response(for: request, statusCode: 401)
+      return (response, Data())
+    }
+    await #expect(throws: WalletSyncError.missingApiKey) {
+      _ = try await client.getTokenMetadata(
+        chain: .ethereum, contractAddress: "0xabc"
+      )
+    }
+    #expect(touched.wasTouched == false)
+  }
+
+  @Test
+  func emptyApiKeyShortCircuitsGetTransactionReceiptWithMissingApiKey() async throws {
+    let touched = NetworkTouchRecorder()
+    let client = AlchemyTestSupport.makeClient(apiKey: "") { request in
+      touched.markTouched()
+      let response = AlchemyTestSupport.response(for: request, statusCode: 401)
+      return (response, Data())
+    }
+    await #expect(throws: WalletSyncError.missingApiKey) {
+      _ = try await client.getTransactionReceipt(
+        chain: .ethereum, hash: "0xdead"
+      )
+    }
+    #expect(touched.wasTouched == false)
+  }
+}
+
+/// Minimal lock-protected flag the empty-API-key tests use to assert the
+/// pre-flight guard never reaches the URLProtocol stub.
+private final class NetworkTouchRecorder: @unchecked Sendable {
+  private let lock = NSLock()
+  private var touched = false
+
+  func markTouched() {
+    lock.lock()
+    defer { lock.unlock() }
+    touched = true
+  }
+
+  var wasTouched: Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return touched
+  }
 }
