@@ -74,6 +74,29 @@ final class SQLiteCoinGeckoCatalogStorageTests {
   }
 
   @Test
+  func constraintFailureIncludesSqliteErrorMessage() async throws {
+    let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    let withDuplicate: [SQLiteCoinGeckoCatalog.RawCoin] = [
+      .init(id: "tether", symbol: "USDT", name: "Tether", platforms: [:]),
+      .init(id: "tether", symbol: "USDT", name: "Tether (dup)", platforms: [:]),
+    ]
+    do {
+      try await catalog.replaceAllForTesting(coins: withDuplicate, platforms: [])
+      Issue.record("expected constraint failure")
+    } catch let SQLiteCoinGeckoCatalog.CatalogError.sqlite(message) {
+      // Extended result codes turn bare `step 19` into the specific
+      // `SQLITE_CONSTRAINT_UNIQUE (2067)` plus the human-readable errmsg
+      // "UNIQUE constraint failed: coin.coingecko_id". Without both pieces
+      // a real-world refresh failure can't be diagnosed from logs alone.
+      #expect(message.contains("UNIQUE constraint failed"))
+      #expect(message.contains("coin.coingecko_id"))
+      #expect(message.contains("2067"))
+    } catch {
+      Issue.record("unexpected error type: \(error)")
+    }
+  }
+
+  @Test
   func replaceAllRollsBackOnConstraintFailure() async throws {
     let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir)
 

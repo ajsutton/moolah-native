@@ -90,6 +90,13 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     guard result == SQLITE_OK, let handle else {
       throw CatalogError.sqlite("open failed: \(result)")
     }
+    // Promote bare codes (e.g. `19 SQLITE_CONSTRAINT`) into specific
+    // extended codes (e.g. `2067 SQLITE_CONSTRAINT_UNIQUE`) so log lines
+    // pinpoint the actual failure mode. Combined with `sqlite3_errmsg(_:)`
+    // pulled into our throw sites, a constraint violation surfaces as
+    // `step 2067: UNIQUE constraint failed: coin.coingecko_id` instead of
+    // bare `step 19`.
+    sqlite3_extended_result_codes(handle, 1)
     return handle
   }
 
@@ -212,9 +219,9 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     var error: UnsafeMutablePointer<CChar>?
     let result = sqlite3_exec(database, sql, nil, nil, &error)
     if result != SQLITE_OK {
-      let message = error.map { String(cString: $0) } ?? "code \(result)"
+      let message = error.map { String(cString: $0) } ?? "(no errmsg)"
       sqlite3_free(error)
-      throw CatalogError.sqlite("exec failed: \(message)")
+      throw CatalogError.sqlite("exec \(result): \(message)")
     }
   }
 
@@ -225,7 +232,8 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
   ) throws {
     let result = sqlite3_prepare_v2(database, sql, -1, &statement, nil)
     guard result == SQLITE_OK else {
-      throw CatalogError.sqlite("prepare failed: \(result) for \(sql)")
+      throw CatalogError.sqlite(
+        "prepare \(result): \(errorMessage(database: database)) — \(sql)")
     }
   }
 
@@ -241,7 +249,10 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
       -1,
       unsafeBitCast(Int(-1), to: sqlite3_destructor_type.self)
     )
-    guard result == SQLITE_OK else { throw CatalogError.sqlite("bind text \(result)") }
+    guard result == SQLITE_OK else {
+      throw CatalogError.sqlite(
+        "bind text \(result): \(errorMessage(statement: statement))")
+    }
   }
 
   static func bind(
@@ -250,14 +261,32 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     _ value: Int
   ) throws {
     let result = sqlite3_bind_int64(statement, index, Int64(value))
-    guard result == SQLITE_OK else { throw CatalogError.sqlite("bind int \(result)") }
+    guard result == SQLITE_OK else {
+      throw CatalogError.sqlite(
+        "bind int \(result): \(errorMessage(statement: statement))")
+    }
   }
 
   static func step(_ statement: OpaquePointer?) throws {
     let result = sqlite3_step(statement)
     guard result == SQLITE_DONE || result == SQLITE_ROW else {
-      throw CatalogError.sqlite("step \(result)")
+      throw CatalogError.sqlite(
+        "step \(result): \(errorMessage(statement: statement))")
     }
+  }
+
+  /// Reads `sqlite3_errmsg(_:)` for the connection backing `statement`.
+  /// Empty/missing handle paths fall back to a sentinel so a throw site is
+  /// never silent — even a degraded message beats `step 19` alone.
+  private static func errorMessage(statement: OpaquePointer?) -> String {
+    errorMessage(database: statement.flatMap { sqlite3_db_handle($0) })
+  }
+
+  private static func errorMessage(database: OpaquePointer?) -> String {
+    guard let database, let cString = sqlite3_errmsg(database) else {
+      return "(no errmsg)"
+    }
+    return String(cString: cString)
   }
 
   private static func scalarInt(database: OpaquePointer?, _ sql: String) throws -> Int {
