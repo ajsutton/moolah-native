@@ -159,10 +159,14 @@ struct CoreFinancialGraphRollbackTests {
     let priorLegs = try await fetchLegs(in: database, transactionId: txn.id)
     #expect(priorLegs.count == 1)
 
-    // Install a trigger that aborts every leg insert. The update path
-    // deletes existing legs, then re-inserts the new ones — the trigger
-    // fires on the first re-insert, and the header update plus the
-    // pre-update leg deletes must roll back.
+    // Install a trigger that aborts any INSERT attempt on transaction_leg.
+    // `performUpdate` now diffs legs by id: it deletes only legs absent
+    // from the new array, then upserts each surviving/new leg via
+    // `INSERT ... ON CONFLICT DO UPDATE`. SQLite fires `BEFORE INSERT`
+    // for the upsert path, so the trigger raises ABORT on the first
+    // upsert attempt; GRDB propagates the error and rolls the entire
+    // write transaction back — undoing both the partial leg delete and
+    // the header UPDATE.
     try await database.write { database in
       try database.execute(
         sql: """

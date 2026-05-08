@@ -71,10 +71,13 @@ struct TransactionHookUpdateDeleteTests {
     capture.changed.removeAll()
     capture.deleted.removeAll()
 
-    // Update with a fresh 2-leg set. `performUpdate` always replaces
-    // every leg row (new UUIDs assigned inside the repo) so the hook
-    // fan-out is: 1 TransactionRow change, 2 TransactionLegRow changes
-    // for the new legs, 2 TransactionLegRow deletes for the old legs.
+    // Update with a fresh 2-leg set (legs carry newly allocated ids —
+    // makeContractTestLeg assigns UUID() each call). performUpdate diffs
+    // the new ids against the persisted set; since none of the new ids
+    // match the originals, the diff treats both old legs as deleted and
+    // both new legs as inserts. Hook fan-out: 1 TransactionRow change,
+    // 2 TransactionLegRow changes (the inserts), 2 TransactionLegRow
+    // deletes (the now-absent originals).
     let updated = Transaction(
       id: txn.id, date: txn.date, payee: "Trade",
       legs: [

@@ -154,7 +154,7 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     }
 
     onRecordChanged(TransactionRow.recordType, transaction.id)
-    for legId in outcome.insertedLegIds {
+    for legId in outcome.upsertedLegIds {
       onRecordChanged(TransactionLegRow.recordType, legId)
     }
     for legId in outcome.deletedLegIds {
@@ -238,57 +238,6 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
 
   // MARK: - Private helpers
 
-  private struct UpdateOutcome {
-    let deletedLegIds: [UUID]
-    let insertedLegIds: [UUID]
-  }
-
-  /// Single-statement body of `update`'s `database.write { … }`
-  /// closure. Looks up the existing header row, applies the domain
-  /// fields, replaces every leg, and returns the deleted/inserted leg
-  /// ids so the caller can fan out the right hooks after the
-  /// transaction commits.
-  private static func performUpdate(
-    database: Database,
-    transaction: Transaction
-  ) throws -> UpdateOutcome {
-    guard
-      var existing =
-        try TransactionRow
-        .filter(TransactionRow.Columns.id == transaction.id)
-        .fetchOne(database)
-    else {
-      throw BackendError.notFound("Transaction not found")
-    }
-    applyMetadata(of: transaction, to: &existing)
-    try existing.update(database)
-
-    let oldLegs =
-      try TransactionLegRow
-      .filter(TransactionLegRow.Columns.transactionId == transaction.id)
-      .fetchAll(database)
-    let oldLegIds = oldLegs.map(\.id)
-    _ =
-      try TransactionLegRow
-      .filter(TransactionLegRow.Columns.transactionId == transaction.id)
-      .deleteAll(database)
-
-    var newLegIds: [UUID] = []
-    newLegIds.reserveCapacity(transaction.legs.count)
-    for (index, leg) in transaction.legs.enumerated() {
-      try Self.ensureInstrumentReadable(database: database, leg: leg)
-      let legId = UUID()
-      let legRow = TransactionLegRow(
-        id: legId,
-        domain: leg,
-        transactionId: transaction.id,
-        sortOrder: index)
-      try legRow.insert(database)
-      newLegIds.append(legId)
-    }
-    return UpdateOutcome(deletedLegIds: oldLegIds, insertedLegIds: newLegIds)
-  }
-
   /// Converts the snapshot's per-instrument after-page subtotals to a
   /// single `priorBalance` on the target instrument. Returns `nil` on
   /// any conversion failure so callers can mark the running-balance
@@ -325,27 +274,16 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     return total
   }
 
-  /// Mirrors `CloudKitTransactionRepository.applyMetadata`. Copies the
-  /// header fields (including the eight denormalised
-  /// `import_origin_*` columns) from the domain object onto the
-  /// existing row.
-  private static func applyMetadata(
-    of transaction: Transaction, to row: inout TransactionRow
-  ) {
-    let fresh = TransactionRow(domain: transaction)
-    row.date = fresh.date
-    row.payee = fresh.payee
-    row.notes = fresh.notes
-    row.recurPeriod = fresh.recurPeriod
-    row.recurEvery = fresh.recurEvery
-    row.importOriginRawDescription = fresh.importOriginRawDescription
-    row.importOriginBankReference = fresh.importOriginBankReference
-    row.importOriginRawAmount = fresh.importOriginRawAmount
-    row.importOriginRawBalance = fresh.importOriginRawBalance
-    row.importOriginImportedAt = fresh.importOriginImportedAt
-    row.importOriginImportSessionId = fresh.importOriginImportSessionId
-    row.importOriginSourceFilename = fresh.importOriginSourceFilename
-    row.importOriginParserIdentifier = fresh.importOriginParserIdentifier
-  }
-
+  // MARK: - Cross-extension internals
+  //
+  // The following types and helpers are defined in peer extension files
+  // and consumed by methods in this file:
+  //   `UpdateOutcome`, `performUpdate(database:transaction:)` →
+  //     `GRDBTransactionRepository+Update.swift`
+  //   `FetchSnapshot`, `buildFetchSnapshot(...)`,
+  //   `candidateTransactionRows(...)`, `applyLegFilters(...)`,
+  //   `fetchLegs(...)`, `fetchInstrumentMap(...)` →
+  //     `GRDBTransactionRepository+Fetch.swift`
+  //   `ensureInstrumentReadable(database:leg:)` →
+  //     `GRDBTransactionRepository+FKEnsure.swift`
 }
