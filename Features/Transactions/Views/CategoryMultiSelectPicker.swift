@@ -22,12 +22,21 @@ struct CategoryMultiSelectPicker: View {
   // Inline header rather than `.toolbar`: SwiftUI toolbar items don't
   // render inside a macOS popover, so a toolbar Clear would be invisible
   // on the macOS host. The inline header works on both platforms.
+  // The macOS popover gets its title from the inline label below; the
+  // iOS NavigationLink host already supplies one via `navigationTitle`.
   private var header: some View {
     HStack {
+      #if os(macOS)
+        Text("Categories")
+          .font(.headline)
+      #endif
       Spacer()
-      Button("Clear") { selectedIds.removeAll() }
+      // Whole-value reassignment for the same propagation reason as
+      // the per-row toggle.
+      Button("Clear") { selectedIds = [] }
         .disabled(selectedIds.isEmpty)
         .help("Clear all selected categories")
+        .accessibilityLabel("Clear selected categories")
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
@@ -60,11 +69,22 @@ struct CategoryMultiSelectPicker: View {
       isOn: Binding(
         get: { selectedIds.contains(entry.category.id) },
         set: { isOn in
+          // Read-modify-write the whole `Set<UUID>` rather than calling
+          // a mutating method (`insert(_:)` / `remove(_:)`) on the
+          // `@Binding` projection. The mutating-method form did not
+          // propagate updates back to the host's `@State` when the
+          // picker was hosted inside a macOS popover (issue #781).
+          // Whole-value reassignment goes through `Binding.wrappedValue`'s
+          // `nonmutating set` unambiguously, which fixes it. The same
+          // pattern is mirrored in the Clear button and in
+          // `SubtreeContextMenu` below.
+          var updated = selectedIds
           if isOn {
-            selectedIds.insert(entry.category.id)
+            updated.insert(entry.category.id)
           } else {
-            selectedIds.remove(entry.category.id)
+            updated.remove(entry.category.id)
           }
+          selectedIds = updated
         }
       )
     ) {
@@ -80,6 +100,7 @@ struct CategoryMultiSelectPicker: View {
     .modifier(
       SubtreeContextMenu(
         category: entry.category,
+        path: entry.path,
         isParent: isParent,
         categories: categories,
         selectedIds: $selectedIds
@@ -98,6 +119,7 @@ struct CategoryMultiSelectPicker: View {
 /// finer-grained control.
 private struct SubtreeContextMenu: ViewModifier {
   let category: Category
+  let path: String
   let isParent: Bool
   let categories: Categories
   @Binding var selectedIds: Set<UUID>
@@ -106,11 +128,13 @@ private struct SubtreeContextMenu: ViewModifier {
     if isParent {
       content.contextMenu {
         Button("Select all in \(category.name)") {
-          selectedIds.formUnion(categories.subtreeIds(of: category.id))
+          selectedIds = selectedIds.union(categories.subtreeIds(of: category.id))
         }
+        .accessibilityLabel("Select all in \(path)")
         Button("Deselect all in \(category.name)") {
-          selectedIds.subtract(categories.subtreeIds(of: category.id))
+          selectedIds = selectedIds.subtracting(categories.subtreeIds(of: category.id))
         }
+        .accessibilityLabel("Deselect all in \(path)")
       }
     } else {
       content

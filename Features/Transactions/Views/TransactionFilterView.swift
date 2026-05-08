@@ -53,13 +53,11 @@ struct TransactionFilterView: View {
 
   private var form: some View {
     Form {
+      scopeSection
+      matchSection
       dateRangeSection
-      accountSection
-      earmarkSection
-      categoriesSection
-      payeeSection
-      scheduledSection
     }
+    .formStyle(.grouped)
     .navigationTitle("Filter Transactions")
     #if os(iOS)
       .navigationBarTitleDisplayMode(.inline)
@@ -68,69 +66,34 @@ struct TransactionFilterView: View {
       ToolbarItem(placement: .cancellationAction) {
         Button("Cancel") { dismiss() }
       }
-      ToolbarItem(placement: .primaryAction) {
+      ToolbarItem(placement: .confirmationAction) {
         Button("Apply") { applyFilter() }
       }
-      #if os(iOS)
-        ToolbarItem(placement: .bottomBar) {
-          Button("Clear All") { clearAll() }
-        }
-      #else
-        ToolbarItem(placement: .automatic) {
-          Button("Clear All") { clearAll() }
-        }
-      #endif
-    }
-  }
-
-  private var dateRangeSection: some View {
-    Section("Date Range") {
-      Toggle(
-        "Filter by date",
-        isOn: Binding(
-          get: { dateRangeLowerBound != nil && dateRangeUpperBound != nil },
-          set: { enabled in
-            if enabled {
-              let now = Date()
-              let calendar = Calendar.current
-              dateRangeLowerBound = calendar.date(byAdding: .month, value: -1, to: now)
-              dateRangeUpperBound = now
-            } else {
-              dateRangeLowerBound = nil
-              dateRangeUpperBound = nil
-            }
-          }
-        ))
-      if dateRangeLowerBound != nil && dateRangeUpperBound != nil {
-        DatePicker(
-          "Start Date",
-          selection: Binding(
-            get: { dateRangeLowerBound ?? Date() },
-            set: { dateRangeLowerBound = $0 }),
-          displayedComponents: .date)
-        DatePicker(
-          "End Date",
-          selection: Binding(
-            get: { dateRangeUpperBound ?? Date() },
-            set: { dateRangeUpperBound = $0 }),
-          displayedComponents: .date)
+      ToolbarItem(placement: .destructiveAction) {
+        Button("Reset", role: .destructive) { clearAll() }
+          .disabled(!hasAnySelection)
       }
     }
   }
 
-  private var accountSection: some View {
-    Section("Account") {
+  private var hasAnySelection: Bool {
+    selectedAccountId != nil
+      || selectedEarmarkId != nil
+      || selectedScheduled != .all
+      || dateRangeLowerBound != nil
+      || dateRangeUpperBound != nil
+      || !selectedCategoryIds.isEmpty
+      || !payeeText.isEmpty
+  }
+
+  private var scopeSection: some View {
+    Section("Scope") {
       Picker("Account", selection: $selectedAccountId) {
         Text("All Accounts").tag(nil as UUID?)
         ForEach(accounts.ordered) { account in
           Text(account.name).tag(account.id as UUID?)
         }
       }
-    }
-  }
-
-  private var earmarkSection: some View {
-    Section("Earmark") {
       Picker("Earmark", selection: $selectedEarmarkId) {
         Text("All Earmarks").tag(nil as UUID?)
         ForEach(earmarks.ordered) { earmark in
@@ -140,12 +103,20 @@ struct TransactionFilterView: View {
     }
   }
 
-  private var categoriesSection: some View {
-    Section("Categories") {
+  private var matchSection: some View {
+    Section("Match") {
       if categories.roots.isEmpty {
-        Text("No categories available").foregroundStyle(.secondary)
+        LabeledContent("Categories") {
+          Text("No categories available").foregroundStyle(.secondary)
+        }
       } else {
         categoryPickerRow
+      }
+      TextField("Payee", text: $payeeText, prompt: Text("Contains…"))
+      Picker("Schedule", selection: $selectedScheduled) {
+        Text("All Transactions").tag(ScheduledFilter.all)
+        Text("Scheduled Only").tag(ScheduledFilter.scheduledOnly)
+        Text("Non-Scheduled Only").tag(ScheduledFilter.nonScheduledOnly)
       }
     }
   }
@@ -155,17 +126,27 @@ struct TransactionFilterView: View {
     // not a result-builder statement.
     let summary = categories.selectionSummary(for: selectedCategoryIds)
     #if os(macOS)
-      // `LabeledContent` is the form-row primitive (label left, value right,
-      // standard hover); the trigger Button lives in the value column. The
-      // value text inherits the system foreground style so it stays visually
-      // consistent with the surrounding Picker / DatePicker / TextField rows
-      // — the row's hover highlight and the popover that opens on click are
-      // the activation cues, not a tinted label.
+      // The full row is the trigger so any click inside the cell opens the
+      // popover — matching how Picker rows in the same form behave. The
+      // chevron makes the affordance discoverable without colour.
       LabeledContent("Categories") {
-        Button(summary) {
+        Button {
           showCategoryPicker = true
+        } label: {
+          HStack(spacing: 6) {
+            Text(summary)
+              .foregroundStyle(.primary)
+              .lineLimit(1)
+              .truncationMode(.tail)
+            Image(systemName: "chevron.up.chevron.down")
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+          }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
+        .accessibilityLabel("Categories")
+        .accessibilityValue(summary)
+        .accessibilityHint("Opens the category picker")
         .popover(isPresented: $showCategoryPicker, arrowEdge: .trailing) {
           CategoryMultiSelectPicker(
             categories: categories,
@@ -186,20 +167,50 @@ struct TransactionFilterView: View {
     #endif
   }
 
-  private var payeeSection: some View {
-    Section("Payee") {
-      TextField("Payee contains…", text: $payeeText)
+  private var dateRangeSection: some View {
+    Section("Date Range") {
+      Toggle("Filter by Date", isOn: dateRangeEnabledBinding)
+      if dateRangeLowerBound != nil && dateRangeUpperBound != nil {
+        DatePicker(
+          "Start Date", selection: lowerBoundBinding, displayedComponents: .date
+        )
+        .monospacedDigit()
+        DatePicker(
+          "End Date", selection: upperBoundBinding, displayedComponents: .date
+        )
+        .monospacedDigit()
+      }
     }
   }
 
-  private var scheduledSection: some View {
-    Section("Scheduled") {
-      Picker("Scheduled", selection: $selectedScheduled) {
-        Text("All Transactions").tag(ScheduledFilter.all)
-        Text("Scheduled Only").tag(ScheduledFilter.scheduledOnly)
-        Text("Non-Scheduled Only").tag(ScheduledFilter.nonScheduledOnly)
+  private var dateRangeEnabledBinding: Binding<Bool> {
+    Binding(
+      get: { dateRangeLowerBound != nil && dateRangeUpperBound != nil },
+      set: { enabled in
+        guard enabled else {
+          dateRangeLowerBound = nil
+          dateRangeUpperBound = nil
+          return
+        }
+        let now = Date()
+        dateRangeLowerBound = Calendar.current.date(byAdding: .month, value: -1, to: now)
+        dateRangeUpperBound = now
       }
-    }
+    )
+  }
+
+  private var lowerBoundBinding: Binding<Date> {
+    Binding(
+      get: { dateRangeLowerBound ?? Date() },
+      set: { dateRangeLowerBound = $0 }
+    )
+  }
+
+  private var upperBoundBinding: Binding<Date> {
+    Binding(
+      get: { dateRangeUpperBound ?? Date() },
+      set: { dateRangeUpperBound = $0 }
+    )
   }
 
   private func applyFilter() {
