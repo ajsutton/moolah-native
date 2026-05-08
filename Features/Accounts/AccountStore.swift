@@ -34,7 +34,7 @@ final class AccountStore {
   // private-by-convention from elsewhere in the module.
   let repository: AccountRepository
   let conversionService: any InstrumentConversionService
-  private let targetInstrument: Instrument
+  let targetInstrument: Instrument
   /// Investment repository — captured separately from the read-through
   /// cache so the observation pipeline can subscribe to its
   /// `observeAllValues()` tick stream. `nil` in tests / previews that
@@ -129,6 +129,7 @@ final class AccountStore {
     MainActor.assumeIsolated {
       observationTask?.cancel()
       conversionTask?.cancel()
+      showHiddenTask?.cancel()
       testObservationTickContinuation.finish()
     }
   }
@@ -193,6 +194,8 @@ final class AccountStore {
     observationTask = nil
     conversionTask?.cancel()
     conversionTask = nil
+    showHiddenTask?.cancel()
+    showHiddenTask = nil
   }
 
   /// Asks `investmentValueCache` to hydrate itself with the latest value for
@@ -211,7 +214,21 @@ final class AccountStore {
     await investmentValueCache.preload(for: investmentAccountIds)
   }
 
-  var showHidden: Bool = false
+  /// Recompute task spawned by the `showHidden` `didSet`. Tracked (not
+  /// fire-and-forget) so `stopObserving()` and `deinit` can cancel an
+  /// in-flight recompute. A rapid double-toggle cancels the prior task
+  /// before spawning the next, narrowing the window for stale writes.
+  private var showHiddenTask: Task<Void, Never>?
+
+  var showHidden: Bool = false {
+    didSet {
+      // Aggregate totals filter on `showHidden`; without this recompute they
+      // stay pinned to the previous visibility's sum until the next tick.
+      guard oldValue != showHidden else { return }
+      showHiddenTask?.cancel()
+      showHiddenTask = Task { await recomputeConvertedTotals() }
+    }
+  }
 
   var currentAccounts: [Account] {
     accounts.filter { $0.type.isCurrent && (showHidden || !$0.isHidden) }
@@ -221,40 +238,8 @@ final class AccountStore {
     accounts.filter { $0.type.isInvestmentLike && (showHidden || !$0.isHidden) }
   }
 
-  /// The display balance for an account in its own instrument. Forwards to
-  /// `balanceCalculator`, passing the cached externally-set investment value
-  /// when the account is an investment account.
-  func displayBalance(for accountId: UUID) async throws -> InstrumentAmount {
-    guard let account = accounts.by(id: accountId) else {
-      return .zero(instrument: targetInstrument)
-    }
-    return try await balanceCalculator.displayBalance(
-      for: account, investmentValue: investmentValueCache.value(for: accountId))
-  }
-
-  /// Whether the sidebar should show "Not set" instead of `$0` for an
-  /// investment account in `.recordedValue` mode (no snapshot recorded;
-  /// initial conversion already completed). See
-  /// `INSTRUMENT_CONVERSION_GUIDE.md` Rule 11 — `$0` would otherwise roll
-  /// into net-worth as a real number.
-  func hasUnrecordedValue(_ account: Account) -> Bool {
-    guard hasCompletedInitialConversion else { return false }
-    guard account.type == .investment, account.valuationMode == .recordedValue else {
-      return false
-    }
-    return investmentValueCache.value(for: account.id) == nil
-  }
-
-  /// Whether an account can be deleted (all positions are zero or empty).
-  func canDelete(_ accountId: UUID) -> Bool {
-    guard let account = accounts.by(id: accountId) else { return false }
-    return account.positions.isEmpty || account.positions.allSatisfy { $0.quantity == 0 }
-  }
-
-  /// Positions for a given account. Returns empty array if not loaded.
-  func positions(for accountId: UUID) -> [Position] {
-    accounts.by(id: accountId)?.positions ?? []
-  }
+  // Read-only query helpers (`displayBalance`, `hasUnrecordedValue`,
+  // `canDelete`, `positions(for:)`) live in `AccountStore+Queries.swift`.
 
   /// Recompute per-account balances and aggregate totals via
   /// `balanceCalculator`. Driven by emissions from either

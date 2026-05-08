@@ -72,6 +72,33 @@ struct AccountStoreMutationsTests {
     #expect(store.investmentAccounts.count == 2)
   }
 
+  @Test("convertedCurrentTotal refreshes when showHidden toggles to include hidden accounts")
+  func convertedCurrentTotalRefreshesOnShowHiddenToggle() async throws {
+    // Without a recompute on toggle the sidebar shows hidden account rows
+    // (filter is computed from showHidden) but the "Current Total" stays
+    // pinned to the visible-only sum until the next emission.
+    let (backend, database) = try TestBackend.create()
+    _ = AccountStoreTestSupport.seedAccount(
+      name: "Visible", balance: Decimal(100000) / 100, in: database)
+    _ = AccountStoreTestSupport.seedAccount(
+      name: "Hidden", balance: Decimal(50000) / 100, isHidden: true, in: database)
+    let store = AccountStore(
+      repository: backend.accounts, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
+
+    try await store.waitForNextEmission(
+      matching: { $0.convertedCurrentTotal?.quantity == Decimal(100000) / 100 },
+      description: "initial total reflects visible account only"
+    )
+
+    store.showHidden = true
+
+    try await store.waitForNextEmission(
+      matching: { $0.convertedCurrentTotal?.quantity == Decimal(150000) / 100 },
+      description: "total recomputes to include hidden account"
+    )
+  }
+
   @Test("investmentAccounts includes crypto accounts (isInvestmentLike)")
   func investmentAccountsIncludesCrypto() async throws {
     // Sidebar feeds its "Investments" section from `investmentAccounts`. A
