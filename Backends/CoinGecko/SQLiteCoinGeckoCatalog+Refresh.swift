@@ -19,9 +19,13 @@ extension SQLiteCoinGeckoCatalog {
   /// the next launch retries.
   func refreshIfStale() async {
     do {
+      // Capture `now` once so the staleness compare and the `writeMeta`
+      // timestamp use the same instant — avoids any drift if the body
+      // takes long enough that two `Date()` reads diverge.
+      let now = Date()
       let meta = try Self.readMeta(database: database)
       if let lastFetched = meta.lastFetched,
-        Date().timeIntervalSince(lastFetched) < Self.maxAge
+        now.timeIntervalSince(lastFetched) < Self.maxAge
       {
         return
       }
@@ -56,12 +60,12 @@ extension SQLiteCoinGeckoCatalog {
         database: database, coins: coinsUpdate, platforms: platformsUpdate)
       try Self.writeMeta(
         database: database,
-        lastFetched: Date(),
+        lastFetched: now,
         coinsEtag: newCoinsEtag,
         platformsEtag: newPlatformsEtag
       )
     } catch {
-      log.error("refresh failed: \(String(describing: error), privacy: .public)")
+      Self.log.error("refresh failed: \(String(describing: error), privacy: .public)")
     }
   }
 }
@@ -263,7 +267,7 @@ extension SQLiteCoinGeckoCatalog {
       try insertCoins(database: database, coins: coins)
       try exec(database: database, "COMMIT;")
     } catch {
-      try? exec(database: database, "ROLLBACK;")
+      rollback(database: database)
       throw error
     }
   }
@@ -277,7 +281,7 @@ extension SQLiteCoinGeckoCatalog {
       try insertPlatforms(database: database, platforms: platforms)
       try exec(database: database, "COMMIT;")
     } catch {
-      try? exec(database: database, "ROLLBACK;")
+      rollback(database: database)
       throw error
     }
   }
@@ -291,18 +295,18 @@ extension SQLiteCoinGeckoCatalog {
     var statement: OpaquePointer?
     try prepare(
       database: database,
-      "UPDATE meta SET last_fetched = ?, coins_etag = ?, platforms_etag = ?;",
-      &statement
+      sql: "UPDATE meta SET last_fetched = ?, coins_etag = ?, platforms_etag = ?;",
+      into: &statement
     )
     defer { sqlite3_finalize(statement) }
     sqlite3_bind_double(statement, 1, lastFetched.timeIntervalSince1970)
     if let coinsEtag {
-      try bind(statement, 2, coinsEtag)
+      try bind(statement, at: 2, to: coinsEtag)
     } else {
       sqlite3_bind_null(statement, 2)
     }
     if let platformsEtag {
-      try bind(statement, 3, platformsEtag)
+      try bind(statement, at: 3, to: platformsEtag)
     } else {
       sqlite3_bind_null(statement, 3)
     }

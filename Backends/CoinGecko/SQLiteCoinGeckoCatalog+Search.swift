@@ -35,7 +35,7 @@ extension SQLiteCoinGeckoCatalog {
         )
       }
     } catch {
-      log.error("search failed: \(String(describing: error), privacy: .public)")
+      Self.log.error("search failed: \(String(describing: error), privacy: .public)")
       return []
     }
   }
@@ -59,18 +59,18 @@ extension SQLiteCoinGeckoCatalog {
     var statement: OpaquePointer?
     try prepare(
       database: database,
-      """
-      SELECT c.coingecko_id, c.symbol, c.name
-      FROM coin_fts JOIN coin c ON c.rowid = coin_fts.rowid
-      WHERE coin_fts MATCH ?
-      ORDER BY rank
-      LIMIT ?;
-      """,
-      &statement
+      sql: """
+        SELECT c.coingecko_id, c.symbol, c.name
+        FROM coin_fts JOIN coin c ON c.rowid = coin_fts.rowid
+        WHERE coin_fts MATCH ?
+        ORDER BY rank
+        LIMIT ?;
+        """,
+      into: &statement
     )
     defer { sqlite3_finalize(statement) }
-    try bind(statement, 1, ftsQuery)
-    try bind(statement, 2, limit)
+    try bind(statement, at: 1, to: ftsQuery)
+    try bind(statement, at: 2, to: limit)
     var rows: [RankedCoin] = []
     while sqlite3_step(statement) == SQLITE_ROW {
       let id = readText(statement, column: 0) ?? ""
@@ -91,17 +91,17 @@ extension SQLiteCoinGeckoCatalog {
     var statement: OpaquePointer?
     try prepare(
       database: database,
-      """
-      SELECT cp.coingecko_id, cp.platform_slug, cp.contract_address, p.chain_id
-      FROM coin_platform cp
-      LEFT JOIN platform p ON p.slug = cp.platform_slug
-      WHERE cp.coingecko_id IN (\(placeholders));
-      """,
-      &statement
+      sql: """
+        SELECT cp.coingecko_id, cp.platform_slug, cp.contract_address, p.chain_id
+        FROM coin_platform cp
+        LEFT JOIN platform p ON p.slug = cp.platform_slug
+        WHERE cp.coingecko_id IN (\(placeholders));
+        """,
+      into: &statement
     )
     defer { sqlite3_finalize(statement) }
     for (offset, id) in coingeckoIds.enumerated() {
-      try bind(statement, Int32(offset + 1), id)
+      try bind(statement, at: Int32(offset + 1), to: id)
     }
     var bindingsById: [String: [PlatformBinding]] = [:]
     while sqlite3_step(statement) == SQLITE_ROW {

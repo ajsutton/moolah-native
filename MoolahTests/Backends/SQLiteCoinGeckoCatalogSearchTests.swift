@@ -16,7 +16,7 @@ final class SQLiteCoinGeckoCatalogSearchTests {
     tempDir = URL(fileURLWithPath: NSTemporaryDirectory())
       .appendingPathComponent("search-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-    catalog = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    catalog = try SQLiteCoinGeckoCatalog.make(directory: tempDir)
   }
 
   deinit {
