@@ -155,19 +155,24 @@ enum AlchemyResponseValidator {
   }
 }
 
-/// Wire-format payload for `eth_getTransactionReceipt`. We only decode
-/// the two fields the gas-leg builder needs (`gasUsed`,
-/// `effectiveGasPrice`); everything else on the receipt is ignored.
+/// Wire-format payload for `eth_getTransactionReceipt`. We decode the
+/// three fields the gas-leg builder needs (`gasUsed`,
+/// `effectiveGasPrice`, `from`); everything else on the receipt is
+/// ignored.
 ///
 /// Hex parsing happens in `toReceipt(hash:)` rather than in a custom
-/// `init(from:)` so the throw-site stays close to the call. Both
+/// `init(from:)` so the throw-site stays close to the call. All three
 /// fields are required — the JSON-RPC spec mandates them on a non-null
 /// receipt, so a missing one is a malformed response we reject rather
 /// than silently zero out (a zero gas leg would look like a free
-/// transaction and corrupt the user's ledger).
+/// transaction; a missing `from` would always fail the wallet-match
+/// check and drop legitimate gas legs).
 struct AlchemyTransactionReceiptPayload: Decodable {
   let gasUsed: String
   let effectiveGasPrice: String
+  /// EOA that signed the transaction. Decoded raw; lowercased at
+  /// construction so downstream comparisons stay canonical.
+  let from: String
 
   func toReceipt(hash: String) throws -> AlchemyTransactionReceipt {
     guard
@@ -179,7 +184,8 @@ struct AlchemyTransactionReceiptPayload: Decodable {
     return AlchemyTransactionReceipt(
       hash: hash,
       gasUsed: gasUsedValue,
-      effectiveGasPrice: effectiveGasPriceValue
+      effectiveGasPrice: effectiveGasPriceValue,
+      from: from.lowercased()
     )
   }
 }

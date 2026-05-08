@@ -273,7 +273,7 @@ final class ZeroReceiptAlchemyStub: AlchemyClient, @unchecked Sendable {
   ) async throws -> AlchemyTransactionReceipt {
     lock.withLock { receiptHashes.append(hash) }
     return AlchemyTransactionReceipt(
-      hash: hash, gasUsed: 0, effectiveGasPrice: 0)
+      hash: hash, gasUsed: 0, effectiveGasPrice: 0, from: "")
   }
 }
 

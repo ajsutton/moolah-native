@@ -119,6 +119,61 @@ struct AlchemyTransactionReceiptDecodingTests {
   }
 
   @Test
+  func receiptDecodesFromFieldLowercased() async throws {
+    // Real-shape Alchemy receipt; `from` is checksummed (mixed case)
+    // on the wire but must be lowercased on `AlchemyTransactionReceipt`
+    // so downstream comparisons against `walletAddress.lowercased()`
+    // are canonical.
+    let payload = Data(
+      """
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "gasUsed": "0x5208",
+          "effectiveGasPrice": "0x59682f00",
+          "from": "0xAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAa"
+        }
+      }
+      """.utf8)
+    let client = AlchemyTestSupport.makeClient { request in
+      (AlchemyTestSupport.okResponse(for: request), payload)
+    }
+
+    let receipt = try await client.getTransactionReceipt(
+      chain: .ethereum, hash: "0xabc")
+
+    #expect(receipt.from == "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+  }
+
+  @Test
+  func missingFromMapsToProviderMalformedResponse() async throws {
+    // `from` is the source of truth for gas attribution. Missing
+    // `from` must surface as malformed rather than silently default
+    // to empty (which would make every receipt fail the wallet-match
+    // check and silently drop legitimate gas legs).
+    let payload = Data(
+      """
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "gasUsed": "0x5208",
+          "effectiveGasPrice": "0x59682f00"
+        }
+      }
+      """.utf8)
+    let client = AlchemyTestSupport.makeClient { request in
+      (AlchemyTestSupport.okResponse(for: request), payload)
+    }
+    await #expect(throws: WalletSyncError.providerMalformedResponse(stage: "getTransactionReceipt"))
+    {
+      _ = try await client.getTransactionReceipt(
+        chain: .ethereum, hash: "0xnope")
+    }
+  }
+
+  @Test
   func unprefixedHexAlsoDecodesForLeniency() async throws {
     // The wire spec mandates 0x prefixes, but a node that omits them
     // shouldn't fail the whole sync — the lenient parser strips the
@@ -130,7 +185,8 @@ struct AlchemyTransactionReceiptDecodingTests {
         "id": 1,
         "result": {
           "gasUsed": "5208",
-          "effectiveGasPrice": "59682f00"
+          "effectiveGasPrice": "59682f00",
+          "from": "0x1111111111111111111111111111111111111111"
         }
       }
       """.utf8)
