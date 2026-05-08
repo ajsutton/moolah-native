@@ -104,7 +104,8 @@ struct AlchemyTransactionReceiptDecodingTests {
         "id": 1,
         "result": {
           "gasUsed": "0xZZZ",
-          "effectiveGasPrice": "0x59682f00"
+          "effectiveGasPrice": "0x59682f00",
+          "from": "0x1111111111111111111111111111111111111111"
         }
       }
       """.utf8)

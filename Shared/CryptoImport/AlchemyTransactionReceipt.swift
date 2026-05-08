@@ -27,7 +27,7 @@ struct AlchemyTransactionReceipt: Sendable, Hashable {
   /// EOA that signed the on-chain transaction (lowercased). Sourced from
   /// the `from` field on `eth_getTransactionReceipt`. The gas-leg
   /// builder compares this against the synced wallet address — gas is
-  /// only attributed to a wallet that signed the outer tx. An `internal`
+  /// only attributed to a wallet that signed the outer tx. An `.internal`
   /// or `erc20 transferFrom` row can have `transfer.from == wallet`
   /// while `receipt.from` is a different EOA; that wallet did not pay
   /// gas and gets no `:gas` leg.
