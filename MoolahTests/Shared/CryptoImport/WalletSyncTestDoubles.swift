@@ -273,7 +273,15 @@ final class ZeroReceiptAlchemyStub: AlchemyClient, @unchecked Sendable {
   ) async throws -> AlchemyTransactionReceipt {
     lock.withLock { receiptHashes.append(hash) }
     return AlchemyTransactionReceipt(
-      hash: hash, gasUsed: 0, effectiveGasPrice: 0, from: "")
+      hash: hash,
+      gasUsed: 0,
+      effectiveGasPrice: 0,
+      // Sentinel: a zero fee makes `totalGasFeeWei == 0` so the builder
+      // drops the gas leg before the `receipt.from == walletAddress` check
+      // ever fires. An empty string here can never match a real wallet
+      // address, which is consistent with "no gas leg" if the zero-fee
+      // early-exit ever moves.
+      from: "")
   }
 }
 

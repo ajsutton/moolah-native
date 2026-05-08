@@ -33,6 +33,7 @@ struct AlchemyTransactionReceiptDecodingTests {
     #expect(receipt.effectiveGasPrice == Decimal(1_500_000_000))
     // 21,000 * 1,500,000,000 = 31,500,000,000,000 wei.
     #expect(receipt.totalGasFeeWei == Decimal(31_500_000_000_000))
+    #expect(receipt.from == "0x1111111111111111111111111111111111111111")
   }
 
   @Test
@@ -51,6 +52,7 @@ struct AlchemyTransactionReceiptDecodingTests {
     #expect(receipt.effectiveGasPrice == Decimal(64_170))
     // 65,000 * 64,170 = 4,171,050,000 wei.
     #expect(receipt.totalGasFeeWei == Decimal(4_171_050_000))
+    #expect(receipt.from == "0x1111111111111111111111111111111111111111")
   }
 
   @Test
