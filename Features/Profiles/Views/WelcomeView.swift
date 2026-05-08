@@ -149,6 +149,7 @@ struct WelcomeView: View {
     .accessibilityHint(offHeroHint(for: reason))
   }
 
+  @ViewBuilder
   private func formView(
     banner: WelcomeStateResolver.BannerKind?
   ) -> some View {
@@ -156,7 +157,7 @@ struct WelcomeView: View {
       profileStore.iCloudAvailability == .available
       && !syncCoordinator.profileIndexFetchedAtLeastOnce
 
-    return CreateProfileFormView(
+    let form = CreateProfileFormView(
       name: $name,
       currency: $currency,
       financialYearStartMonth: $financialYearStartMonth,
@@ -167,6 +168,16 @@ struct WelcomeView: View {
       cancelAction: { phase = .landing },
       createAction: handleCreate
     )
+
+    // Toolbar items in `.cancellationAction`/`.confirmationAction` only
+    // render on iOS when there's a navigation bar to attach to. On macOS
+    // the toolbar binds to the window's NSToolbar, so the wrapper would
+    // double-render — keep the wrap iOS-only.
+    #if os(iOS)
+      NavigationStack { form }
+    #else
+      form
+    #endif
   }
 
   private var pickerView: some View {
