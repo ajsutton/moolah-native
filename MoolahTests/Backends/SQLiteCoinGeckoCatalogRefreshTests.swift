@@ -45,7 +45,7 @@ final class SQLiteCoinGeckoCatalogRefreshTests {
       (HTTPURLResponse.ok(etag: "W/\"p1\""), platformsData)
     }
 
-    let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir, session: makeSession())
+    let catalog = try SQLiteCoinGeckoCatalog.make(directory: tempDir, session: makeSession())
     await catalog.refreshIfStale()
 
     let count = try await catalog.coinCountForTesting()
@@ -68,7 +68,7 @@ final class SQLiteCoinGeckoCatalogRefreshTests {
     StubURLProtocol.handlers["api.coingecko.com:/api/v3/asset_platforms"] = { _ in
       (HTTPURLResponse.ok(etag: "W/\"p1\""), platformsData)
     }
-    let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir, session: makeSession())
+    let catalog = try SQLiteCoinGeckoCatalog.make(directory: tempDir, session: makeSession())
     await catalog.refreshIfStale()
 
     // Fast-forward `last_fetched` so the next call is "stale".
@@ -106,7 +106,7 @@ final class SQLiteCoinGeckoCatalogRefreshTests {
     StubURLProtocol.handlers["api.coingecko.com:/api/v3/asset_platforms"] = { _ in
       (HTTPURLResponse.ok(etag: "W/\"p1\""), platformsData)
     }
-    let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir, session: makeSession())
+    let catalog = try SQLiteCoinGeckoCatalog.make(directory: tempDir, session: makeSession())
     await catalog.refreshIfStale()
     await catalog.refreshIfStale()
 
@@ -123,7 +123,7 @@ final class SQLiteCoinGeckoCatalogRefreshTests {
     StubURLProtocol.handlers["api.coingecko.com:/api/v3/asset_platforms"] = { _ in
       (HTTPURLResponse.ok(etag: "W/\"p1\""), platformsData)
     }
-    let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir, session: makeSession())
+    let catalog = try SQLiteCoinGeckoCatalog.make(directory: tempDir, session: makeSession())
     await catalog.refreshIfStale()
     try await catalog.bumpLastFetchedBackwardForTesting(by: 25 * 3600)
 
@@ -150,7 +150,7 @@ final class SQLiteCoinGeckoCatalogRefreshTests {
     StubURLProtocol.handlers["api.coingecko.com:/api/v3/asset_platforms"] = { _ in
       (HTTPURLResponse.ok(etag: "W/\"p1\""), platforms)
     }
-    let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir, session: makeSession())
+    let catalog = try SQLiteCoinGeckoCatalog.make(directory: tempDir, session: makeSession())
     await catalog.refreshIfStale()
     try await catalog.bumpLastFetchedBackwardForTesting(by: 25 * 3600)
 

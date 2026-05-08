@@ -213,7 +213,7 @@ extension ProfileSession {
     let directory = URL.moolahScopedApplicationSupport
       .appending(path: "InstrumentRegistry", directoryHint: .isDirectory)
     do {
-      let catalog = try SQLiteCoinGeckoCatalog(directory: directory)
+      let catalog = try SQLiteCoinGeckoCatalog.make(directory: directory)
       // `SQLiteCoinGeckoCatalog` is an actor, so `await catalog.refreshIfStale()`
       // hops to the catalog's executor regardless of the enclosing Task's
       // isolation — no `Task.detached` needed (CONCURRENCY_GUIDE §8).

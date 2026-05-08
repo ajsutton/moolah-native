@@ -23,7 +23,7 @@ final class SQLiteCoinGeckoCatalogStorageTests {
 
   @Test
   func openCreatesFreshSchema() async throws {
-    let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    let catalog = try SQLiteCoinGeckoCatalog.make(directory: tempDir)
     let dbURL = tempDir.appendingPathComponent("catalog.sqlite")
     #expect(FileManager.default.fileExists(atPath: dbURL.path))
     let meta = try await catalog.readMetaForTesting()
@@ -35,7 +35,7 @@ final class SQLiteCoinGeckoCatalogStorageTests {
 
   @Test
   func replaceAllCoinsAndPlatformsCommitsAtomically() async throws {
-    let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    let catalog = try SQLiteCoinGeckoCatalog.make(directory: tempDir)
     let coins: [SQLiteCoinGeckoCatalog.RawCoin] = [
       .init(id: "bitcoin", symbol: "BTC", name: "Bitcoin", platforms: [:]),
       .init(
@@ -58,7 +58,7 @@ final class SQLiteCoinGeckoCatalogStorageTests {
 
   @Test
   func replaceAllReplacesPriorContent() async throws {
-    let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    let catalog = try SQLiteCoinGeckoCatalog.make(directory: tempDir)
     let first: [SQLiteCoinGeckoCatalog.RawCoin] = [
       .init(id: "bitcoin", symbol: "BTC", name: "Bitcoin", platforms: [:])
     ]
@@ -75,7 +75,7 @@ final class SQLiteCoinGeckoCatalogStorageTests {
 
   @Test
   func constraintFailureIncludesSqliteErrorMessage() async throws {
-    let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    let catalog = try SQLiteCoinGeckoCatalog.make(directory: tempDir)
     let withDuplicate: [SQLiteCoinGeckoCatalog.RawCoin] = [
       .init(id: "tether", symbol: "USDT", name: "Tether", platforms: [:]),
       .init(id: "tether", symbol: "USDT", name: "Tether (dup)", platforms: [:]),
@@ -98,7 +98,7 @@ final class SQLiteCoinGeckoCatalogStorageTests {
 
   @Test
   func replaceAllRollsBackOnConstraintFailure() async throws {
-    let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    let catalog = try SQLiteCoinGeckoCatalog.make(directory: tempDir)
 
     // Seed a successful first batch so we have prior state to preserve.
     let first: [SQLiteCoinGeckoCatalog.RawCoin] = [
@@ -128,15 +128,15 @@ final class SQLiteCoinGeckoCatalogStorageTests {
 
   @Test
   func schemaVersionMismatchRecreatesFile() async throws {
-    _ = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    _ = try SQLiteCoinGeckoCatalog.make(directory: tempDir)
     let dbURL = tempDir.appendingPathComponent("catalog.sqlite")
     let creationOriginal =
       try FileManager.default.attributesOfItem(atPath: dbURL.path)[.creationDate] as? Date
 
-    let stale = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    let stale = try SQLiteCoinGeckoCatalog.make(directory: tempDir)
     try await stale.writeMetaSchemaVersionForTesting(999)
 
-    let reopened = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    let reopened = try SQLiteCoinGeckoCatalog.make(directory: tempDir)
     let metaAfter = try await reopened.readMetaForTesting()
     #expect(metaAfter.schemaVersion == CoinGeckoCatalogSchema.version)
 

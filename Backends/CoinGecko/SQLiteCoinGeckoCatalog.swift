@@ -8,35 +8,57 @@ import os
 /// work runs on the actor's serial executor so the connection is never
 /// shared across threads. See design §4.1 / §6.
 actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
+  /// Stateless `Logger`; `static` so the nonisolated bootstrap path and the
+  /// `static` SQLite helpers can both emit on the same subsystem/category
+  /// without each call site rebuilding the logger.
+  static let log = Logger(subsystem: "moolah.instrument-registry", category: "catalog")
+
   private let directory: URL
   let session: URLSession
-  let log = Logger(subsystem: "moolah.instrument-registry", category: "catalog")
   private(set) var database: OpaquePointer?
 
   // MARK: - Cross-extension internals
   //
   // Swift's `private` doesn't reach across files, so members called from
-  // `+Search.swift` or `+Refresh.swift` drop their `private` keyword and
-  // become module-internal. This is the closed surface — callers outside
-  // `Backends/CoinGecko/` MUST NOT use them.
+  // `+Search.swift`, `+Refresh.swift`, or `+SQLite.swift` drop their
+  // `private` keyword and become module-internal. This is the closed
+  // surface — callers outside `Backends/CoinGecko/` MUST NOT use them.
   //
-  // Used by +Search.swift only:    `readText`
-  // Used by +Refresh.swift only:   `session`, `exec`, `step`,
-  //                                `replaceAll`, `insertCoins`,
+  // Most low-level SQLite helpers (`exec`, `prepare`, `bind` ×2, `step`,
+  // `rollback`, `readText`, `errorMessage` ×2, `scalarInt`) live in
+  // `+SQLite.swift`.
+  //
+  // Used by +Search.swift only:    nothing in this file
+  // Used by +Refresh.swift only:   `session`, `replaceAll`, `insertCoins`,
   //                                `insertPlatforms`, `readMeta`
-  // Used by both extensions:       `log`, `database` (read-only),
-  //                                `prepare`, `bind` (×2)
+  // Used by both extensions:       `log` (static), `database` (read-only)
 
-  init(
+  /// Opens or creates the on-disk catalog at `<directory>/catalog.sqlite`,
+  /// then constructs the actor with the prepared handle. Factored out as a
+  /// `static func` per CODE_GUIDE §10 so `init` can stay a memberwise
+  /// property assignment — keeping all the I/O and schema bootstrap
+  /// (directory creation, SQLite open, version check, drop-and-recreate)
+  /// in one named place.
+  static func make(
     directory: URL,
     session: URLSession = .shared
-  ) throws {
-    self.directory = directory
-    self.session = session
+  ) throws -> SQLiteCoinGeckoCatalog {
     try FileManager.default.createDirectory(
       at: directory, withIntermediateDirectories: true
     )
-    self.database = try Self.open(dbURL: directory.appendingPathComponent("catalog.sqlite"))
+    let database = try open(dbURL: directory.appendingPathComponent("catalog.sqlite"))
+    return SQLiteCoinGeckoCatalog(
+      directory: directory, session: session, database: database)
+  }
+
+  private init(
+    directory: URL,
+    session: URLSession,
+    database: OpaquePointer
+  ) {
+    self.directory = directory
+    self.session = session
+    self.database = database
   }
 
   isolated deinit {
@@ -123,7 +145,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
       try insertPlatforms(database: database, platforms: platforms)
       try exec(database: database, "COMMIT;")
     } catch {
-      try? exec(database: database, "ROLLBACK;")
+      rollback(database: database)
       throw error
     }
   }
@@ -133,28 +155,28 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     var insertCoin: OpaquePointer?
     try prepare(
       database: database,
-      "INSERT INTO coin (coingecko_id, symbol, name) VALUES (?, ?, ?);",
-      &insertCoin)
+      sql: "INSERT INTO coin (coingecko_id, symbol, name) VALUES (?, ?, ?);",
+      into: &insertCoin)
     defer { sqlite3_finalize(insertCoin) }
     var insertCoinPlatform: OpaquePointer?
     try prepare(
       database: database,
-      "INSERT INTO coin_platform (coingecko_id, platform_slug, contract_address) "
+      sql: "INSERT INTO coin_platform (coingecko_id, platform_slug, contract_address) "
         + "VALUES (?, ?, ?);",
-      &insertCoinPlatform)
+      into: &insertCoinPlatform)
     defer { sqlite3_finalize(insertCoinPlatform) }
 
     for coin in coins {
-      try bind(insertCoin, 1, coin.id)
-      try bind(insertCoin, 2, coin.symbol)
-      try bind(insertCoin, 3, coin.name)
+      try bind(insertCoin, at: 1, to: coin.id)
+      try bind(insertCoin, at: 2, to: coin.symbol)
+      try bind(insertCoin, at: 3, to: coin.name)
       try step(insertCoin)
       sqlite3_reset(insertCoin)
 
       for (slug, contract) in coin.platforms where !contract.isEmpty {
-        try bind(insertCoinPlatform, 1, coin.id)
-        try bind(insertCoinPlatform, 2, slug)
-        try bind(insertCoinPlatform, 3, contract.lowercased())
+        try bind(insertCoinPlatform, at: 1, to: coin.id)
+        try bind(insertCoinPlatform, at: 2, to: slug)
+        try bind(insertCoinPlatform, at: 3, to: contract.lowercased())
         try step(insertCoinPlatform)
         sqlite3_reset(insertCoinPlatform)
       }
@@ -169,17 +191,17 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     var insertPlatform: OpaquePointer?
     try prepare(
       database: database,
-      "INSERT INTO platform (slug, chain_id, name) VALUES (?, ?, ?);",
-      &insertPlatform)
+      sql: "INSERT INTO platform (slug, chain_id, name) VALUES (?, ?, ?);",
+      into: &insertPlatform)
     defer { sqlite3_finalize(insertPlatform) }
     for platform in platforms {
-      try bind(insertPlatform, 1, platform.slug)
+      try bind(insertPlatform, at: 1, to: platform.slug)
       if let chainId = platform.chainId {
-        try bind(insertPlatform, 2, chainId)
+        try bind(insertPlatform, at: 2, to: chainId)
       } else {
         sqlite3_bind_null(insertPlatform, 2)
       }
-      try bind(insertPlatform, 3, platform.name)
+      try bind(insertPlatform, at: 3, to: platform.name)
       try step(insertPlatform)
       sqlite3_reset(insertPlatform)
     }
@@ -191,8 +213,8 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     var statement: OpaquePointer?
     try prepare(
       database: database,
-      "SELECT schema_version, last_fetched, coins_etag, platforms_etag FROM meta LIMIT 1;",
-      &statement)
+      sql: "SELECT schema_version, last_fetched, coins_etag, platforms_etag FROM meta LIMIT 1;",
+      into: &statement)
     defer { sqlite3_finalize(statement) }
     guard sqlite3_step(statement) == SQLITE_ROW else {
       throw CatalogError.sqlite("meta table empty")
@@ -214,95 +236,8 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
   }
 
   // MARK: - Low-level SQLite helpers
-
-  static func exec(database: OpaquePointer?, _ sql: String) throws {
-    var error: UnsafeMutablePointer<CChar>?
-    let result = sqlite3_exec(database, sql, nil, nil, &error)
-    if result != SQLITE_OK {
-      let message = error.map { String(cString: $0) } ?? "(no errmsg)"
-      sqlite3_free(error)
-      throw CatalogError.sqlite("exec \(result): \(message)")
-    }
-  }
-
-  static func prepare(
-    database: OpaquePointer?,
-    _ sql: String,
-    _ statement: inout OpaquePointer?
-  ) throws {
-    let result = sqlite3_prepare_v2(database, sql, -1, &statement, nil)
-    guard result == SQLITE_OK else {
-      throw CatalogError.sqlite(
-        "prepare \(result): \(errorMessage(database: database)) — \(sql)")
-    }
-  }
-
-  static func bind(
-    _ statement: OpaquePointer?,
-    _ index: Int32,
-    _ value: String
-  ) throws {
-    let result = sqlite3_bind_text(
-      statement,
-      index,
-      value,
-      -1,
-      unsafeBitCast(Int(-1), to: sqlite3_destructor_type.self)
-    )
-    guard result == SQLITE_OK else {
-      throw CatalogError.sqlite(
-        "bind text \(result): \(errorMessage(statement: statement))")
-    }
-  }
-
-  static func bind(
-    _ statement: OpaquePointer?,
-    _ index: Int32,
-    _ value: Int
-  ) throws {
-    let result = sqlite3_bind_int64(statement, index, Int64(value))
-    guard result == SQLITE_OK else {
-      throw CatalogError.sqlite(
-        "bind int \(result): \(errorMessage(statement: statement))")
-    }
-  }
-
-  static func step(_ statement: OpaquePointer?) throws {
-    let result = sqlite3_step(statement)
-    guard result == SQLITE_DONE || result == SQLITE_ROW else {
-      throw CatalogError.sqlite(
-        "step \(result): \(errorMessage(statement: statement))")
-    }
-  }
-
-  /// Reads `sqlite3_errmsg(_:)` for the connection backing `statement`.
-  /// Empty/missing handle paths fall back to a sentinel so a throw site is
-  /// never silent — even a degraded message beats `step 19` alone.
-  private static func errorMessage(statement: OpaquePointer?) -> String {
-    errorMessage(database: statement.flatMap { sqlite3_db_handle($0) })
-  }
-
-  private static func errorMessage(database: OpaquePointer?) -> String {
-    guard let database, let cString = sqlite3_errmsg(database) else {
-      return "(no errmsg)"
-    }
-    return String(cString: cString)
-  }
-
-  private static func scalarInt(database: OpaquePointer?, _ sql: String) throws -> Int {
-    var statement: OpaquePointer?
-    try prepare(database: database, sql, &statement)
-    defer { sqlite3_finalize(statement) }
-    guard sqlite3_step(statement) == SQLITE_ROW else {
-      throw CatalogError.sqlite("scalar empty")
-    }
-    return Int(sqlite3_column_int64(statement, 0))
-  }
-
-  static func readText(_ statement: OpaquePointer?, column: Int32) -> String? {
-    guard let cString = sqlite3_column_text(statement, column) else { return nil }
-    return String(cString: cString)
-  }
+  //
+  // Live in `SQLiteCoinGeckoCatalog+SQLite.swift`.
 
   enum CatalogError: Error, Equatable {
     case sqlite(String)
@@ -371,9 +306,9 @@ extension SQLiteCoinGeckoCatalog {
   func writeMetaSchemaVersionForTesting(_ version: Int) throws {
     var statement: OpaquePointer?
     try Self.prepare(
-      database: database, "UPDATE meta SET schema_version = ?;", &statement)
+      database: database, sql: "UPDATE meta SET schema_version = ?;", into: &statement)
     defer { sqlite3_finalize(statement) }
-    try Self.bind(statement, 1, version)
+    try Self.bind(statement, at: 1, to: version)
     try Self.step(statement)
   }
 }
