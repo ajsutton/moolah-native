@@ -6,7 +6,7 @@
 import SwiftData
 import SwiftUI
 
-struct TransactionListView: View {
+struct TransactionListView<TopAccessory: View>: View {
   let title: String
   let baseFilter: TransactionFilter
   let accounts: Accounts
@@ -24,6 +24,17 @@ struct TransactionListView: View {
   /// drop-spam-from-positions UX of issue #790. Optional with a default
   /// of `0` so non-crypto call sites need not thread it through.
   var registrationsVersion: Int = 0
+
+  /// Optional content rendered as `.safeAreaInset(edge: .top)` above the
+  /// list — used for per-account headers (e.g. the wallet header on a
+  /// crypto account). Callers MUST pass any such header here rather than
+  /// wrapping `TransactionListView` in a `VStack`: wrapping breaks the
+  /// view-tree identity that `.searchable` and `.toolbar` register
+  /// against, and reproducibly crashes AppKit's toolbar bridge with a
+  /// duplicate `com.apple.SwiftUI.search` item the next time the parent's
+  /// body re-evaluates. See `guides/UI_GUIDE.md` §3 — view-tree stability
+  /// for views with toolbars.
+  let topAccessory: TopAccessory
 
   /// When non-nil, the parent owns the selection and handles the inspector.
   /// When nil, TransactionListView manages its own selection and inspector.
@@ -67,36 +78,11 @@ struct TransactionListView: View {
 
   private var handlesOwnInspector: Bool { _externalSelection == nil }
 
-  /// Default init — TransactionListView owns selection and shows its own inspector.
-  init(
-    title: String,
-    filter: TransactionFilter,
-    accounts: Accounts,
-    categories: Categories,
-    earmarks: Earmarks,
-    transactionStore: TransactionStore,
-    positions: [Position] = [],
-    positionsHostCurrency: Instrument = .AUD,
-    positionsTitle: String = "Balances",
-    conversionService: (any InstrumentConversionService)? = nil,
-    registrationsVersion: Int = 0
-  ) {
-    self.title = title
-    self.baseFilter = filter
-    self.accounts = accounts
-    self.categories = categories
-    self.earmarks = earmarks
-    self.transactionStore = transactionStore
-    self.positions = positions
-    self.positionsHostCurrency = positionsHostCurrency
-    self.positionsTitle = positionsTitle
-    self.conversionService = conversionService
-    self.registrationsVersion = registrationsVersion
-    self._externalSelection = nil
-    self._activeFilter = State(initialValue: filter)
-  }
-
-  /// Embedded init — parent provides selection binding and handles the inspector.
+  /// Default init — TransactionListView owns selection and shows its own
+  /// inspector. `topAccessory` is rendered as a top safe-area inset above
+  /// the list (use `EmptyView()` when no header is needed; the
+  /// `where TopAccessory == EmptyView` extension provides a no-arg
+  /// convenience).
   init(
     title: String,
     filter: TransactionFilter,
@@ -109,7 +95,7 @@ struct TransactionListView: View {
     positionsTitle: String = "Balances",
     conversionService: (any InstrumentConversionService)? = nil,
     registrationsVersion: Int = 0,
-    selectedTransaction: Binding<Transaction?>
+    @ViewBuilder topAccessory: () -> TopAccessory
   ) {
     self.title = title
     self.baseFilter = filter
@@ -122,6 +108,40 @@ struct TransactionListView: View {
     self.positionsTitle = positionsTitle
     self.conversionService = conversionService
     self.registrationsVersion = registrationsVersion
+    self.topAccessory = topAccessory()
+    self._externalSelection = nil
+    self._activeFilter = State(initialValue: filter)
+  }
+
+  /// Embedded init — parent provides selection binding and handles the
+  /// inspector. See `topAccessory` doc on the default init.
+  init(
+    title: String,
+    filter: TransactionFilter,
+    accounts: Accounts,
+    categories: Categories,
+    earmarks: Earmarks,
+    transactionStore: TransactionStore,
+    positions: [Position] = [],
+    positionsHostCurrency: Instrument = .AUD,
+    positionsTitle: String = "Balances",
+    conversionService: (any InstrumentConversionService)? = nil,
+    registrationsVersion: Int = 0,
+    selectedTransaction: Binding<Transaction?>,
+    @ViewBuilder topAccessory: () -> TopAccessory
+  ) {
+    self.title = title
+    self.baseFilter = filter
+    self.accounts = accounts
+    self.categories = categories
+    self.earmarks = earmarks
+    self.transactionStore = transactionStore
+    self.positions = positions
+    self.positionsHostCurrency = positionsHostCurrency
+    self.positionsTitle = positionsTitle
+    self.conversionService = conversionService
+    self.registrationsVersion = registrationsVersion
+    self.topAccessory = topAccessory()
     self._externalSelection = selectedTransaction
     self._activeFilter = State(initialValue: filter)
   }
@@ -141,6 +161,7 @@ struct TransactionListView: View {
 
   var body: some View {
     listView
+      .safeAreaInset(edge: .top, spacing: 0) { topAccessory }
       .modifier(
         OptionalTransactionInspector(
           enabled: handlesOwnInspector,
@@ -297,61 +318,56 @@ struct TransactionListView: View {
   }
 }
 
-@MainActor
-private func seedTransactionListPreview(
-  backend: any BackendProvider,
-  accountId: UUID,
-  savingsId: UUID,
-  store: TransactionStore
-) async {
-  _ = try? await backend.transactions.create(
-    Transaction(
-      date: Date(), payee: "Woolworths",
-      legs: [
-        TransactionLeg(accountId: accountId, instrument: .AUD, quantity: -50.23, type: .expense)
-      ]))
-  _ = try? await backend.transactions.create(
-    Transaction(
-      date: Date().addingTimeInterval(-86400), payee: "Employer",
-      legs: [
-        TransactionLeg(accountId: accountId, instrument: .AUD, quantity: 3500, type: .income)
-      ]))
-  _ = try? await backend.transactions.create(
-    Transaction(
-      date: Date().addingTimeInterval(-172800),
-      legs: [
-        TransactionLeg(accountId: accountId, instrument: .AUD, quantity: -1000, type: .transfer),
-        TransactionLeg(accountId: savingsId, instrument: .AUD, quantity: 1000, type: .transfer),
-      ]))
-  await store.load(filter: TransactionFilter(accountId: accountId))
-}
-
-#Preview {
-  let accountId = UUID()
-  let savingsId = UUID()
-  let account = Account(
-    id: accountId, name: "Checking", type: .bank, instrument: .AUD,
-    positions: [Position(instrument: .AUD, quantity: 2449.77)])
-  let accounts = Accounts(from: [
-    account,
-    Account(
-      id: savingsId, name: "Savings", type: .bank, instrument: .AUD,
-      positions: [Position(instrument: .AUD, quantity: 5000)]),
-  ])
-  let (backend, _) = PreviewBackend.create()
-  let store = TransactionStore(
-    repository: backend.transactions,
-    conversionService: backend.conversionService,
-    targetInstrument: .AUD)
-  return NavigationStack {
-    TransactionListView(
-      title: account.name, filter: TransactionFilter(accountId: accountId),
-      accounts: accounts, categories: Categories(from: []),
-      earmarks: Earmarks(from: []),
-      transactionStore: store)
+extension TransactionListView where TopAccessory == EmptyView {
+  /// Convenience init when no top accessory is needed. Forwards to the
+  /// designated init with `EmptyView()` so the call site stays as it was
+  /// before `topAccessory` was introduced.
+  init(
+    title: String,
+    filter: TransactionFilter,
+    accounts: Accounts,
+    categories: Categories,
+    earmarks: Earmarks,
+    transactionStore: TransactionStore,
+    positions: [Position] = [],
+    positionsHostCurrency: Instrument = .AUD,
+    positionsTitle: String = "Balances",
+    conversionService: (any InstrumentConversionService)? = nil,
+    registrationsVersion: Int = 0
+  ) {
+    self.init(
+      title: title, filter: filter,
+      accounts: accounts, categories: categories, earmarks: earmarks,
+      transactionStore: transactionStore,
+      positions: positions, positionsHostCurrency: positionsHostCurrency,
+      positionsTitle: positionsTitle, conversionService: conversionService,
+      registrationsVersion: registrationsVersion,
+      topAccessory: { EmptyView() })
   }
-  .task {
-    await seedTransactionListPreview(
-      backend: backend, accountId: accountId, savingsId: savingsId, store: store)
+
+  /// Convenience embedded init when no top accessory is needed.
+  init(
+    title: String,
+    filter: TransactionFilter,
+    accounts: Accounts,
+    categories: Categories,
+    earmarks: Earmarks,
+    transactionStore: TransactionStore,
+    positions: [Position] = [],
+    positionsHostCurrency: Instrument = .AUD,
+    positionsTitle: String = "Balances",
+    conversionService: (any InstrumentConversionService)? = nil,
+    registrationsVersion: Int = 0,
+    selectedTransaction: Binding<Transaction?>
+  ) {
+    self.init(
+      title: title, filter: filter,
+      accounts: accounts, categories: categories, earmarks: earmarks,
+      transactionStore: transactionStore,
+      positions: positions, positionsHostCurrency: positionsHostCurrency,
+      positionsTitle: positionsTitle, conversionService: conversionService,
+      registrationsVersion: registrationsVersion,
+      selectedTransaction: selectedTransaction,
+      topAccessory: { EmptyView() })
   }
 }

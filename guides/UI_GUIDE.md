@@ -85,6 +85,43 @@ NavigationSplitView (macOS/iPad) or NavigationStack (iPhone)
 
 See [Sheets & Dialogs](#sheets--dialogs) in Section 6 for full guidance on sheet padding, sizing, and button placement.
 
+### View-tree stability for views with `.searchable` / `.toolbar`
+
+Any view that registers a `.searchable(...)` or `.toolbar { ToolbarItem }` modifier (e.g. `TransactionListView`, `RecentlyAddedView`, `EarmarksView`) MUST keep a stable structural position inside its parent. SwiftUI's AppKit toolbar bridge tracks toolbar items by view identity and silently re-installs them when an ancestor re-mounts the host. If the search-bearing view ends up at a different structural index between two renders, the bridge attempts to insert `com.apple.SwiftUI.search` while the previous registration is still live and AppKit crashes the app:
+
+```
+NSInternalInconsistencyException: NSToolbar already contains an item
+with the identifier com.apple.SwiftUI.search. Duplicate items of this
+type are not allowed.
+```
+
+The crash is timing-dependent (appears once a parent re-render races a toolbar update), so it routinely passes review and lands in production before reproducing on a user's machine. Two prior incidents in this repo: `InvestmentAccountView` flipping between `legacyValuationsLayout` and `positionTrackedLayout` after `.task` resolved (commit `010fb55b`), and `accountDetail` wrapping the wallet header + `TransactionListView` in a `VStack` whose first child appeared/disappeared based on `account.type == .crypto` (PR #TBD).
+
+**Rules:**
+
+1. **Never wrap a `.searchable` / `.toolbar`-bearing view in an outer container whose body branches** (e.g. an `if` whose two arms differ in shape, or a `VStack` whose child count changes between renders). Either give every parent branch the same structural shape, or hoist the search-bearing view to the root and let its surroundings vary.
+2. **Use `safeAreaInset(edge:)` for per-context headers** instead of wrapping. `TransactionListView` exposes a `topAccessory` parameter for exactly this reason — pass the accessory there so the list stays at the root of the detail panel:
+
+   ```swift
+   // ✅ stable — TransactionListView is always the root.
+   TransactionListView(/* … */) {
+     if account.type == .crypto, let header = walletHeader(for: account) {
+       header
+     }
+   }
+
+   // ❌ unstable — VStack child count flips with account type.
+   VStack(spacing: 0) {
+     if account.type == .crypto { walletHeader(for: account) }
+     TransactionListView(/* … */)
+   }
+   ```
+
+3. **Defer layout decisions until data is stable** when a `.task`-driven flag (e.g. `initialLoadComplete`, `hasLegacyValuations`) chooses between two structurally different bodies. Render a `ProgressView()` until the flag flips, then commit to one branch and stay there. Mark each branch with a distinct `.id(...)` so SwiftUI fully tears down the previous one before mounting the next, e.g. `legacyLayout.id(ValuationMode.recordedValue)` vs `positionLayout.id(ValuationMode.calculatedFromTrades)`. `InvestmentAccountView` is the reference implementation.
+4. **Don't host two `.searchable` modifiers in the same `NavigationSplitView` column.** AppKit collapses both into a single `NSToolbar`; even if neither view-tree flips, the bridge still hits the duplicate-item assertion.
+
+The `code-review` and `ui-review` agents flag any new view that places a `.searchable` or `.toolbar`-bearing child inside a structurally-flipping parent. Treat agent findings on this rule as Critical.
+
 ---
 
 ## 4. Typography
@@ -837,6 +874,7 @@ var animation: Animation? {
 - ❌ Over-nesting `VStack`/`HStack` (flatten where possible)
 - ❌ Sheet content flush to the sheet edges — use `Form` or `.padding(24)` on macOS / `.padding(20)` on iOS (see Sheets & Dialogs)
 - ❌ macOS sheets without a minimum `.frame(minWidth:minHeight:)` — they collapse to unreadable panels
+- ❌ Wrapping a `.searchable` / `.toolbar`-bearing view in a structurally-flipping parent (e.g. `VStack` whose first child is gated by `if`). Crashes AppKit's toolbar bridge with a duplicate `com.apple.SwiftUI.search` item; use the host view's accessory slot or `.safeAreaInset(edge:)` instead. See [§3 — view-tree stability for views with toolbars](#view-tree-stability-for-views-with-searchable--toolbar).
 
 ### Typography
 - ❌ Custom fonts for amounts (always use SF Pro with `.monospacedDigit()`)
