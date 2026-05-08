@@ -81,6 +81,17 @@ final class CryptoSyncStore {
   /// tracked so teardown can cancel them.
   var sceneActiveSyncTask: Task<Void, Never>?
 
+  /// Fire-and-forget initial-sync tasks dispatched by the create-account
+  /// form, keyed by account id. The form spawns one of these per newly
+  /// created crypto account (via `scheduleInitialSync(for:)`) so the
+  /// sheet can dismiss the moment the account is persisted instead of
+  /// awaiting the network round-trip. Tracked here per
+  /// `guides/CONCURRENCY_GUIDE.md` §8 so `cancelTimer()` (called from
+  /// `ProfileSession.cleanupSync`) can cancel any in-flight sync that
+  /// outlives the form, and so tests can await completion via
+  /// `waitForPendingInitialSyncs()`.
+  private(set) var initialSyncTasks: [UUID: Task<Void, Never>] = [:]
+
   private static let logger = Logger(
     subsystem: "com.moolah.app", category: "CryptoSyncStore")
 
@@ -151,6 +162,34 @@ final class CryptoSyncStore {
     await syncAccounts([account])
   }
 
+  /// Fire-and-forget kick-off of `syncAccount(_:)` for a newly created
+  /// crypto account. Returns immediately so the create-account sheet
+  /// can `dismiss()` the moment the account is persisted; the network
+  /// sync continues in the spawned task, which is tracked in
+  /// `initialSyncTasks` so `cancelTimer()` can tear it down on profile
+  /// teardown. A second call for an account that already has a pending
+  /// initial-sync task is a no-op — the original task wins, mirroring
+  /// the duplicate-collapse rule on `syncAccount(_:)` itself.
+  func scheduleInitialSync(for account: Account) {
+    let id = account.id
+    guard initialSyncTasks[id] == nil else { return }
+    initialSyncTasks[id] = Task { [weak self] in
+      await self?.syncAccount(account)
+      self?.initialSyncTasks.removeValue(forKey: id)
+    }
+  }
+
+  /// Test seam — awaits every tracked initial-sync task to completion.
+  /// Production code never needs this: the sheet dismisses on
+  /// `.created` and the sync runs out-of-band. Tests use it to
+  /// synchronise on the post-sync state (e.g. asserting that the
+  /// alchemy stub recorded the build call).
+  func waitForPendingInitialSyncs() async {
+    while let task = initialSyncTasks.first?.value {
+      await task.value
+    }
+  }
+
   // MARK: - Lifecycle
 
   /// Call from `.onChange(of: scenePhase)` in the root scene. Owns the
@@ -171,15 +210,18 @@ final class CryptoSyncStore {
     }
   }
 
-  /// Cancels and clears the hourly stale-check timer plus any
-  /// in-flight scene-active sync. Safe to call when no task is
-  /// running. Exposed for `ProfileSession.cleanupSync` so neither task
-  /// outlives a profile teardown.
+  /// Cancels and clears the hourly stale-check timer, any in-flight
+  /// scene-active sync, and any pending initial-sync tasks scheduled by
+  /// the create-account form. Safe to call when no task is running.
+  /// Exposed for `ProfileSession.cleanupSync` so no task outlives a
+  /// profile teardown.
   func cancelTimer() {
     timerTask?.cancel()
     timerTask = nil
     sceneActiveSyncTask?.cancel()
     sceneActiveSyncTask = nil
+    for task in initialSyncTasks.values { task.cancel() }
+    initialSyncTasks.removeAll()
   }
 
   // MARK: - Sync algorithm (parallel build → sequential apply)

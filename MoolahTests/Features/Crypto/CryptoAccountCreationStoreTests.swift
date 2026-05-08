@@ -101,8 +101,15 @@ struct CryptoAccountCreationStoreTests {
     // on `valuationMode` would see the wrong intent.
     #expect(created.valuationMode == .calculatedFromTrades)
 
-    // The store optimistically populates its observable list, so the
-    // new account is visible immediately without a reload round-trip.
+    // `AccountStore` mirrors the repository through reactive observation
+    // — there is no optimistic insert, so the new account lands in
+    // `accounts` only once the GRDB write commits and `observeAll()`
+    // emits. Wait for that emission before asserting the store's view
+    // of the world.
+    try await fixture.accountStore.waitForNextEmission(
+      matching: { $0.accounts.contains(where: { $0.id == created.id }) },
+      description: "newly-created crypto account observed in store"
+    )
     #expect(fixture.accountStore.accounts.count == 1)
     #expect(fixture.accountStore.accounts.first?.id == created.id)
   }
@@ -144,10 +151,54 @@ struct CryptoAccountCreationStoreTests {
       return
     }
 
+    // The kick-off is fire-and-forget so the create-account sheet can
+    // dismiss immediately; await the spawned task before asserting on
+    // the alchemy stub.
+    await fixture.cryptoSyncStore.waitForPendingInitialSyncs()
+
     // The store invokes the build phase exactly once for the newly-
     // created account, with the canonical wallet address it persisted.
     #expect(fixture.alchemy.recordedCalls.count == 1)
     #expect(fixture.alchemy.recordedCalls.first?.walletAddress == Self.validAddress)
+  }
+
+  @Test("Submit returns immediately rather than blocking on the wallet sync")
+  func submitDoesNotBlockOnSync() async throws {
+    let fixture = try makeFixture()
+    // Park the sync indefinitely so we can prove `submit` returns
+    // without waiting for it. Without the fix, `submit` awaited
+    // `syncAccount`, leaving the create-account sheet open until the
+    // entire network round-trip finished — visible to the user as
+    // "the new account appears in the sidebar but the form sticks
+    // around".
+    fixture.alchemy.setBeforeAssetTransfers { @Sendable in
+      try? await Task.sleep(for: .seconds(30))
+    }
+    let logic = CryptoAccountCreationLogic(
+      accountStore: fixture.accountStore,
+      cryptoSyncStore: fixture.cryptoSyncStore)
+
+    let start = ContinuousClock.now
+    let outcome = await logic.submit(
+      name: "Fast Dismiss Wallet",
+      chain: .ethereum,
+      walletAddressInput: Self.validAddress)
+    let elapsed = ContinuousClock.now - start
+
+    guard case .created = outcome else {
+      Issue.record("Expected .created outcome, got \(outcome)")
+      fixture.cryptoSyncStore.cancelTimer()
+      return
+    }
+    // The fire-and-forget sync is still parked at the alchemy hook;
+    // submit must already be back so the sheet can dismiss. Allow a
+    // generous budget — only scheduling overhead should land between
+    // create and return.
+    #expect(elapsed < .seconds(1))
+
+    // Cancel the parked sync so the spawned 30-second sleep doesn't
+    // outlive the test.
+    fixture.cryptoSyncStore.cancelTimer()
   }
 
   @Test("Invalid address aborts before any repository or sync work")
