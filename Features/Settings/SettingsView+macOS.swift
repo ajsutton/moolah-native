@@ -79,7 +79,8 @@
           rulesTabContent
         }
       }
-      .frame(minWidth: 600, minHeight: 400)
+      .frame(minWidth: 600, idealWidth: 700, minHeight: 400, idealHeight: 560)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
       .sheet(isPresented: $showAddProfile) {
         ProfileFormView()
           .environment(profileStore)

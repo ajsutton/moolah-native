@@ -3,7 +3,8 @@ import SwiftUI
 
 /// Compact row used by the Registered Tokens, Discovered Tokens inbox,
 /// and Spam Tokens management lists. Renders the instrument's symbol,
-/// name, chain, optional truncated contract address, and the badge set
+/// name, chain, optional contract address (shown in full so a spoofed
+/// contract can't hide behind a truncation ellipsis), and the badge set
 /// derived from the row's `CryptoProviderMapping`.
 ///
 /// `CryptoRegistrationRow` is read-only — actions (remove, mark-spam,
@@ -33,11 +34,15 @@ struct CryptoRegistrationRow: View {
         Text(instrument.name)
           .font(.caption)
           .foregroundStyle(.secondary)
-        if showsContractAddress, let truncated = truncatedContractAddress {
-          Text(truncated)
+        if showsContractAddress, let address = instrument.contractAddress {
+          // Full address — never truncated. A trailing-ellipsis form
+          // can hide the only character that distinguishes a legitimate
+          // contract from a spoofed one (issue #790). `.textSelection`
+          // lets the user copy it to compare against an explorer.
+          Text(address)
             .font(.caption2.monospaced())
             .foregroundStyle(.secondary)
-            .lineLimit(1)
+            .textSelection(.enabled)
         }
       }
       Spacer()
@@ -51,19 +56,6 @@ struct CryptoRegistrationRow: View {
   }
 
   private var instrument: Instrument { registration.instrument }
-
-  /// Truncated `0xabcd…wxyz` style label for the contract address, or
-  /// `nil` for native gas tokens (no contract). 6+4 hex chars match the
-  /// design's truncation convention; full address is available in the
-  /// row's `accessibilityLabel`.
-  private var truncatedContractAddress: String? {
-    guard let address = instrument.contractAddress, address.count > 12 else {
-      return instrument.contractAddress
-    }
-    let prefix = address.prefix(6)
-    let suffix = address.suffix(4)
-    return "\(prefix)…\(suffix)"
-  }
 
   private var accessibilityLabel: String {
     let mapping = registration.mapping

@@ -206,6 +206,7 @@ struct MoolahApp: App {
           .environment(syncCoordinator)
           .modelContainer(containerManager.indexContainer)
       }
+      .windowResizability(.contentMinSize)
 
       // Auto-open the main window on `--ui-testing` launches.
       // `WindowGroup(for: Profile.ID.self)` does not present without an
