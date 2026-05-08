@@ -1,6 +1,7 @@
 import Foundation
 
-struct TransactionLeg: Codable, Sendable, Hashable {
+struct TransactionLeg {
+  let id: UUID
   let accountId: UUID?
   let instrument: Instrument
   let quantity: Decimal
@@ -20,6 +21,7 @@ struct TransactionLeg: Codable, Sendable, Hashable {
   var earmarkId: UUID?
 
   init(
+    id: UUID = UUID(),
     accountId: UUID?,
     instrument: Instrument,
     quantity: Decimal,
@@ -29,6 +31,7 @@ struct TransactionLeg: Codable, Sendable, Hashable {
     categoryId: UUID? = nil,
     earmarkId: UUID? = nil
   ) {
+    self.id = id
     self.accountId = accountId
     self.instrument = instrument
     self.quantity = quantity
@@ -42,5 +45,41 @@ struct TransactionLeg: Codable, Sendable, Hashable {
   /// Convenience: the quantity as an InstrumentAmount.
   var amount: InstrumentAmount {
     InstrumentAmount(quantity: quantity, instrument: instrument)
+  }
+}
+
+extension TransactionLeg: Sendable {}
+
+extension TransactionLeg: Identifiable {}
+
+extension TransactionLeg: Hashable {}
+
+extension TransactionLeg: Codable {
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case accountId
+    case instrument
+    case quantity
+    case externalId
+    case counterpartyAddress
+    case type
+    case categoryId
+    case earmarkId
+  }
+
+  init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    // Legacy rows (pre-stable-leg-id) round-trip with a freshly allocated id;
+    // newer rows persist a stable id assigned at creation time.
+    self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+    self.accountId = try container.decodeIfPresent(UUID.self, forKey: .accountId)
+    self.instrument = try container.decode(Instrument.self, forKey: .instrument)
+    self.quantity = try container.decode(Decimal.self, forKey: .quantity)
+    self.externalId = try container.decodeIfPresent(String.self, forKey: .externalId)
+    self.counterpartyAddress = try container.decodeIfPresent(
+      String.self, forKey: .counterpartyAddress)
+    self.type = try container.decode(TransactionType.self, forKey: .type)
+    self.categoryId = try container.decodeIfPresent(UUID.self, forKey: .categoryId)
+    self.earmarkId = try container.decodeIfPresent(UUID.self, forKey: .earmarkId)
   }
 }
