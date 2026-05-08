@@ -72,6 +72,81 @@ struct EarmarkStoreVisibilityTests {
     #expect(store.visibleEarmarks.count == 2)
   }
 
+  @Test("convertedBalance is populated for hidden earmarks even when showHidden is false")
+  func hiddenEarmarkConvertedBalancePopulated() async throws {
+    // Regression: toggling "Show Hidden" used to surface a permanent spinner
+    // on hidden earmark rows because runConversionAttempt only iterated
+    // visibleEarmarks. The store should populate convertedBalances for every
+    // earmark regardless of visibility — the filter is for what to display.
+    let visible = Earmark(name: "Visible", instrument: .defaultTestInstrument)
+    let hidden = Earmark(
+      name: "Hidden", instrument: .defaultTestInstrument, isHidden: true)
+    let accountId = UUID()
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
+      ], in: database)
+    TestBackend.seedWithTransactions(
+      earmarks: [visible, hidden],
+      amounts: [
+        visible.id: (saved: 500, spent: 0),
+        hidden.id: (saved: 300, spent: 0),
+      ],
+      accountId: accountId, in: database)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
+
+    try await store.waitForNextEmission(
+      matching: { $0.convertedBalance(for: hidden.id) != nil },
+      description: "hidden earmark balance populated despite showHidden=false"
+    )
+
+    let hiddenBalance = try #require(store.convertedBalance(for: hidden.id))
+    #expect(hiddenBalance.quantity == 300)
+  }
+
+  @Test("convertedTotalBalance refreshes when showHidden toggles to include hidden earmarks")
+  func convertedTotalBalanceRefreshesOnShowHiddenToggle() async throws {
+    // With showHidden=false the grand total reflects only visible earmarks.
+    // Toggling showHidden=true must trigger a recompute so the visible
+    // "Earmarked Total" stays consistent with the rows the user now sees.
+    let visible = Earmark(name: "Visible", instrument: .defaultTestInstrument)
+    let hidden = Earmark(
+      name: "Hidden", instrument: .defaultTestInstrument, isHidden: true)
+    let accountId = UUID()
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
+      ], in: database)
+    TestBackend.seedWithTransactions(
+      earmarks: [visible, hidden],
+      amounts: [
+        visible.id: (saved: 500, spent: 0),
+        hidden.id: (saved: 300, spent: 0),
+      ],
+      accountId: accountId, in: database)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
+
+    try await store.waitForNextEmission(
+      matching: { $0.convertedTotalBalance?.quantity == 500 },
+      description: "initial total reflects visible earmark only"
+    )
+
+    store.showHidden = true
+
+    try await store.waitForNextEmission(
+      matching: { $0.convertedTotalBalance?.quantity == 800 },
+      description: "total recomputes to include hidden earmark"
+    )
+  }
+
   // MARK: - Multi-instrument earmarks
 
   @Test("USD earmark is loaded with USD instrument intact")

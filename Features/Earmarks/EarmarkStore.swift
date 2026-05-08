@@ -21,10 +21,11 @@ final class EarmarkStore {
   private(set) var convertedSavedAmounts: [UUID: InstrumentAmount] = [:]
   private(set) var convertedSpentAmounts: [UUID: InstrumentAmount] = [:]
 
-  // internal (not `private`) so the `+Budget` and `+Mutations` extensions
-  // can reach the repository for budget CRUD and pass-through writes.
+  // internal (not `private`): `repository` is used by `+Budget` and
+  // `+Mutations`; `conversionService` is used by `+Conversion`. All three
+  // extensions need cross-file access that `private` would block.
   let repository: EarmarkRepository
-  private let conversionService: any InstrumentConversionService
+  let conversionService: any InstrumentConversionService
   let targetInstrument: Instrument
   /// Delay between retry attempts after a conversion failure. Production
   /// uses ~30s; tests pass a small value to keep retries snappy.
@@ -93,6 +94,7 @@ final class EarmarkStore {
     MainActor.assumeIsolated {
       observationTask?.cancel()
       conversionTask?.cancel()
+      showHiddenTask?.cancel()
       testObservationTickContinuation.finish()
     }
   }
@@ -162,6 +164,8 @@ final class EarmarkStore {
     observationTask = nil
     conversionTask?.cancel()
     conversionTask = nil
+    showHiddenTask?.cancel()
+    showHiddenTask = nil
   }
 
   func convertedBalance(for earmarkId: UUID) -> InstrumentAmount? {
@@ -176,7 +180,22 @@ final class EarmarkStore {
     convertedSpentAmounts[earmarkId]
   }
 
-  var showHidden: Bool = false
+  /// Recompute task spawned by the `showHidden` `didSet`. Tracked (not
+  /// fire-and-forget) so `stopObserving()` and `deinit` can cancel an
+  /// in-flight recompute. A rapid double-toggle cancels the prior task
+  /// before spawning the next, narrowing the window for stale writes.
+  private var showHiddenTask: Task<Void, Never>?
+
+  var showHidden: Bool = false {
+    didSet {
+      // The grand total sums only `visibleEarmarks`; without this recompute
+      // the "Earmarked Total" stays pinned to the previous visibility's sum
+      // until the next observation tick.
+      guard oldValue != showHidden else { return }
+      showHiddenTask?.cancel()
+      showHiddenTask = Task { await recomputeConvertedTotals() }
+    }
+  }
 
   var visibleEarmarks: [Earmark] {
     earmarks.filter { showHidden || !$0.isHidden }
@@ -278,9 +297,14 @@ final class EarmarkStore {
     await task.value
   }
 
-  /// Single pass over all visible earmarks; returns `true` if any
-  /// conversion failed. Always publishes the latest computed state,
-  /// even if partial.
+  /// Single pass over every earmark; returns `true` if any conversion
+  /// failed. Always publishes the latest computed state, even if partial.
+  ///
+  /// Iterates all earmarks (not just `visibleEarmarks`) so per-earmark
+  /// balances populate regardless of `showHidden` — otherwise toggling
+  /// "Show Hidden" surfaces a permanent spinner on hidden rows that no
+  /// recompute ever filled in. The grand total still sums only visible
+  /// earmarks so it matches what the user sees.
   private func runConversionAttempt() async -> Bool {
     var anyFailed = false
     var balances: [UUID: InstrumentAmount] = [:]
@@ -290,7 +314,8 @@ final class EarmarkStore {
     var grandTotalValid = true
     let zeroInTarget = InstrumentAmount.zero(instrument: targetInstrument)
 
-    for earmark in visibleEarmarks {
+    for earmark in earmarks {
+      let isVisible = showHidden || !earmark.isHidden
       do {
         let totals = try await convertEarmarkPositions(earmark)
         guard !Task.isCancelled else { return false }
@@ -298,17 +323,21 @@ final class EarmarkStore {
         saved[earmark.id] = totals.saved
         spent[earmark.id] = totals.spent
 
-        // Convert earmark balance to target instrument for grand total.
+        // Only visible earmarks contribute to the displayed grand total.
         // Clamp negative balances to zero so they don't reduce the total.
-        let convertedToTarget = try await conversionService.convertAmount(
-          totals.balance, to: targetInstrument, on: Date())
-        guard !Task.isCancelled else { return false }
-        if grandTotalValid {
+        if isVisible, grandTotalValid {
+          let convertedToTarget = try await conversionService.convertAmount(
+            totals.balance, to: targetInstrument, on: Date())
+          guard !Task.isCancelled else { return false }
           grandTotal += max(convertedToTarget, zeroInTarget)
         }
       } catch {
         anyFailed = true
-        grandTotalValid = false
+        // A failure on a hidden earmark shouldn't blank the total — only
+        // visible earmarks contribute to it. Hidden-earmark failures still
+        // mark `anyFailed` so the retry loop kicks in (and a later toggle
+        // doesn't surface a spinner because no retry was scheduled).
+        if isVisible { grandTotalValid = false }
         logger.warning(
           "Conversion failed for earmark \(earmark.name): \(error.localizedDescription)")
       }
@@ -324,56 +353,7 @@ final class EarmarkStore {
     return anyFailed
   }
 
-  /// Per-earmark conversion result: the three position-list totals,
-  /// each expressed in the earmark's own instrument.
-  private struct ConvertedEarmarkTotals {
-    let balance: InstrumentAmount
-    let saved: InstrumentAmount
-    let spent: InstrumentAmount
-  }
-
-  /// Sums an earmark's three position lists, each converted to the
-  /// earmark's own instrument. `.knownZero` positions (an `.unpriced`
-  /// / `.spam` crypto registration) contribute zero rather than
-  /// failing the earmark — issue #790. A real provider failure still
-  /// throws so the caller treats the whole earmark as failed (we never
-  /// display a partial earmark balance under transient outage).
-  private func convertEarmarkPositions(_ earmark: Earmark) async throws
-    -> ConvertedEarmarkTotals
-  {
-    let date = Date()
-    var balance = InstrumentAmount.zero(instrument: earmark.instrument)
-    var saved = InstrumentAmount.zero(instrument: earmark.instrument)
-    var spent = InstrumentAmount.zero(instrument: earmark.instrument)
-    for position in earmark.positions {
-      balance += try await convertPositionOrZero(
-        position.amount, to: earmark.instrument, on: date)
-    }
-    for position in earmark.savedPositions {
-      saved += try await convertPositionOrZero(
-        position.amount, to: earmark.instrument, on: date)
-    }
-    for position in earmark.spentPositions {
-      spent += try await convertPositionOrZero(
-        position.amount, to: earmark.instrument, on: date)
-    }
-    return ConvertedEarmarkTotals(balance: balance, saved: saved, spent: spent)
-  }
-
-  /// Convert `amount` to `target` on `date`, folding `.knownZero` (an
-  /// `.unpriced` / `.spam` crypto source) to zero in `target`.
-  /// Issue #790.
-  private func convertPositionOrZero(
-    _ amount: InstrumentAmount, to target: Instrument, on date: Date
-  ) async throws -> InstrumentAmount {
-    let result = try await conversionService.convertResult(
-      amount, to: target, on: date)
-    switch result {
-    case .value(let converted): return converted
-    case .knownZero: return .zero(instrument: target)
-    }
-  }
-
+  // Per-earmark conversion helpers live in `EarmarkStore+Conversion.swift`.
   // Mutation methods live in `EarmarkStore+Mutations.swift`.
   // Budget CRUD lives in `EarmarkStore+Budget.swift`.
 
