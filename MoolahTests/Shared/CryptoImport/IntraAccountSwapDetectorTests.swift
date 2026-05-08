@@ -229,4 +229,79 @@ struct IntraAccountSwapDetectorTests {
     #expect(result.count == 1)
     #expect(result.first?.type == .income)
   }
+
+  @Test("Field preservation: id, externalId, counterparty, category, earmark, quantity")
+  func retypePreservesEveryFieldExceptType() throws {
+    let categoryId = UUID()
+    let earmarkId = UUID()
+    let inboundId = try #require(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+    let outboundId = try #require(UUID(uuidString: "22222222-2222-2222-2222-222222222222"))
+    let inbound = DirectionalLeg(
+      leg: TransactionLeg(
+        id: inboundId,
+        accountId: Self.accountId,
+        instrument: Self.ethereum,
+        quantity: 10,
+        externalId: "0xhash:0",
+        counterpartyAddress: "0xrouter-in",
+        type: .income,
+        categoryId: categoryId,
+        earmarkId: earmarkId),
+      direction: .inbound)
+    let outbound = DirectionalLeg(
+      leg: TransactionLeg(
+        id: outboundId,
+        accountId: Self.accountId,
+        instrument: Self.polygon,
+        quantity: -20,
+        externalId: "0xhash:1",
+        counterpartyAddress: "0xrouter-out",
+        type: .expense),
+      direction: .outbound)
+
+    let result = IntraAccountSwapDetector.retypeSwapLegs([inbound, outbound])
+
+    #expect(result.count == 2)
+    let inboundResult = try #require(result.first { $0.id == inboundId })
+    #expect(inboundResult.type == .trade)
+    #expect(inboundResult.accountId == Self.accountId)
+    #expect(inboundResult.instrument == Self.ethereum)
+    #expect(inboundResult.quantity == Decimal(10))
+    #expect(inboundResult.externalId == "0xhash:0")
+    #expect(inboundResult.counterpartyAddress == "0xrouter-in")
+    #expect(inboundResult.categoryId == categoryId)
+    #expect(inboundResult.earmarkId == earmarkId)
+
+    let outboundResult = try #require(result.first { $0.id == outboundId })
+    #expect(outboundResult.type == .trade)
+    #expect(outboundResult.quantity == Decimal(-20))
+    #expect(outboundResult.counterpartyAddress == "0xrouter-out")
+  }
+
+  @Test("Input order is preserved on the output")
+  func orderPreserved() {
+    let outbound = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.polygon,
+        quantity: -20,
+        externalId: "0xhash:0",
+        type: .expense),
+      direction: .outbound)
+    let inbound = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.ethereum,
+        quantity: 10,
+        externalId: "0xhash:1",
+        type: .income),
+      direction: .inbound)
+
+    let result = IntraAccountSwapDetector.retypeSwapLegs([outbound, inbound])
+
+    #expect(result.count == 2)
+    #expect(result[0].externalId == "0xhash:0")  // outbound first
+    #expect(result[1].externalId == "0xhash:1")  // inbound second
+    #expect(result.allSatisfy { $0.type == .trade })
+  }
 }
