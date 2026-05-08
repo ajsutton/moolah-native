@@ -217,6 +217,39 @@ struct CrossAccountTransferMergerTests {
     #expect(result.transaction.date == Self.dateA)
   }
 
+  @Test("All-trade swap candidate passes through merger untouched")
+  func allTradeSwapCandidatePassesThrough() async throws {
+    // Single-account 2-leg swap: both legs typed .trade, distinct instruments.
+    let tradeIn = TransactionLeg(
+      accountId: Self.accountA,
+      instrument: TestInstruments.ethereum,
+      quantity: 1,
+      externalId: "\(Self.hash):0",
+      type: .trade)
+    let tradeOut = TransactionLeg(
+      accountId: Self.accountA,
+      instrument: TestInstruments.polygon,
+      quantity: -100,
+      externalId: "\(Self.hash):1",
+      type: .trade)
+    let swap = BuiltTransaction(
+      originAccountId: Self.accountA,
+      transaction: Transaction(
+        date: Self.dateA,
+        legs: [tradeIn, tradeOut],
+        importOrigin: nil))
+
+    let merged = try await LiveCrossAccountTransferMerger().merge(
+      candidates: [swap],
+      existingLegLookup: { _ in [] })
+
+    #expect(merged.count == 1)
+    let result = try #require(merged.first)
+    #expect(result.transaction.legs.count == 2)
+    // Untouched: still .trade on both legs.
+    #expect(result.transaction.legs.allSatisfy { $0.type == .trade })
+  }
+
   // MARK: - Helpers
 
   private func makeBuiltTransaction(
