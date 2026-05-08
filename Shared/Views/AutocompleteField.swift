@@ -190,7 +190,7 @@ struct AutocompleteSuggestionDropdown<Item: Identifiable>: View {
     }
 
     var attributed = AttributedString(text)
-    attributed.font = .body.bold()
+    attributed.foregroundColor = .secondary
     let chars = Array(text)
     var i = 0
     while i < chars.count {
@@ -199,8 +199,8 @@ struct AutocompleteSuggestionDropdown<Item: Identifiable>: View {
         while j < chars.count && matched[j] { j += 1 }
         let startIdx = attributed.characters.index(attributed.startIndex, offsetBy: i)
         let endIdx = attributed.characters.index(attributed.startIndex, offsetBy: j)
-        attributed[startIdx..<endIdx].font = .body
-        attributed[startIdx..<endIdx].foregroundColor = .secondary
+        attributed[startIdx..<endIdx].font = .body.bold()
+        attributed[startIdx..<endIdx].foregroundColor = .primary
         i = j
       } else {
         i += 1
