@@ -44,8 +44,11 @@ extension ProfileSession {
   }
 
   /// Builds the crypto-price service with its configured clients
-  /// (CoinGecko when an API key is present in the keychain, plus
-  /// CryptoCompare and Binance as fallbacks) and the token resolver.
+  /// (CoinGecko first — Pro tier when a key is set, otherwise the free
+  /// public endpoint — plus CryptoCompare and Binance as fallbacks) and
+  /// the token resolver. The price-service falls through to the next
+  /// client on any error, so an anonymous CoinGecko 429 still resolves
+  /// via CryptoCompare/Binance.
   static func makeCryptoPriceService(
     coinGeckoApiKey: String?,
     database: any DatabaseWriter
@@ -63,17 +66,21 @@ extension ProfileSession {
       }
     }
 
-    var priceClients: [CryptoPriceClient] = []
-    if let coinGeckoApiKey, !coinGeckoApiKey.isEmpty {
-      priceClients.append(CoinGeckoClient(apiKey: coinGeckoApiKey))
-    }
-    priceClients.append(cryptoCompareClient)
-    priceClients.append(binanceClient)
+    // Empty key → CoinGeckoClient targets the free public host;
+    // non-empty key → Pro host with `x_cg_pro_api_key`. Always included
+    // so users without a Pro key still get coverage for tokens like
+    // USDC that CryptoCompare omits from its contract index.
+    let resolverApiKey = coinGeckoApiKey ?? ""
+    let priceClients: [CryptoPriceClient] = [
+      CoinGeckoClient(apiKey: resolverApiKey),
+      cryptoCompareClient,
+      binanceClient,
+    ]
 
     return CryptoPriceService(
       clients: priceClients,
       database: database,
-      resolutionClient: CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey)
+      resolutionClient: CompositeTokenResolutionClient(coinGeckoApiKey: resolverApiKey)
     )
   }
 
@@ -153,7 +160,9 @@ extension ProfileSession {
       let made = makeCoinGeckoCatalog()
       catalog = made.catalog
       refreshTask = made.refreshTask
-      resolutionClient = CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey)
+      // Empty string when no key is configured so the resolver targets
+      // the free public CoinGecko endpoint. See `makeCryptoPriceService`.
+      resolutionClient = CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey ?? "")
     }
     let store = CryptoTokenStore(
       registry: cloudBackend.instrumentRegistry,

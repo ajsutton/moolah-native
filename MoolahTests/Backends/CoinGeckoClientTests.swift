@@ -47,6 +47,51 @@ struct CoinGeckoClientTests {
     #expect(queryItems["vs_currencies"] == "usd")
   }
 
+  // MARK: - Public free-tier fallback (no API key)
+
+  @Test
+  func marketChartURLUsesPublicHostWhenApiKeyIsEmpty() throws {
+    let url = CoinGeckoClient.marketChartURL(coinId: "ethereum", days: 1, apiKey: "")
+    let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+    #expect(components.host == "api.coingecko.com")
+    let names = Set((components.queryItems ?? []).map(\.name))
+    #expect(!names.contains("x_cg_pro_api_key"))
+  }
+
+  @Test
+  func simplePriceURLUsesPublicHostWhenApiKeyIsEmpty() throws {
+    let url = CoinGeckoClient.simplePriceURL(coinIds: ["ethereum"], apiKey: "")
+    let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+    #expect(components.host == "api.coingecko.com")
+    let names = Set((components.queryItems ?? []).map(\.name))
+    #expect(!names.contains("x_cg_pro_api_key"))
+  }
+
+  @Test
+  func contractLookupURLUsesPublicHostWhenApiKeyIsEmpty() throws {
+    let url = CoinGeckoClient.contractLookupURL(
+      platformId: "ethereum",
+      contractAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      apiKey: ""
+    )
+    let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+    #expect(components.host == "api.coingecko.com")
+    #expect(
+      components.path
+        == "/api/v3/coins/ethereum/contract/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    )
+    #expect((components.queryItems ?? []).isEmpty)
+  }
+
+  @Test
+  func assetPlatformsURLUsesPublicHostWhenApiKeyIsEmpty() throws {
+    let url = CoinGeckoClient.assetPlatformsURL(apiKey: "")
+    let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+    #expect(components.host == "api.coingecko.com")
+    #expect(components.path == "/api/v3/asset_platforms")
+    #expect((components.queryItems ?? []).isEmpty)
+  }
+
   // MARK: - Response parsing
 
   @Test
