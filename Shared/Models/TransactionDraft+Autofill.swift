@@ -32,6 +32,13 @@ extension TransactionDraft {
       }
     }
 
+    // Autofill copies content from a different transaction; legs save
+    // into *this* transaction so they need new ids — preserving the
+    // source's leg ids would PK-collide on the GRDB upsert against the
+    // source's own row. `clearingLegId()` owns the rebuild so a future
+    // `LegDraft` field addition can't silently drop its value here.
+    newDraft.legDrafts = newDraft.legDrafts.map { $0.clearingLegId() }
+
     // Preserve the viewed account. Skip custom mode: a complex match has no
     // single "viewed" leg, and adopting its structure means the user is
     // already accepting whatever accounts it references.

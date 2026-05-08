@@ -96,6 +96,23 @@ struct TransactionDraft: Sendable, Equatable {
       accountId == nil && earmarkId != nil
     }
 
+    /// Returns a copy of this leg draft with `legId` cleared. Used by
+    /// `applyAutofill` to detach legs carried in from another
+    /// transaction so they save into a new `transaction_leg.id` and do
+    /// not PK-collide with the source. `legId` is `let`, so a new
+    /// value must be returned.
+    func clearingLegId() -> LegDraft {
+      LegDraft(
+        legId: nil,
+        type: type,
+        accountId: accountId,
+        amountText: amountText,
+        categoryId: categoryId,
+        categoryText: categoryText,
+        earmarkId: earmarkId,
+        instrument: instrument)
+    }
+
     /// The instrument the editor should default to for this leg when the
     /// leg has no explicit instrument override stored. Resolves through
     /// the leg's account, then its earmark, then falls back to AUD as a
@@ -119,35 +136,9 @@ struct TransactionDraft: Sendable, Equatable {
     }
   }
 
-  // MARK: - Negation Helpers
-
-  /// Whether a leg type uses negated display (expense, transfer → negate; income, openingBalance → as-is).
-  static func displaysNegated(_ type: TransactionType) -> Bool {
-    switch type {
-    case .expense, .transfer: return true
-    case .income, .openingBalance, .trade: return false
-    }
-  }
-
-  /// Convert a leg quantity to display text using the negation rule.
-  static func displayText(quantity: Decimal, type: TransactionType, decimals: Int) -> String {
-    let displayValue = displaysNegated(type) ? -quantity : quantity
-    if displayValue == .zero {
-      return "0"
-    }
-    return displayValue.formatted(.number.precision(.fractionLength(decimals)).grouping(.never))
-  }
-
-  /// Parse display text back to a signed quantity using the negation rule.
-  /// Returns nil if the text can't be parsed.
-  static func parseDisplayText(_ text: String, type: TransactionType, decimals: Int) -> Decimal? {
-    guard let parsed = InstrumentAmount.parseQuantity(from: text, decimals: decimals) else {
-      return nil
-    }
-    return displaysNegated(type) ? -parsed : parsed
-  }
 }
 
+// Negation helpers live in `TransactionDraft+Negation.swift`.
 // Computed accessors, editing methods, and mode-switching helpers for simple mode
 // live in `TransactionDraft+SimpleMode.swift`.
 

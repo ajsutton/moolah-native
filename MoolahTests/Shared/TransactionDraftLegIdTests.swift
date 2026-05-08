@@ -49,4 +49,32 @@ struct TransactionDraftLegIdTests {
     #expect(rebuilt.legs[0].id == leg.id)
     #expect(rebuilt.legs[1].id != leg.id)
   }
+
+  @Test("applyAutofill clears legId so saving does not collide with the source's leg rows")
+  func applyAutofillClearsLegIds() throws {
+    let sourceLeg = TransactionLeg(
+      accountId: UUID(),
+      instrument: Instrument.defaultTestInstrument,
+      quantity: Decimal(-25), type: .expense,
+      categoryId: UUID())
+    let source = Transaction(
+      date: Date(timeIntervalSince1970: 0),
+      payee: "Coffee",
+      legs: [sourceLeg])
+
+    // A fresh draft is a brand-new transaction in progress.
+    var draft = TransactionDraft(accountId: nil, instrument: Instrument.defaultTestInstrument)
+
+    draft.applyAutofill(
+      from: source, categories: Categories(from: []), accounts: Accounts(from: []))
+
+    // The carried leg's content matches `source` but its id is regenerated
+    // at save time so it does not collide with `source.legs[0].id` in
+    // GRDB's primary key.
+    #expect(draft.legDrafts.allSatisfy { $0.legId == nil })
+
+    let savedNewId = UUID()
+    let saved = try #require(draft.toTransaction(id: savedNewId))
+    #expect(saved.legs.first?.id != sourceLeg.id)
+  }
 }
