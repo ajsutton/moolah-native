@@ -19,9 +19,9 @@ import SwiftUI
 /// affordance for the *transaction*; this section is just structured
 /// data the user might want to copy.
 ///
-/// Truncation matches `WalletAccountHeaderLogic.truncateAddress` —
-/// `0xabcd…wxyz` (6 leading + 4 trailing). The full address is in the
-/// VoiceOver label so screen-reader users hear the complete value.
+/// The address is rendered in full — never truncated. A `0xabcd…wxyz`
+/// abbreviation is unsafe to verify against because an attacker can
+/// vanity-mine an address whose prefix and suffix match a target.
 struct TransactionDetailCounterpartySection: View {
   let transaction: Transaction
 
@@ -60,8 +60,9 @@ struct TransactionDetailCounterpartySection: View {
             .font(.caption)
             .foregroundStyle(.secondary)
         }
-        Text(WalletAccountHeaderLogic.truncateAddress(entry.address))
+        Text(entry.address)
           .font(.body.monospaced())
+          .textSelection(.enabled)
       }
       Spacer()
       Button {

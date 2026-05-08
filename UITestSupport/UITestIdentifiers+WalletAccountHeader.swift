@@ -12,9 +12,11 @@ extension UITestIdentifiers {
     /// wallet header is on screen".
     public static let container = "wallet.header.container"
 
-    /// Truncated `0xabcd…wxyz` wallet-address label. The full address
-    /// is exposed via the row's `accessibilityLabel`.
-    public static let truncatedAddress = "wallet.header.address"
+    /// Full wallet-address label. Crypto addresses are never truncated
+    /// in the UI — verifying the entire string is what protects the
+    /// user from vanity-mined lookalike addresses, so prefix/suffix
+    /// abbreviation is unsafe even when it would fit better.
+    public static let address = "wallet.header.address"
 
     /// Copy-address button. Tapping copies the full lowercased
     /// wallet address to the system pasteboard.

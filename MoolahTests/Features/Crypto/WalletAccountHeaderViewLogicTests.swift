@@ -4,45 +4,13 @@ import Testing
 
 @testable import Moolah
 
-/// Pure-logic tests for `WalletAccountHeaderLogic` — the truncation
-/// rule, the relative-time formatting for the last-synced label, and the
-/// "is sync allowed" predicate. These are the load-bearing pieces of the
-/// wallet-header view; the SwiftUI rendering itself is exercised via
-/// preview snapshots and the UI driver suite.
+/// Pure-logic tests for `WalletAccountHeaderLogic` — the relative-time
+/// formatting for the last-synced label, the "is sync allowed" predicate,
+/// and the user-facing error caption. These are the load-bearing pieces
+/// of the wallet-header view; the SwiftUI rendering itself is exercised
+/// via preview snapshots and the UI driver suite.
 @Suite("WalletAccountHeaderLogic")
 struct WalletAccountHeaderViewLogicTests {
-  // MARK: - Address truncation
-
-  @Test("Canonical 0x address truncates to first 6 + ellipsis + last 4")
-  func canonicalAddressTruncatesToShortForm() {
-    let address = "0xabcdef0123456789abcdef0123456789abcdwxyz"
-    let truncated = WalletAccountHeaderLogic.truncateAddress(address)
-    #expect(truncated == "0xabcd…wxyz")
-  }
-
-  @Test("0x + 40 hex chars produces 11-character truncated label")
-  func standardEvmAddressProducesElevenCharacterLabel() {
-    let address = "0x" + String(repeating: "f", count: 40)
-    let truncated = WalletAccountHeaderLogic.truncateAddress(address)
-    // 6 (prefix) + 1 (ellipsis) + 4 (suffix) = 11 grapheme clusters.
-    #expect(truncated.count == 11)
-    #expect(truncated.hasPrefix("0xffff"))
-    #expect(truncated.hasSuffix("ffff"))
-    #expect(truncated.contains("…"))
-  }
-
-  @Test("Address shorter than the truncation threshold passes through unchanged")
-  func shortAddressIsNotTruncated() {
-    // 10 chars — below the 11-char threshold; truncation can't add clarity.
-    let short = "0xabcd1234"
-    #expect(WalletAccountHeaderLogic.truncateAddress(short) == short)
-  }
-
-  @Test("Empty address passes through as empty string")
-  func emptyAddressIsUnchanged() {
-    #expect(WalletAccountHeaderLogic.truncateAddress("").isEmpty)
-  }
-
   // MARK: - Last-synced text
 
   @Test("Nil sync state renders as 'Never synced'")
