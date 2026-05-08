@@ -188,6 +188,15 @@ extension SyncCoordinator {
       if shouldBackfillUnsynced {
         _ = await self.queueUnsyncedRecordsForAllProfiles()
       }
+      // Targeted instrument-only reconciliation. Runs unconditionally
+      // because the bug it fixes (auto-inserted stock/crypto rows that
+      // never reached CloudKit due to `ensureInstrumentReadable` not
+      // firing the sync hook) produces state that the flag-gated
+      // backfill above has already skipped on every prior launch.
+      // Idempotent: the instrument table is small and CKSyncEngine's
+      // pending list dedupes against rows already queued via the new
+      // hook plumbing.
+      _ = await self.queueUnsyncedInstrumentsForAllProfiles()
       if self.hasPendingChanges {
         self.logger.info("Zones ready — sending pending changes")
         await self.sendChanges()
