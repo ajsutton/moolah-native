@@ -8,8 +8,10 @@ import os
 /// dependency is supplied per call.
 ///
 /// Produces multi-leg transactions:
-/// - One `.transfer` leg in the value token per token movement involving
-///   this wallet (negative quantity outbound; positive inbound).
+/// - One `.income` (inbound), `.expense` (outbound), or `.trade`
+///   (intra-account swap, retyped by `IntraAccountSwapDetector`) leg
+///   per token movement involving this wallet. Self-send legs stay
+///   `.income`.
 /// - One `.expense` gas leg in the chain native token, on the from-side
 ///   wallet only, when this wallet is the sender of an `external`
 ///   transfer. The receipt fetch is coalesced per unique outbound
@@ -154,7 +156,9 @@ struct TransferEventBuilder: Sendable {
 
   /// Builds one `BuiltTransaction` from a hash group, or returns `nil`
   /// when the group produces no usable legs (every transfer was unknown
-  /// category or malformed).
+  /// category or malformed). Per-event legs are passed through
+  /// `IntraAccountSwapDetector.retypeSwapLegs(_:)` before the gas leg
+  /// is appended; non-swap hashes pass through unchanged.
   ///
   /// `receipt` is the pre-fetched `eth_getTransactionReceipt` for this
   /// hash, present only when at least one event is an outbound
@@ -173,10 +177,11 @@ struct TransferEventBuilder: Sendable {
 
     for event in events {
       try Task.checkCancellation()
-      guard let item = try await makeTransferLeg(event: event, context: context) else {
+      guard let directionalLeg = try await makeTransferLeg(event: event, context: context)
+      else {
         continue
       }
-      directional.append(item)
+      directional.append(directionalLeg)
       if let timestamp = parseTimestamp(event.metadata.blockTimestamp) {
         if let current = earliestTimestamp {
           earliestTimestamp = min(current, timestamp)
@@ -215,10 +220,13 @@ struct TransferEventBuilder: Sendable {
       transaction: transaction)
   }
 
-  /// Builds a single `.transfer` leg for one Alchemy event, or returns
-  /// `nil` when the event is unusable (NFT category slipped through,
-  /// malformed amount, or a touched-but-not-on-this-wallet event that
-  /// doesn't apply to the synced account).
+  /// Builds a `DirectionalLeg` (an `.income` / `.expense` leg per
+  /// `legType(for:)` plus the originating `TransferDirection`) for one
+  /// Alchemy event, or returns `nil` when the event is unusable (NFT
+  /// category slipped through, malformed amount, or a touched-but-not-
+  /// on-this-wallet event). The direction is consumed by
+  /// `IntraAccountSwapDetector` to partition self-sends out of the
+  /// swap predicate without inferring from `counterpartyAddress`.
   private func makeTransferLeg(
     event: AlchemyTransfer,
     context: BuildContext
@@ -360,23 +368,6 @@ struct TransferEventBuilder: Sendable {
     return rawDecimalValue / Decimal(sign: .plus, exponent: decimals, significand: 1)
   }
 
-  /// Parses Alchemy's ISO-8601 block timestamp (`"2024-09-12T12:34:56.000Z"`).
-  /// Returns `nil` on malformed input — caller falls back to
-  /// `ImportOrigin.importedAt`.
-  ///
-  /// `ISO8601DateFormatter` is allocated per call to keep the builder a
-  /// pure `Sendable` value type (no `nonisolated(unsafe)` static state).
-  /// The build hot path is dominated by the Alchemy round-trip and the
-  /// discovery actor, so a per-row allocation here is a non-event.
-  private func parseTimestamp(_ raw: String?) -> Date? {
-    guard let raw else { return nil }
-    let withFraction = ISO8601DateFormatter()
-    withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    if let date = withFraction.date(from: raw) { return date }
-    let plain = ISO8601DateFormatter()
-    plain.formatOptions = [.withInternetDateTime]
-    return plain.date(from: raw)
-  }
 }
 
 /// Per-call context bundle so `TransferEventBuilder`'s helpers stay

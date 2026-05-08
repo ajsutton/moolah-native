@@ -12,7 +12,7 @@ import Testing
 /// self-send legs are never partitioned into the swap predicate.
 @Suite("IntraAccountSwapDetector — preservation")
 struct SwapDetectorPreservationTests {
-  private static let accountId = UUID()
+  private static let accountId = makeUUID("AAAAAAAA-0000-0000-0000-000000000002")
   private static let ethereum = ChainConfig.ethereum.nativeInstrument
   private static let polygon = ChainConfig.polygon.nativeInstrument
   private static let base = ChainConfig.base.nativeInstrument

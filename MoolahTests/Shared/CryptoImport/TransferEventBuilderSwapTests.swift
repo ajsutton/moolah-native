@@ -230,4 +230,58 @@ struct TransferEventBuilderSwapTests {
     #expect(legs.contains { $0.type == .expense && $0.externalId == "0xpure-out:0" })
     #expect(legs.contains { $0.type == .expense && $0.externalId == "0xpure-out:gas" })
   }
+
+  @Test("Same-instrument inbound + outbound on one hash → legs stay .income / .expense")
+  func sameInstrumentBothSidesPassesThroughBuilder() async throws {
+    // Single account, single hash: 2 ETH inbound + 1 ETH outbound. Same
+    // instrument on both sides, so the swap predicate's ≥2 distinct
+    // instruments guard rejects the trigger; legs flow through with
+    // their per-direction types from `legType(for:)`.
+    let subject = makeDiscoverySubject()
+    let alchemy = RecordingAlchemyClientStub()
+    alchemy.setReceiptResponse(
+      .receipt(
+        AlchemyTransactionReceipt(
+          hash: "0xsame-instrument",
+          gasUsed: Self.gasUsed,
+          effectiveGasPrice: Self.gasPrice,
+          from: Self.wallet)),
+      for: "0xsame-instrument")
+
+    let account = makeCryptoAccount(walletAddress: Self.wallet, chain: .ethereum)
+    let origin = makeWalletImportOrigin(for: account.id)
+    let inbound = makeAlchemyTransfer(
+      hash: "0xsame-instrument",
+      from: Self.counterparty,
+      to: Self.wallet,
+      category: .external,
+      uniqueIdSuffix: "0")
+    let outbound = makeAlchemyTransfer(
+      hash: "0xsame-instrument",
+      from: Self.wallet,
+      to: Self.counterparty,
+      category: .external,
+      uniqueIdSuffix: "1")
+
+    let built = try await TransferEventBuilder().build(
+      transfers: [inbound, outbound],
+      account: account,
+      services: BuilderServices(
+        chain: .ethereum, discovery: subject.service, alchemy: alchemy),
+      importOrigin: origin)
+
+    let candidate = try #require(built.first)
+    let legs = candidate.transaction.legs
+    #expect(legs.count == 3)
+    let inboundLeg = try #require(
+      legs.first(where: { $0.externalId == "0xsame-instrument:0" }))
+    let outboundLeg = try #require(
+      legs.first(where: { $0.externalId == "0xsame-instrument:1" }))
+    let gasLeg = try #require(
+      legs.first(where: { $0.externalId == "0xsame-instrument:gas" }))
+    #expect(inboundLeg.type == .income)
+    #expect(outboundLeg.type == .expense)
+    #expect(gasLeg.type == .expense)
+    #expect(!candidate.transaction.legs.contains { $0.type == .trade })
+  }
 }

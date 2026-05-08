@@ -43,14 +43,14 @@ enum IntraAccountSwapDetector {
     guard instruments.count >= 2 else {
       return directional.map(\.leg)
     }
-    return directional.map { item in
-      switch item.direction {
+    return directional.map { directionalLeg in
+      switch directionalLeg.direction {
       case .inbound, .outbound:
-        var leg = item.leg
+        var leg = directionalLeg.leg
         leg.type = .trade
         return leg
       case .selfSend, .unrelated:
-        return item.leg
+        return directionalLeg.leg
       }
     }
   }
