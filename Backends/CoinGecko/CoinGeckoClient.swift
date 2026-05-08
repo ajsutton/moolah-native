@@ -2,14 +2,35 @@
 import Foundation
 
 struct CoinGeckoClient: CryptoPriceClient, Sendable {
-  private static let baseURL =
+  /// Pro-tier base URL. Used whenever the user has supplied a CoinGecko
+  /// Pro API key. Authenticated via the `x_cg_pro_api_key` query item.
+  private static let proBaseURL =
     URL(string: "https://pro-api.coingecko.com/api/v3") ?? URL(fileURLWithPath: "/")
+  /// Public free-tier base URL. Used when no API key is configured; no
+  /// auth query item is sent. Subject to CoinGecko's anonymous rate
+  /// limits (~30 req/min) — the price-service falls back to
+  /// CryptoCompare / Binance if a request 429s.
+  private static let publicBaseURL =
+    URL(string: "https://api.coingecko.com/api/v3") ?? URL(fileURLWithPath: "/")
   private let session: URLSession
   private let apiKey: String
 
   init(session: URLSession = .shared, apiKey: String) {
     self.session = session
     self.apiKey = apiKey
+  }
+
+  /// Resolves the base URL by key presence: non-empty → Pro host,
+  /// empty → public host. Static so the URL builders can call it
+  /// without an instance.
+  private static func baseURL(apiKey: String) -> URL {
+    apiKey.isEmpty ? publicBaseURL : proBaseURL
+  }
+
+  /// `x_cg_pro_api_key` query item, or `nil` when no key is supplied
+  /// (free public endpoint accepts the request without auth).
+  private static func authQueryItem(apiKey: String) -> URLQueryItem? {
+    apiKey.isEmpty ? nil : URLQueryItem(name: "x_cg_pro_api_key", value: apiKey)
   }
 
   func dailyPrice(for mapping: CryptoProviderMapping, on date: Date) async throws -> Decimal {
@@ -69,51 +90,50 @@ struct CoinGeckoClient: CryptoPriceClient, Sendable {
   // MARK: - URL builders (internal for testing)
 
   static func marketChartURL(coinId: String, days: Int, apiKey: String) -> URL {
-    let pathURL = baseURL.appendingPathComponent("coins/\(coinId)/market_chart")
+    let pathURL = baseURL(apiKey: apiKey).appendingPathComponent(
+      "coins/\(coinId)/market_chart")
     var components =
       URLComponents(url: pathURL, resolvingAgainstBaseURL: false) ?? URLComponents()
-    components.queryItems = [
+    var items: [URLQueryItem] = [
       URLQueryItem(name: "vs_currency", value: "usd"),
       URLQueryItem(name: "days", value: String(days)),
       URLQueryItem(name: "interval", value: "daily"),
-      URLQueryItem(name: "x_cg_pro_api_key", value: apiKey),
     ]
+    if let auth = authQueryItem(apiKey: apiKey) { items.append(auth) }
+    components.queryItems = items
     return components.url ?? pathURL
   }
 
   // MARK: - Token resolution
 
   static func assetPlatformsURL(apiKey: String) -> URL {
-    let pathURL = baseURL.appendingPathComponent("asset_platforms")
+    let pathURL = baseURL(apiKey: apiKey).appendingPathComponent("asset_platforms")
     var components =
       URLComponents(url: pathURL, resolvingAgainstBaseURL: false) ?? URLComponents()
-    components.queryItems = [
-      URLQueryItem(name: "x_cg_pro_api_key", value: apiKey)
-    ]
+    components.queryItems = authQueryItem(apiKey: apiKey).map { [$0] }
     return components.url ?? pathURL
   }
 
   static func contractLookupURL(platformId: String, contractAddress: String, apiKey: String) -> URL
   {
-    let pathURL = baseURL.appendingPathComponent(
+    let pathURL = baseURL(apiKey: apiKey).appendingPathComponent(
       "coins/\(platformId)/contract/\(contractAddress.lowercased())")
     var components =
       URLComponents(url: pathURL, resolvingAgainstBaseURL: false) ?? URLComponents()
-    components.queryItems = [
-      URLQueryItem(name: "x_cg_pro_api_key", value: apiKey)
-    ]
+    components.queryItems = authQueryItem(apiKey: apiKey).map { [$0] }
     return components.url ?? pathURL
   }
 
   static func simplePriceURL(coinIds: [String], apiKey: String) -> URL {
-    let pathURL = baseURL.appendingPathComponent("simple/price")
+    let pathURL = baseURL(apiKey: apiKey).appendingPathComponent("simple/price")
     var components =
       URLComponents(url: pathURL, resolvingAgainstBaseURL: false) ?? URLComponents()
-    components.queryItems = [
+    var items: [URLQueryItem] = [
       URLQueryItem(name: "ids", value: coinIds.joined(separator: ",")),
       URLQueryItem(name: "vs_currencies", value: "usd"),
-      URLQueryItem(name: "x_cg_pro_api_key", value: apiKey),
     ]
+    if let auth = authQueryItem(apiKey: apiKey) { items.append(auth) }
+    components.queryItems = items
     return components.url ?? pathURL
   }
 

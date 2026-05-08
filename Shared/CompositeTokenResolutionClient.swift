@@ -52,8 +52,12 @@ struct CompositeTokenResolutionClient: TokenResolutionClient, Sendable {
 
     // 2. CoinGecko — contract-based lookup for ERC-20s only. Runs before
     //    Binance so a CG-confirmed symbol can authorise the Binance pair
-    //    attribution (issue #790).
-    if let apiKey = coinGeckoApiKey, !apiKey.isEmpty, !isNative, let contractAddress {
+    //    attribution (issue #790). An empty `apiKey` falls through to the
+    //    free public CoinGecko endpoint (`api.coingecko.com`) so users
+    //    without a Pro key still get tokens like USDC priced. Production
+    //    passes empty string in that case; tests that pass `nil` opt out
+    //    of CoinGecko entirely so they don't hit the network.
+    if let apiKey = coinGeckoApiKey, !isNative, let contractAddress {
       do {
         let platformMapping = try await fetchAssetPlatforms(apiKey: apiKey)
         if let platformSlug = platformMapping[chainId] {
