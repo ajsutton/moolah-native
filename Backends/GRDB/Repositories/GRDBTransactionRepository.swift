@@ -128,14 +128,13 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
         try Self.ensureInstrumentReadable(
           database: database,
           leg: leg)
-        let legId = UUID()
         let legRow = TransactionLegRow(
-          id: legId,
+          id: leg.id,
           domain: leg,
           transactionId: transaction.id,
           sortOrder: index)
         try legRow.insert(database)
-        legIds.append(legId)
+        legIds.append(leg.id)
       }
       return legIds
     }
