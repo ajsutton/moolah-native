@@ -55,6 +55,7 @@ final class TransactionLegRecord {
   /// `TransactionType.decoded(rawValue:)`.
   func toDomain(instrument: Instrument) throws -> TransactionLeg {
     TransactionLeg(
+      id: id,
       accountId: accountId,
       instrument: instrument,
       quantity: InstrumentAmount(storageValue: quantity, instrument: instrument).quantity,
@@ -70,6 +71,7 @@ final class TransactionLegRecord {
     -> TransactionLegRecord
   {
     TransactionLegRecord(
+      id: leg.id,
       transactionId: transactionId,
       accountId: leg.accountId,
       instrumentId: leg.instrument.id,
