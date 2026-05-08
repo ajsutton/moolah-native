@@ -56,7 +56,18 @@ extension Transaction {
       date: scheduled.date,
       payee: scheduled.payee,
       notes: scheduled.notes,
-      legs: scheduled.legs
+      legs: scheduled.legs.map { source in
+        TransactionLeg(
+          id: UUID(),
+          accountId: source.accountId,
+          instrument: source.instrument,
+          quantity: source.quantity,
+          externalId: source.externalId,
+          counterpartyAddress: source.counterpartyAddress,
+          type: source.type,
+          categoryId: source.categoryId,
+          earmarkId: source.earmarkId)
+      }
     )
   }
 

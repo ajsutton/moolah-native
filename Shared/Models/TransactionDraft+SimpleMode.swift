@@ -179,6 +179,7 @@ extension TransactionDraft {
       let counterpartAmount = negatedAmountText(relevantLeg.amountText)
 
       let counterpartLeg = LegDraft(
+        legId: nil,
         type: .transfer,
         accountId: defaultAccount?.id,
         amountText: counterpartAmount,

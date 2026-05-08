@@ -103,12 +103,11 @@ struct ScheduledTransactionTestsMore {
       filter: TransactionFilter(scheduled: .scheduledOnly), page: 0, pageSize: 50)
     #expect(page1.transactions.count == 1)
 
-    // Create paid transaction (simulating the pay action)
-    let paid = Transaction(
-      date: Date(),
-      payee: scheduled.payee,
-      legs: scheduled.legs
-    )
+    // Create paid transaction (simulating the pay action). Use
+    // `paidCopy(of:)` so the copy gets fresh leg ids — leg ids are PKs
+    // on `transaction_leg`, and reusing `scheduled.legs` verbatim
+    // would duplicate-key on insert.
+    let paid = Transaction.paidCopy(of: scheduled)
     _ = try await backend.transactions.create(paid)
 
     // For .once, the scheduled transaction should be deleted
@@ -144,12 +143,10 @@ struct ScheduledTransactionTestsMore {
     let (backend, database) = try TestBackend.create()
     _ = TestBackend.seed(transactions: [scheduled], in: database)
 
-    // Create paid transaction
-    let paid = Transaction(
-      date: Date(),
-      payee: scheduled.payee,
-      legs: scheduled.legs
-    )
+    // Create paid transaction. Use `paidCopy(of:)` so the copy gets
+    // fresh leg ids — leg ids are PKs on `transaction_leg`, and
+    // reusing `scheduled.legs` verbatim would duplicate-key on insert.
+    let paid = Transaction.paidCopy(of: scheduled)
     _ = try await backend.transactions.create(paid)
 
     // For recurring, update the scheduled transaction's date to next occurrence

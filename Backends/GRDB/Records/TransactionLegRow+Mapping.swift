@@ -11,20 +11,23 @@ extension TransactionLegRow {
     "\(recordType)|\(id.uuidString)"
   }
 
-  /// Builds a row from a domain `TransactionLeg`. Mirrors
-  /// `TransactionLegRecord.from(_:transactionId:sortOrder:)`.
-  /// `TransactionLeg` does not own its own UUID, so the caller supplies
-  /// `id`, `transactionId`, and `sortOrder`. Pass an existing leg id
-  /// when round-tripping (replace-legs path); pass a fresh `UUID()` on
-  /// initial create.
+  /// Builds a row from a domain `TransactionLeg`. The row's `id` defaults
+  /// to `leg.id` (the leg's stable domain id). Callers can override `id`
+  /// only if they need a row id that differs from the leg's own stable
+  /// id — no in-tree callsite needs that. Passing `leg.id` explicitly
+  /// (as `create(_:)` does, for callsite-clarity) is also fine; the
+  /// default and the explicit value are identical. The CK-ingestion
+  /// path constructs `TransactionLegRow` via the memberwise init in
+  /// `TransactionLegRow+CloudKit.fieldValues(from:)`, not this factory.
   init(
-    id: UUID = UUID(),
+    id: UUID? = nil,
     domain leg: TransactionLeg,
     transactionId: UUID,
     sortOrder: Int
   ) {
-    self.id = id
-    self.recordName = Self.recordName(for: id)
+    let resolvedId = id ?? leg.id
+    self.id = resolvedId
+    self.recordName = Self.recordName(for: resolvedId)
     self.transactionId = transactionId
     self.accountId = leg.accountId
     self.instrumentId = leg.instrument.id
@@ -48,6 +51,7 @@ extension TransactionLegRow {
   /// `TransactionType.decoded(rawValue:)`.
   func toDomain(instrument: Instrument) throws -> TransactionLeg {
     TransactionLeg(
+      id: id,
       accountId: accountId,
       instrument: instrument,
       quantity: InstrumentAmount(storageValue: quantity, instrument: instrument).quantity,

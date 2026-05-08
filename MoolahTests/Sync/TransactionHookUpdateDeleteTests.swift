@@ -48,7 +48,8 @@ struct TransactionHookUpdateDeleteTests {
     try await Task.sleep(for: .milliseconds(50))
   }
 
-  @Test("update(_:) emits TransactionRecord change plus per-leg LegRecord changes/deletes")
+  @Test(
+    "update(_:) preserving leg ids emits TransactionRow change + per-leg upserts, no deletes")
   func transactionUpdateEmitsLegRecordType() async throws {
     let database = try ProfileDatabase.openInMemory()
     let capture = HookCapture()
@@ -71,29 +72,77 @@ struct TransactionHookUpdateDeleteTests {
     capture.changed.removeAll()
     capture.deleted.removeAll()
 
-    // Update with a fresh 2-leg set. `performUpdate` always replaces
-    // every leg row (new UUIDs assigned inside the repo) so the hook
-    // fan-out is: 1 TransactionRow change, 2 TransactionLegRow changes
-    // for the new legs, 2 TransactionLegRow deletes for the old legs.
-    let updated = Transaction(
-      id: txn.id, date: txn.date, payee: "Trade",
-      legs: [
-        makeContractTestLeg(accountId: accountId, quantity: -50, type: .transfer),
-        makeContractTestLeg(accountId: accountId, quantity: 50, type: .transfer),
-      ])
+    // Update with the same legs (preserving ids) but a different payee.
+    // Expected hook fan-out: 1 TransactionRow change, N TransactionLegRow
+    // changes (one upsert per leg), 0 TransactionLegRow deletes.
+    var updated = txn
+    updated.payee = "Renamed Trade"
     _ = try await txnRepo.update(updated)
     try await drainHookHops()
 
     let txnEmits = capture.changed.filter { $0.recordType == TransactionRow.recordType }
     #expect(txnEmits.map(\.id) == [txn.id])
     let legChanges = capture.changed.filter { $0.recordType == TransactionLegRow.recordType }
-    // A regression that mis-tagged the per-leg insert emit with the
-    // TransactionRow.recordType would drop this count to 0.
-    #expect(legChanges.count == 2)
+    // Identity check: the upsert must emit the *original* leg ids — not
+    // freshly-allocated ones. A regression that reintroduces fresh-UUID
+    // allocation in performUpdate would still emit two leg-changes
+    // (passing a count-only assertion) while churning the recordName.
+    let emittedLegIds = Set(legChanges.map(\.id))
+    let originalLegIds = Set(txn.legs.map(\.id))
+    #expect(emittedLegIds == originalLegIds)
+    // Crucially: no leg-delete events when the leg array is preserved by id.
     let legDeletes = capture.deleted.filter { $0.recordType == TransactionLegRow.recordType }
-    #expect(legDeletes.count == 2)
+    #expect(legDeletes.isEmpty)
     let txnDeletes = capture.deleted.filter { $0.recordType == TransactionRow.recordType }
     #expect(txnDeletes.isEmpty)
+  }
+
+  @Test(
+    "update(_:) replacing legs (different ids) emits per-leg upserts + per-leg deletes")
+  func transactionUpdateWithReplacedLegsEmitsDeletes() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    let capture = HookCapture()
+    let txnRepo = GRDBTransactionRepository(
+      database: database,
+      defaultInstrument: .defaultTestInstrument,
+      conversionService: FixedConversionService(),
+      onRecordChanged: makeChangedHook(capture),
+      onRecordDeleted: makeDeletedHook(capture))
+
+    let accountId = UUID()
+    let txn = try await txnRepo.create(
+      Transaction(
+        date: Date(), payee: "Trade",
+        legs: [
+          makeContractTestLeg(accountId: accountId, quantity: -100, type: .transfer),
+          makeContractTestLeg(accountId: accountId, quantity: 100, type: .transfer),
+        ]))
+    try await drainHookHops()
+    capture.changed.removeAll()
+    capture.deleted.removeAll()
+
+    // Replace the leg array entirely — every leg has a fresh id.
+    // Expected: 2 leg-upserts (the new ids) + 2 leg-deletes (the old ids).
+    let replacement = Transaction(
+      id: txn.id, date: txn.date, payee: txn.payee,
+      legs: [
+        makeContractTestLeg(accountId: accountId, quantity: -50, type: .transfer),
+        makeContractTestLeg(accountId: accountId, quantity: 50, type: .transfer),
+      ])
+    _ = try await txnRepo.update(replacement)
+    try await drainHookHops()
+
+    let legChanges = capture.changed.filter { $0.recordType == TransactionLegRow.recordType }
+    // Identity check on the upsert side: emitted ids match the *replacement*
+    // legs, not the originals.
+    let replacementIds = Set(replacement.legs.map(\.id))
+    let changedIds = Set(legChanges.map(\.id))
+    #expect(changedIds == replacementIds)
+    let legDeletes = capture.deleted.filter { $0.recordType == TransactionLegRow.recordType }
+    // The deleted ids are the original legs', not the replacement's.
+    let originalIds = Set(txn.legs.map(\.id))
+    let deletedIds = Set(legDeletes.map(\.id))
+    #expect(deletedIds == originalIds)
   }
 
   @Test("delete(id:) emits TransactionRecord delete plus per-leg LegRecord deletes")
