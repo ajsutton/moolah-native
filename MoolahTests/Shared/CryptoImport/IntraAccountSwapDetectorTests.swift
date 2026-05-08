@@ -173,4 +173,60 @@ struct IntraAccountSwapDetectorTests {
     #expect(result.count == 3)
     #expect(result.allSatisfy { $0.type == .trade })
   }
+
+  @Test("Self-send + swap pair → self-send stays .income, swap legs retyped")
+  func selfSendCoexistsWithSwap() {
+    let selfSend = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.ethereum,
+        quantity: 5,
+        externalId: "0xhash:0",
+        counterpartyAddress: nil,
+        type: .income),
+      direction: .selfSend)
+    let inbound = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.polygon,
+        quantity: 10,
+        externalId: "0xhash:1",
+        counterpartyAddress: "0xrouter",
+        type: .income),
+      direction: .inbound)
+    let outbound = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.base,
+        quantity: -1,
+        externalId: "0xhash:2",
+        counterpartyAddress: "0xrouter",
+        type: .expense),
+      direction: .outbound)
+
+    let result = IntraAccountSwapDetector.retypeSwapLegs([selfSend, inbound, outbound])
+
+    #expect(result.count == 3)
+    // Order preserved: selfSend at [0], inbound at [1], outbound at [2].
+    #expect(result[0].type == .income)
+    #expect(result[1].type == .trade)
+    #expect(result[2].type == .trade)
+  }
+
+  @Test("Self-send only (no inbound or outbound) → unchanged")
+  func selfSendOnlyUnchanged() {
+    let selfSend = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.ethereum,
+        quantity: 5,
+        externalId: "0xhash:0",
+        type: .income),
+      direction: .selfSend)
+
+    let result = IntraAccountSwapDetector.retypeSwapLegs([selfSend])
+
+    #expect(result.count == 1)
+    #expect(result.first?.type == .income)
+  }
 }
