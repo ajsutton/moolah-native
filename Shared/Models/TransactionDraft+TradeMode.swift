@@ -42,6 +42,7 @@ extension TransactionDraft {
   mutating func appendFee(defaultInstrument: Instrument) {
     legDrafts.append(
       LegDraft(
+        legId: nil,
         type: .expense,
         accountId: paidLegIndex.flatMap { legDrafts[$0].accountId },
         amountText: "0",
@@ -125,6 +126,7 @@ extension TransactionDraft {
     accountId: UUID?, amountText: String, instrument: Instrument?
   ) -> LegDraft {
     LegDraft(
+      legId: nil,
       type: .trade,
       accountId: accountId,
       amountText: amountText,
@@ -171,6 +173,7 @@ extension TransactionDraft {
   private mutating func applyIncomeLeg(from source: LegDraft) {
     legDrafts = [
       LegDraft(
+        legId: nil,
         type: .income,
         accountId: source.accountId,
         amountText: Self.adjustAmountText(source.amountText, from: .trade, to: .income),
@@ -185,6 +188,7 @@ extension TransactionDraft {
   private mutating func applyExpenseLeg(from source: LegDraft) {
     legDrafts = [
       LegDraft(
+        legId: nil,
         type: .expense,
         accountId: source.accountId,
         amountText: Self.adjustAmountText(source.amountText, from: .trade, to: .expense),
@@ -200,6 +204,7 @@ extension TransactionDraft {
     let primaryText = Self.adjustAmountText(paidLeg.amountText, from: .trade, to: .transfer)
     let other = accounts.sidebarOrdered(excluding: paidLeg.accountId).first
     let counterpart = LegDraft(
+      legId: nil,
       type: .transfer,
       accountId: other?.id,
       amountText: negatedAmountText(primaryText),
@@ -208,6 +213,7 @@ extension TransactionDraft {
       earmarkId: nil,
       instrument: other?.instrument ?? paidLeg.instrument)
     let primary = LegDraft(
+      legId: nil,
       type: .transfer,
       accountId: paidLeg.accountId,
       amountText: primaryText,

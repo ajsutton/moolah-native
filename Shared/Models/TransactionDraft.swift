@@ -55,6 +55,10 @@ struct TransactionDraft: Sendable, Equatable {
 
   /// A draft for a single leg in a transaction.
   struct LegDraft: Sendable, Equatable {
+    /// Stable id of the leg this draft maps back to in
+    /// `transaction_leg.id`. `nil` for legs added during this draft
+    /// session — `toTransaction(id:)` allocates a fresh id at save time.
+    let legId: UUID?
     var type: TransactionType
     var accountId: UUID?
     /// The display value — negated for expense/transfer types.
@@ -68,6 +72,7 @@ struct TransactionDraft: Sendable, Equatable {
     var instrument: Instrument?
 
     init(
+      legId: UUID? = nil,
       type: TransactionType,
       accountId: UUID?,
       amountText: String,
@@ -76,6 +81,7 @@ struct TransactionDraft: Sendable, Equatable {
       earmarkId: UUID?,
       instrument: Instrument? = nil
     ) {
+      self.legId = legId
       self.type = type
       self.accountId = accountId
       self.amountText = amountText
@@ -160,6 +166,7 @@ extension TransactionDraft {
     // cross-currency trade booked against a single investment account).
     let drafts = transaction.legs.map { leg in
       LegDraft(
+        legId: leg.id,
         type: leg.type,
         accountId: leg.accountId,
         amountText: Self.displayText(
@@ -217,6 +224,7 @@ extension TransactionDraft {
       isCustom: false,
       legDrafts: [
         LegDraft(
+          legId: nil,
           type: .income, accountId: nil, amountText: "0",
           categoryId: nil, categoryText: "", earmarkId: earmarkId,
           instrument: instrument)
@@ -238,6 +246,7 @@ extension TransactionDraft {
       isCustom: false,
       legDrafts: [
         LegDraft(
+          legId: nil,
           type: .expense, accountId: accountId, amountText: "0",
           categoryId: nil, categoryText: "", earmarkId: nil,
           instrument: instrument)
@@ -321,6 +330,7 @@ extension TransactionDraft {
 
       legs.append(
         TransactionLeg(
+          id: legDraft.legId ?? UUID(),
           accountId: legDraft.accountId,
           instrument: instrument,
           quantity: quantity,
@@ -363,6 +373,7 @@ extension TransactionDraft {
   mutating func addLeg(defaultAccountId: UUID? = nil, instrument: Instrument? = nil) {
     legDrafts.append(
       LegDraft(
+        legId: nil,
         type: .expense, accountId: defaultAccountId, amountText: "0",
         categoryId: nil, categoryText: "", earmarkId: nil,
         instrument: instrument
