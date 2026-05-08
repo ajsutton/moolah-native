@@ -78,19 +78,58 @@ enum LogCapture {
     var matched: [Entry] = []
     while ContinuousClock.now < deadline {
       try await Task.sleep(for: pollInterval)
-      let entries = try store.getEntries(at: startPosition, matching: predicate)
-      matched = entries.compactMap { entry -> Entry? in
-        guard let log = entry as? OSLogEntryLog else { return nil }
-        return Entry(
-          level: log.level,
-          subsystem: log.subsystem,
-          category: log.category,
-          message: log.composedMessage)
-      }
+      let raw = try Array(store.getEntries(at: startPosition, matching: predicate))
+      matched = mapDeduplicating(raw)
       if matched.count == lastCount { return matched }
       lastCount = matched.count
     }
     return matched
+  }
+
+  /// Maps raw `OSLogEntry` instances to user-facing `Entry` rows while
+  /// suppressing duplicate views of the same logical emission. Under
+  /// iOS Simulator load, `OSLogStore.getEntries(at:matching:)`
+  /// occasionally returns the same write twice — once via the in-memory
+  /// ring buffer and once via the persistent backing store — which
+  /// breaks count-based assertions that expect "one `logger.warning`
+  /// call → one captured entry". Two `OSLogEntryLog`s that share their
+  /// full identity tuple (`date`, `level`, `subsystem`, `category`,
+  /// `composedMessage`) represent the same write seen via different
+  /// storage views, not two distinct writes, so we collapse them.
+  /// Genuine same-content emissions on different timestamps remain
+  /// distinct because `OSLogEntry.date` is recorded once per call site
+  /// at sub-millisecond resolution.
+  private static func mapDeduplicating(_ raw: [OSLogEntry]) -> [Entry] {
+    var seen = Set<Identity>()
+    return raw.compactMap { entry -> Entry? in
+      guard let log = entry as? OSLogEntryLog else { return nil }
+      let message = log.composedMessage
+      let identity = Identity(
+        date: log.date,
+        level: log.level,
+        subsystem: log.subsystem,
+        category: log.category,
+        message: message)
+      guard seen.insert(identity).inserted else { return nil }
+      return Entry(
+        level: log.level,
+        subsystem: log.subsystem,
+        category: log.category,
+        message: message)
+    }
+  }
+
+  /// Full-tuple identity used by `mapDeduplicating(_:)` to suppress
+  /// duplicate views of the same logical emission. Lives at type scope
+  /// because Swift forbids nested types inside generic methods and
+  /// keeps the deduplication invariant adjacent to the helper that
+  /// uses it.
+  private struct Identity: Hashable {
+    let date: Date
+    let level: OSLogEntryLog.Level
+    let subsystem: String
+    let category: String
+    let message: String
   }
 
   /// Builds an NSPredicate matching `subsystem == X` (and `category == Y`
