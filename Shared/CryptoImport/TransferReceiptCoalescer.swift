@@ -113,20 +113,31 @@ enum TransferReceiptCoalescer {
   /// Builds the gas leg for an outbound transaction from a fetched
   /// receipt. The leg is `.expense` typed, denominated in the chain's
   /// native instrument, and carries a negative quantity — gas is always
-  /// paid out (this wallet is the sender). Per the project sign rule
-  /// (CLAUDE.md "Monetary Sign Convention") the negative is preserved
-  /// rather than `abs()`-stripped; downstream display logic handles the
-  /// sign.
+  /// paid out (this wallet is the signer of the outer tx). Per the
+  /// project sign rule (CLAUDE.md "Monetary Sign Convention") the
+  /// negative is preserved rather than `abs()`-stripped; downstream
+  /// display logic handles the sign.
   ///
-  /// Returns `nil` when the receipt's `gasUsed` or `effectiveGasPrice`
-  /// produces a non-positive product (e.g. a zero-gas synthetic). A
-  /// zero gas leg would clutter the transaction without representing
-  /// any real expense, so we drop it rather than persist a noise row.
+  /// Returns `nil` in any of:
+  /// - `receipt.from != walletAddress`: the wallet did not sign the
+  ///   outer tx (e.g. an `internal` row where the wallet appears as a
+  ///   sub-call's `from` inside someone else's tx, or an `erc20
+  ///   transferFrom` initiated by a router holding approval). The
+  ///   on-chain gas was paid by another EOA, not us.
+  /// - `receipt.totalGasFeeWei <= 0`: zero-fee synthetic. A zero gas
+  ///   leg would clutter the transaction without representing real
+  ///   expense.
+  ///
+  /// `walletAddress` is expected pre-lowercased (the builder passes
+  /// `BuildContext.walletAddress`). `receipt.from` is lowercased at the
+  /// wire boundary in `AlchemyTransactionReceiptPayload.toReceipt`.
   static func makeGasLeg(
     receipt: AlchemyTransactionReceipt,
     accountId: UUID,
-    chain: ChainConfig
+    chain: ChainConfig,
+    walletAddress: String
   ) -> TransactionLeg? {
+    guard receipt.from == walletAddress else { return nil }
     let gasFeeWei = receipt.totalGasFeeWei
     guard gasFeeWei > 0 else { return nil }
     let nativeDecimals = chain.nativeInstrument.decimals
