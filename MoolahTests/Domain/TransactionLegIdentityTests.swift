@@ -65,4 +65,28 @@ struct TransactionLegIdentityTests {
     let secondDecode = try JSONDecoder().decode(TransactionLeg.self, from: json)
     #expect(decoded.id != secondDecode.id)
   }
+
+  @Test("paidCopy(of:) allocates fresh ids for every leg")
+  func paidCopyAllocatesFreshLegIds() {
+    let scheduled = Transaction(
+      date: Date(), payee: "Rent",
+      legs: [
+        TransactionLeg(
+          accountId: UUID(),
+          instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-1000), type: .expense),
+        TransactionLeg(
+          accountId: UUID(),
+          instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(1000), type: .transfer),
+      ])
+    let copy = Transaction.paidCopy(of: scheduled)
+    let scheduledIds = Set(scheduled.legs.map(\.id))
+    let copyIds = Set(copy.legs.map(\.id))
+    // Different transactions, distinct leg rows: ids must not collide.
+    #expect(scheduledIds.isDisjoint(with: copyIds))
+    #expect(copy.legs.count == scheduled.legs.count)
+    // Content is preserved.
+    #expect(copy.legs.map(\.quantity) == scheduled.legs.map(\.quantity))
+  }
 }
