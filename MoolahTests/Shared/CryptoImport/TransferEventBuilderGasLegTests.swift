@@ -32,7 +32,8 @@ struct TransferEventBuilderGasLegTests {
         AlchemyTransactionReceipt(
           hash: "0xeth-send",
           gasUsed: Self.gasUsed,
-          effectiveGasPrice: Self.gasPrice)
+          effectiveGasPrice: Self.gasPrice,
+          from: Self.wallet)
       ),
       for: "0xeth-send")
 
@@ -81,7 +82,8 @@ struct TransferEventBuilderGasLegTests {
         AlchemyTransactionReceipt(
           hash: "0xerc20-send",
           gasUsed: Self.gasUsed,
-          effectiveGasPrice: Self.gasPrice)
+          effectiveGasPrice: Self.gasPrice,
+          from: Self.wallet)
       ),
       for: "0xerc20-send")
 
@@ -161,7 +163,8 @@ struct TransferEventBuilderGasLegTests {
         AlchemyTransactionReceipt(
           hash: "0xself",
           gasUsed: Self.gasUsed,
-          effectiveGasPrice: Self.gasPrice)
+          effectiveGasPrice: Self.gasPrice,
+          from: Self.wallet)
       ),
       for: "0xself")
 
@@ -201,7 +204,8 @@ struct TransferEventBuilderGasLegTests {
         AlchemyTransactionReceipt(
           hash: "0xgood",
           gasUsed: Self.gasUsed,
-          effectiveGasPrice: Self.gasPrice)
+          effectiveGasPrice: Self.gasPrice,
+          from: Self.wallet)
       ),
       for: "0xgood")
     alchemy.setReceiptResponse(

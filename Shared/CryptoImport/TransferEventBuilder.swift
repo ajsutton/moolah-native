@@ -190,7 +190,10 @@ struct TransferEventBuilder: Sendable {
 
     if let receipt,
       let gasLeg = TransferReceiptCoalescer.makeGasLeg(
-        receipt: receipt, accountId: context.account.id, chain: context.chain)
+        receipt: receipt,
+        accountId: context.account.id,
+        chain: context.chain,
+        walletAddress: context.walletAddress)
     {
       legs.append(gasLeg)
     }

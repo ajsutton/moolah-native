@@ -273,7 +273,15 @@ final class ZeroReceiptAlchemyStub: AlchemyClient, @unchecked Sendable {
   ) async throws -> AlchemyTransactionReceipt {
     lock.withLock { receiptHashes.append(hash) }
     return AlchemyTransactionReceipt(
-      hash: hash, gasUsed: 0, effectiveGasPrice: 0)
+      hash: hash,
+      gasUsed: 0,
+      effectiveGasPrice: 0,
+      // Sentinel: `from: ""` can never match a real wallet address, so
+      // `makeGasLeg` returns nil at the `receipt.from == walletAddress`
+      // guard. `gasUsed: 0` / `effectiveGasPrice: 0` provide a second
+      // line of defence (zero total-fee guard) if the from-check order
+      // ever changes, keeping the "no gas leg" behaviour consistent.
+      from: "")
   }
 }
 

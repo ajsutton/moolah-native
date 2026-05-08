@@ -27,7 +27,8 @@ struct TransferEventBuilderGasCoalescingTests {
         AlchemyTransactionReceipt(
           hash: "0xout",
           gasUsed: Self.gasUsed,
-          effectiveGasPrice: Self.gasPrice)
+          effectiveGasPrice: Self.gasPrice,
+          from: Self.wallet)
       ),
       for: "0xout")
 
@@ -69,7 +70,8 @@ struct TransferEventBuilderGasCoalescingTests {
           AlchemyTransactionReceipt(
             hash: "0xout\(index)",
             gasUsed: Self.gasUsed,
-            effectiveGasPrice: Self.gasPrice)
+            effectiveGasPrice: Self.gasPrice,
+            from: Self.wallet)
         ),
         for: "0xout\(index)")
     }
@@ -111,7 +113,8 @@ struct TransferEventBuilderGasCoalescingTests {
         AlchemyTransactionReceipt(
           hash: "0xmulti",
           gasUsed: Self.gasUsed,
-          effectiveGasPrice: Self.gasPrice)
+          effectiveGasPrice: Self.gasPrice,
+          from: Self.wallet)
       ),
       for: "0xmulti")
 
