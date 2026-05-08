@@ -34,13 +34,33 @@ extension CryptoSettingsView {
       )
       .frame(maxWidth: .infinity)
     } else {
-      ForEach(pricedRegistrations) { registration in
-        // `showsContractAddress: true` — wallets with copied tickers
-        // (issue #790) need the truncated address visible so a
-        // legitimate token can be told apart from a spam contract
-        // claiming the same symbol.
-        registrationRow(for: registration)
-      }
+      // `showsContractAddress: true` — wallets with copied tickers
+      // (issue #790) need the full contract address visible so a
+      // legitimate token can be told apart from a spam contract
+      // claiming the same symbol.
+      #if os(macOS)
+        // Cap the section's height so a long token list scrolls within
+        // its own pane instead of pushing the CoinGecko / API-key
+        // sections off-screen.
+        ScrollView {
+          LazyVStack(spacing: 0) {
+            ForEach(
+              Array(pricedRegistrations.enumerated()), id: \.element.id
+            ) { index, registration in
+              if index > 0 {
+                Divider()
+              }
+              registrationRow(for: registration)
+                .padding(.vertical, 4)
+            }
+          }
+        }
+        .frame(maxHeight: 280)
+      #else
+        ForEach(pricedRegistrations) { registration in
+          registrationRow(for: registration)
+        }
+      #endif
     }
   }
 
