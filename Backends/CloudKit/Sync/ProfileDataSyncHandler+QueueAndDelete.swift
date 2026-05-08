@@ -25,6 +25,42 @@ extension ProfileDataSyncHandler {
     return recordIDs
   }
 
+  /// Scans the `instrument` table only and returns CKRecord.IDs for
+  /// non-fiat rows that have never been successfully sent to CloudKit
+  /// (i.e. `encodedSystemFields == nil` AND `kind != 'fiatCurrency'`).
+  /// Run unconditionally on every coordinator start by
+  /// `queueUnsyncedInstrumentsForAllProfiles` so a row inserted by a
+  /// build that predated the `onInstrumentChanged` plumbing eventually
+  /// reaches CloudKit, even on profiles whose flag-gated full backfill
+  /// has already completed.
+  func queueUnsyncedInstrumentRecords() -> [CKRecord.ID] {
+    let signpostID = OSSignpostID(log: Signposts.sync)
+    os_signpost(
+      .begin,
+      log: Signposts.sync,
+      name: "queueUnsyncedInstrumentRecords",
+      signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end,
+        log: Signposts.sync,
+        name: "queueUnsyncedInstrumentRecords",
+        signpostID: signpostID)
+    }
+
+    var recordIDs: [CKRecord.ID] = []
+    let repo = grdbRepositories.instruments
+    collectAllGRDBStrings(
+      ids: { try repo.unsyncedNonFiatRowIdsSync() },
+      recordType: InstrumentRow.recordType,
+      into: &recordIDs)
+    if !recordIDs.isEmpty {
+      logger.info(
+        "Collected \(recordIDs.count) unsynced non-fiat instrument records for upload")
+    }
+    return recordIDs
+  }
+
   /// Scans all record types and returns CKRecord.IDs for records that have never been
   /// successfully sent to CloudKit (i.e. `encodedSystemFields == nil`). Used on startup
   /// to backfill uploads for profiles whose data landed via migration or any other path

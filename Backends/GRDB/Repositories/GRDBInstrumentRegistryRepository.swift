@@ -350,6 +350,10 @@ final class GRDBInstrumentRegistryRepository:
     }
   }
 
+  // `unsyncedNonFiatRowIdsSync` lives in
+  // `GRDBInstrumentRegistryRepository+Lookup.swift` to keep this file
+  // under SwiftLint's `type_body_length` and `file_length` budgets.
+
   /// Returns IDs of every row in the table.
   func allRowIdsSync() throws -> [String] {
     try database.read { database in

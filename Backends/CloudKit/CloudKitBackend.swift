@@ -56,6 +56,13 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
     let onTransactionDeleted: @Sendable (String, UUID) -> Void
     let onTransactionLegChanged: @Sendable (String, UUID) -> Void
     let onTransactionLegDeleted: @Sendable (String, UUID) -> Void
+    /// Fires when an account / transaction write auto-inserts a non-fiat
+    /// `InstrumentRow` to satisfy a leg or account denomination. Carries
+    /// the instrument id (which doubles as the InstrumentRecord
+    /// recordName) — the registry's own `register*` paths fire this
+    /// from a separate hook, so this surface only covers the
+    /// auto-insert path inside the transaction / account repositories.
+    let onInstrumentChanged: @Sendable (String) -> Void
 
     static let noop = CloudKitBackendHooks(
       onCSVImportProfileChanged: { _, _ in },
@@ -75,7 +82,8 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
       onTransactionChanged: { _, _ in },
       onTransactionDeleted: { _, _ in },
       onTransactionLegChanged: { _, _ in },
-      onTransactionLegDeleted: { _, _ in })
+      onTransactionLegDeleted: { _, _ in },
+      onInstrumentChanged: { _ in })
   }
 
   init(
@@ -145,13 +153,15 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
       accounts: GRDBAccountRepository(
         database: database,
         onRecordChanged: hooks.onAccountChanged,
-        onRecordDeleted: hooks.onAccountDeleted),
+        onRecordDeleted: hooks.onAccountDeleted,
+        onInstrumentChanged: hooks.onInstrumentChanged),
       transactions: GRDBTransactionRepository(
         database: database,
         defaultInstrument: instrument,
         conversionService: conversionService,
         onRecordChanged: hooks.onTransactionChanged,
-        onRecordDeleted: hooks.onTransactionDeleted),
+        onRecordDeleted: hooks.onTransactionDeleted,
+        onInstrumentChanged: hooks.onInstrumentChanged),
       categories: GRDBCategoryRepository(
         database: database,
         onRecordChanged: hooks.onCategoryChanged,

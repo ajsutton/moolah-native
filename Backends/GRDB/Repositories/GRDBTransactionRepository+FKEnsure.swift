@@ -20,19 +20,30 @@ import GRDB
 // `ProfileSchema+DropForeignKeys.swift`.
 extension GRDBTransactionRepository {
   /// Inserts a placeholder `instrument` row for any non-fiat
-  /// instrument a leg references that isn't already present. Required
-  /// so `fetchAll` can resolve the full `Instrument` domain value on
-  /// read.
+  /// instrument a leg references that isn't already present. Returns
+  /// the instrument id when an insert actually happened so the caller
+  /// can fan out the sync hook AFTER the surrounding write commits;
+  /// returns `nil` for fiat legs and for legs whose instrument was
+  /// already in the registry.
+  ///
+  /// Required so `fetchAll` can resolve the full `Instrument` domain
+  /// value on read AND so the new row reaches CloudKit — without the
+  /// hook fan-out the row would live only on the device that created
+  /// it. Sibling devices would receive the leg but no `InstrumentRow`,
+  /// `fetchInstrumentMap` would fall back to
+  /// `Instrument.fiat(code: id)`, and stock conversions would route
+  /// through the fiat-only Frankfurter API and 404.
   static func ensureInstrumentReadable(
     database: Database,
     leg: TransactionLeg
-  ) throws {
-    guard leg.instrument.kind != .fiatCurrency else { return }
+  ) throws -> String? {
+    guard leg.instrument.kind != .fiatCurrency else { return nil }
     let exists =
       try InstrumentRow
       .filter(InstrumentRow.Columns.id == leg.instrument.id)
       .fetchOne(database)
-    guard exists == nil else { return }
+    guard exists == nil else { return nil }
     try InstrumentRow(domain: leg.instrument).insert(database)
+    return leg.instrument.id
   }
 }

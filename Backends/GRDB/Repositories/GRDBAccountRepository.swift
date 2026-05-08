@@ -41,6 +41,14 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   /// see `RepositoryHookRecordTypeTests`.
   private let onRecordChanged: @Sendable (String, UUID) -> Void
   private let onRecordDeleted: @Sendable (String, UUID) -> Void
+  /// Receives the `Instrument.id` (which doubles as the InstrumentRow's
+  /// CloudKit recordName) of any non-fiat instrument that
+  /// `performAccountInsert` had to auto-insert into the registry to
+  /// satisfy a stock / crypto account's denomination. Without this hook
+  /// the auto-inserted row never reaches CloudKit and sibling devices
+  /// fall back to `Instrument.fiat(code: id)` — see
+  /// `InstrumentLocalSyncQueueTests`.
+  private let onInstrumentChanged: @Sendable (String) -> Void
   /// Single shared error channel for every `observeAll()` subscription
   /// returned by this repo instance. The bridge in
   /// `Backends/GRDB/Observation/AsyncValueObservation+AsyncStream.swift`
@@ -53,11 +61,13 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   init(
     database: any DatabaseWriter,
     onRecordChanged: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
-    onRecordDeleted: @escaping @Sendable (String, UUID) -> Void = { _, _ in }
+    onRecordDeleted: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
+    onInstrumentChanged: @escaping @Sendable (String) -> Void = { _ in }
   ) {
     self.database = database
     self.onRecordChanged = onRecordChanged
     self.onRecordDeleted = onRecordDeleted
+    self.onInstrumentChanged = onInstrumentChanged
   }
 
   // MARK: - AccountRepository conformance
@@ -106,81 +116,15 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
     if let legId = inserts.legId {
       onRecordChanged(TransactionLegRow.recordType, legId)
     }
+    if let instrumentId = inserts.instrumentId {
+      onInstrumentChanged(instrumentId)
+    }
     return account
   }
 
-  /// Single-statement body of `create(_:openingBalance:)`'s
-  /// `database.write { … }` block. Inserts the account row, and — when
-  /// the caller passes a non-zero opening balance — a one-leg
-  /// `TransactionRow` + `TransactionLegRow` to seed the account's
-  /// initial position. Returns the ids the caller fans out as hooks.
-  private static func performAccountInsert(
-    database: Database,
-    account: Account,
-    openingBalance: InstrumentAmount?,
-    openingBalanceDate: Date
-  ) throws -> OpeningBalanceInserts {
-    // Non-fiat instruments (stocks, crypto) must have a row in the
-    // `instrument` table so `fetchAll` can resolve the full
-    // `Instrument` value (kind, ticker, exchange, chainId, decimals).
-    // Fiat is ambient — synthesised from `Locale.Currency.isoCurrencies`
-    // by `fetchInstrumentMap`. Mirrors the SwiftData-era
-    // `CloudKitAccountRepository.ensureInstrument`.
-    if account.instrument.kind != .fiatCurrency {
-      let exists =
-        try InstrumentRow
-        .filter(InstrumentRow.Columns.id == account.instrument.id)
-        .fetchOne(database)
-      if exists == nil {
-        try InstrumentRow(domain: account.instrument).insert(database)
-      }
-    }
-
-    let accountRow = AccountRow(domain: account)
-    try accountRow.insert(database)
-
-    // No opening balance — only the account row was inserted.
-    guard let openingBalance, !openingBalance.isZero else {
-      return OpeningBalanceInserts(transactionId: nil, legId: nil)
-    }
-
-    let txnId = UUID()
-    let txnRow = TransactionRow(
-      id: txnId,
-      recordName: TransactionRow.recordName(for: txnId),
-      date: openingBalanceDate,
-      payee: nil,
-      notes: nil,
-      recurPeriod: nil,
-      recurEvery: nil,
-      importOriginRawDescription: nil,
-      importOriginBankReference: nil,
-      importOriginRawAmount: nil,
-      importOriginRawBalance: nil,
-      importOriginImportedAt: nil,
-      importOriginImportSessionId: nil,
-      importOriginSourceFilename: nil,
-      importOriginParserIdentifier: nil,
-      encodedSystemFields: nil)
-    try txnRow.insert(database)
-
-    let legId = UUID()
-    let legRow = TransactionLegRow(
-      id: legId,
-      recordName: TransactionLegRow.recordName(for: legId),
-      transactionId: txnId,
-      accountId: account.id,
-      instrumentId: account.instrument.id,
-      quantity: openingBalance.storageValue,
-      type: TransactionType.openingBalance.rawValue,
-      categoryId: nil,
-      earmarkId: nil,
-      sortOrder: 0,
-      encodedSystemFields: nil)
-    try legRow.insert(database)
-
-    return OpeningBalanceInserts(transactionId: txnId, legId: legId)
-  }
+  // `performAccountInsert` and `OpeningBalanceInserts` live in
+  // `GRDBAccountRepository+Create.swift` to keep this file under
+  // SwiftLint's `type_body_length` and `file_length` budgets.
 
   func update(_ account: Account) async throws -> Account {
     guard !account.name.trimmingCharacters(in: .whitespaces).isEmpty else {
@@ -273,15 +217,6 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
       try existing.update(database)
     }
     onRecordChanged(AccountRow.recordType, id)
-  }
-
-  // MARK: - Helpers
-
-  /// Captures the ids written by `create(_:openingBalance:)` so the
-  /// caller can fan out hook fires after the write transaction commits.
-  private struct OpeningBalanceInserts {
-    let transactionId: UUID?
-    let legId: UUID?
   }
 
   // MARK: - Sync entry points (synchronous, GRDB-queue-blocking)

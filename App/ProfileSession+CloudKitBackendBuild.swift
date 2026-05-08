@@ -72,8 +72,32 @@ extension ProfileSession {
         onTransactionChanged: hooks.changed,
         onTransactionDeleted: hooks.deleted,
         onTransactionLegChanged: hooks.changed,
-        onTransactionLegDeleted: hooks.deleted)
+        onTransactionLegDeleted: hooks.deleted,
+        onInstrumentChanged: makeInstrumentChangedHook(
+          zoneID: zoneID, syncCoordinator: syncCoordinator))
     )
+  }
+
+  /// Builds the closure `GRDBTransactionRepository` /
+  /// `GRDBAccountRepository` fire whenever they auto-insert a non-fiat
+  /// `InstrumentRow` to satisfy a leg or account denomination. Routes
+  /// through the same recordName-keyed `queueSave` path
+  /// `GRDBInstrumentRegistryRepository.registerStock` already uses so
+  /// the row reaches CloudKit on the next batch. Without this, an
+  /// instrument introduced by SelfWealth import or a stock-account
+  /// create would live only on the device that wrote it (sibling
+  /// devices fall back to `Instrument.fiat(code: id)` and stock
+  /// conversions 404 against the fiat-only Frankfurter API). Returns a
+  /// no-op closure when no coordinator is wired (preview / test
+  /// backends).
+  private static func makeInstrumentChangedHook(
+    zoneID: CKRecordZone.ID, syncCoordinator: SyncCoordinator?
+  ) -> @Sendable (String) -> Void {
+    { [weak syncCoordinator] recordName in
+      Task { @MainActor [weak syncCoordinator] in
+        syncCoordinator?.queueSave(recordName: recordName, zoneID: zoneID)
+      }
+    }
   }
 
   /// Bundle of the change/delete closures the GRDB repos call on each
