@@ -122,16 +122,15 @@ struct CryptoAccountCreationLogic {
 
     do {
       let created = try await accountStore.create(account)
-      // Kick off the initial sync so the wallet's history starts
-      // loading immediately. The store internally guards against
-      // duplicate in-flight syncs, so the next scenePhase `.active`
-      // trigger collapses with this dispatch rather than queueing a
-      // redundant pass. A `nil` `cryptoSyncStore` (degraded launch)
-      // leaves the account stale; the next stale-sync pass picks it
-      // up.
-      if let cryptoSyncStore {
-        await cryptoSyncStore.syncAccount(created)
-      }
+      // Kick off the initial sync without awaiting so the parent sheet
+      // can `dismiss()` the moment the account is persisted instead of
+      // sitting open through the entire network round-trip. The store
+      // tracks the spawned task so it's cancelled on profile teardown
+      // and collapses with the next scenePhase `.active` trigger
+      // rather than queueing a redundant pass. A `nil` `cryptoSyncStore`
+      // (degraded launch) leaves the account stale; the next
+      // stale-sync pass picks it up.
+      cryptoSyncStore?.scheduleInitialSync(for: created)
       return .created(created)
     } catch {
       return .failure(error)
