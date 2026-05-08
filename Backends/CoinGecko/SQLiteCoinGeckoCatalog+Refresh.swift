@@ -172,29 +172,62 @@ private struct PlatformWire: Decodable {
 }
 
 extension SQLiteCoinGeckoCatalog {
+  /// Decodes CoinGecko's `/coins/list` payload, collapsing duplicate `id`s
+  /// to their first occurrence. CoinGecko occasionally lists the same id
+  /// more than once (typically around delistings or rebrandings); a dupe
+  /// would otherwise trip the `coin.coingecko_id UNIQUE` constraint mid-
+  /// transaction and roll the whole refresh back. Dedupe at the seam keeps
+  /// the on-disk constraints strict so genuine bugs in our insert path
+  /// still trap.
   static func parseCoins(_ data: Data) throws -> [RawCoin] {
     let decoded = try JSONDecoder().decode([CoinWire].self, from: data)
-    return decoded.map { wire in
-      var platforms: [String: String] = [:]
-      for (slug, contract) in wire.platforms {
-        if let contract, !contract.isEmpty {
-          platforms[slug] = contract
-        }
-      }
-      return RawCoin(
-        id: wire.id,
-        symbol: wire.symbol.uppercased(),
-        name: wire.name,
-        platforms: platforms
+    var seen: Set<String> = []
+    seen.reserveCapacity(decoded.count)
+    var coins: [RawCoin] = []
+    coins.reserveCapacity(decoded.count)
+    for wire in decoded where seen.insert(wire.id).inserted {
+      coins.append(
+        RawCoin(
+          id: wire.id,
+          symbol: wire.symbol.uppercased(),
+          name: wire.name,
+          platforms: compactPlatforms(wire.platforms)
+        )
       )
     }
+    return coins
   }
 
+  /// Drops `null` and empty contract addresses from a `CoinWire.platforms`
+  /// dict. CoinGecko sometimes maps a known platform slug to `null` for de-
+  /// listed tokens; only mappings with a non-empty contract make it into
+  /// `coin_platform`.
+  static func compactPlatforms(_ raw: [String: String?]) -> [String: String] {
+    var compacted: [String: String] = [:]
+    compacted.reserveCapacity(raw.count)
+    for (slug, contract) in raw {
+      if let contract, !contract.isEmpty {
+        compacted[slug] = contract
+      }
+    }
+    return compacted
+  }
+
+  /// Decodes `/asset_platforms`, collapsing duplicate slugs to their first
+  /// occurrence for the same reason as `parseCoins(_:)` — keeps the
+  /// `platform.slug PRIMARY KEY` constraint strict at the DB layer.
   static func parsePlatforms(_ data: Data) throws -> [RawPlatform] {
     let decoded = try JSONDecoder().decode([PlatformWire].self, from: data)
-    return decoded.map {
-      RawPlatform(slug: $0.id, chainId: $0.chainIdentifier, name: $0.name)
+    var seen: Set<String> = []
+    seen.reserveCapacity(decoded.count)
+    var platforms: [RawPlatform] = []
+    platforms.reserveCapacity(decoded.count)
+    for wire in decoded where seen.insert(wire.id).inserted {
+      platforms.append(
+        RawPlatform(slug: wire.id, chainId: wire.chainIdentifier, name: wire.name)
+      )
     }
+    return platforms
   }
 }
 
