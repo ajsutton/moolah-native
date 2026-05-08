@@ -42,4 +42,69 @@ struct IntraAccountSwapDetectorTests {
     #expect(result.count == 2)
     #expect(result.allSatisfy { $0.type == .trade })
   }
+
+  @Test("Pure inbound (no outbound) → unchanged")
+  func pureInboundUnchanged() {
+    let inbound = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.ethereum,
+        quantity: 10,
+        externalId: "0xhash:0",
+        type: .income),
+      direction: .inbound)
+
+    let result = IntraAccountSwapDetector.retypeSwapLegs([inbound])
+
+    #expect(result.count == 1)
+    #expect(result.first?.type == .income)
+  }
+
+  @Test("Pure outbound (no inbound) → unchanged")
+  func pureOutboundUnchanged() {
+    let outbound = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.ethereum,
+        quantity: -10,
+        externalId: "0xhash:0",
+        type: .expense),
+      direction: .outbound)
+
+    let result = IntraAccountSwapDetector.retypeSwapLegs([outbound])
+
+    #expect(result.count == 1)
+    #expect(result.first?.type == .expense)
+  }
+
+  @Test("Same instrument both sides (no third token) → unchanged")
+  func sameInstrumentBothSidesUnchanged() {
+    let inbound = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.ethereum,
+        quantity: 100,
+        externalId: "0xhash:0",
+        type: .income),
+      direction: .inbound)
+    let outbound = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.ethereum,
+        quantity: -50,
+        externalId: "0xhash:1",
+        type: .expense),
+      direction: .outbound)
+
+    let result = IntraAccountSwapDetector.retypeSwapLegs([inbound, outbound])
+
+    #expect(result.count == 2)
+    #expect(result.map(\.type) == [.income, .expense])
+  }
+
+  @Test("Empty input → empty output")
+  func emptyInputUnchanged() {
+    let result = IntraAccountSwapDetector.retypeSwapLegs([])
+    #expect(result.isEmpty)
+  }
 }
