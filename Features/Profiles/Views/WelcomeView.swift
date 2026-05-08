@@ -149,7 +149,6 @@ struct WelcomeView: View {
     .accessibilityHint(offHeroHint(for: reason))
   }
 
-  @ViewBuilder
   private func formView(
     banner: WelcomeStateResolver.BannerKind?
   ) -> some View {
@@ -157,26 +156,37 @@ struct WelcomeView: View {
       profileStore.iCloudAvailability == .available
       && !syncCoordinator.profileIndexFetchedAtLeastOnce
 
-    let form = CreateProfileFormView(
-      name: $name,
-      currency: $currency,
-      financialYearStartMonth: $financialYearStartMonth,
-      banner: banner.map(mapBanner),
-      onBannerPrimary: handleBannerPrimary,
-      onBannerDismiss: { bannerDismissed = true },
-      backgroundCheckingICloud: backgroundChecking,
-      cancelAction: { phase = .landing },
-      createAction: handleCreate
-    )
+    return formWrapper {
+      CreateProfileFormView(
+        name: $name,
+        currency: $currency,
+        financialYearStartMonth: $financialYearStartMonth,
+        banner: banner.map(mapBanner),
+        onBannerPrimary: handleBannerPrimary,
+        onBannerDismiss: { bannerDismissed = true },
+        backgroundCheckingICloud: backgroundChecking,
+        cancelAction: { phase = .landing },
+        createAction: handleCreate
+      )
+    }
+  }
 
-    // Toolbar items in `.cancellationAction`/`.confirmationAction` only
-    // render on iOS when there's a navigation bar to attach to. On macOS
-    // the toolbar binds to the window's NSToolbar, so the wrapper would
-    // double-render — keep the wrap iOS-only.
+  /// Toolbar items in `.cancellationAction`/`.confirmationAction` only
+  /// render on iOS when there's a navigation bar to attach to. On macOS
+  /// the toolbar binds to the window's NSToolbar, so the wrapper would
+  /// double-render — keep the wrap iOS-only.
+  @ViewBuilder
+  private func formWrapper<Content: View>(
+    @ViewBuilder content: () -> Content
+  ) -> some View {
     #if os(iOS)
-      NavigationStack { form }
+      NavigationStack {
+        content()
+          .navigationBarTitleDisplayMode(.inline)
+          .toolbar(.visible, for: .navigationBar)
+      }
     #else
-      form
+      content()
     #endif
   }
 
