@@ -107,4 +107,70 @@ struct IntraAccountSwapDetectorTests {
     let result = IntraAccountSwapDetector.retypeSwapLegs([])
     #expect(result.isEmpty)
   }
+
+  @Test("3-leg basket trade (1 in, 2 out, 3 instruments) → all retyped to .trade")
+  func threeLegBasketTradeRetypesAll() {
+    let inbound = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.ethereum,
+        quantity: 5,
+        externalId: "0xhash:0",
+        type: .income),
+      direction: .inbound)
+    let outboundA = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.polygon,
+        quantity: -10,
+        externalId: "0xhash:1",
+        type: .expense),
+      direction: .outbound)
+    let outboundB = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.base,
+        quantity: -3,
+        externalId: "0xhash:2",
+        type: .expense),
+      direction: .outbound)
+
+    let result = IntraAccountSwapDetector.retypeSwapLegs([inbound, outboundA, outboundB])
+
+    #expect(result.count == 3)
+    #expect(result.allSatisfy { $0.type == .trade })
+  }
+
+  @Test("LP add shape (2 outbound, 1 inbound LP token) → all retyped to .trade")
+  func lpAddShapeRetypesAll() {
+    let outboundA = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.ethereum,
+        quantity: -1,
+        externalId: "0xhash:0",
+        type: .expense),
+      direction: .outbound)
+    let outboundB = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.polygon,
+        quantity: -100,
+        externalId: "0xhash:1",
+        type: .expense),
+      direction: .outbound)
+    let inboundLP = DirectionalLeg(
+      leg: TransactionLeg(
+        accountId: Self.accountId,
+        instrument: Self.base,
+        quantity: 1,
+        externalId: "0xhash:2",
+        type: .income),
+      direction: .inbound)
+
+    let result = IntraAccountSwapDetector.retypeSwapLegs([outboundA, outboundB, inboundLP])
+
+    #expect(result.count == 3)
+    #expect(result.allSatisfy { $0.type == .trade })
+  }
 }
