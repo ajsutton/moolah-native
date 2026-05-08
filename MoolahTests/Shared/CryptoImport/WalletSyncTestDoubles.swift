@@ -276,11 +276,11 @@ final class ZeroReceiptAlchemyStub: AlchemyClient, @unchecked Sendable {
       hash: hash,
       gasUsed: 0,
       effectiveGasPrice: 0,
-      // Sentinel: a zero fee makes `totalGasFeeWei == 0` so the builder
-      // drops the gas leg before the `receipt.from == walletAddress` check
-      // ever fires. An empty string here can never match a real wallet
-      // address, which is consistent with "no gas leg" if the zero-fee
-      // early-exit ever moves.
+      // Sentinel: `from: ""` can never match a real wallet address, so
+      // `makeGasLeg` returns nil at the `receipt.from == walletAddress`
+      // guard. `gasUsed: 0` / `effectiveGasPrice: 0` provide a second
+      // line of defence (zero total-fee guard) if the from-check order
+      // ever changes, keeping the "no gas leg" behaviour consistent.
       from: "")
   }
 }
