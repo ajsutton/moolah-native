@@ -129,15 +129,19 @@ enum TransferReceiptCoalescer {
   ///   expense.
   ///
   /// `walletAddress` is expected pre-lowercased (the builder passes
-  /// `BuildContext.walletAddress`). `receipt.from` is lowercased at the
-  /// wire boundary in `AlchemyTransactionReceiptPayload.toReceipt`.
+  /// `BuildContext.walletAddress`). `receipt.from` is also lowercased at
+  /// the wire boundary in `AlchemyTransactionReceiptPayload.toReceipt`,
+  /// but the comparison re-lowercases defensively — that mirrors
+  /// `outboundHashes`'s defensive normalisation, and means a test stub or
+  /// future caller that constructs `AlchemyTransactionReceipt` directly
+  /// with a checksummed `from` doesn't silently miss a match.
   static func makeGasLeg(
     receipt: AlchemyTransactionReceipt,
     accountId: UUID,
     chain: ChainConfig,
     walletAddress: String
   ) -> TransactionLeg? {
-    guard receipt.from == walletAddress else { return nil }
+    guard receipt.from.lowercased() == walletAddress else { return nil }
     let gasFeeWei = receipt.totalGasFeeWei
     guard gasFeeWei > 0 else { return nil }
     let nativeDecimals = chain.nativeInstrument.decimals
