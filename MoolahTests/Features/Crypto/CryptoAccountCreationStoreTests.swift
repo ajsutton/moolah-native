@@ -101,8 +101,15 @@ struct CryptoAccountCreationStoreTests {
     // on `valuationMode` would see the wrong intent.
     #expect(created.valuationMode == .calculatedFromTrades)
 
-    // The store optimistically populates its observable list, so the
-    // new account is visible immediately without a reload round-trip.
+    // `AccountStore` mirrors the repository through reactive observation
+    // — there is no optimistic insert, so the new account lands in
+    // `accounts` only once the GRDB write commits and `observeAll()`
+    // emits. Wait for that emission before asserting the store's view
+    // of the world.
+    try await fixture.accountStore.waitForNextEmission(
+      matching: { $0.accounts.contains(where: { $0.id == created.id }) },
+      description: "newly-created crypto account observed in store"
+    )
     #expect(fixture.accountStore.accounts.count == 1)
     #expect(fixture.accountStore.accounts.first?.id == created.id)
   }
