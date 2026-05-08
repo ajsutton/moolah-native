@@ -52,6 +52,19 @@ The only exception is scope the user has explicitly authorised in the conversati
 - Context menus (macOS) and swipe actions (iOS)
 - Keyboard shortcuts (macOS)
 
+### View-tree stability for toolbar-bearing views (Critical)
+
+This is a recurring crash class — the same root cause has shipped to production at least twice (`InvestmentAccountView` initial-load flip; `accountDetail` crypto VStack). Treat any finding here as **Critical** and reject the PR until it's fixed. Reference: `guides/UI_GUIDE.md` §3 — "View-tree stability for views with `.searchable` / `.toolbar`".
+
+Flag the change if:
+
+- A view that registers `.searchable(...)` or `.toolbar { ToolbarItem(...) }` (e.g. `TransactionListView`, `RecentlyAddedView`, `EarmarksView`, `CategoriesView`) is wrapped in a parent whose body branches on data or async-resolved state — typically a `VStack` whose first child is gated by `if account.type == .crypto` / `if hasLoaded` / `if let value = …`. SwiftUI re-mounts the inner view in a new structural position when the gate flips, AppKit's toolbar bridge double-registers `com.apple.SwiftUI.search`, and the app crashes with `NSInternalInconsistencyException: NSToolbar already contains an item …`.
+- A new `if/else` is introduced in a parent whose two arms differ in shape and one of them contains a search-bearing or toolbar-bearing view. The two arms must either be structurally identical (same number of children in the same order) or be tagged with distinct `.id(...)` so SwiftUI fully tears the previous one down before mounting the next (see `InvestmentAccountView` for the reference pattern).
+- A per-context header or accessory is added by wrapping the search-bearing view in an outer container instead of using its host's accessory slot (e.g. `TransactionListView`'s `topAccessory:` parameter, or a `safeAreaInset(edge:)` modifier on the search-bearing view itself).
+- Two `.searchable(...)` modifiers end up in the same `NavigationSplitView` column or detail surface — AppKit collapses both into a single `NSToolbar` and hits the duplicate-item assertion regardless of identity.
+
+When in doubt: ask whether the search-bearing view's structural position is the same on every render of its parent. If the answer requires "as long as the data has loaded" or "for non-crypto accounts" or any other conditional, that's a finding.
+
 ### Accessibility
 - VoiceOver labels on images and custom controls (`.accessibilityLabel()`)
 - Accessibility values for amounts (`.accessibilityValue()`)
