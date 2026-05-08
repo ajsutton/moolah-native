@@ -168,15 +168,15 @@ struct TransferEventBuilder: Sendable {
     receipt: AlchemyTransactionReceipt?,
     context: BuildContext
   ) async throws -> BuiltTransaction? {
-    var legs: [TransactionLeg] = []
+    var directional: [DirectionalLeg] = []
     var earliestTimestamp: Date?
 
     for event in events {
       try Task.checkCancellation()
-      guard let leg = try await makeTransferLeg(event: event, context: context) else {
+      guard let item = try await makeTransferLeg(event: event, context: context) else {
         continue
       }
-      legs.append(leg)
+      directional.append(item)
       if let timestamp = parseTimestamp(event.metadata.blockTimestamp) {
         if let current = earliestTimestamp {
           earliestTimestamp = min(current, timestamp)
@@ -186,7 +186,9 @@ struct TransferEventBuilder: Sendable {
       }
     }
 
-    guard !legs.isEmpty else { return nil }
+    guard !directional.isEmpty else { return nil }
+
+    var legs = IntraAccountSwapDetector.retypeSwapLegs(directional)
 
     if let receipt,
       let gasLeg = TransferReceiptCoalescer.makeGasLeg(
@@ -220,7 +222,7 @@ struct TransferEventBuilder: Sendable {
   private func makeTransferLeg(
     event: AlchemyTransfer,
     context: BuildContext
-  ) async throws -> TransactionLeg? {
+  ) async throws -> DirectionalLeg? {
     guard event.category != .unknown else {
       Self.logger.notice(
         "Skipping unknown-category transfer hash \(event.hash, privacy: .private)"
@@ -263,13 +265,14 @@ struct TransferEventBuilder: Sendable {
       return nil
     }
 
-    return TransactionLeg(
+    let leg = TransactionLeg(
       accountId: context.account.id,
       instrument: instrument,
       quantity: resolution.signedQuantity,
       externalId: event.uniqueId,
       counterpartyAddress: resolution.counterpartyAddress,
       type: TransferEventBuilder.legType(for: direction))
+    return DirectionalLeg(leg: leg, direction: direction)
   }
 
   /// Resolves a transfer's direction into the leg's signed quantity and
