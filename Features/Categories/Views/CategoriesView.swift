@@ -88,6 +88,7 @@ struct CategoriesView: View {
       .sheet(isPresented: $showCreateSheet) {
         CreateCategorySheet(
           categories: categoryStore.categories,
+          initialParentId: selectedCategory?.id,
           onCreate: { newCategory in
             Task {
               _ = await categoryStore.create(newCategory)
@@ -194,49 +195,108 @@ private struct CategoryNodeView: View {
 
     if children.isEmpty {
       Label(category.name, systemImage: "tag")
-        .contentShape(Rectangle())
+        .contentShape(.rect)
     } else {
       DisclosureGroup {
         ForEach(children) { child in
           CategoryNodeView(category: child, categories: categories)
+            .contentShape(.rect)
             .tag(child)
         }
       } label: {
         Label(category.name, systemImage: "folder")
+          .contentShape(.rect)
       }
     }
   }
 }
 
 private struct CreateCategorySheet: View {
+  /// Single-enum focus model so Tab/Cmd+Return advance through Name →
+  /// Parent → Create in the order the form renders. UI_GUIDE §13
+  /// requires one optional enum per form with one case per focusable
+  /// field; multiple boolean `@FocusState`s don't compose.
+  private enum Field: Hashable { case name, parent }
+
   let categories: Categories
+  let initialParentId: UUID?
   let onCreate: (Category) -> Void
 
   @State private var name: String = ""
-  @State private var selectedParentId: UUID?
+  @State private var parent: ParentCategorySelection
+  @State private var pickerState = CategoryAutocompleteState()
+  @FocusState private var focusedField: Field?
   @Environment(\.dismiss) private var dismiss
+
+  init(
+    categories: Categories,
+    initialParentId: UUID? = nil,
+    onCreate: @escaping (Category) -> Void
+  ) {
+    self.categories = categories
+    self.initialParentId = initialParentId
+    self.onCreate = onCreate
+    _parent = State(
+      initialValue: ParentCategorySelection(
+        initialId: initialParentId, in: categories))
+  }
 
   var body: some View {
     NavigationStack {
       form
     }
     #if os(macOS)
-      .frame(minWidth: 400, minHeight: 300)
+      .frame(minWidth: 500, minHeight: 400)
     #endif
+  }
+
+  private var visibleSuggestions: [CategorySuggestion] {
+    pickerState.visibleSuggestions(for: parent.text, in: categories)
   }
 
   private var form: some View {
     Form {
       Section("Details") {
         TextField("Name", text: $name)
+          .accessibilityLabel("Category name")
+          .focused($focusedField, equals: .name)
+          .onSubmit { focusedField = .parent }
       }
 
       Section("Parent Category") {
-        Picker("Parent", selection: $selectedParentId) {
-          Text("None (Top-Level)").tag(nil as UUID?)
-          ForEach(allCategories) { category in
-            Text(category.name).tag(category.id as UUID?)
-          }
+        CategoryAutocompleteField(
+          placeholder: "Parent",
+          text: $parent.text,
+          highlightedIndex: $pickerState.highlightedIndex,
+          suggestionCount: visibleSuggestions.count,
+          onTextChange: { _ in openDropdownIfFocused() },
+          onAcceptHighlighted: acceptHighlightedParent,
+          onCancel: { pickerState.cancel() }
+        )
+        .focused($focusedField, equals: .parent)
+        .accessibilityLabel("Parent category")
+        .accessibilityIdentifier(UITestIdentifiers.CreateCategory.parentCategoryField)
+      }
+    }
+    .formStyle(.grouped)
+    #if os(macOS)
+      .defaultFocus($focusedField, .name)
+    #endif
+    .onChange(of: focusedField) { _, newField in
+      if newField != .parent { handleParentBlur() }
+    }
+    .overlayPreferenceValue(CategoryPickerAnchorKey.self) { anchor in
+      if pickerState.showSuggestions, !visibleSuggestions.isEmpty, let anchor {
+        GeometryReader { proxy in
+          let rect = proxy[anchor]
+          CategorySuggestionDropdown(
+            suggestions: visibleSuggestions,
+            searchText: parent.text,
+            highlightedIndex: $pickerState.highlightedIndex,
+            onSelect: selectParent(_:)
+          )
+          .frame(width: rect.width)
+          .offset(x: rect.minX, y: rect.maxY + 4)
         }
       }
     }
@@ -250,24 +310,48 @@ private struct CreateCategorySheet: View {
       }
       ToolbarItem(placement: .confirmationAction) {
         Button("Create") {
-          onCreate(Category(name: name, parentId: selectedParentId))
+          onCreate(Category(name: name, parentId: parent.id))
         }
         .disabled(name.isEmpty)
+        #if os(macOS)
+          .keyboardShortcut(.return, modifiers: .command)
+        #endif
       }
     }
   }
 
-  private var allCategories: [Category] {
-    var result: [Category] = []
-    for root in categories.roots {
-      result.append(root)
-      result.append(contentsOf: categories.children(of: root.id))
+  private func openDropdownIfFocused() {
+    guard focusedField == .parent else { return }
+    if pickerState.justSelected {
+      pickerState.justSelected = false
+    } else {
+      pickerState.showSuggestions = true
     }
-    return result
+  }
+
+  private func acceptHighlightedParent() {
+    guard
+      let index = pickerState.highlightedIndex,
+      index < visibleSuggestions.count
+    else { return }
+    selectParent(visibleSuggestions[index])
+  }
+
+  private func selectParent(_ suggestion: CategorySuggestion) {
+    pickerState.dismiss()
+    parent.commit(suggestion)
+  }
+
+  private func handleParentBlur() {
+    let highlighted = pickerState.highlightedSuggestion(
+      for: parent.text, in: categories)
+    pickerState.dismiss()
+    parent.commitHighlightedOrNormalise(
+      highlighted: highlighted, in: categories)
   }
 }
 
-#Preview {
+#Preview("Categories List") {
   let (backend, _) = PreviewBackend.create()
   let store = CategoryStore(repository: backend.categories)
 
@@ -288,4 +372,21 @@ private struct CreateCategorySheet: View {
     // CategoryStore is reactive — it'll see the seeded categories via
     // `observeAll()` without an explicit load() call.
   }
+}
+
+#Preview("Create Category Sheet") {
+  let groceriesId = UUID()
+  let categories = Categories(from: [
+    Category(id: groceriesId, name: "Groceries"),
+    Category(name: "Fruit", parentId: groceriesId),
+    Category(name: "Vegetables", parentId: groceriesId),
+    Category(name: "Transport"),
+    Category(name: "Entertainment"),
+  ])
+
+  CreateCategorySheet(
+    categories: categories,
+    initialParentId: groceriesId,
+    onCreate: { _ in }
+  )
 }
