@@ -55,7 +55,16 @@ final class CloudKitAuthProvider: AuthProvider, Sendable {
 
   static var isCloudKitAvailable: Bool {
     #if CLOUDKIT_ENABLED
-      return true
+      // The iOS Simulator doesn't apply iCloud entitlements at signing
+      // time even when the entitlements file specifies them, so any
+      // `CKContainer` access traps inside the framework. Treat the iOS
+      // sim as if CloudKit is unavailable so the app falls through to
+      // the local-only path — same as a device with no iCloud account.
+      #if targetEnvironment(simulator) && os(iOS)
+        return false
+      #else
+        return true
+      #endif
     #else
       return false
     #endif
