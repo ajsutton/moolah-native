@@ -1,7 +1,5 @@
 import Foundation
 
-// MARK: - Negation Helpers
-
 extension TransactionDraft {
   /// Whether a leg type uses negated display (expense, transfer → negate; income, openingBalance → as-is).
   static func displaysNegated(_ type: TransactionType) -> Bool {
