@@ -10,8 +10,10 @@ import SwiftUI
 
 /// Compact header for an `AccountType.crypto` account view. Renders:
 ///
-/// - Truncated wallet address (`0xabcd…wxyz`) rendered in a monospaced font
-///   with a copy button alongside.
+/// - Full wallet address rendered in a monospaced, selectable font with a
+///   copy button alongside. The address is **never** truncated — a
+///   truncated `0x1234…abcd` is unsafe to verify against because an
+///   attacker can mine a vanity address with matching prefix and suffix.
 /// - Chain display name (e.g. "Ethereum").
 /// - Last-synced relative timestamp ("Synced 2h ago") or "Never synced"
 ///   when the account has no checkpoint yet.
@@ -21,10 +23,9 @@ import SwiftUI
 ///   address URL in the user's default browser.
 ///
 /// Pure presentation: every piece of business logic that benefits from
-/// unit testing (truncation, last-synced formatting, sync button state)
-/// lives in `WalletAccountHeaderLogic` so
-/// `WalletAccountHeaderViewLogicTests` can exercise the contract without
-/// spinning up a SwiftUI view.
+/// unit testing (last-synced formatting, sync button state) lives in
+/// `WalletAccountHeaderLogic` so `WalletAccountHeaderViewLogicTests` can
+/// exercise the contract without spinning up a SwiftUI view.
 struct WalletAccountHeaderView: View {
   let account: Account
   let chain: ChainConfig
@@ -69,10 +70,6 @@ struct WalletAccountHeaderView: View {
 
   private var address: String { account.walletAddress ?? "" }
 
-  private var truncatedAddress: String {
-    WalletAccountHeaderLogic.truncateAddress(address)
-  }
-
   private var syncState: WalletSyncState? {
     cryptoSyncStore.statePerAccount[account.id]
   }
@@ -93,13 +90,13 @@ struct WalletAccountHeaderView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
+      addressSection
       HStack(spacing: 12) {
-        addressSection
-        Spacer(minLength: 12)
         Text(chain.displayName)
           .font(.subheadline)
           .foregroundStyle(.secondary)
           .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.chainName)
+        Spacer(minLength: 12)
         Text(lastSyncedText)
           .font(.subheadline)
           .foregroundStyle(.secondary)
@@ -170,10 +167,11 @@ struct WalletAccountHeaderView: View {
   }
 
   private var addressSection: some View {
-    HStack(spacing: 6) {
-      Text(truncatedAddress)
+    HStack(alignment: .firstTextBaseline, spacing: 6) {
+      Text(address)
         .font(.body.monospaced())
-        .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.truncatedAddress)
+        .textSelection(.enabled)
+        .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.address)
         .accessibilityLabel("Wallet address \(address)")
       Button {
         copyToPasteboard(address)
@@ -186,6 +184,7 @@ struct WalletAccountHeaderView: View {
       .accessibilityLabel("Copy wallet address")
       .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.copyAddressButton)
       .disabled(address.isEmpty)
+      Spacer(minLength: 0)
     }
   }
 
@@ -261,25 +260,11 @@ extension WalletAccountHeaderView {
 
 // MARK: - Pure logic
 
-/// Pure-logic helper for `WalletAccountHeaderView`. Owns the truncation
-/// rule, the relative-time formatting for the last-synced label, and the
-/// "is sync allowed" predicate so they are all unit-testable without
-/// instantiating a SwiftUI view.
+/// Pure-logic helper for `WalletAccountHeaderView`. Owns the relative-
+/// time formatting for the last-synced label, the "is sync allowed"
+/// predicate, and the user-facing error caption so they are all
+/// unit-testable without instantiating a SwiftUI view.
 enum WalletAccountHeaderLogic {
-  /// Truncates a `0x…` wallet address to a `0xabcd…wxyz` shape: 6 leading
-  /// characters (including the `0x` prefix), an ellipsis, and 4 trailing
-  /// characters. Same convention as Etherscan / wallet UIs.
-  ///
-  /// Addresses shorter than 11 characters fall through unchanged — they
-  /// can't be truncated in a way that adds clarity, and are treated as
-  /// already-displayable.
-  static func truncateAddress(_ address: String) -> String {
-    guard address.count >= 11 else { return address }
-    let prefix = address.prefix(6)
-    let suffix = address.suffix(4)
-    return "\(prefix)…\(suffix)"
-  }
-
   /// User-facing relative-time label for the wallet's last successful
   /// sync. `nil` state → "Never synced". Otherwise uses
   /// `RelativeDateTimeFormatter.short` and prefixes "Synced ".

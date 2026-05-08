@@ -343,7 +343,7 @@ extension ContentView {
       } else {
         VStack(spacing: 0) {
           // Crypto wallets get a header bar above the transaction list
-          // showing the truncated address, chain, last-synced state,
+          // showing the full wallet address, chain, last-synced state,
           // and a Sync now action. Skipped for non-crypto accounts and
           // for crypto accounts whose `chainId` couldn't be resolved
           // (defensive — surfaces a config gap rather than crashing).
