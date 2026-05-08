@@ -88,16 +88,64 @@ enum TransactionStoreTestSupport {
       conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument
     )
-    await accountStore.load()
-    await earmarkStore.load()
+    // `AccountStore` and `EarmarkStore` are both reactive — wait for an
+    // observation emission that contains the seeded rows before any
+    // TransactionStore code path that depends on them being visible
+    // runs. Without seeded entries the first emission is enough.
+    if accounts.isEmpty {
+      try? await accountStore.waitForFirstEmission()
+    } else {
+      let expectedCount = accounts.count
+      try? await accountStore.waitForNextEmission(
+        matching: { $0.accounts.count == expectedCount },
+        description: "seeded accounts observable"
+      )
+    }
+    if earmarks.isEmpty {
+      try? await earmarkStore.waitForFirstEmission()
+    } else {
+      let expectedCount = earmarks.count
+      try? await earmarkStore.waitForNextEmission(
+        matching: { $0.earmarks.count == expectedCount },
+        description: "seeded earmarks observable"
+      )
+    }
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument,
-      accountStore: accountStore,
-      earmarkStore: earmarkStore
+      targetInstrument: .defaultTestInstrument
     )
     return Stores(transactions: store, accounts: accountStore, earmarks: earmarkStore)
+  }
+}
+
+/// Test-only helpers for awaiting the reactive observation tick after a
+/// mutation. Mutations are pass-through under the reactive design, so
+/// the store doesn't update its `transactions` array until the next
+/// `repository.observe(...)` emission lands. Existing pre-migration
+/// tests assumed synchronous local state; these helpers bridge that
+/// gap by awaiting the next emission.
+extension TransactionStore {
+  /// Awaits the next observation emission and asserts no timeout. Used
+  /// by tests that want a one-line "do mutation; await emission"
+  /// pattern rather than calling `waitForNextEmission(matching:)` with
+  /// a custom predicate.
+  func awaitNextSyncRefresh(timeout: Duration = .seconds(2)) async throws {
+    try await waitForFirstEmission(timeout: timeout)
+  }
+
+  /// Convenience for "do mutation, then await an emission whose
+  /// `transactions.count` matches `expected`". Useful for the most
+  /// common test shape after a create/update/delete.
+  func awaitTransactionCount(
+    _ expected: Int, timeout: Duration = .seconds(2)
+  ) async throws {
+    if transactions.count == expected { return }
+    try await waitForNextEmission(
+      matching: { $0.transactions.count == expected },
+      description: "transactions.count == \(expected)",
+      timeout: timeout
+    )
   }
 }
 
@@ -111,6 +159,20 @@ struct FailingTransactionRepository: TransactionRepository {
 
   func fetchAll(filter: TransactionFilter) async throws -> [Transaction] {
     throw BackendError.networkUnavailable
+  }
+
+  func observe(
+    filter: TransactionFilter, page: Int, pageSize: Int
+  ) -> AsyncStream<TransactionPage> {
+    AsyncStream { $0.finish() }
+  }
+
+  func observeAll(filter: TransactionFilter) -> AsyncStream<[Transaction]> {
+    AsyncStream { $0.finish() }
+  }
+
+  func observeErrors() -> AsyncStream<any Error> {
+    AsyncStream { $0.finish() }
   }
 
   func create(_ transaction: Transaction) async throws -> Transaction {

@@ -120,41 +120,14 @@ final class SyncCoordinator {
     }
   }
 
-  // MARK: - Observer Pattern
-
-  struct ObserverToken: Equatable {
-    let id: UUID
-    let profileId: UUID
-  }
-
-  private struct ProfileObserver {
-    let id: UUID
-    let callback: @MainActor (Set<String>) -> Void
-  }
+  // MARK: - Index Observer
 
   private struct IndexObserver {
     let id: UUID
     let callback: @MainActor () -> Void
   }
 
-  private var profileObservers: [UUID: [ProfileObserver]] = [:]
   private var indexObservers: [IndexObserver] = []
-
-  func addObserver(
-    for profileId: UUID, callback: @escaping @MainActor (Set<String>) -> Void
-  ) -> ObserverToken {
-    let token = ObserverToken(id: UUID(), profileId: profileId)
-    let observer = ProfileObserver(id: token.id, callback: callback)
-    profileObservers[profileId, default: []].append(observer)
-    return token
-  }
-
-  func removeObserver(token: ObserverToken) {
-    profileObservers[token.profileId]?.removeAll { $0.id == token.id }
-    if profileObservers[token.profileId]?.isEmpty == true {
-      profileObservers.removeValue(forKey: token.profileId)
-    }
-  }
 
   func addIndexObserver(_ callback: @escaping @MainActor () -> Void) -> UUID {
     let id = UUID()
@@ -164,14 +137,6 @@ final class SyncCoordinator {
 
   func removeIndexObserver(_ id: UUID) {
     indexObservers.removeAll { $0.id == id }
-  }
-
-  /// Notify profile observers. Exposed for testing.
-  func notifyObservers(for profileId: UUID, changedTypes: Set<String>) {
-    guard let observers = profileObservers[profileId] else { return }
-    for observer in observers {
-      observer.callback(changedTypes)
-    }
   }
 
   /// Notify index observers. Exposed for testing.
@@ -261,9 +226,6 @@ final class SyncCoordinator {
   /// True when iCloud storage is full and sync uploads are failing.
   /// Cleared when a send cycle completes without quota errors.
   var isQuotaExceeded = false
-
-  /// Record types accumulated per profile during a fetch session.
-  var fetchSessionChangedTypes: [UUID: Set<String>] = [:]
 
   /// Whether the profile-index zone had changes during the current fetch session.
   var fetchSessionIndexChanged = false
@@ -371,11 +333,6 @@ final class SyncCoordinator {
   // MARK: - Fetch-Session Book-keeping
   // (Begin/end live on `+Lifecycle`; the isFetchingChanges flag is mutated there
   // and by `+Zones` on sign-out.)
-
-  /// Accumulate changed types for a profile during a fetch session. Exposed for testing.
-  func accumulateFetchSessionChanges(for profileId: UUID, changedTypes: Set<String>) {
-    fetchSessionChangedTypes[profileId, default: []].formUnion(changedTypes)
-  }
 
   // MARK: - Handler Access
   // (Lazy `ProfileDataSyncHandler` creation and the per-profile

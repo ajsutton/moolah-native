@@ -12,13 +12,17 @@ struct EarmarkStoreMutationTests {
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
+    try await store.waitForFirstEmission()
 
     let earmark = Earmark(name: "New Fund", instrument: .defaultTestInstrument)
     let created = await store.create(earmark)
 
     #expect(created != nil)
     #expect(created?.name == "New Fund")
-    #expect(store.earmarks.count == 1)
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.count == 1 },
+      description: "created earmark observed"
+    )
     #expect(store.earmarks.first?.name == "New Fund")
   }
 
@@ -41,13 +45,17 @@ struct EarmarkStoreMutationTests {
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
+    try await store.waitForFirstEmission()
 
     let first = Earmark(name: "First", instrument: .defaultTestInstrument)
     _ = await store.create(first)
     let second = Earmark(name: "Second", instrument: .defaultTestInstrument)
     _ = await store.create(second)
 
-    #expect(store.earmarks.count == 2)
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.count == 2 },
+      description: "both created earmarks observed"
+    )
     #expect(store.earmarks.by(id: first.id) != nil)
     #expect(store.earmarks.by(id: second.id) != nil)
   }
@@ -60,7 +68,10 @@ struct EarmarkStoreMutationTests {
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.by(id: earmark.id) != nil },
+      description: "seeded earmark observed"
+    )
 
     var modified = earmark
     modified.name = "Vacation Fund"
@@ -68,7 +79,10 @@ struct EarmarkStoreMutationTests {
 
     #expect(updated != nil)
     #expect(updated?.name == "Vacation Fund")
-    #expect(store.earmarks.by(id: earmark.id)?.name == "Vacation Fund")
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.by(id: earmark.id)?.name == "Vacation Fund" },
+      description: "renamed earmark observed"
+    )
   }
 
   @Test
@@ -92,12 +106,18 @@ struct EarmarkStoreMutationTests {
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.by(id: earmark.id) != nil },
+      description: "seeded earmark observed"
+    )
 
     let result = await store.hide(earmark)
 
     #expect(result?.isHidden == true)
-    #expect(store.earmarks.by(id: earmark.id)?.isHidden == true)
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.by(id: earmark.id)?.isHidden == true },
+      description: "hidden flag propagates via observation"
+    )
     #expect(store.visibleEarmarks.contains(where: { $0.id == earmark.id }) == false)
   }
 }
@@ -107,6 +127,22 @@ struct EarmarkStoreMutationTests {
 private struct FailingEarmarkRepository: EarmarkRepository {
   func fetchAll() async throws -> [Earmark] {
     throw BackendError.networkUnavailable
+  }
+
+  // No-op stubs for the reactive surface — mutation tests construct a
+  // store with this repository specifically to exercise mutation
+  // failures, not observation. An empty (immediately-finished) stream
+  // satisfies the protocol without delivering any data.
+  func observeAll() -> AsyncStream<[Earmark]> {
+    AsyncStream { $0.finish() }
+  }
+
+  func observeBudget(earmarkId: UUID) -> AsyncStream<[EarmarkBudgetItem]> {
+    AsyncStream { $0.finish() }
+  }
+
+  func observeErrors() -> AsyncStream<any Error> {
+    AsyncStream { $0.finish() }
   }
 
   func create(_ earmark: Earmark) async throws -> Earmark {

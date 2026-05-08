@@ -16,7 +16,7 @@ struct InvestmentValue: Codable, Sendable, Identifiable, Hashable, Comparable {
 }
 
 /// A page of investment values with pagination metadata.
-struct InvestmentValuePage: Sendable {
+struct InvestmentValuePage: Sendable, Equatable {
   let values: [InvestmentValue]
   let hasMore: Bool
 }

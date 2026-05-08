@@ -106,7 +106,30 @@ Forbidden without an inline justification comment naming the lifted guarantee. T
 
 ### `ValueObservation`
 
-**Not adopted at this time.** Stores reload on explicit triggers (init, store actions, post-CKSyncEngine notifications via `ProfileSession`). Re-evaluate after Slice 1 ships if reactive pulses prove painful in SwiftUI. Adopting `ValueObservation` requires a guide update and is not a per-feature decision.
+**Adopted for reactive store updates** (per `plans/2026-05-06-reactive-sync-refresh-design.md`, lifted 2026-05-06).
+
+Conventions, all enforced by `database-code-review`:
+
+1. **Tracking closure form.** Use `ValueObservation.tracking { db in … }` for queries that fetch concrete data; GRDB infers the region from the SQL/table accesses. **Empty-table caveat:** region inference only registers a table if at least one row is touched during the first fetch (SQLite's `SQLITE_READ` authorizer fires on row access, not on `SELECT 1 FROM empty_table LIMIT 1` returning zero rows). For tracking closures that may run against empty tables — most notably `Void`-emitting tick streams over cache tables — use the explicit-region form `ValueObservation.tracking(regions: [Table("name1"), Table("name2"), ...]) { _ in () }` so the regions are registered unconditionally.
+   - **`WITHOUT ROWID` caveat.** SQLite's `sqlite3_update_hook` (the mechanism `ValueObservation` relies on to detect writes) does **not** fire for `WITHOUT ROWID` tables — a documented SQLite limitation. Any write site that targets a `WITHOUT ROWID` table whose region is being observed MUST call `db.notifyChanges(in: Table("name"))` inside the same `db.write { ... }` block, **after** the insert / update / delete. Without the notify the observation registers the region correctly and emits the initial value, but never re-fires on subsequent writes — every subscriber hangs. The rate-cache helper at `Backends/GRDB/Observation/RateCacheTable.swift` (`db.notifyRateCacheChange(.exchangeRate | .stockPrice | .cryptoPrice)`) is the canonical example; production write sites in `ExchangeRateService+Persistence.swift`, `StockPriceService.swift`, and `CryptoPriceService+Persistence.swift` use it after every insert / delete against the three `WITHOUT ROWID` rate-cache tables.
+2. **`.removeDuplicates()` is the default** for every `observe…` method that emits a value type (relies on the row decoder being `Equatable`). **Carve-out:** streams that emit `Void` (e.g. `InstrumentConversionService.observeRates()`) MUST NOT apply `removeDuplicates` — `Void == Void` would suppress every emission.
+3. **Scheduling.** `.values(in: writer)` with no explicit `scheduling:` argument. The default `.task` scheduler (cooperative thread pool) is correct for `AsyncSequence` consumption inside a Swift `Task`. Do not override with a `DispatchQueue`-targeting scheduler (`.async(...)` factories on `DispatchQueue` or the `.mainActorQueued` style); those exist for the Combine `publisher(in:scheduling:)` and callback `start(in:scheduling:onError:onChange:)` paths, and using them with `.values(in:)` causes a redundant dispatch hop when the consuming `Task` is already actor-isolated.
+4. **AsyncStream bridge.** All domain protocols return `AsyncStream<T>` (Foundation, `Sendable`). The bridge lives at `Backends/GRDB/Observation/AsyncValueObservation+AsyncStream.swift` and MUST wire `continuation.onTermination` to cancel the underlying observation `Task`. Without this, an `AsyncStream` consumer that cancels its `Task` would not propagate cancellation to GRDB and the observation would leak.
+5. **Errors — categorise at the repository, not the bridge.** The bridge is single-shot: it delivers the first error to `onError` and completes the stream (no retry, no categorisation, no logging — see the doc comment on `toAsyncStream(onError:)`). Repositories provide an `onError` callback that distinguishes:
+   - **Programmer bugs** (`SQLITE_ERROR` from malformed SQL, missing tables) — `fatalError` in debug; in release, surface to the store via the repository's `observeErrors()` channel and let the stream complete (no restart).
+   - **Transient I/O** (`SQLITE_FULL`, `SQLITE_IOERR`) — log at `error` level, then re-create the observation via a restart wrapper that re-calls `repository.observeAll()` (or equivalent) with backoff (1 s, 5 s, 30 s, capped at 5 retries).
+   - **Retry budget exhaustion** (5 consecutive transient failures) — surface the most recent error to `observeErrors()`, do not restart again.
+
+   The retry-loop wrapper is implemented by repositories in subsequent stages (the first one lands in Stage 3); the bridge itself stays minimal because it only holds `self` (the `AsyncValueObservation`), not the underlying writer needed to re-create the observation.
+6. **Logging contract.** Every error log includes the repository name, method name, and underlying error. Format: `GRDB observation error in <Repo>.<method> [<qualifier>]: <error>`, where `[programmer-bug]` marks fatal programming errors (malformed SQL, missing tables) and `[transient]` marks recoverable I/O errors. Examples:
+   ```
+   GRDB observation error in AccountRepository.observeAll [transient]: SQLITE_IOERR (errno 5)
+   GRDB observation error in AccountRepository.observeAll [programmer-bug]: malformed SQL
+   ```
+   No bare `print()` or `logger.error("\(error)")`.
+7. **Stream completion.** After the bridge surfaces an error to the store (programmer bug or budget exhausted), both `observeAll()` and `observeErrors()` complete (`continuation.finish()`). The store's `TaskGroup` child tasks exit naturally; the `TaskGroup` returns; teardown is clean.
+
+Stores subscribe in `init` with strong `self` (the store is `@MainActor`; the task already holds an implicit strong reference). `stopObserving()` (called from `ProfileSession.cleanupSync`) cancels the observation; a `deinit { observationTask?.cancel() }` safety net protects against missed `cleanupSync` calls.
 
 ---
 

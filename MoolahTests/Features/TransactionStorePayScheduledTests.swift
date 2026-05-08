@@ -39,6 +39,10 @@ struct TransactionStorePayScheduledTests {
 
     let result = await store.payScheduledTransaction(scheduled)
     let expectedNextDate = try TransactionStoreTestSupport.makeDate("2024-02-15")
+    try await store.waitForNextEmission(
+      matching: { $0.transactions.first?.transaction.date == expectedNextDate },
+      description: "advanced date is observable"
+    )
 
     // Store should show the scheduled tx with advanced date
     #expect(store.transactions.count == 1)
@@ -54,18 +58,22 @@ struct TransactionStorePayScheduledTests {
     #expect(updated?.id == scheduled.id)
     #expect(updated?.date == expectedNextDate)
 
+    try await assertBackendStateAfterRentPay(backend: backend, scheduled: scheduled)
+  }
+
+  private func assertBackendStateAfterRentPay(
+    backend: any BackendProvider, scheduled: Transaction
+  ) async throws {
     // Backend should have the paid (non-scheduled) transaction
     let paidPage = try await backend.transactions.fetch(
       filter: TransactionFilter(), page: 0, pageSize: 50)
     #expect(paidPage.transactions.count == 1)
-
     let paidTx = paidPage.transactions.first
     #expect(paidTx != nil)
     #expect(paidTx?.recurPeriod == nil)
     #expect(paidTx?.recurEvery == nil)
     #expect(paidTx?.payee == "Rent")
     #expect(paidTx?.legs.first?.quantity == Decimal(-200000) / 100)
-
     // Backend should still have the scheduled transaction with advanced date
     let scheduledPage = try await backend.transactions.fetch(
       filter: TransactionFilter(scheduled: .scheduledOnly), page: 0, pageSize: 50)
@@ -100,6 +108,10 @@ struct TransactionStorePayScheduledTests {
     await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
     let result = await store.payScheduledTransaction(scheduled)
     let expectedNextDate = try TransactionStoreTestSupport.makeDate("2024-01-29")
+    try await store.waitForNextEmission(
+      matching: { $0.transactions.first?.transaction.date == expectedNextDate },
+      description: "advanced (weekly) date is observable"
+    )
 
     #expect(store.transactions.count == 1)
     #expect(store.transactions[0].transaction.date == expectedNextDate)
@@ -139,6 +151,7 @@ struct TransactionStorePayScheduledTests {
     #expect(store.transactions.count == 1)
 
     let result = await store.payScheduledTransaction(scheduled)
+    try await store.awaitTransactionCount(0)
 
     // Store should show no scheduled transactions (the original was deleted)
     #expect(store.transactions.isEmpty)

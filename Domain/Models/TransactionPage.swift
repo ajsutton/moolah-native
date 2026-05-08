@@ -6,7 +6,14 @@ private let transactionLogger = Logger(
 
 /// A page of transactions returned from the repository, including the account
 /// balance prior to the earliest transaction in this page.
-struct TransactionPage: Sendable {
+///
+/// `Equatable` is required so the reactive observation surface can apply
+/// `removeDuplicates()` — identical re-fetches (e.g. after a write to a row
+/// that doesn't affect the page) are coalesced into a single emission. All
+/// stored fields are themselves `Equatable` (`[Transaction]` via
+/// `Transaction: Hashable`; `Instrument` and `InstrumentAmount` via
+/// `Hashable`; `Int?`), so the synthesised conformance is correct.
+struct TransactionPage: Sendable, Equatable {
   let transactions: [Transaction]
   /// The instrument in which the running balance column should be displayed for
   /// this fetch. For account-scoped fetches this is the account's own instrument;

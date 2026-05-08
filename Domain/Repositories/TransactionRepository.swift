@@ -7,6 +7,35 @@ protocol TransactionRepository: Sendable {
   /// backend to re-filter and re-sort the whole dataset per page. Skips the
   /// prior-balance computation since it is not meaningful for the bulk path.
   func fetchAll(filter: TransactionFilter) async throws -> [Transaction]
+  /// Reactive observation of a single page. Emits the current page once
+  /// immediately, then re-emits whenever the underlying tables change in a
+  /// way that affects the page or its `priorBalance` / `totalCount`. The
+  /// `filter`, `page`, and `pageSize` are captured into the GRDB tracking
+  /// closure — changing any of them requires cancelling the prior
+  /// subscription and starting a new one with the new values.
+  ///
+  /// Errors are surfaced out-of-band on `observeErrors()`.
+  func observe(
+    filter: TransactionFilter, page: Int, pageSize: Int
+  ) -> AsyncStream<TransactionPage>
+  /// Reactive observation of the bulk projection. Emits every matching
+  /// transaction once immediately, then re-emits on any underlying-table
+  /// change that produces a different snapshot. `removeDuplicates()`
+  /// (applied inside the retry helper) coalesces re-fetches that produce
+  /// the same `[Transaction]` value.
+  ///
+  /// Used by consumers that already process the full filtered set and
+  /// want a single live projection (e.g. small whole-account feeds, the
+  /// scheduled-transactions card). Bulk paginated views should prefer
+  /// `observe(filter:page:pageSize:)` so the observation cost scales
+  /// with the page, not the dataset.
+  func observeAll(filter: TransactionFilter) -> AsyncStream<[Transaction]>
+  /// Companion error stream for `observe(...)` and `observeAll(...)`.
+  /// A healthy observation stays quiet here for its lifetime; a
+  /// programmer-bug or non-recoverable I/O error from the underlying
+  /// observation is yielded once and then the stream completes. Stores
+  /// typically surface this to a banner / log path.
+  func observeErrors() -> AsyncStream<any Error>
   func create(_ transaction: Transaction) async throws -> Transaction
   func update(_ transaction: Transaction) async throws -> Transaction
   func delete(id: UUID) async throws

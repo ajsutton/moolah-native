@@ -8,39 +8,33 @@ import Testing
 @MainActor
 struct CategoryStoreTests {
   @Test
-  func testLoadPopulatesCategories() async throws {
+  func testInitialEmissionPopulatesCategories() async throws {
     let cat = Moolah.Category(name: "Groceries")
     let (backend, database) = try TestBackend.create()
     TestBackend.seed(categories: [cat], in: database)
     let store = CategoryStore(repository: backend.categories)
 
-    await store.load()
+    try await store.waitForFirstEmission()
 
     #expect(store.categories.roots.count == 1)
     #expect(store.categories.roots.first?.name == "Groceries")
   }
 
   @Test
-  func testLoadSetsErrorOnFailure() async throws {
-    let store = CategoryStore(repository: FailingCategoryRepository())
-
-    await store.load()
-
-    #expect(store.error != nil)
-    #expect(store.categories.roots.isEmpty)
-  }
-
-  @Test
   func testCreateAddsCategory() async throws {
     let (backend, _) = try TestBackend.create()
     let store = CategoryStore(repository: backend.categories)
+    try await store.waitForFirstEmission()
 
     let cat = Moolah.Category(name: "Transport")
     let created = await store.create(cat)
 
     #expect(created != nil)
     #expect(created?.name == "Transport")
-    #expect(store.categories.roots.count == 1)
+    try await store.waitForNextEmission(
+      matching: { $0.categories.roots.count == 1 },
+      description: "categories.roots.count == 1"
+    )
     #expect(store.categories.roots.first?.name == "Transport")
   }
 
@@ -60,7 +54,7 @@ struct CategoryStoreTests {
     let (backend, database) = try TestBackend.create()
     TestBackend.seed(categories: [cat], in: database)
     let store = CategoryStore(repository: backend.categories)
-    await store.load()
+    try await store.waitForFirstEmission()
 
     var modified = cat
     modified.name = "Food & Groceries"
@@ -68,7 +62,10 @@ struct CategoryStoreTests {
 
     #expect(updated != nil)
     #expect(updated?.name == "Food & Groceries")
-    #expect(store.categories.by(id: cat.id)?.name == "Food & Groceries")
+    try await store.waitForNextEmission(
+      matching: { $0.categories.by(id: cat.id)?.name == "Food & Groceries" },
+      description: "category renamed"
+    )
   }
 
   @Test
@@ -87,14 +84,18 @@ struct CategoryStoreTests {
     let (backend, database) = try TestBackend.create()
     TestBackend.seed(categories: [cat], in: database)
     let store = CategoryStore(repository: backend.categories)
-    await store.load()
-
-    #expect(store.categories.roots.count == 1)
+    try await store.waitForNextEmission(
+      matching: { $0.categories.roots.count == 1 },
+      description: "store sees seeded category"
+    )
 
     let success = await store.delete(id: cat.id, withReplacement: nil)
 
     #expect(success == true)
-    #expect(store.categories.roots.isEmpty)
+    try await store.waitForNextEmission(
+      matching: { $0.categories.roots.isEmpty },
+      description: "category removed"
+    )
   }
 
   @Test
@@ -104,12 +105,18 @@ struct CategoryStoreTests {
     let (backend, database) = try TestBackend.create()
     TestBackend.seed(categories: [cat1, cat2], in: database)
     let store = CategoryStore(repository: backend.categories)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.categories.roots.count == 2 },
+      description: "store sees both seeded categories"
+    )
 
     let success = await store.delete(id: cat1.id, withReplacement: cat2.id)
 
     #expect(success == true)
-    #expect(store.categories.roots.count == 1)
+    try await store.waitForNextEmission(
+      matching: { $0.categories.roots.count == 1 },
+      description: "categories collapsed to one"
+    )
     #expect(store.categories.roots.first?.name == "New Category")
   }
 
@@ -129,6 +136,14 @@ struct CategoryStoreTests {
 private struct FailingCategoryRepository: CategoryRepository {
   func fetchAll() async throws -> [Moolah.Category] {
     throw BackendError.networkUnavailable
+  }
+
+  func observeAll() -> AsyncStream<[Moolah.Category]> {
+    AsyncStream { $0.finish() }
+  }
+
+  func observeErrors() -> AsyncStream<any Error> {
+    AsyncStream { $0.finish() }
   }
 
   func create(_ category: Moolah.Category) async throws -> Moolah.Category {

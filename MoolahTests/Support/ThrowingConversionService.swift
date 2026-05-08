@@ -27,4 +27,17 @@ struct ThrowingConversionService: InstrumentConversionService {
     throw Invoked()
   }
   func invalidateCache(for instrument: Instrument) async {}
+
+  // No-op observation stubs — see `FixedConversionService.observeRates`
+  // for the rationale.
+  func observeRates() -> AsyncStream<Void> {
+    AsyncStream { continuation in
+      continuation.yield(())
+      continuation.finish()
+    }
+  }
+
+  func observeErrors() -> AsyncStream<any Error> {
+    AsyncStream { $0.finish() }
+  }
 }

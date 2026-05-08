@@ -51,6 +51,7 @@ struct TransactionStoreLoadingTests {
     #expect(store.hasMore == true)
 
     await store.loadMore()
+    try await store.awaitTransactionCount(5)
     #expect(store.transactions.count == 5)
     #expect(store.hasMore == false)
   }

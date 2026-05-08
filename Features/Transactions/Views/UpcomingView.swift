@@ -79,7 +79,9 @@ struct UpcomingView: View {
       }
     }
     .task {
-      await transactionStore.load(filter: TransactionFilter(scheduled: .scheduledOnly))
+      // View-driven reactive subscription — runs the for-await loop in
+      // the store until this `.task` is cancelled (view unmount).
+      await transactionStore.observe(filter: TransactionFilter(scheduled: .scheduledOnly))
     }
     .refreshable {
       await transactionStore.load(filter: TransactionFilter(scheduled: .scheduledOnly))

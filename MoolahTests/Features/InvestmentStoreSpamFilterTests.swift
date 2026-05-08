@@ -184,4 +184,15 @@ private actor MutableKnownZeroConversionService: InstrumentConversionService {
   }
 
   func invalidateCache(for instrument: Instrument) async {}
+
+  nonisolated func observeRates() -> AsyncStream<Void> {
+    AsyncStream { continuation in
+      continuation.yield(())
+      continuation.finish()
+    }
+  }
+
+  nonisolated func observeErrors() -> AsyncStream<any Error> {
+    AsyncStream { $0.finish() }
+  }
 }

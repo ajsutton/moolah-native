@@ -58,10 +58,6 @@ final class ProfileSession: Identifiable {
   /// (see issue #359). `nil` when idle so the sheet dismisses automatically.
   var activeExport: ActiveExport?
 
-  /// Observer token for sync coordinator notifications. Module-internal
-  /// because `cleanupSync` lives in `ProfileSession+SyncCleanup.swift`.
-  var syncObserverToken: SyncCoordinator.ObserverToken?
-
   /// Stable profile identity captured at init time so the nonisolated
   /// `id` accessor (used by `Identifiable` conformance / SwiftUI diffing)
   /// does not have to read the main-actor-isolated `profile` property.
@@ -76,11 +72,6 @@ final class ProfileSession: Identifiable {
   /// `ProfileSession+DatabaseMaintenance.swift` can log without needing
   /// their own Logger instances.
   let logger = Logger(subsystem: "com.moolah.app", category: "ProfileSession")
-  // Module-internal so `ProfileSession+SyncCleanup.swift` can drive the
-  // debounced reload + cancel the in-flight task on teardown.
-  var syncReloadTask: Task<Void, Never>?
-  var pendingChangedTypes = Set<String>()
-  var lastSyncEventTime: ContinuousClock.Instant?
   /// Background task handle for the once-per-session CoinGecko
   /// `refreshIfStale()` kick-off. Tracked so it can be cancelled in
   /// `cleanupSync(coordinator:)` if the session is torn down before the
@@ -108,9 +99,11 @@ final class ProfileSession: Identifiable {
   /// because `runPragmaOptimize` lives in
   /// `ProfileSession+DatabaseMaintenance.swift`; mutated only there.
   var pragmaOptimizeRunCount: Int = 0
-  /// Tasks spawned by the investment-store → account-store bridge, kept
-  /// reachable so `cleanupSync` can cancel in-flight balance updates
-  /// (per `guides/CONCURRENCY_GUIDE.md` §8). Module-internal so
+  /// Tasks spawned by cross-store side effects (e.g.
+  /// `seedBuiltInCryptoPresets`, the `cryptoTokenStore` ->
+  /// `investmentStore.revaluateLoadedPositions` callback). Kept
+  /// reachable so `cleanupSync` can cancel in-flight work (per
+  /// `guides/CONCURRENCY_GUIDE.md` §8). Module-internal so
   /// `ProfileSession+SyncCleanup.swift` can drain the list on teardown.
   var crossStoreUpdateTasks: [Task<Void, Never>] = []
 
@@ -198,18 +191,22 @@ final class ProfileSession: Identifiable {
     self.folderWatcher = importPipeline.watcher
 
     finishInit(
-      syncCoordinator: syncCoordinator,
       cryptoRegistry: registryWiring.registry,
       cryptoPriceService: services.cryptoPrice)
   }
 
   /// Tail of the initialiser — kept as a separate method so `init`
   /// stays under SwiftLint's `function_body_length` threshold. Wires
-  /// the crypto-wallet sync stores, cross-store side effects, the
-  /// sync coordinator, and starts the hourly `PRAGMA optimize` tick
-  /// (issue #576).
+  /// the crypto-wallet sync stores and starts the hourly
+  /// `PRAGMA optimize` tick (issue #576).
+  ///
+  /// Cross-store propagation is handled reactively: every store
+  /// subscribes to its repository's GRDB `ValueObservation` stream in
+  /// `init`, so remote-sync writes (and local writes) reach views
+  /// without an explicit reload step. The session no longer needs a
+  /// reference to `SyncCoordinator` here — apply still drives GRDB
+  /// writes and the observation streams take it from there.
   private func finishInit(
-    syncCoordinator: SyncCoordinator?,
     cryptoRegistry: (any InstrumentRegistryRepository)?,
     cryptoPriceService: CryptoPriceService
   ) {
@@ -221,7 +218,6 @@ final class ProfileSession: Identifiable {
     self.cryptoTokenDiscovery = cryptoWiring?.discovery
     seedBuiltInCryptoPresets(registry: cryptoRegistry)
     wireCrossStoreSideEffects()
-    registerWithSyncCoordinator(syncCoordinator)
     startPeriodicPragmaOptimize()
   }
 
@@ -243,23 +239,21 @@ final class ProfileSession: Identifiable {
     crossStoreUpdateTasks.append(task)
   }
 
-  /// Wires the investment-store -> account-store callback. The spawned
-  /// Task is appended to `crossStoreUpdateTasks` so `cleanupSync` can
-  /// cancel in-flight updates if the session is torn down.
-  ///
-  /// Also wires the crypto-token-store -> investment-store hook: when a
+  /// Wires the crypto-token-store -> investment-store hook: when a
   /// registration's `pricingStatus` flips (e.g. user marks a token as
   /// `.spam` from preferences), the loaded investment account
   /// re-valuates so the spam position drops out of `valuedPositions`
   /// without the user having to navigate away and back. Issue #790.
+  ///
+  /// The investment-store -> account-store fan-out (formerly
+  /// `onInvestmentValueChanged`) was removed when AccountStore
+  /// migrated to reactive observation: AccountStore now subscribes to
+  /// `investmentRepository.observeAllValues()` and refreshes its cache
+  /// directly, so a write to `investment_value` reaches the sidebar
+  /// without a callback. The spawned crypto-token Task is tracked in
+  /// `crossStoreUpdateTasks` so `cleanupSync` can cancel in-flight
+  /// revaluations on session teardown.
   private func wireCrossStoreSideEffects() {
-    let accountStore = self.accountStore
-    self.investmentStore.onInvestmentValueChanged = { [weak self] accountId, latestValue in
-      let task = Task { @MainActor in
-        await accountStore.updateInvestmentValue(accountId: accountId, value: latestValue)
-      }
-      self?.crossStoreUpdateTasks.append(task)
-    }
     let investmentStore = self.investmentStore
     self.cryptoTokenStore?.onRegistrationsChanged = { [weak self] in
       let task = Task { @MainActor in
@@ -269,24 +263,8 @@ final class ProfileSession: Identifiable {
     }
   }
 
-  /// Registers the session with the `SyncCoordinator`:
-  /// installs the per-profile reload observer and wires the repository
-  /// sync callbacks for the profile's zone. Logs a warning when the
-  /// coordinator is unavailable.
-  private func registerWithSyncCoordinator(_ coordinator: SyncCoordinator?) {
-    let profileId = profile.id
-    guard let coordinator else {
-      logger.warning("CloudKit not available — profile sync disabled for \(profileId)")
-      return
-    }
-    logger.info("Registering profile \(profileId) with sync coordinator")
-    self.syncObserverToken = coordinator.addObserver(for: profileId) { [weak self] changedTypes in
-      self?.scheduleReloadFromSync(changedTypes: changedTypes)
-    }
-  }
-
-  // CloudKit-sync reload debouncing, `cleanupSync(coordinator:)`, and
-  // `updateProfile(_:)` live in `ProfileSession+SyncCleanup.swift`.
+  // `cleanupSync(coordinator:)` and `updateProfile(_:)` live in
+  // `ProfileSession+SyncCleanup.swift`.
 
   // MARK: - Folder watch
 

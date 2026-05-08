@@ -93,6 +93,12 @@ actor CryptoPriceService {
         try CryptoTokenMetaRecord
           .filter(CryptoTokenMetaRecord.Columns.tokenId == instrumentId)
           .deleteAll(database)
+        // `crypto_price` is `WITHOUT ROWID`; SQLite's update hook does
+        // not fire for these tables, so `ValueObservation` over the
+        // rate-cache region needs an explicit notify to see this delete.
+        // See `Backends/GRDB/Observation/RateCacheTable.swift`
+        // and `guides/DATABASE_CODE_GUIDE.md` §2 convention 1.
+        try database.notifyRateCacheChange(.cryptoPrice)
       }
     } catch {
       logger.warning(

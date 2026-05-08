@@ -10,7 +10,9 @@ struct AccountStoreInvestmentValuesTests {
 
   // MARK: - Preload investment values on load
 
-  @Test("load populates investmentValues from latest repository value for investment accounts")
+  @Test(
+    "first emission populates investmentValues from latest repository value for investment accounts"
+  )
   func loadPreloadsLatestInvestmentValues() async throws {
     let acctId = UUID()
     let instrument = Instrument.defaultTestInstrument
@@ -40,13 +42,16 @@ struct AccountStoreInvestmentValuesTests {
       targetInstrument: instrument,
       investmentRepository: backend.investments)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.investmentValues[acctId] != nil },
+      description: "investmentValues populated"
+    )
 
     #expect(store.investmentValues[acctId]?.quantity == Decimal(250000) / 100)
     #expect(store.convertedBalances[acctId]?.quantity == Decimal(250000) / 100)
   }
 
-  @Test("load with recordedValue and no snapshot yields zero balance")
+  @Test("first emission with recordedValue and no snapshot yields zero balance")
   func loadRecordedValueWithoutSnapshotYieldsZero() async throws {
     let acctId = UUID()
     let (backend, database) = try TestBackend.create()
@@ -60,7 +65,10 @@ struct AccountStoreInvestmentValuesTests {
       targetInstrument: .defaultTestInstrument,
       investmentRepository: backend.investments)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.convertedBalances[acctId] != nil },
+      description: "balance is published (zero)"
+    )
 
     // `recordedValue` (default) + no snapshot → balance = 0. Position sum is
     // intentionally not used as a fallback; see `displayBalance` in
@@ -69,7 +77,7 @@ struct AccountStoreInvestmentValuesTests {
     #expect(store.convertedBalances[acctId]?.quantity == 0)
   }
 
-  @Test("load with calculatedFromTrades sums positions when no snapshot exists")
+  @Test("first emission with calculatedFromTrades sums positions when no snapshot exists")
   func loadCalculatedFromTradesUsesPositionsWhenSnapshotMissing() async throws {
     let acctId = UUID()
     let (backend, database) = try TestBackend.create()
@@ -83,7 +91,10 @@ struct AccountStoreInvestmentValuesTests {
       targetInstrument: .defaultTestInstrument,
       investmentRepository: backend.investments)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.convertedBalances[acctId]?.quantity == Decimal(100000) / 100 },
+      description: "position-derived balance"
+    )
 
     #expect(store.investmentValues[acctId] == nil)
     #expect(store.convertedBalances[acctId]?.quantity == Decimal(100000) / 100)
@@ -99,7 +110,10 @@ struct AccountStoreInvestmentValuesTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.count == 1 },
+      description: "seeded account observed"
+    )
 
     let newValue = InstrumentAmount(
       quantity: Decimal(150000) / 100, instrument: Instrument.defaultTestInstrument)
@@ -119,7 +133,10 @@ struct AccountStoreInvestmentValuesTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.count == 1 },
+      description: "seeded account observed"
+    )
 
     let account = try #require(store.accounts.first)
     let investmentValue = InstrumentAmount(
@@ -143,7 +160,10 @@ struct AccountStoreInvestmentValuesTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.count == 1 },
+      description: "seeded account observed"
+    )
 
     let newValue = InstrumentAmount(
       quantity: Decimal(150000) / 100, instrument: Instrument.defaultTestInstrument)
@@ -166,7 +186,10 @@ struct AccountStoreInvestmentValuesTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.by(id: acctId) != nil },
+      description: "seeded account observed"
+    )
 
     let investmentValue = InstrumentAmount(
       quantity: Decimal(150000) / 100, instrument: Instrument.defaultTestInstrument)
@@ -184,7 +207,10 @@ struct AccountStoreInvestmentValuesTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.by(id: acctId) != nil },
+      description: "seeded account observed"
+    )
 
     #expect(store.canDelete(acctId))
   }
@@ -198,7 +224,10 @@ struct AccountStoreInvestmentValuesTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { ($0.accounts.by(id: acctId)?.positions.isEmpty == false) },
+      description: "seeded account with positions observed"
+    )
 
     #expect(!store.canDelete(acctId))
   }

@@ -18,64 +18,108 @@ struct ImportRuleStoreTests {
       conditions: conditions, actions: actions)
   }
 
-  @Test("load sorts rules by position")
-  func loadSortsByPosition() async throws {
+  @Test("initial emission sorts pre-existing rules by position")
+  func initialEmissionSortsByPosition() async throws {
     let (backend, _) = try TestBackend.create()
     _ = try await backend.importRules.create(rule(name: "ruleC", position: 5))
     _ = try await backend.importRules.create(rule(name: "ruleA", position: 1))
     _ = try await backend.importRules.create(rule(name: "ruleB", position: 3))
     let store = ImportRuleStore(repository: backend.importRules)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.rules.count == 3 },
+      description: "rules.count == 3"
+    )
     #expect(store.rules.map(\.name) == ["ruleA", "ruleB", "ruleC"])
   }
 
-  @Test("create appends the new rule and keeps sorted")
+  @Test("create produces an emission with the appended rule")
   func createAppends() async throws {
     let (backend, _) = try TestBackend.create()
     let store = ImportRuleStore(repository: backend.importRules)
-    await store.load()
+    try await store.waitForFirstEmission()
     await store.create(rule(name: "alpha", position: 0))
+    try await store.waitForNextEmission(
+      matching: { $0.rules.count == 1 },
+      description: "rules.count == 1"
+    )
     await store.create(rule(name: "beta", position: 1))
+    try await store.waitForNextEmission(
+      matching: { $0.rules.count == 2 },
+      description: "rules.count == 2"
+    )
     #expect(store.rules.map(\.name) == ["alpha", "beta"])
   }
 
-  @Test("update replaces the existing rule")
+  @Test("update emits the renamed rule with refreshed conditions")
   func updateReplaces() async throws {
     let (backend, _) = try TestBackend.create()
     let store = ImportRuleStore(repository: backend.importRules)
+    try await store.waitForFirstEmission()
     guard let created = await store.create(rule(name: "original", position: 0)) else {
       Issue.record("create returned nil")
       return
     }
+    try await store.waitForNextEmission(
+      matching: { $0.rules.first?.name == "original" },
+      description: "store sees created rule"
+    )
     var edited = created
     edited.name = "renamed"
     edited.conditions = [.descriptionContains(["FOO"])]
     await store.update(edited)
-    #expect(store.rules.first?.name == "renamed")
+    try await store.waitForNextEmission(
+      matching: { $0.rules.first?.name == "renamed" },
+      description: "store sees renamed rule"
+    )
     #expect(store.rules.first?.conditions == [.descriptionContains(["FOO"])])
   }
 
-  @Test("delete removes from the list")
+  @Test("delete emits an empty rules list")
   func deleteRemoves() async throws {
     let (backend, _) = try TestBackend.create()
     let store = ImportRuleStore(repository: backend.importRules)
+    try await store.waitForFirstEmission()
     guard let created = await store.create(rule(name: "x", position: 0)) else {
       Issue.record("create failed")
       return
     }
+    try await store.waitForNextEmission(
+      matching: { $0.rules.count == 1 },
+      description: "store sees created rule"
+    )
     await store.delete(id: created.id)
-    #expect(store.rules.isEmpty)
+    try await store.waitForNextEmission(
+      matching: { $0.rules.isEmpty },
+      description: "rules empty after delete"
+    )
   }
 
-  @Test("reorder atomically updates positions and re-sorts")
+  @Test("reorder atomically renumbers positions and re-sorts")
   func reorderUpdatesPositions() async throws {
     let (backend, _) = try TestBackend.create()
     let store = ImportRuleStore(repository: backend.importRules)
-    let ruleA = await store.create(rule(name: "ruleA", position: 0))!
-    let ruleB = await store.create(rule(name: "ruleB", position: 1))!
-    let ruleC = await store.create(rule(name: "ruleC", position: 2))!
+    try await store.waitForFirstEmission()
+    guard let ruleA = await store.create(rule(name: "ruleA", position: 0)) else {
+      Issue.record("create ruleA failed")
+      return
+    }
+    guard let ruleB = await store.create(rule(name: "ruleB", position: 1)) else {
+      Issue.record("create ruleB failed")
+      return
+    }
+    guard let ruleC = await store.create(rule(name: "ruleC", position: 2)) else {
+      Issue.record("create ruleC failed")
+      return
+    }
+    try await store.waitForNextEmission(
+      matching: { $0.rules.count == 3 },
+      description: "store sees all three created rules"
+    )
     await store.reorder([ruleC.id, ruleA.id, ruleB.id])
-    #expect(store.rules.map(\.name) == ["ruleC", "ruleA", "ruleB"])
+    try await store.waitForNextEmission(
+      matching: { $0.rules.map(\.name) == ["ruleC", "ruleA", "ruleB"] },
+      description: "store sees reorder applied"
+    )
     #expect(store.rules.map(\.position) == [0, 1, 2])
   }
 

@@ -20,9 +20,7 @@ struct CategoryTreeView: View {
     #endif
     .navigationTitle("Categories")
     .overlay {
-      if categoryStore.isLoading && categoryStore.categories.roots.isEmpty {
-        ProgressView()
-      } else if !categoryStore.isLoading && categoryStore.categories.roots.isEmpty {
+      if categoryStore.categories.roots.isEmpty {
         ContentUnavailableView(
           "No Categories",
           systemImage: "tag",
@@ -72,6 +70,7 @@ private struct CategoryNodeView: View {
     ] {
       _ = try? await backend.categories.create(cat)
     }
-    await store.load()
+    // CategoryStore is reactive — it'll see the seeded categories via
+    // `observeAll()` without an explicit load() call.
   }
 }

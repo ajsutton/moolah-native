@@ -67,4 +67,17 @@ final class RecordingConversionService: InstrumentConversionService, Sendable {
   func invalidateCache(for instrument: Instrument) async {
     invalidations.withLock { $0.append(instrument) }
   }
+
+  // No-op observation stubs — see `FixedConversionService.observeRates`
+  // for the rationale.
+  func observeRates() -> AsyncStream<Void> {
+    AsyncStream { continuation in
+      continuation.yield(())
+      continuation.finish()
+    }
+  }
+
+  func observeErrors() -> AsyncStream<any Error> {
+    AsyncStream { $0.finish() }
+  }
 }

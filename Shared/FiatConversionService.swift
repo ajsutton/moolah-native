@@ -1,11 +1,28 @@
 import Foundation
+import GRDB
 
 /// Fiat-to-fiat conversion backed by ExchangeRateService.
 actor FiatConversionService: InstrumentConversionService {
   private let exchangeRates: ExchangeRateService
+  /// Database used by `observeRates()` to watch the live price-cache
+  /// tables (`exchange_rate`, `stock_price`, `crypto_price`). Optional
+  /// so the service stays usable in test fixtures that never observe
+  /// rates — when nil, `observeRates()` emits a single tick on
+  /// subscription and `observeErrors()` returns an empty stream.
+  private let database: (any DatabaseWriter)?
+  /// Shared with every `observeRates()` subscription returned by this
+  /// instance. Per the Stage 1/3 convention, the channel is single-shot:
+  /// once `surfaceAndFinish(_:)` is called every observation surfaces
+  /// the same terminal error.
+  private let errorChannel: ObservationErrorChannel?
 
-  init(exchangeRates: ExchangeRateService) {
+  init(
+    exchangeRates: ExchangeRateService,
+    database: (any DatabaseWriter)? = nil
+  ) {
     self.exchangeRates = exchangeRates
+    self.database = database
+    self.errorChannel = database == nil ? nil : ObservationErrorChannel()
   }
 
   func convert(
@@ -61,5 +78,30 @@ actor FiatConversionService: InstrumentConversionService {
   /// invalidation only matters in `FullConversionService`.
   func invalidateCache(for instrument: Instrument) async {
     // Intentionally empty.
+  }
+
+  /// Reactive rate-tick stream. See protocol docs for the contract.
+  /// When constructed without a database (legacy test sites that don't
+  /// observe), emits a single tick on subscription and never again —
+  /// stores subscribing fire `recomputeConvertedTotals` once and stop,
+  /// which is harmless.
+  nonisolated func observeRates() -> AsyncStream<Void> {
+    guard let database, let errorChannel else {
+      return AsyncStream { continuation in
+        continuation.yield(())
+        continuation.finish()
+      }
+    }
+    return makeRateCacheTickStream(
+      database: database,
+      errorChannel: errorChannel,
+      repoMethod: "FiatConversionService.observeRates")
+  }
+
+  nonisolated func observeErrors() -> AsyncStream<any Error> {
+    guard let errorChannel else {
+      return AsyncStream { $0.finish() }
+    }
+    return errorChannel.stream
   }
 }

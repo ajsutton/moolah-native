@@ -174,27 +174,20 @@ extension SyncCoordinator {
     let result = handler.applyRemoteChanges(
       saved: saved, deleted: deleted, preExtractedSystemFields: zonePreExtracted)
 
-    // Notify observers on main — read isFetchingChanges live to avoid
-    // stale snapshot if stop() was called during applyRemoteChanges
     switch result {
-    case .success(let changedTypes):
+    case .success:
       await MainActor.run {
         // Successful apply proves local writes are working — reset the re-fetch
         // attempt counter so a future transient failure gets a full retry budget.
         resetRefetchAttempts()
-        if !changedTypes.isEmpty {
-          if isFetchingChanges {
-            accumulateFetchSessionChanges(for: profileId, changedTypes: changedTypes)
-          } else {
-            notifyObservers(for: profileId, changedTypes: changedTypes)
-          }
-        }
       }
       // Run the cross-device leg deduper after the apply so any
       // duplicates introduced by a multi-device race collapse to one
-      // canonical leg before observers see the post-fetch state.
+      // canonical leg before subscribers see the post-fetch state.
       // Best-effort — failures are logged inside the deduper and
-      // don't block observer notifications.
+      // don't block downstream propagation. Stores observe their
+      // repositories' GRDB `ValueObservation` streams directly, so
+      // remote writes propagate without an explicit notification step.
       await runCrossDeviceLegDedup(
         profileId: profileId, touchedExternalIds: touchedExternalIds)
     case .saveFailed(let errorDescription):

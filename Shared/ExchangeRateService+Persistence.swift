@@ -76,6 +76,12 @@ extension ExchangeRateService {
         try record.insert(database, onConflict: .replace)
       }
       try meta.insert(database, onConflict: .replace)
+      // `exchange_rate` is `WITHOUT ROWID`; SQLite's update hook does
+      // not fire for these tables, so `ValueObservation` over the
+      // rate-cache region needs an explicit notify to see this write.
+      // See `Backends/GRDB/Observation/RateCacheTable.swift`
+      // and `guides/DATABASE_CODE_GUIDE.md` §2 convention 1.
+      try database.notifyRateCacheChange(.exchangeRate)
     }
   }
 }

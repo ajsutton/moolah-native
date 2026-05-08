@@ -175,6 +175,18 @@ struct ScriptedBenchmarkAlchemyClient: AlchemyClient, Sendable {
     AlchemyTokenMetadata(
       symbol: "TKN", name: "Token", decimals: 18, logo: nil, isSpam: false)
   }
+
+  /// Thrown when a benchmark path triggers an unscripted receipt fetch.
+  /// The current crypto-sync benchmarks don't exercise the gas-leg
+  /// pipeline, so any invocation here is a wiring bug worth surfacing.
+  struct UnscriptedReceiptCall: Error { let hash: String }
+
+  func getTransactionReceipt(
+    chain: ChainConfig,
+    hash: String
+  ) async throws -> AlchemyTransactionReceipt {
+    throw UnscriptedReceiptCall(hash: hash)
+  }
 }
 
 /// Returns a successful CoinGecko mapping for every input. Used by the

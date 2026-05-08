@@ -67,7 +67,11 @@ struct ImportRulesSettingsView: View {
       #endif
     }
     .task {
-      await ruleStore.load()
+      // Reactive `ImportRuleStore` subscribes to `observeAll()` from
+      // `init`; the rules list is already populated on appear. We still
+      // refresh the per-rule match stats here because they are derived
+      // from a `transactions.fetch(...)` rather than from the rules
+      // table itself.
       await ruleStore.refreshStats(backend: session.backend)
     }
     .sheet(isPresented: $showingAddSheet) {

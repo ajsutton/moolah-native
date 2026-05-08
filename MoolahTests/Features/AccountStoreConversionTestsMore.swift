@@ -30,7 +30,10 @@ struct AccountStoreConversionTestsMore {
     let store = AccountStore(
       repository: backend.accounts, conversionService: conversion,
       targetInstrument: .AUD)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { !($0.positions(for: accountId).isEmpty) },
+      description: "USD position observed"
+    )
 
     // recordedValue + no snapshot → balance = 0 (positions are NOT a fallback).
     let sumBalance = try await store.displayBalance(for: accountId)
@@ -51,7 +54,7 @@ struct AccountStoreConversionTestsMore {
       repository: backend.accounts,
       conversionService: backend.conversionService,
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForFirstEmission()
     let balance = try await store.displayBalance(for: UUID())
     #expect(balance == .zero(instrument: .defaultTestInstrument))
   }
@@ -102,10 +105,16 @@ struct AccountStoreConversionTestsMore {
       targetInstrument: aud,
       retryDelay: .seconds(60))
 
-    // `load()` awaits the first conversion pass inline, so after it returns
-    // `convertedBalances` reflects the partial-failure state deterministically
-    // — no polling or timeouts needed.
-    await store.load()
+    // After the first emission settles, the partial-failure state is
+    // observable: AUD bank has a balance, mixed bank does not, totals nil.
+    try await store.waitForNextEmission(
+      matching: {
+        $0.convertedBalances[bankAud.id] != nil
+          && $0.convertedBalances[bankMixed.id] == nil
+          && $0.convertedCurrentTotal == nil
+      },
+      description: "partial-failure state observable"
+    )
 
     // AUD bank: only AUD positions → succeeds.
     #expect(store.convertedBalances[bankAud.id]?.quantity == 1000)
@@ -150,12 +159,11 @@ struct AccountStoreConversionTestsMore {
       targetInstrument: aud,
       retryDelay: .milliseconds(20))
 
-    // `load()` awaits the first pass; since EUR fails we land in the
-    // partial-failure state with a retry loop running in the background.
-    await store.load()
-
-    // Initial state: EUR bank can't be converted to AUD aggregate target → aggregate nil.
-    #expect(store.convertedCurrentTotal == nil)
+    // Wait for the partial-failure state to land in the store.
+    try await store.waitForNextEmission(
+      matching: { $0.convertedCurrentTotal == nil && $0.accounts.count == 2 },
+      description: "partial-failure observable"
+    )
 
     // Recover the conversion service and wait for the background retry
     // loop to succeed. `waitForPendingConversions()` returns when the loop

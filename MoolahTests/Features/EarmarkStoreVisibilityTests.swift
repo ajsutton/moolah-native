@@ -31,7 +31,10 @@ struct EarmarkStoreVisibilityTests {
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.count == 2 },
+      description: "both seeded earmarks observed"
+    )
 
     #expect(store.visibleEarmarks.count == 1)
     #expect(store.visibleEarmarks[0].name == "Visible")
@@ -60,7 +63,10 @@ struct EarmarkStoreVisibilityTests {
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.count == 2 },
+      description: "both seeded earmarks observed"
+    )
     store.showHidden = true
 
     #expect(store.visibleEarmarks.count == 2)
@@ -85,8 +91,10 @@ struct EarmarkStoreVisibilityTests {
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .USD)
 
-    await store.load()
-    #expect(store.earmarks.count == 1)
+    try await store.waitForNextEmission(
+      matching: { $0.earmarks.count == 1 },
+      description: "seeded earmark observed"
+    )
     #expect(store.earmarks.first?.instrument == .USD)
   }
 
@@ -130,7 +138,10 @@ struct EarmarkStoreVisibilityTests {
       conversionService: FixedConversionService(rates: ["AUD": 2]),
       targetInstrument: aud)
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.convertedBalance(for: earmarkId)?.quantity == 1000 },
+      description: "USD balance settled"
+    )
 
     let balance = try #require(store.convertedBalance(for: earmarkId))
     #expect(balance.instrument == usd)
@@ -158,11 +169,13 @@ struct EarmarkStoreVisibilityTests {
       repository: backend.earmarks,
       conversionService: FixedConversionService(rates: ["AUD": 2]),
       targetInstrument: aud)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.convertedBalance(for: earmarkId)?.quantity == 400 },
+      description: "AUD balance settled"
+    )
 
     let before = try #require(store.convertedBalance(for: earmarkId))
     #expect(before.instrument == aud)
-    #expect(before.quantity == 400)
 
     let current = try #require(store.earmarks.by(id: earmarkId))
     var changed = current
@@ -170,8 +183,11 @@ struct EarmarkStoreVisibilityTests {
     let updated = await store.update(changed)
     #expect(updated?.instrument == usd)
 
+    try await store.waitForNextEmission(
+      matching: { $0.convertedBalance(for: earmarkId)?.instrument == usd },
+      description: "USD-instrument re-expression observed"
+    )
     let after = try #require(store.convertedBalance(for: earmarkId))
-    #expect(after.instrument == usd)
     #expect(after.quantity == 800)
   }
 }

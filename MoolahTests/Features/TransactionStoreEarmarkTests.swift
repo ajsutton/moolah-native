@@ -41,10 +41,16 @@ struct TransactionStoreEarmarkTests {
     )
     _ = await store.create(transaction)
 
-    // Earmark spent should increase (balance decreases for expense)
+    // EarmarkStore is reactive — wait for the observation to settle
+    // on the post-create state (spent = 50). This both lets the
+    // applyDelta + observation race converge and asserts the final
+    // converged value rather than whichever transient mid-state
+    // happens to be visible synchronously.
+    try await earmarkStore.waitForNextEmission(
+      matching: { $0.earmarks.by(id: earmarkId)?.spentPositions.first?.quantity == Decimal(50) },
+      description: "earmark spent settled at 50"
+    )
     let updatedEarmark = earmarkStore.earmarks.by(id: earmarkId)
-    #expect(updatedEarmark != nil)
-    // Expense of -50 against earmark: spent increases by 50
     #expect(updatedEarmark?.spentPositions.first?.quantity == Decimal(50))
   }
 
@@ -95,10 +101,15 @@ struct TransactionStoreEarmarkTests {
     ]
     await store.update(updated)
 
-    // Earmark 1 should have spent reversed (50 - 50 = 0)
+    // EarmarkStore is reactive — wait for the observation to settle
+    // on the post-update state. Earmark1 should have spent reversed
+    // (transaction moved away) and earmark2 should have spent=50.
+    try await earmarkStore.waitForNextEmission(
+      matching: { $0.earmarks.by(id: earmarkId2)?.spentPositions.first?.quantity == Decimal(50) },
+      description: "earmark2 spent settled at 50"
+    )
     let updatedEarmark1 = earmarkStore.earmarks.by(id: earmarkId1)
     #expect(updatedEarmark1?.spentPositions.first?.quantity ?? 0 == Decimal(0))
-    // Earmark 2 should have spent increased (0 + 50 = 50)
     let updatedEarmark2 = earmarkStore.earmarks.by(id: earmarkId2)
     #expect(updatedEarmark2?.spentPositions.first?.quantity == Decimal(50))
   }
@@ -139,7 +150,10 @@ struct TransactionStoreEarmarkTests {
     ]
     await store.update(updated)
 
-    // Loaded: 950+(-50)=900. Update delta: +50-(-50)=+100. Final: 900+100=1000
+    // AccountStore is reactive — wait for observation to settle (OB 950 + income +50 = 1000).
+    try await accountStore.waitForNextEmission(
+      matching: { $0.accounts.by(id: accountId)?.positions.first?.quantity == Decimal(1000) },
+      description: "account settled at 1000 after expense-to-income update")
     let balance = try await accountStore.displayBalance(for: accountId)
     #expect(balance.quantity == Decimal(1000))
   }
@@ -171,6 +185,10 @@ struct TransactionStoreEarmarkTests {
     await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
     _ = await store.payScheduledTransaction(scheduled)
 
+    // AccountStore is reactive — wait for observation to settle (OB 1000 + paid -2000 = -1000).
+    try await accountStore.waitForNextEmission(
+      matching: { $0.accounts.by(id: accountId)?.positions.first?.quantity == Decimal(-1000) },
+      description: "account settled at -1000 after paying -2000 scheduled expense")
     // Paying a -2000 expense should decrease balance by 2000
     let balance = try await accountStore.displayBalance(for: accountId)
     #expect(balance.quantity == Decimal(-1000))
@@ -203,64 +221,17 @@ struct TransactionStoreEarmarkTests {
     await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
     _ = await store.payScheduledTransaction(scheduled)
 
+    // AccountStore is reactive — wait for observation to settle (OB 1000 + paid -500 = 500).
+    try await accountStore.waitForNextEmission(
+      matching: { $0.accounts.by(id: accountId)?.positions.first?.quantity == Decimal(500) },
+      description: "account settled at 500 after paying -500 one-time expense")
     // Paying a -500 expense should decrease balance by 500
     let balance = try await accountStore.displayBalance(for: accountId)
     #expect(balance.quantity == Decimal(500))
   }
 
-  @Test
-  func testRunningBalancesUpdateAfterAmountChange() async throws {
-    let salary = Transaction(
-      date: try TransactionStoreTestSupport.makeDate("2024-01-01"),
-      payee: "Salary",
-      legs: [
-        TransactionLeg(
-          accountId: accountId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(100000) / 100,
-          type: .income
-        )
-      ]
-    )
-    let coffee = Transaction(
-      date: try TransactionStoreTestSupport.makeDate("2024-01-15"),
-      payee: "Coffee",
-      legs: [
-        TransactionLeg(
-          accountId: accountId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-3000) / 100,
-          type: .expense
-        )
-      ]
-    )
-    let (backend, database) = try TestBackend.create()
-    TestBackend.seed(transactions: [salary, coffee], in: database)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
-
-    await store.load(filter: TransactionFilter(accountId: accountId))
-    #expect(store.transactions.count == 2)
-    #expect(store.transactions[0].balance?.quantity == Decimal(97000) / 100)  // After Coffee
-    #expect(store.transactions[1].balance?.quantity == Decimal(100000) / 100)  // After Salary
-
-    // Update Coffee amount to -5000
-    var updated = coffee
-    updated.legs = [
-      TransactionLeg(
-        accountId: accountId,
-        instrument: Instrument.defaultTestInstrument,
-        quantity: Decimal(-5000) / 100,
-        type: .expense
-      )
-    ]
-    await store.update(updated)
-
-    #expect(store.transactions.count == 2)
-    #expect(store.transactions[0].balance?.quantity == Decimal(95000) / 100)  // After updated Coffee
-    #expect(store.transactions[1].balance?.quantity == Decimal(100000) / 100)  // After Salary (unchanged)
-  }
+  // `testRunningBalancesUpdateAfterAmountChange` was moved to
+  // `TransactionStoreRunningBalanceTests.swift` so this file's
+  // type body stays under the SwiftLint length budget after the
+  // reactive migration's emission-await call was added.
 }

@@ -12,29 +12,19 @@ struct SyncCoordinatorTestsExtra {
   func stuckFetchFlagResetWhenNewSessionStartsWhileAlreadyFetching() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
-    let profileId = UUID()
-    var callbackInvocations: [Set<String>] = []
 
-    _ = coordinator.addObserver(for: profileId) { types in
-      callbackInvocations.append(types)
-    }
-
-    // First session starts
+    // First session starts and never ends.
     coordinator.beginFetchingChanges()
-    coordinator.accumulateFetchSessionChanges(for: profileId, changedTypes: ["Account"])
+    #expect(coordinator.isFetchingChanges)
 
     // Second session starts without first ending — this is the "stuck" case.
-    // The old accumulated types should be flushed.
+    // `beginFetchingChanges` flushes any pending index notification and
+    // re-arms the session so the new fetch starts clean.
     coordinator.beginFetchingChanges()
+    #expect(coordinator.isFetchingChanges)
 
-    // The flush from the stuck state should have delivered the old types
-    #expect(callbackInvocations == [Set(["Account"])])
-
-    // New session should start clean
-    callbackInvocations.removeAll()
-    coordinator.accumulateFetchSessionChanges(for: profileId, changedTypes: ["Transaction"])
     coordinator.endFetchingChanges()
-    #expect(callbackInvocations == [Set(["Transaction"])])
+    #expect(!coordinator.isFetchingChanges)
   }
 
   // MARK: - Queue Methods

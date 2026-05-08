@@ -8,15 +8,17 @@ import SwiftData
 @Observable
 @MainActor
 final class SessionManager {
-  /// Live sessions keyed by profile id. **Mutation invariant:** any
-  /// drop / replace must go through `removeSession(for:)` /
-  /// `rebuildSession(for:)` so `cleanupSync` runs first. `cleanupSync`
-  /// is the only place that cancels the session's tracked tasks
-  /// (`syncReloadTask`, `catalogRefreshTask`, `pragmaOptimizeTask`,
-  /// `setUpTask`, etc.); a direct mutation to `sessions` would leak any
-  /// of those that happen to be in flight. Adding new tracked tasks to
-  /// `ProfileSession`? Cancel them in `cleanupSync` and uphold this
-  /// rule for any new mutation site.
+  /// Live sessions keyed by profile id.
+  ///
+  /// **Mutation invariant:** any code path that drops or replaces a
+  /// session **must** go through `removeSession(for:)` or
+  /// `rebuildSession(for:)` so the session's `cleanupSync(coordinator:)`
+  /// runs first. `cleanupSync` is the only place that cancels the
+  /// session's tracked tasks (`catalogRefreshTask`, `pragmaOptimizeTask`,
+  /// `periodicPragmaOptimizeTask`, `setUpTask`); a direct mutation to
+  /// `sessions` would leak any of those that happen to be in flight.
+  /// Adding new tracked tasks to `ProfileSession`? Cancel them in
+  /// `cleanupSync` and uphold this rule for any new mutation site.
   private(set) var sessions: [UUID: ProfileSession] = [:]
 
   /// Profiles whose `dataFormatVersion` exceeds `DataFormatVersion.current`
@@ -182,7 +184,7 @@ final class SessionManager {
   /// `cleanupSync(coordinator:)` itself accepts an optional and
   /// guards the coordinator-only work internally. Without this split,
   /// no-coordinator builds would leak the session's tracked tasks
-  /// (`syncReloadTask`, `setUpTask`, etc.) past teardown.
+  /// (`setUpTask`, etc.) past teardown.
   func removeSession(for profileID: UUID) {
     guard let session = sessions.removeValue(forKey: profileID) else { return }
     session.cleanupSync(coordinator: syncCoordinator)

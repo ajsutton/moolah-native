@@ -139,7 +139,13 @@ final class BalanceDeltaBenchmarks: XCTestCase {
         repository: backend.accounts,
         conversionService: backend.conversionService,
         targetInstrument: .AUD)
-      await store.load()
+      // AccountStore is reactive — the seeded accounts arrive via
+      // `observeAll()` shortly after `init`. Wait for them so the
+      // `currentAccounts.first!` below is non-nil.
+      try? await store.waitForNextEmission(
+        matching: { !$0.currentAccounts.isEmpty },
+        description: "seeded current accounts visible"
+      )
       return store
     }
     let accountId = awaitSyncExpecting { @MainActor in
@@ -155,42 +161,15 @@ final class BalanceDeltaBenchmarks: XCTestCase {
     }
   }
 
-  /// Measures reloadFromSync on AccountStore — the expensive path that
-  /// re-fetches everything. This is the baseline we're trying to avoid.
-  func testAccountReloadFromSync() {
-    let backend = self.backend
-    let accountStore = awaitSyncExpecting { @MainActor in
-      let store = AccountStore(
-        repository: backend.accounts,
-        conversionService: backend.conversionService,
-        targetInstrument: .AUD)
-      await store.load()
-      return store
-    }
-    measure(metrics: metrics, options: options) {
-      awaitSyncExpecting { @MainActor in
-        await accountStore.reloadFromSync()
-      }
-    }
-  }
+  // The legacy `testAccountReloadFromSync` benchmark was deleted along
+  // with `AccountStore.reloadFromSync()` in the reactive-sync migration.
+  // Equivalent observation-driven measurement lives in Stage 6 of
+  // `plans/2026-05-06-reactive-sync-refresh-implementation.md`.
 
   // MARK: - Earmark Store
 
-  /// Measures reloadFromSync on EarmarkStore — how expensive the earmark reload is.
-  func testEarmarkReloadFromSync() {
-    let backend = self.backend
-    let earmarkStore = awaitSyncExpecting { @MainActor in
-      let store = EarmarkStore(
-        repository: backend.earmarks,
-        conversionService: backend.conversionService,
-        targetInstrument: .AUD)
-      await store.load()
-      return store
-    }
-    measure(metrics: metrics, options: options) {
-      awaitSyncExpecting { @MainActor in
-        await earmarkStore.reloadFromSync()
-      }
-    }
-  }
+  // The legacy `testEarmarkReloadFromSync` benchmark was deleted along
+  // with `EarmarkStore.reloadFromSync()` in the reactive-sync migration.
+  // Equivalent observation-driven measurement lives alongside the
+  // AccountStore reactivity benchmark in `SyncReactivityBenchmarks`.
 }

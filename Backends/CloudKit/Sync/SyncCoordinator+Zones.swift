@@ -131,16 +131,15 @@ extension SyncCoordinator {
     profileIndexHandler.deleteLocalData()
     notifyIndexObservers()
 
-    // Delete all profile data
+    // Delete all profile data. Stores observe their repositories' GRDB
+    // `ValueObservation` streams directly, so the local wipe propagates
+    // without an explicit notification step.
     for profileId in await containerManager.allProfileIds() {
       let zoneID = CKRecordZone.ID(
         zoneName: "profile-\(profileId.uuidString)",
         ownerName: CKCurrentUserDefaultName)
       if let handler = try? handlerForProfileZone(profileId: profileId, zoneID: zoneID) {
-        let changedTypes = handler.deleteLocalData()
-        if !changedTypes.isEmpty {
-          notifyObservers(for: profileId, changedTypes: changedTypes)
-        }
+        _ = handler.deleteLocalData()
       }
     }
     dataHandlers.removeAll()
@@ -184,10 +183,7 @@ extension SyncCoordinator {
     case .profileData(let profileId):
       logger.warning("Profile zone deleted: \(profileId) — removing local data")
       if let handler = try? handlerForProfileZone(profileId: profileId, zoneID: zoneID) {
-        let changedTypes = handler.deleteLocalData()
-        if !changedTypes.isEmpty {
-          notifyObservers(for: profileId, changedTypes: changedTypes)
-        }
+        _ = handler.deleteLocalData()
       }
       // Records have been wiped; any re-created zone starts with no system fields and
       // must be re-scanned. Clear the flag so the next backfill pass picks it up.
@@ -209,10 +205,7 @@ extension SyncCoordinator {
     case .profileData(let profileId):
       logger.warning("Profile zone purged: \(profileId) — deleting data")
       if let handler = try? handlerForProfileZone(profileId: profileId, zoneID: zoneID) {
-        let changedTypes = handler.deleteLocalData()
-        if !changedTypes.isEmpty {
-          notifyObservers(for: profileId, changedTypes: changedTypes)
-        }
+        _ = handler.deleteLocalData()
       }
       clearBackfillScanFlag(for: profileId)
 

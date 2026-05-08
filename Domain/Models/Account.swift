@@ -136,6 +136,7 @@ extension Account: Hashable {
       && lhs.position == rhs.position && lhs.isHidden == rhs.isHidden
       && lhs.valuationMode == rhs.valuationMode
       && lhs.walletAddress == rhs.walletAddress && lhs.chainId == rhs.chainId
+      && lhs.positions == rhs.positions
   }
 
   func hash(into hasher: inout Hasher) {
@@ -148,6 +149,7 @@ extension Account: Hashable {
     hasher.combine(valuationMode)
     hasher.combine(walletAddress)
     hasher.combine(chainId)
+    hasher.combine(positions)
   }
 }
 

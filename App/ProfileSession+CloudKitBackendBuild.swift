@@ -44,7 +44,8 @@ extension ProfileSession {
       cryptoPrices: marketData.cryptoPrices,
       cryptoRegistrations: {
         try await registry.allCryptoRegistrations()
-      }
+      },
+      database: database
     )
     let hooks = grdbRepoHooks(zoneID: zoneID, syncCoordinator: syncCoordinator)
     return CloudKitBackend(

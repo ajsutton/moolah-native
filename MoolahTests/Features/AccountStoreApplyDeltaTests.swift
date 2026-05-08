@@ -20,7 +20,10 @@ struct AccountStoreApplyDeltaTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.by(id: acctId) != nil },
+      description: "seeded account is observed"
+    )
 
     let deltas: PositionDeltas = [acctId: [instrument: Decimal(-5000) / 100]]
     await store.applyDelta(deltas)
@@ -39,7 +42,10 @@ struct AccountStoreApplyDeltaTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.by(id: acctId) != nil },
+      description: "seeded account is observed"
+    )
 
     let deltas: PositionDeltas = [acctId: [instrument: Decimal(50000) / 100]]
     await store.applyDelta(deltas)
@@ -61,7 +67,10 @@ struct AccountStoreApplyDeltaTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.count == 2 },
+      description: "both accounts are observed"
+    )
 
     let deltas: PositionDeltas = [
       checkingId: [instrument: Decimal(-10000) / 100],
@@ -85,7 +94,10 @@ struct AccountStoreApplyDeltaTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.convertedCurrentTotal?.quantity == Decimal(100000) / 100 },
+      description: "totals settle"
+    )
 
     #expect(store.convertedCurrentTotal?.quantity == Decimal(100000) / 100)
 
@@ -106,7 +118,10 @@ struct AccountStoreApplyDeltaTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.by(id: acctId) != nil },
+      description: "seeded account is observed"
+    )
 
     let transaction = Transaction(
       date: Date(),
@@ -135,7 +150,10 @@ struct AccountStoreApplyDeltaTests {
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.accounts.by(id: acctId) != nil },
+      description: "seeded account is observed"
+    )
 
     let deltas: PositionDeltas = [unknownId: [instrument: Decimal(-5000) / 100]]
     await store.applyDelta(deltas)
@@ -148,7 +166,7 @@ struct AccountStoreApplyDeltaTests {
   // MARK: - Converted Totals
 
   @Test
-  func testConvertedTotalsAreNilBeforeLoad() async throws {
+  func testConvertedTotalsAreNilBeforeFirstEmission() async throws {
     let (backend, _) = try TestBackend.create()
     let store = AccountStore(
       repository: backend.accounts,
@@ -156,13 +174,15 @@ struct AccountStoreApplyDeltaTests {
       targetInstrument: Instrument.defaultTestInstrument
     )
 
+    // Read state synchronously before any emission has had a chance to
+    // arrive: the @Observable defaults are still in place.
     #expect(store.convertedCurrentTotal == nil)
     #expect(store.convertedInvestmentTotal == nil)
     #expect(store.convertedNetWorth == nil)
   }
 
   @Test
-  func testConvertedTotalsPopulatedAfterLoad() async throws {
+  func testConvertedTotalsPopulatedAfterEmission() async throws {
     let instrument = Instrument.defaultTestInstrument
     let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
@@ -173,7 +193,10 @@ struct AccountStoreApplyDeltaTests {
       targetInstrument: instrument
     )
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.convertedCurrentTotal?.quantity == Decimal(100000) / 100 },
+      description: "totals settle"
+    )
 
     #expect(store.convertedCurrentTotal != nil)
     #expect(store.convertedCurrentTotal?.quantity == Decimal(100000) / 100)
@@ -193,7 +216,10 @@ struct AccountStoreApplyDeltaTests {
       targetInstrument: instrument
     )
 
-    await store.load()
+    try await store.waitForNextEmission(
+      matching: { $0.convertedCurrentTotal?.quantity == Decimal(100000) / 100 },
+      description: "totals settle"
+    )
 
     #expect(store.convertedCurrentTotal?.quantity == Decimal(100000) / 100)
 

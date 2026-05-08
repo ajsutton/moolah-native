@@ -69,9 +69,10 @@ struct SidebarView: View {
       .environment(\.editMode, $editMode)
     #endif
     .refreshable {
-      async let accountsLoad: Void = accountStore.load()
-      async let earmarksLoad: Void = earmarkStore.load()
-      _ = await (accountsLoad, earmarksLoad)
+      // Both AccountStore and EarmarkStore are reactive (subscribe via
+      // observeAll() in init), so pull-to-refresh has nothing imperative
+      // left to nudge here. Pull is still wired so the system gesture
+      // resolves with the standard animation.
     }
     .safeAreaInset(edge: .bottom, spacing: 0) {
       SyncProgressFooter()
@@ -334,11 +335,10 @@ extension SidebarView {
 }
 
 @MainActor
-private func seedSidebarPreview(
-  backend: any BackendProvider,
-  accountStore: AccountStore,
-  earmarkStore: EarmarkStore
-) async {
+private func seedSidebarPreview(backend: any BackendProvider) async {
+  // Both `accountStore` and `earmarkStore` are reactive — they load
+  // themselves from `init` via `observeAll()`. Seeded rows propagate
+  // through the observation streams without an explicit reload here.
   _ = try? await backend.accounts.create(
     Account(name: "Bank", type: .bank, instrument: .AUD),
     openingBalance: InstrumentAmount(quantity: 1000, instrument: .AUD))
@@ -346,8 +346,6 @@ private func seedSidebarPreview(
     Account(name: "Asset", type: .asset, instrument: .AUD),
     openingBalance: InstrumentAmount(quantity: 5000, instrument: .AUD))
   _ = try? await backend.earmarks.create(Earmark(name: "Holiday Fund", instrument: .AUD))
-  await accountStore.load()
-  await earmarkStore.load()
 }
 
 #Preview {
@@ -371,8 +369,7 @@ private func seedSidebarPreview(
       .environment(earmarkStore)
       .environment(session)
       .task {
-        await seedSidebarPreview(
-          backend: backend, accountStore: accountStore, earmarkStore: earmarkStore)
+        await seedSidebarPreview(backend: backend)
       }
   } detail: {
     Text("Detail")

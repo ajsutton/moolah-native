@@ -6,12 +6,14 @@ private let importSettingsLogger = Logger(
   subsystem: "com.moolah.app", category: "ImportSettingsView")
 
 /// Settings → Import: pick a folder to watch, toggle delete-after-import,
-/// and browse import profiles. Device-local settings — not synced.
+/// and browse import profiles. Folder-watch preferences are device-local
+/// (not synced); the profiles list reflects CloudKit-synced rows and
+/// auto-refreshes via `csvImportProfiles.observeAll()` when a remote
+/// device adds, edits, or removes a profile.
 struct ImportSettingsView: View {
   @Environment(ProfileSession.self) private var session
   @State private var profiles: [CSVImportProfile] = []
   @State private var showFolderPicker = false
-  @State private var isReloadingProfiles = false
 
   var body: some View {
     Form {
@@ -20,7 +22,7 @@ struct ImportSettingsView: View {
     }
     .formStyle(.grouped)
     .navigationTitle("CSV Import")
-    .task { await reloadProfiles() }
+    .task { await observeProfiles() }
     .fileImporter(
       isPresented: $showFolderPicker,
       allowedContentTypes: [.folder],
@@ -95,21 +97,26 @@ struct ImportSettingsView: View {
     }
   }
 
-  private func reloadProfiles() async {
-    isReloadingProfiles = true
-    defer { isReloadingProfiles = false }
-    do {
-      profiles = try await session.backend.csvImportProfiles.fetchAll()
-    } catch {
-      importSettingsLogger.error(
-        "Failed to reload import profiles: \(error.localizedDescription, privacy: .public)"
-      )
+  /// Subscribes to `csvImportProfiles.observeAll()` for the lifetime of
+  /// the view's `.task { … }`. The stream emits the current list once
+  /// immediately and re-emits whenever the underlying table changes
+  /// (local mutation or remote sync). When the task is cancelled — view
+  /// disappears, scene backgrounds, etc. — the `for await` loop exits
+  /// and the underlying `ValueObservation` is torn down.
+  private func observeProfiles() async {
+    for await fresh in session.backend.csvImportProfiles.observeAll() {
+      profiles = fresh
     }
   }
 
   private func deleteProfile(_ profile: CSVImportProfile) async {
-    try? await session.backend.csvImportProfiles.delete(id: profile.id)
-    await reloadProfiles()
+    do {
+      try await session.backend.csvImportProfiles.delete(id: profile.id)
+    } catch {
+      importSettingsLogger.error(
+        "Failed to delete import profile: \(error.localizedDescription, privacy: .public)"
+      )
+    }
   }
 
   private func handleFolderPick(_ result: Result<[URL], Error>) {

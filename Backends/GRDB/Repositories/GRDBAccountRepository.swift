@@ -31,13 +31,24 @@ import GRDB
 /// See `guides/CONCURRENCY_GUIDE.md` §2 "False Positives to Avoid",
 /// Carve-out 3 (GRDB repositories).
 final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
-  private let database: any DatabaseWriter
+  // `database` and `errorChannel` are deliberately not `private` so the
+  // sibling `+Observation.swift` extension can reach them. Treat them
+  // as private-by-convention from elsewhere in the module.
+  let database: any DatabaseWriter
   /// Receives `(recordType, id)` so the opening-balance create path can
   /// tag its txn and leg writes with `TransactionRow.recordType` /
   /// `TransactionLegRow.recordType` instead of the account's own type —
   /// see `RepositoryHookRecordTypeTests`.
   private let onRecordChanged: @Sendable (String, UUID) -> Void
   private let onRecordDeleted: @Sendable (String, UUID) -> Void
+  /// Single shared error channel for every `observeAll()` subscription
+  /// returned by this repo instance. The bridge in
+  /// `Backends/GRDB/Observation/AsyncValueObservation+AsyncStream.swift`
+  /// is single-shot, so once `surfaceAndFinish(_:)` is called the
+  /// channel terminates — subsequent observations from the same repo
+  /// share that fate. This matches the design's "repository instance
+  /// owns the channel" rule (see Stage 1 of the reactive-sync plan).
+  let errorChannel = ObservationErrorChannel()
 
   init(
     database: any DatabaseWriter,

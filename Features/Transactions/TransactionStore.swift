@@ -6,6 +6,10 @@ import Observation
 @MainActor
 final class TransactionStore {
   private(set) var transactions: [TransactionWithBalance] = []
+  /// True until the active subscription's first emission settles.
+  /// Distinguishes "still loading" from "loaded but empty" for the
+  /// empty-state overlay and the load-more footer. Observed; never
+  /// directly mutated by views.
   private(set) var isLoading = false
   private(set) var hasMore = true
   private(set) var error: Error?
@@ -15,12 +19,17 @@ final class TransactionStore {
   /// this to show a progress indicator on the Pay button.
   private(set) var isPayingScheduled = false
 
-  private let repository: TransactionRepository
+  // internal (not `private`) so the `+Observation` and `+Mutations`
+  // extension files can reach the repository for the apply pipeline and
+  // pass-through writes.
+  let repository: TransactionRepository
   /// Owns the payee-autocomplete debounce/fetch state and the autofill
   /// lookup. Exposed directly so views bind through the dedicated type;
   /// `TransactionStore` no longer mirrors its surface.
   let payeeSuggestionSource: PayeeSuggestionSource
-  private let conversionService: InstrumentConversionService
+  // internal so the `+Observation` extension can prefetch rates for the
+  // running-balance recompute on each emission.
+  let conversionService: any InstrumentConversionService
   /// The store's default target instrument (profile currency). Used for views
   /// that don't narrow to a single account — scheduled, upcoming, analysis.
   private(set) var targetInstrument: Instrument
@@ -28,41 +37,79 @@ final class TransactionStore {
   /// Account-scoped views display balances in the account's own currency so
   /// native legs don't require conversion. The repository reports the
   /// account's instrument via `TransactionPage.targetInstrument`, and the
-  /// store aligns to it on the first page fetch.
+  /// store aligns to it on every emission of the active subscription.
   private(set) var currentTargetInstrument: Instrument
-  private let pageSize: Int
-  private let accountStore: AccountStore?
-  private let earmarkStore: EarmarkStore?
-  private let logger = Logger(subsystem: "com.moolah.app", category: "TransactionStore")
-  /// Filter that produced the current contents of `transactions`. Exposed so
-  /// views sharing the store (Analysis, Upcoming) can ignore stale contents
-  /// from a prior unfiltered load until their own `.task` reloads. When no
-  /// load has completed yet, this is the default empty filter.
+  // internal so `+Observation` can read the page-size constant when
+  // computing the windowed pageSize for the active subscription.
+  let pageSize: Int
+  // internal so `+Observation` and `+Mutations` log under the same
+  // subsystem/category.
+  let logger = Logger(subsystem: "com.moolah.app", category: "TransactionStore")
+  /// Filter that drives the active subscription. Exposed so views sharing
+  /// the store (Analysis, Upcoming) can ignore stale contents from a prior
+  /// subscription until their own `.task(id: filter)` re-subscribes. When
+  /// no subscription is active yet, this is the default empty filter.
   private(set) var currentFilter = TransactionFilter()
-  private var currentPage = 0
-  private var rawTransactions: [Transaction] = []
-  private var priorBalance: InstrumentAmount?
-  /// Monotonic counter bumped by every `load(filter:)` call. `fetchPage`
-  /// captures its value at entry and aborts before mutating state if a newer
-  /// load has superseded it — preventing a stale in-flight fetch (e.g. from a
-  /// view that re-mounted mid-load; see #372) from appending page 0 twice.
-  private var loadGeneration: Int = 0
-  /// True once a `fetchPage` call has successfully returned a page for
-  /// `currentFilter`. Combined with `isLoading` in `isLoaded(for:)` so an
-  /// in-flight load for the same filter also counts as "loaded" — a view
-  /// that re-mounts mid-load (see #372) then skips the redundant second
-  /// fetch. Reset to false at the start of every `load(filter:)` call and
-  /// never set in the error path, so a failed fetch lets a subsequent
-  /// re-mount retry instead of silently showing an empty list.
-  private var didSucceedLoadForCurrentFilter: Bool = false
+  /// Number of pages currently surfaced by the active subscription.
+  /// Starts at 1; `loadMore()` increments it and signals the observe
+  /// loop to resubscribe with `pageSize * pageWindow` rows. internal so
+  /// `+Observation` can read it; written only here and `loadMore()`.
+  var pageWindow: Int = 1
+
+  /// Snapshot returned from `repository.fetch(...)` for the active filter,
+  /// including `priorBalance` and `targetInstrument`. Stored so the
+  /// running-balance recompute path can re-apply rates without re-fetching
+  /// when only the rate cache ticks. internal so `+Observation` can mutate.
+  var lastSnapshotPage: TransactionPage?
+
+  /// Continuation for the "restart current subscription" channel.
+  /// `loadMore()` and refresh paths yield `()`; the observe loop reacts
+  /// by tearing down the current `for await` and resubscribing with the
+  /// new window. internal so `+Observation` can yield from the restart
+  /// path. Nil when no subscription is active.
+  var subscriptionRestartContinuation: AsyncStream<Void>.Continuation?
+
+  /// Awaiters parked on `load(filter:)` calls — woken by the next
+  /// `applySnapshot(...)`. Multiple concurrent `load(filter:)` calls
+  /// each register their own continuation; all are resumed by the
+  /// same emission. internal so `+Observation` can park / resume.
+  var pendingLoadAwaiters: [CheckedContinuation<Void, Never>] = []
+
+  /// Generation counter bumped every time `observe(filter:)` is called or
+  /// the subscription window changes. Stale fetches and stale conversions
+  /// check it before mutating state so a superseded operation can early-
+  /// return. internal so `+Observation` and `+Mutations` can read it.
+  var loadGeneration: Int = 0
+
+  /// Test-only emission tick stream. Yields `()` after every `apply(page:)`
+  /// in `+Observation` and after every recompute in
+  /// `recomputeBalances()`. Tests use the `TestableStoreObservation`
+  /// helpers in `MoolahTests/Support/TestableStoreObservation.swift` to
+  /// await emissions deterministically. `internal` access is intentional;
+  /// `@testable import Moolah` exposes it to the test target.
+  let testObservationTickStream: AsyncStream<Void>
+  // internal so `+Observation` and `+Mutations` can yield ticks after
+  // mutating state.
+  let testObservationTickContinuation: AsyncStream<Void>.Continuation
+
+  /// The single observation `Task` subscribing to
+  /// `conversionService.observeRates()` and `…observeErrors()`. Spawned
+  /// from `init`; torn down by `stopObserving()`.
+  private var rateObservationTask: Task<Void, Never>?
+
+  /// The long-lived data-subscription task for the current filter. Owned
+  /// by the store (not by the view's `.task`) so `load(filter:)` and
+  /// `observe(filter:)` callers see the same active subscription, and
+  /// mutations made between calls still get observation re-emissions.
+  /// Replaced (with cancellation of the prior handle) on every filter
+  /// change. internal so `+Observation` can manage the lifecycle.
+  var subscriptionTask: Task<Void, Never>?
 
   init(
     repository: TransactionRepository,
-    conversionService: InstrumentConversionService,
+    conversionService: any InstrumentConversionService,
     targetInstrument: Instrument,
-    pageSize: Int = 50,
-    accountStore: AccountStore? = nil,
-    earmarkStore: EarmarkStore? = nil
+    pageSize: Int = 50
   ) {
     self.repository = repository
     self.payeeSuggestionSource = PayeeSuggestionSource(repository: repository)
@@ -70,255 +117,154 @@ final class TransactionStore {
     self.targetInstrument = targetInstrument
     self.currentTargetInstrument = targetInstrument
     self.pageSize = pageSize
-    self.accountStore = accountStore
-    self.earmarkStore = earmarkStore
+    let pair = AsyncStream<Void>.makeStream()
+    self.testObservationTickStream = pair.stream
+    self.testObservationTickContinuation = pair.continuation
+
+    // Strong `self` capture is intentional: the store is `@MainActor`,
+    // the task already holds an implicit strong reference, and
+    // `stopObserving()` (called from `cleanupSync`) is the sole lifetime
+    // gate. A weak capture would just add a nil-check hazard without
+    // preventing the retain — and `guard let self else { return }` would
+    // mask cancellation-propagation bugs by silently exiting.
+    rateObservationTask = Task { await self.observeRateChannels() }
   }
 
+  deinit {
+    // Safety net for the case where `cleanupSync` is missed (e.g. an
+    // early-error tear-down path that drops the ProfileSession without
+    // calling cleanupSync). Cancels the strongly-held observation Tasks
+    // so they do not retain `self` and a stale GRDB connection forever.
+    // Under normal lifecycle, `stopObserving()` runs first via
+    // `cleanupSync` and this is a no-op. Swift 6 makes `deinit`
+    // nonisolated; reading `@MainActor`-isolated state requires
+    // `MainActor.assumeIsolated`. The store is owned by main-actor
+    // code (`ProfileSession`), so the assumption holds in practice.
+    MainActor.assumeIsolated {
+      rateObservationTask?.cancel()
+      subscriptionTask?.cancel()
+      subscriptionRestartContinuation?.finish()
+      testObservationTickContinuation.finish()
+      wakePendingLoadAwaiters()
+    }
+  }
+
+  /// View-driven entry point: subscribe to remote changes for `filter` and
+  /// stream emissions into `transactions` until the surrounding `.task`
+  /// is cancelled. Callers use `.task(id: filter) {
+  /// await store.observe(filter: filter) }` — the `for await` loop lives
+  /// here (per the thin-view rule from spec Section 5).
+  func observe(filter: TransactionFilter) async {
+    await runDataObservation(filter: filter)
+  }
+
+  /// Convenience for views keyed by a single account id (account-detail,
+  /// embedded investment account list). Wraps `observe(filter:)` with the
+  /// canonical per-account filter so the call site stays one line.
+  func observe(accountId: UUID) async {
+    await observe(filter: TransactionFilter(accountId: accountId))
+  }
+
+  /// Compatibility entry point. Restarts the active subscription with the
+  /// supplied filter and returns once the first emission settles. Used by
+  /// toolbar Refresh / `.refreshable` and by tests that want a synchronous-
+  /// looking "load and assert" pattern. The view-driven `observe(filter:)`
+  /// is the preferred way to drive observation; `load(filter:)` is a thin
+  /// wrapper that yields the restart and waits one tick.
   func load(filter: TransactionFilter) async {
-    loadGeneration &+= 1
-    currentFilter = filter
-    didSucceedLoadForCurrentFilter = false
-    currentTargetInstrument = targetInstrument
-    currentPage = 0
-    rawTransactions = []
-    priorBalance = nil
-    transactions = []
-    hasMore = true
-    error = nil
-    loadedCount = 0
-    totalCount = nil
-    await fetchPage()
+    await runImperativeReload(filter: filter)
   }
 
-  /// Whether the store is already showing — or fetching — data for `filter`.
-  /// Call sites use this to suppress redundant `load(filter:)` calls when a
-  /// SwiftUI `.task` re-runs for reasons unrelated to the filter changing
-  /// (see #372 for the original motivating case, a view re-mounted during
-  /// Analysis → Account navigation). Explicit refresh (toolbar button,
-  /// pull-to-refresh) bypasses this by calling `load(filter:)` directly,
-  /// and a failed fetch leaves this `false` so re-mounts retry.
-  ///
-  /// Also returns `true` while the initial load for `filter` is still in
-  /// flight, so two `.task` fires back-to-back coalesce to a single fetch.
+  /// Whether the store's currently-active subscription matches `filter`
+  /// AND has produced at least one emission. Used by `.task(id: filter)`
+  /// call sites that may re-fire on spurious re-mounts (see #372) to
+  /// short-circuit a redundant `load(filter:)`.
   func isLoaded(for filter: TransactionFilter) -> Bool {
-    guard currentFilter == filter else { return false }
-    return isLoading || didSucceedLoadForCurrentFilter
+    currentFilter == filter && lastSnapshotPage != nil
   }
 
+  /// Bumps the page window and signals the active subscription to
+  /// resubscribe with the wider page size. Awaits the next observation
+  /// emission so callers can assert against the wider page contents
+  /// immediately. Idempotent when no more pages are available or
+  /// another load is already in flight.
   func loadMore() async {
     guard !isLoading, hasMore else { return }
-    await fetchPage()
+    pageWindow += 1
+    loadGeneration &+= 1
+    setIsLoading(true)
+    subscriptionRestartContinuation?.yield(())
+    await awaitNextLoadEmissionInternal()
   }
 
-  /// Creates a blank expense bound to `accountId` (falling back to
-  /// `fallbackAccountId`). See `Transaction.defaultExpense(...)` for the shape.
-  func createDefault(
-    accountId: UUID?,
-    fallbackAccountId: UUID?,
-    instrument: Instrument
-  ) async -> Transaction? {
-    guard let acctId = accountId ?? fallbackAccountId else { return nil }
-    return await create(.defaultExpense(accountId: acctId, instrument: instrument))
+  /// Test-internal helper for `loadMore` and the imperative-reload path
+  /// to wait for the next `applySnapshot` to wake them. Mirrors the
+  /// inline body of `awaitNextLoadEmission` in `+Observation.swift`.
+  func awaitNextLoadEmissionInternal() async {
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+      pendingLoadAwaiters.append(continuation)
+    }
   }
 
-  /// Creates a blank monthly-recurring expense. See
-  /// `Transaction.defaultMonthlyScheduled(...)`.
-  func createDefaultScheduled(
-    accountId: UUID?,
-    fallbackAccountId: UUID?,
-    instrument: Instrument
-  ) async -> Transaction? {
-    guard let acctId = accountId ?? fallbackAccountId else { return nil }
-    return await create(.defaultMonthlyScheduled(accountId: acctId, instrument: instrument))
+  /// Tears down the rate-observation task and the data subscription.
+  /// Idempotent. Called from
+  /// `ProfileSession.cleanupSync(coordinator:)` AFTER any
+  /// `deleteAllLocalData()` call so the empty-state transition is
+  /// emitted to subscribed views before cancellation.
+  func stopObserving() {
+    rateObservationTask?.cancel()
+    rateObservationTask = nil
+    subscriptionTask?.cancel()
+    subscriptionTask = nil
+    subscriptionRestartContinuation?.finish()
+    subscriptionRestartContinuation = nil
+    // Wake any `load(filter:)` callers blocked on a first emission so
+    // they don't hang past tear-down.
+    wakePendingLoadAwaiters()
   }
 
-  /// Creates a blank earmark-only income transaction. See
-  /// `Transaction.defaultEarmarkIncome(...)`.
-  func createDefaultEarmark(
-    earmarkId: UUID,
-    instrument: Instrument
-  ) async -> Transaction? {
-    await create(.defaultEarmarkIncome(earmarkId: earmarkId, instrument: instrument))
-  }
-
-  func create(_ transaction: Transaction) async -> Transaction? {
-    // Optimistic: insert into local state
-    let snapshot = rawTransactions
-    rawTransactions.append(transaction)
-    await recomputeBalances()
-
-    do {
-      let created = try await repository.create(transaction)
-      // Replace the optimistic entry with the server-confirmed one
-      if let index = rawTransactions.firstIndex(where: { $0.id == transaction.id }) {
-        rawTransactions[index] = created
+  /// Subscribes to `conversionService.observeRates()` /
+  /// `…observeErrors()`. A rate tick recomputes the running-balance
+  /// column against the most recent snapshot (no DB re-fetch); an error
+  /// tick is surfaced on `self.error`. Spawned from `init`.
+  private func observeRateChannels() async {
+    let rateStream = conversionService.observeRates()
+    let rateErrors = conversionService.observeErrors()
+    await withTaskGroup(of: Void.self) { group in
+      group.addTask { [self] in
+        for await _ in rateStream {
+          await self.recomputeBalances(reason: .rateTick)
+        }
       }
-      await recomputeBalances()
-      await applyBalanceDeltas(old: nil, new: created)
-      return created
-    } catch {
-      logger.error("Failed to create transaction: \(error.localizedDescription)")
-      rawTransactions = snapshot
-      await recomputeBalances()
-      self.error = error
-      return nil
-    }
-  }
-
-  func update(_ transaction: Transaction) async {
-    // Optimistic: replace in local state
-    let snapshot = rawTransactions
-    let old = rawTransactions.first { $0.id == transaction.id }
-    if let index = rawTransactions.firstIndex(where: { $0.id == transaction.id }) {
-      rawTransactions[index] = transaction
-      await recomputeBalances()
-    }
-
-    do {
-      let updated = try await repository.update(transaction)
-      if let index = rawTransactions.firstIndex(where: { $0.id == transaction.id }) {
-        rawTransactions[index] = updated
-      }
-      await recomputeBalances()
-      await applyBalanceDeltas(old: old, new: updated)
-    } catch {
-      logger.error("Failed to update transaction: \(error.localizedDescription)")
-      rawTransactions = snapshot
-      await recomputeBalances()
-      self.error = error
-    }
-  }
-
-  /// Records a payment of `scheduledTransaction`: creates a paid copy dated
-  /// today, then either advances the scheduled template to its next due date
-  /// (recurring) or deletes it (one-time). The paid copy is removed from
-  /// local state because it doesn't belong in a scheduled-filtered view.
-  func payScheduledTransaction(_ scheduledTransaction: Transaction) async -> PayResult {
-    isPayingScheduled = true
-    defer { isPayingScheduled = false }
-
-    let paidTransaction = Transaction.paidCopy(of: scheduledTransaction)
-    guard await create(paidTransaction) != nil else { return .failed }
-
-    if let advanced = scheduledTransaction.advancingToNextDueDate() {
-      await update(advanced)
-    } else {
-      await delete(id: scheduledTransaction.id)
-    }
-
-    rawTransactions.removeAll { $0.id == paidTransaction.id }
-    await recomputeBalances()
-
-    guard scheduledTransaction.isRecurring else { return .deleted }
-    let updated = transactions.first { $0.transaction.id == scheduledTransaction.id }?.transaction
-    return .paid(updatedScheduledTransaction: updated)
-  }
-
-  enum PayResult {
-    case paid(updatedScheduledTransaction: Transaction?)
-    case deleted
-    case failed
-  }
-
-  func delete(id: UUID) async {
-    // Optimistic: remove from local state
-    let snapshot = rawTransactions
-    let removed = rawTransactions.first { $0.id == id }
-    rawTransactions.removeAll { $0.id == id }
-    await recomputeBalances()
-
-    do {
-      try await repository.delete(id: id)
-      await applyBalanceDeltas(old: removed, new: nil)
-    } catch {
-      logger.error("Failed to delete transaction: \(error.localizedDescription)")
-      rawTransactions = snapshot
-      await recomputeBalances()
-      self.error = error
-    }
-  }
-
-  private func applyBalanceDeltas(old: Transaction?, new: Transaction?) async {
-    let delta = BalanceDeltaCalculator.deltas(old: old, new: new)
-    if !delta.accountDeltas.isEmpty {
-      await accountStore?.applyDelta(delta.accountDeltas)
-    }
-    if delta.hasEarmarkChanges {
-      await earmarkStore?.applyDelta(
-        earmarkDeltas: delta.earmarkDeltas,
-        savedDeltas: delta.earmarkSavedDeltas,
-        spentDeltas: delta.earmarkSpentDeltas)
-    }
-  }
-
-  private func fetchPage() async {
-    let myGeneration = loadGeneration
-    isLoading = true
-    logger.debug("Loading transactions page \(self.currentPage)...")
-    // Cancellation can early-return below; without `defer` the live load
-    // would leak `isLoading = true`, making `isLoaded(for: filter)` true
-    // and the next `.task` mount skip its own load. Sibling of #412. The
-    // generation guard avoids stomping on a newer load that owns the flag.
-    defer {
-      if myGeneration == loadGeneration {
-        isLoading = false
+      group.addTask { [self] in
+        for await error in rateErrors {
+          await self.surface(observationError: error)
+        }
       }
     }
-
-    do {
-      let fetchStart = ContinuousClock.now
-      let page = try await repository.fetch(
-        filter: currentFilter,
-        page: currentPage,
-        pageSize: pageSize
-      )
-      let fetchMs = (ContinuousClock.now - fetchStart).inMilliseconds
-      // Skip publishing if a newer `load(filter:)` has superseded us or the
-      // SwiftUI task hosting this fetch was cancelled (view torn down).
-      // Without this guard, a stale in-flight fetch from a re-mounted view
-      // appends page 0 on top of the next load — see #372.
-      guard !Task.isCancelled, myGeneration == loadGeneration else { return }
-      rawTransactions.append(contentsOf: page.transactions)
-      priorBalance = page.priorBalance
-      if currentPage == 0 {
-        currentTargetInstrument = page.targetInstrument
-      }
-      hasMore = page.transactions.count >= pageSize
-      currentPage += 1
-      loadedCount = rawTransactions.count
-      if let total = page.totalCount {
-        totalCount = total
-      }
-      // Mark this filter as successfully loaded so `isLoaded(for:)` can
-      // suppress a redundant re-fetch on a spurious view re-mount (see #372).
-      // Idempotent on page-N>0 `loadMore` calls.
-      didSucceedLoadForCurrentFilter = true
-      let recomputeStart = ContinuousClock.now
-      await recomputeBalances()
-      let recomputeMs = (ContinuousClock.now - recomputeStart).inMilliseconds
-      Self.logFetchPageTiming(
-        logger: logger,
-        fetchMs: fetchMs,
-        recomputeMs: recomputeMs,
-        count: page.transactions.count,
-        totalLoaded: rawTransactions.count)
-    } catch is CancellationError {
-      // Cancelling a `.task` mid-fetch (e.g. a structural branch flip in
-      // `InvestmentAccountView` that unmounts the embedded transaction list
-      // while a load is in flight) is a normal lifecycle event, not a
-      // user-actionable error. Latching it as `self.error` would cause the
-      // alert observer to surface "Swift.CancellationError" on every
-      // subsequent mount; matches the pattern already used in `loadValues` /
-      // `loadPositions` on `InvestmentStore`.
-      return
-    } catch {
-      // Only surface the error for the live load — a superseded one's
-      // failure isn't user-actionable because the newer load is running.
-      guard myGeneration == loadGeneration else { return }
-      logger.error("Failed to load transactions: \(error.localizedDescription)")
-      self.error = error
-    }
   }
+
+  // MARK: - Internal helpers used by `+Mutations.swift` and `+Observation.swift`
+
+  func surface(observationError error: any Error) {
+    logger.error("TransactionStore observation error: \(error.localizedDescription)")
+    self.error = error
+  }
+
+  /// Mutator hooks invoked by `+Observation.swift` (which lives in the
+  /// same module but a separate file, so `private(set)` properties on
+  /// the main type are not directly assignable from there).
+  func setCurrentFilter(_ filter: TransactionFilter) { currentFilter = filter }
+  func setCurrentTargetInstrument(_ instrument: Instrument) {
+    currentTargetInstrument = instrument
+  }
+  func setTransactions(_ rows: [TransactionWithBalance]) { transactions = rows }
+  func setHasMore(_ value: Bool) { hasMore = value }
+  func setError(_ error: (any Error)?) { self.error = error }
+  func setLoadedCount(_ count: Int) { loadedCount = count }
+  func setTotalCount(_ count: Int?) { totalCount = count }
+  func setIsLoading(_ value: Bool) { isLoading = value }
+  func setIsPayingScheduled(_ value: Bool) { isPayingScheduled = value }
 
   // MARK: - Debounced Save
 
@@ -335,49 +281,9 @@ final class TransactionStore {
     }
   }
 
-}
-
-// MARK: - Balance Computation
-//
-// Lives in an extension so the recompute body — which carries a cancellation
-// guard around the `withRunningBalances` await (see #530) — doesn't push the
-// main type past its `type_body_length` budget. Same file, so `private`
-// members of `TransactionStore` remain reachable.
-
-extension TransactionStore {
-  private func recomputeBalances() async {
-    // Re-sort newest-first to account for newly inserted/updated transactions
-    rawTransactions.sort { lhs, rhs in
-      if lhs.date != rhs.date { return lhs.date > rhs.date }
-      return lhs.id.uuidString < rhs.id.uuidString
-    }
-    let result = await TransactionPage.withRunningBalances(
-      transactions: rawTransactions,
-      priorBalance: priorBalance,
-      accountId: currentFilter.accountId,
-      earmarkId: currentFilter.earmarkId,
-      targetInstrument: currentTargetInstrument,
-      conversionService: conversionService
-    )
-    // If a newer load has already superseded us while the rate prefetch was
-    // in flight, drop the result so we don't overwrite that load's rows.
-    // Sibling of the generation guard in `fetchPage`. See #530.
-    if Task.isCancelled { return }
-    transactions = result.rows
-    // Surface conversion failures so the user sees a retryable error state
-    // rather than silently blanked balances. Per Rule 11 of
-    // `guides/INSTRUMENT_CONVERSION_GUIDE.md`, a failed conversion must be
-    // logged and surfaced; the store logs here in addition to the per-leg log
-    // emitted by `withRunningBalances`. If a prior recompute published a
-    // conversion error and the current one succeeds, clear it so the UI
-    // reflects recovery.
-    if let conversionError = result.firstConversionError {
-      logger.error(
-        "Conversion failed while computing running balances: \(conversionError.localizedDescription)"
-      )
-      self.error = conversionError
-    } else if self.error is RunningBalanceConversionError {
-      self.error = nil
-    }
+  enum PayResult {
+    case paid(updatedScheduledTransaction: Transaction?)
+    case deleted
+    case failed
   }
 }

@@ -31,9 +31,19 @@ import GRDB
 /// See `guides/CONCURRENCY_GUIDE.md` §2 "False Positives to Avoid",
 /// Carve-out 3 (GRDB repositories).
 final class GRDBCSVImportProfileRepository: CSVImportProfileRepository, @unchecked Sendable {
-  private let database: any DatabaseWriter
+  // `database` and `errorChannel` are deliberately not `private` so the
+  // sibling `+Observation.swift` extension can reach them. Treat them
+  // as private-by-convention from elsewhere in the module.
+  let database: any DatabaseWriter
   private let onRecordChanged: @Sendable (String, UUID) -> Void
   private let onRecordDeleted: @Sendable (String, UUID) -> Void
+  /// Single shared error channel for every `observeAll()` subscription
+  /// returned by this repo instance. The bridge in
+  /// `Backends/GRDB/Observation/AsyncValueObservation+AsyncStream.swift`
+  /// is single-shot, so once `surfaceAndFinish(_:)` is called the
+  /// channel terminates — subsequent observations from the same repo
+  /// share that fate. Matches `GRDBImportRuleRepository.errorChannel`.
+  let errorChannel = ObservationErrorChannel()
 
   init(
     database: any DatabaseWriter,
