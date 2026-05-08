@@ -110,8 +110,7 @@ struct EarmarkDetailView: View {
         label: "Spent",
         amount:
           -(earmarkStore.convertedSpent(for: earmark.id)
-          ?? .zero(instrument: earmark.instrument)),
-        colorOverride: .primary)
+          ?? .zero(instrument: earmark.instrument)))
     }
   }
 
