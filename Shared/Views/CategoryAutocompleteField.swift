@@ -13,8 +13,11 @@ struct CategoryPickerAnchorKey: PreferenceKey {
 ///
 /// The text field shows the selected category path. Typing filters suggestions.
 /// The parent view owns `showSuggestions` and `highlightedIndex` state and wires
-/// the dropdown overlay on the Form.
+/// the dropdown overlay on the Form. `placeholder` defaults to "Category"
+/// for the transaction-detail use; pass a different label (e.g. "Parent")
+/// when the surrounding section already says "Category".
 struct CategoryAutocompleteField: View {
+  let placeholder: String
   @Binding var text: String
   @Binding var highlightedIndex: Int?
   let suggestionCount: Int
@@ -22,9 +25,27 @@ struct CategoryAutocompleteField: View {
   let onAcceptHighlighted: () -> Void
   let onCancel: () -> Void
 
+  init(
+    placeholder: String = "Category",
+    text: Binding<String>,
+    highlightedIndex: Binding<Int?>,
+    suggestionCount: Int,
+    onTextChange: @escaping (String) -> Void,
+    onAcceptHighlighted: @escaping () -> Void,
+    onCancel: @escaping () -> Void
+  ) {
+    self.placeholder = placeholder
+    self._text = text
+    self._highlightedIndex = highlightedIndex
+    self.suggestionCount = suggestionCount
+    self.onTextChange = onTextChange
+    self.onAcceptHighlighted = onAcceptHighlighted
+    self.onCancel = onCancel
+  }
+
   var body: some View {
     AutocompleteField(
-      placeholder: "Category",
+      placeholder: placeholder,
       text: $text,
       highlightedIndex: $highlightedIndex,
       suggestionCount: suggestionCount,

@@ -239,6 +239,13 @@ public enum UITestIdentifiers {
     public static let walletAddressField = "createAccount.crypto.walletAddress"
   }
 
+  public enum CreateCategory {
+    /// Parent-category autocomplete field in the create-category sheet
+    /// reached from the Categories list "+". Pinned so a future UI test
+    /// can drive the create flow without depending on rendered text.
+    public static let parentCategoryField = "createCategory.parentCategory"
+  }
+
   // The `WalletAccountHeader` namespace lives in
   // `UITestIdentifiers+WalletAccountHeader.swift` so this file stays
   // under SwiftLint's `file_length` budget.
