@@ -21,30 +21,45 @@ struct TransactionDetailLegRow: View {
 
   @FocusState private var categoryFieldFocused: Bool
 
-  private var isEarmarkOnly: Bool { draft.legDrafts[index].isEarmarkOnly }
+  /// True when `index` still refers to a leg in `legDrafts`. SwiftUI
+  /// re-evaluates this view's body once after `removeLeg(at:)` has shrunk
+  /// `legDrafts` but before the surrounding `ForEach` finishes removing
+  /// the row, so a naive subscript would trap. Mirrors the same guard in
+  /// `TransactionDetailFeeSection`.
+  private var isLive: Bool {
+    draft.legDrafts.indices.contains(index)
+  }
+
+  private var isEarmarkOnly: Bool {
+    guard isLive else { return false }
+    return draft.legDrafts[index].isEarmarkOnly
+  }
 
   private var visibleSuggestions: [CategorySuggestion] {
-    categoryState.visibleSuggestions(
+    guard isLive else { return [] }
+    return categoryState.visibleSuggestions(
       for: draft.legDrafts[index].categoryText, in: categories)
   }
 
   var body: some View {
-    Section("Sub-transaction \(index + 1) of \(totalLegCount)") {
-      if !isEarmarkOnly {
-        typePicker
-      }
-      accountPicker
-      amountRow
-      if !isEarmarkOnly {
-        categoryField
-      }
-      earmarkPicker
-      if totalLegCount > 1 {
-        Button(role: .destructive) {
-          onRequestDelete()
-        } label: {
-          Text("Delete Sub-transaction")
-            .frame(maxWidth: .infinity)
+    if isLive {
+      Section("Sub-transaction \(index + 1) of \(totalLegCount)") {
+        if !isEarmarkOnly {
+          typePicker
+        }
+        accountPicker
+        amountRow
+        if !isEarmarkOnly {
+          categoryField
+        }
+        earmarkPicker
+        if totalLegCount > 1 {
+          Button(role: .destructive) {
+            onRequestDelete()
+          } label: {
+            Text("Delete Sub-transaction")
+              .frame(maxWidth: .infinity)
+          }
         }
       }
     }
