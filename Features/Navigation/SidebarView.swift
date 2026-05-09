@@ -88,6 +88,15 @@ struct SidebarView: View {
           .help("Create new account")
           .accessibilityIdentifier(UITestIdentifiers.Sidebar.newAccountButton)
         }
+        ToolbarItem(placement: .primaryAction) {
+          Button {
+            showCreateEarmarkSheet = true
+          } label: {
+            Label("New Earmark", systemImage: "bookmark.fill")
+          }
+          .help("Create new earmark")
+          .accessibilityIdentifier(UITestIdentifiers.Sidebar.newEarmarkButton)
+        }
       }
     #endif
     .focusedSceneValue(\.newEarmarkAction) {
@@ -152,24 +161,22 @@ struct SidebarView: View {
     }
   }
 
-  @ViewBuilder private var earmarksSection: some View {
-    if !earmarkStore.visibleEarmarks.isEmpty {
-      Section {
-        ForEach(earmarkStore.visibleEarmarks) { earmark in
-          NavigationLink(value: SidebarSelection.earmark(earmark.id)) {
-            SidebarRowView(
-              icon: "bookmark.fill", name: earmark.name,
-              amount: earmarkStore.convertedBalance(for: earmark.id),
-              isSelected: selection == .earmark(earmark.id))
-          }
+  private var earmarksSection: some View {
+    Section {
+      ForEach(earmarkStore.visibleEarmarks) { earmark in
+        NavigationLink(value: SidebarSelection.earmark(earmark.id)) {
+          SidebarRowView(
+            icon: "bookmark.fill", name: earmark.name,
+            amount: earmarkStore.convertedBalance(for: earmark.id),
+            isSelected: selection == .earmark(earmark.id))
         }
-        .onMove { source, destination in
-          Task { await earmarkStore.reorderEarmarks(from: source, to: destination) }
-        }
-        totalRow(label: "Earmarked Total", value: earmarkStore.convertedTotalBalance)
-      } header: {
-        sectionHeader(title: "Earmarks", addAction: addEarmarkAction)
       }
+      .onMove { source, destination in
+        Task { await earmarkStore.reorderEarmarks(from: source, to: destination) }
+      }
+      totalRow(label: "Earmarked Total", value: earmarkStore.convertedTotalBalance)
+    } header: {
+      sectionHeader(title: "Earmarks", addAction: addEarmarkAction)
     }
   }
 
@@ -337,47 +344,5 @@ extension SidebarView {
         .accessibilityLabel("Add \(title.lowercased())")
       #endif
     }
-  }
-}
-
-@MainActor
-private func seedSidebarPreview(backend: any BackendProvider) async {
-  // Both `accountStore` and `earmarkStore` are reactive — they load
-  // themselves from `init` via `observeAll()`. Seeded rows propagate
-  // through the observation streams without an explicit reload here.
-  _ = try? await backend.accounts.create(
-    Account(name: "Bank", type: .bank, instrument: .AUD),
-    openingBalance: InstrumentAmount(quantity: 1000, instrument: .AUD))
-  _ = try? await backend.accounts.create(
-    Account(name: "Asset", type: .asset, instrument: .AUD),
-    openingBalance: InstrumentAmount(quantity: 5000, instrument: .AUD))
-  _ = try? await backend.earmarks.create(Earmark(name: "Holiday Fund", instrument: .AUD))
-}
-
-#Preview {
-  let (backend, _) = PreviewBackend.create()
-  let accountStore = AccountStore(
-    repository: backend.accounts,
-    conversionService: backend.conversionService,
-    targetInstrument: .AUD)
-  let earmarkStore = EarmarkStore(
-    repository: backend.earmarks,
-    conversionService: backend.conversionService,
-    targetInstrument: .AUD)
-  // In-memory preview session can't fail in practice: opens an ephemeral
-  // GRDB queue with no disk access. A trap here is acceptable in #Preview.
-  // swiftlint:disable:next force_try
-  let session = try! ProfileSession.preview()
-
-  return NavigationSplitView {
-    SidebarView(selection: .constant(nil))
-      .environment(accountStore)
-      .environment(earmarkStore)
-      .environment(session)
-      .task {
-        await seedSidebarPreview(backend: backend)
-      }
-  } detail: {
-    Text("Detail")
   }
 }
