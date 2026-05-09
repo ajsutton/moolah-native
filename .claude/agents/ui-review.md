@@ -75,6 +75,12 @@ Per `guides/UI_GUIDE.md` §3:
   modifier on a `NavigationStack` outer or on `ContentView` itself as
   Critical.
 
+**Do NOT re-apply the pre-PR-1 "view-tree shape stability" rule.** The
+per-leaf `NavigationStack` makes structural variance within a leaf
+harmless — the toolbar host is per-leaf. A `VStack { conditionalHeader;
+TransactionListView }` inside a leaf is safe. Only the new invariants
+above apply.
+
 ### Accessibility
 - VoiceOver labels on images and custom controls (`.accessibilityLabel()`)
 - Accessibility values for amounts (`.accessibilityValue()`)
