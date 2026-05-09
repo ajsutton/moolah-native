@@ -51,7 +51,7 @@ struct UpcomingView: View {
     // is selected so the menu item disables otherwise.
     .focusedSceneValue(
       \.payTransactionAction,
-      (selectedTransaction != nil && selectedTransaction?.recurPeriod != nil)
+      selectedTransaction?.recurPeriod != nil
         ? { pendingPayId = selectedTransaction?.id }
         : nil
     )

@@ -147,9 +147,14 @@ struct TransactionListView: View {
         \.editTransactionAction,
         selectedTransaction != nil
           ? {
-            // Re-asserting the binding is a stable no-op when the inspector
-            // is already open; when it's closed (e.g. after the user dismissed
-            // it but selection was preserved), this re-opens it.
+            // Discoverability affordance: under the current architecture
+            // dismissing the inspector clears `selectedTransaction` (see
+            // `TransactionInspectorModifier.isPresented`), so this action is
+            // only published when the inspector is already open and the
+            // self-assign is a no-op. The menu item exists so users can
+            // discover that Edit is available without right-clicking the row.
+            // If the inspector ever stops clearing selection on dismissal,
+            // this self-assign needs to become an explicit reopen path.
             selectedTransaction = selectedTransaction
           }
           : nil

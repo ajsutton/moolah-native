@@ -1,13 +1,16 @@
 import Foundation
 
-/// Cross-platform `Notification.Name` constants used by menu-bar commands to request
-/// actions from the focused window's views. The commands (macOS-only) post these
-/// notifications; the views (shared) listen via `.onReceive`. Keeping the names
-/// outside `#if os(macOS)` lets both compile.
+/// Cross-platform `Notification.Name` constants used by macOS menu-bar
+/// commands to request actions from the focused window's views via
+/// `.onReceive`. Transaction-list actions (Edit / Delete / Pay) were
+/// migrated off this pattern in issue #826 and are now routed through
+/// `focusedSceneValue` (see `Shared/FocusedValues.swift`); the names
+/// below cover Account / Earmark / Category commands and the Finder
+/// "Open with Moolah" CSV pipeline. Future commands should prefer
+/// `focusedSceneValue` over a new notification entry — the typed
+/// action-binding pattern is `Sendable`-clean and per-leaf scoped,
+/// where notifications are untyped and module-global.
 extension Notification.Name {
-  // Transaction commands
-  static let requestTransactionDuplicate = Notification.Name("requestTransactionDuplicate")
-
   // Category commands
   static let requestCategoryEdit = Notification.Name("requestCategoryEdit")
 
