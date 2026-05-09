@@ -35,9 +35,9 @@ public enum UITestIdentifiers {
     public static let newAccountButton = "sidebar.toolbar.newAccount"
 
     /// "New Earmark" toolbar button in the sidebar (macOS only). Pinned for
-    /// symmetry with `newAccountButton` so a future UI test can drive the
+    /// symmetry with `newAccountButton` so a UI test can drive the
     /// create-earmark flow from a zero-earmark seed without further view
-    /// changes. No test references this constant yet.
+    /// changes when one is added.
     public static let newEarmarkButton = "sidebar.toolbar.newEarmark"
 
     /// "Edit Account…" item in the sidebar account context menu.
