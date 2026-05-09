@@ -217,21 +217,27 @@ struct SidebarView: View {
       NavigationLink(value: SidebarSelection.analysis) {
         Label("Analysis", systemImage: "chart.bar.xaxis")
       }
+      .accessibilityIdentifier(UITestIdentifiers.Sidebar.view("analysis"))
       NavigationLink(value: SidebarSelection.reports) {
         Label("Reports", systemImage: "chart.bar.fill")
       }
+      .accessibilityIdentifier(UITestIdentifiers.Sidebar.view("reports"))
       NavigationLink(value: SidebarSelection.categories) {
         Label("Categories", systemImage: "tag")
       }
+      .accessibilityIdentifier(UITestIdentifiers.Sidebar.view("categories"))
       NavigationLink(value: SidebarSelection.upcomingTransactions) {
         Label("Upcoming", systemImage: "calendar")
       }
+      .accessibilityIdentifier(UITestIdentifiers.Sidebar.view("upcoming"))
       NavigationLink(value: SidebarSelection.recentlyAdded) {
         recentlyAddedLabel
       }
+      .accessibilityIdentifier(UITestIdentifiers.Sidebar.view("recentlyAdded"))
       NavigationLink(value: SidebarSelection.allTransactions) {
         Label("All Transactions", systemImage: "list.bullet")
       }
+      .accessibilityIdentifier(UITestIdentifiers.Sidebar.view("allTransactions"))
       #if os(iOS)
         Toggle(isOn: $showHidden) {
           Label("Show Hidden", systemImage: "eye.slash")

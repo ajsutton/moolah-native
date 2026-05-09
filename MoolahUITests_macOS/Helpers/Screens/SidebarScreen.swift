@@ -26,6 +26,22 @@ enum SidebarAccount {
   }
 }
 
+/// Symbolic reference to a named sidebar leaf (Upcoming, All Transactions,
+/// Recently Added, Analysis, Reports, Categories). The `rawValue` is the
+/// suffix passed to `UITestIdentifiers.Sidebar.view(_:)`, so it must
+/// match the identifier the production view applies in
+/// `SidebarView.navigationSection`. `upcoming` deliberately differs from
+/// the underlying `SidebarSelection.upcomingTransactions` case — the
+/// short identifier mirrors the visible "Upcoming" label.
+enum SidebarNamedItem: String {
+  case upcoming
+  case allTransactions
+  case recentlyAdded
+  case analysis
+  case reports
+  case categories
+}
+
 /// Driver for the sidebar (left column on macOS): account list, named
 /// views (Upcoming, Analysis, etc.), earmarks. Returned from
 /// `MoolahApp.sidebar`.
@@ -61,5 +77,27 @@ struct SidebarScreen {
       XCTFail(
         "Transaction list did not render within 3s of switching to account \(account)")
     }
+  }
+
+  /// Switches the centre column to a named sidebar leaf (Upcoming,
+  /// Analysis, Reports, Categories, All Transactions, Recently Added).
+  ///
+  /// Unlike `switchToAccount(_:)`, this does **not** wait on a
+  /// post-condition identifier: each named leaf renders a structurally
+  /// different surface (analytics chart, category tree, transaction
+  /// list, …) with no single shared accessibility identifier. The next
+  /// driver call's own `waitForExistence` provides natural quiescence,
+  /// and `UI_TEST_GUIDE.md`'s no-sleep rule forbids inserting an
+  /// unconditional pause here.
+  func switchToNamed(_ item: SidebarNamedItem) {
+    Trace.record(detail: "named=\(item.rawValue)")
+    let identifier = UITestIdentifiers.Sidebar.view(item.rawValue)
+    let row = app.element(for: identifier)
+    if !row.waitForExistence(timeout: 3) {
+      Trace.recordFailure("sidebar row '\(identifier)' did not appear")
+      XCTFail("Sidebar row for named item \(item.rawValue) did not appear within 3s")
+      return
+    }
+    row.click()
   }
 }
