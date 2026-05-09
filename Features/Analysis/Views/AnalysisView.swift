@@ -252,4 +252,5 @@ private func seedAnalysisPreview(
         await seedAnalysisPreview(backend: backend)
       }
   }
+  .previewProfileEnvironment()
 }

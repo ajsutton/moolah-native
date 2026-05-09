@@ -358,6 +358,7 @@ private struct CreateCategorySheet: View {
   NavigationStack {
     CategoriesView(categoryStore: store)
   }
+  .previewProfileEnvironment()
   .task {
     let groceriesId = UUID()
     for cat in [

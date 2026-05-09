@@ -58,6 +58,7 @@ private func seedTransactionListPreview(
       earmarks: Earmarks(from: []),
       transactionStore: store)
   }
+  .previewProfileEnvironment()
   .task {
     await seedTransactionListPreview(
       backend: backend, accountId: accountId, savingsId: savingsId, store: store)

@@ -124,6 +124,7 @@ private func previewSeedTransactions(
       accounts: accounts, categories: categories,
       earmarks: Earmarks(from: []), transactionStore: store)
   }
+  .previewProfileEnvironment()
   .task {
     await previewSeedTransactions(
       backend: backend, accountId: accountId, categoryId: categoryId, store: store)
