@@ -88,6 +88,15 @@ struct SidebarView: View {
           .help("Create new account")
           .accessibilityIdentifier(UITestIdentifiers.Sidebar.newAccountButton)
         }
+        ToolbarItem(placement: .primaryAction) {
+          Button {
+            showCreateEarmarkSheet = true
+          } label: {
+            Label("New Earmark", systemImage: "bookmark.fill")
+          }
+          .help("Create new earmark")
+          .accessibilityIdentifier(UITestIdentifiers.Sidebar.newEarmarkButton)
+        }
       }
     #endif
     .focusedSceneValue(\.newEarmarkAction) {
@@ -152,24 +161,22 @@ struct SidebarView: View {
     }
   }
 
-  @ViewBuilder private var earmarksSection: some View {
-    if !earmarkStore.visibleEarmarks.isEmpty {
-      Section {
-        ForEach(earmarkStore.visibleEarmarks) { earmark in
-          NavigationLink(value: SidebarSelection.earmark(earmark.id)) {
-            SidebarRowView(
-              icon: "bookmark.fill", name: earmark.name,
-              amount: earmarkStore.convertedBalance(for: earmark.id),
-              isSelected: selection == .earmark(earmark.id))
-          }
+  private var earmarksSection: some View {
+    Section {
+      ForEach(earmarkStore.visibleEarmarks) { earmark in
+        NavigationLink(value: SidebarSelection.earmark(earmark.id)) {
+          SidebarRowView(
+            icon: "bookmark.fill", name: earmark.name,
+            amount: earmarkStore.convertedBalance(for: earmark.id),
+            isSelected: selection == .earmark(earmark.id))
         }
-        .onMove { source, destination in
-          Task { await earmarkStore.reorderEarmarks(from: source, to: destination) }
-        }
-        totalRow(label: "Earmarked Total", value: earmarkStore.convertedTotalBalance)
-      } header: {
-        sectionHeader(title: "Earmarks", addAction: addEarmarkAction)
       }
+      .onMove { source, destination in
+        Task { await earmarkStore.reorderEarmarks(from: source, to: destination) }
+      }
+      totalRow(label: "Earmarked Total", value: earmarkStore.convertedTotalBalance)
+    } header: {
+      sectionHeader(title: "Earmarks", addAction: addEarmarkAction)
     }
   }
 
