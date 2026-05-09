@@ -18,8 +18,15 @@ import GRDB
 /// not benefit from sharing the per-profile WAL.
 ///
 /// Migration history:
-/// `v1_initial`             — the `profile` table.
-/// `v2_data_format_version` — adds `data_format_version INTEGER NOT NULL DEFAULT 0`.
+/// `v1_initial`                    — the `profile` table.
+/// `v2_data_format_version`        — adds `data_format_version INTEGER NOT NULL DEFAULT 0`.
+/// `v3_shared_instrument_registry` — adds the shared `instrument` table
+///   (mirrors the per-profile post-v8 shape) plus the six rate-cache
+///   tables — moved here from per-profile so spam decisions,
+///   discovered-token resolutions, and price-cache rows propagate
+///   across every profile on the same iCloud account. See
+///   `ProfileIndexSchema+SharedInstrumentRegistry.swift` and
+///   `plans/2026-05-09-shared-instrument-registry-design.md`.
 ///
 /// Each migration body is registered here. Once shipped, migration IDs
 /// are frozen forever; splitting later is fine, merging post-ship is
@@ -34,7 +41,7 @@ enum ProfileIndexSchema {
   /// Bumped each time a migration is added. Surfaced for open-time
   /// integrity checks; not used by `DatabaseMigrator` (which keys on
   /// the stable string IDs of registered migrations).
-  static let version = 2
+  static let version = 3
 
   static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
@@ -46,6 +53,9 @@ enum ProfileIndexSchema {
     migrator.registerMigration("v1_initial", migrate: createProfileTable)
     migrator.registerMigration(
       "v2_data_format_version", migrate: addDataFormatVersionColumn)
+    migrator.registerMigration(
+      "v3_shared_instrument_registry",
+      migrate: createSharedInstrumentRegistryTables)
 
     return migrator
   }

@@ -11,10 +11,10 @@ struct ProfileIndexSchemaV2Tests {
     try ProfileIndexDatabase.openInMemory()
   }
 
-  @Test("schema version reflects the v2 migration")
-  func versionIsTwo() {
-    #expect(ProfileIndexSchema.version == 2)
-  }
+  // The schema-version assertion lives in `ProfileIndexSchemaV3Tests` —
+  // `ProfileIndexSchema.version` is a running counter advanced by every
+  // migration and is not a per-migration invariant. Removed from this
+  // file when v3 landed.
 
   @Test("v2 migration adds the data_format_version column with default 0")
   func columnExistsWithDefaultZero() throws {
