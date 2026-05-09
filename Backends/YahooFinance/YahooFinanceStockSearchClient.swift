@@ -10,15 +10,21 @@ import Foundation
 struct YahooFinanceStockSearchClient: StockSearchClient {
   private let session: URLSession
   private let rateLimitGate: RateLimitGate
+  private let failureCache: FailedRequestCache
   private static let baseURL: URL = {
     guard let url = URL(string: "https://query1.finance.yahoo.com/v1/finance/search")
     else { preconditionFailure("malformed Yahoo search URL — fix the literal") }
     return url
   }()
 
-  init(session: URLSession = .shared, rateLimitGate: RateLimitGate = RateLimitGate()) {
+  init(
+    session: URLSession = .shared,
+    rateLimitGate: RateLimitGate = RateLimitGate(),
+    failureCache: FailedRequestCache = FailedRequestCache()
+  ) {
     self.session = session
     self.rateLimitGate = rateLimitGate
+    self.failureCache = failureCache
   }
 
   func search(query: String) async throws -> [StockSearchHit] {
@@ -34,7 +40,7 @@ struct YahooFinanceStockSearchClient: StockSearchClient {
     request.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
 
     let (data, response) = try await session.dataRespectingRateLimit(
-      for: request, gate: rateLimitGate)
+      for: request, gate: rateLimitGate, failureCache: failureCache)
     guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
       throw URLError(.badServerResponse)
     }

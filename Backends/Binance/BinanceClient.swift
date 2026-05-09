@@ -8,15 +8,18 @@ struct BinanceClient: CryptoPriceClient, Sendable {
   private let session: URLSession
   private let usdtRateLookup: @Sendable (Date) async -> Decimal
   private let rateLimitGate: RateLimitGate
+  private let failureCache: FailedRequestCache
 
   init(
     session: URLSession = .shared,
     usdtRateLookup: @escaping @Sendable (Date) async -> Decimal = { _ in Decimal(1) },
-    rateLimitGate: RateLimitGate = RateLimitGate()
+    rateLimitGate: RateLimitGate = RateLimitGate(),
+    failureCache: FailedRequestCache = FailedRequestCache()
   ) {
     self.session = session
     self.usdtRateLookup = usdtRateLookup
     self.rateLimitGate = rateLimitGate
+    self.failureCache = failureCache
   }
 
   func dailyPrice(for mapping: CryptoProviderMapping, on date: Date) async throws -> Decimal {
@@ -46,7 +49,7 @@ struct BinanceClient: CryptoPriceClient, Sendable {
       let chunkEnd = min(candleWindowEnd, range.upperBound)
       let url = Self.klinesURL(symbol: symbol, from: chunkStart, to: chunkEnd)
       let (data, response) = try await session.dataRespectingRateLimit(
-        for: URLRequest(url: url), gate: rateLimitGate)
+        for: URLRequest(url: url), gate: rateLimitGate, failureCache: failureCache)
       guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
         throw URLError(.badServerResponse)
       }

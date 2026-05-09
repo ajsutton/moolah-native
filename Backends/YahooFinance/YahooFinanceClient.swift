@@ -13,10 +13,16 @@ struct YahooFinanceClient: StockPriceClient, Sendable {
     ?? URL(fileURLWithPath: "/")
   private let session: URLSession
   private let rateLimitGate: RateLimitGate
+  private let failureCache: FailedRequestCache
 
-  init(session: URLSession = .shared, rateLimitGate: RateLimitGate = RateLimitGate()) {
+  init(
+    session: URLSession = .shared,
+    rateLimitGate: RateLimitGate = RateLimitGate(),
+    failureCache: FailedRequestCache = FailedRequestCache()
+  ) {
     self.session = session
     self.rateLimitGate = rateLimitGate
+    self.failureCache = failureCache
   }
 
   func fetchDailyPrices(ticker: String, from: Date, to: Date) async throws -> StockPriceResponse {
@@ -36,7 +42,7 @@ struct YahooFinanceClient: StockPriceClient, Sendable {
     )
 
     let (data, response) = try await session.dataRespectingRateLimit(
-      for: request, gate: rateLimitGate)
+      for: request, gate: rateLimitGate, failureCache: failureCache)
 
     guard let httpResponse = response as? HTTPURLResponse,
       (200...299).contains(httpResponse.statusCode)
