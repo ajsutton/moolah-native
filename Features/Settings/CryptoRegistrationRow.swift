@@ -3,9 +3,8 @@ import SwiftUI
 
 /// Compact row used by the Registered Tokens, Discovered Tokens inbox,
 /// and Spam Tokens management lists. Renders the instrument's symbol,
-/// name, chain, optional contract address (shown in full so a spoofed
-/// contract can't hide behind a truncation ellipsis), and the badge set
-/// derived from the row's `CryptoProviderMapping`.
+/// name, chain, and optional contract address (shown in full so a
+/// spoofed contract can't hide behind a truncation ellipsis).
 ///
 /// `CryptoRegistrationRow` is read-only — actions (remove, mark-spam,
 /// re-resolve, restore) live as `contextMenu` / trailing buttons on the
@@ -49,7 +48,6 @@ struct CryptoRegistrationRow: View {
       Text(Instrument.chainName(for: instrument.chainId ?? 0))
         .font(.caption)
         .foregroundStyle(.secondary)
-      providerIndicators(for: registration.mapping)
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLabel)
@@ -58,7 +56,6 @@ struct CryptoRegistrationRow: View {
   private var instrument: Instrument { registration.instrument }
 
   private var accessibilityLabel: String {
-    let mapping = registration.mapping
     var parts: [String] = [
       instrument.ticker ?? instrument.name,
       instrument.name,
@@ -67,44 +64,6 @@ struct CryptoRegistrationRow: View {
     if let address = instrument.contractAddress {
       parts.append("contract \(address)")
     }
-    parts.append(providersAccessibilityFragment(for: mapping))
     return parts.filter { !$0.isEmpty }.joined(separator: ", ")
-  }
-
-  /// VoiceOver fragment listing the active price providers for a mapping.
-  /// The visual `CG`/`CC`/`BN` badges in `providerIndicators` would otherwise
-  /// be silent — a combined-element row reads only the outer label, so each
-  /// badge's individual `accessibilityLabel` doesn't surface.
-  private func providersAccessibilityFragment(for mapping: CryptoProviderMapping) -> String {
-    let names: [String] = [
-      mapping.coingeckoId != nil ? "CoinGecko" : nil,
-      mapping.cryptocompareSymbol != nil ? "CryptoCompare" : nil,
-      mapping.binanceSymbol != nil ? "Binance" : nil,
-    ].compactMap { $0 }
-    return names.isEmpty ? "" : "priced via " + names.joined(separator: ", ")
-  }
-
-  @ViewBuilder
-  private func providerIndicators(for mapping: CryptoProviderMapping) -> some View {
-    HStack(spacing: 4) {
-      if mapping.coingeckoId != nil {
-        providerBadge("CG", accessibilityLabel: "CoinGecko")
-      }
-      if mapping.cryptocompareSymbol != nil {
-        providerBadge("CC", accessibilityLabel: "CryptoCompare")
-      }
-      if mapping.binanceSymbol != nil {
-        providerBadge("BN", accessibilityLabel: "Binance")
-      }
-    }
-  }
-
-  private func providerBadge(_ text: String, accessibilityLabel: String) -> some View {
-    Text(text)
-      .font(.caption2)
-      .padding(.horizontal, 4)
-      .padding(.vertical, 1)
-      .background(.fill, in: RoundedRectangle(cornerRadius: 3))
-      .accessibilityLabel(accessibilityLabel)
   }
 }
