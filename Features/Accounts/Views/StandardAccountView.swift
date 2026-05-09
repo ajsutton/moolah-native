@@ -10,6 +10,12 @@
 // with no behaviour of their own. See `guides/UI_GUIDE.md` §3 for the
 // per-leaf-leaf-view pattern these implement.
 
+// Reason: SwiftUI declarative chains and the Transaction-leg seeding
+// helpers at the bottom wrap arguments across multiple lines for
+// readability; enforcing the rule would fight the formatter and the
+// SwiftUI idiom without improving clarity.
+// swiftlint:disable multiline_arguments
+
 import SwiftUI
 
 /// Detail view for bank, asset, and other non-investment, non-crypto
