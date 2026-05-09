@@ -52,18 +52,28 @@ The only exception is scope the user has explicitly authorised in the conversati
 - Context menus (macOS) and swipe actions (iOS)
 - Keyboard shortcuts (macOS)
 
-### View-tree stability for toolbar-bearing views (Critical)
+### Critical — Detail-column searchable invariant
 
-This is a recurring crash class — the same root cause has shipped to production at least twice (`InvestmentAccountView` initial-load flip; `accountDetail` crypto VStack). Treat any finding here as **Critical** and reject the PR until it's fixed. Reference: `guides/UI_GUIDE.md` §3 — "View-tree stability for views with `.searchable` / `.toolbar`".
+Per `guides/UI_GUIDE.md` §3:
 
-Flag the change if:
-
-- A view that registers `.searchable(...)` or `.toolbar { ToolbarItem(...) }` (e.g. `TransactionListView`, `RecentlyAddedView`, `EarmarksView`, `CategoriesView`) is wrapped in a parent whose body branches on data or async-resolved state — typically a `VStack` whose first child is gated by `if account.type == .crypto` / `if hasLoaded` / `if let value = …`. SwiftUI re-mounts the inner view in a new structural position when the gate flips, AppKit's toolbar bridge double-registers `com.apple.SwiftUI.search`, and the app crashes with `NSInternalInconsistencyException: NSToolbar already contains an item …`.
-- A new `if/else` is introduced in a parent whose two arms differ in shape and one of them contains a search-bearing or toolbar-bearing view. The two arms must either be structurally identical (same number of children in the same order) or be tagged with distinct `.id(...)` so SwiftUI fully tears the previous one down before mounting the next (see `InvestmentAccountView` for the reference pattern).
-- A per-context header or accessory is added by wrapping the search-bearing view in an outer container instead of using its host's accessory slot (e.g. `TransactionListView`'s `topAccessory:` parameter, or a `safeAreaInset(edge:)` modifier on the search-bearing view itself).
-- Two `.searchable(...)` modifiers end up in the same `NavigationSplitView` column or detail surface — AppKit collapses both into a single `NSToolbar` and hits the duplicate-item assertion regardless of identity.
-
-When in doubt: ask whether the search-bearing view's structural position is the same on every render of its parent. If the answer requires "as long as the data has loaded" or "for non-crypto accounts" or any other conditional, that's a finding.
+- Every leaf in `ContentView.detail`'s switch is wrapped in
+  `NavigationStack { … }.id(selection)`. Flag as Critical any new leaf
+  that escapes this wrap, or any diff that removes the `.id(selection)`
+  modifier.
+- Leaves that contain a `TransactionListView` register exactly one
+  `.searchable(text:)`, inside `TransactionListView`. Flag any
+  additional `.searchable` registration in such a leaf as Critical.
+- Leaves that do NOT contain a `TransactionListView` (e.g.,
+  `CategoriesView`) may register at most one `.searchable` directly.
+  Flag any second registration in the same leaf as Critical.
+- Composition shells (`PositionsTransactionsSplit`,
+  `RecordedValueInvestmentLayout` post-PR-3, `EarmarkOverviewWithTabs`
+  post-PR-2) are content-only. Flag any `.toolbar` or `.searchable`
+  inside a shell as Critical.
+- Inspector modifiers (`.transactionInspector(...)`) attach at the
+  leaf's body level, not at `ContentView.detail`. Flag any inspector
+  modifier on a `NavigationStack` outer or on `ContentView` itself as
+  Critical.
 
 ### Accessibility
 - VoiceOver labels on images and custom controls (`.accessibilityLabel()`)
