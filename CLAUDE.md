@@ -26,6 +26,17 @@ To prevent it:
 
 If you do push into the wrong branch by accident, push your commit to a new branch first to preserve the work, then force-push the parent's branch back to its previous head (verify the SHA via `gh pr view <parent> --json headRefOid` before and after).
 
+### Xcode previews and the `mcp__xcode__RenderPreview` tool from a worktree
+
+`mcp__xcode__RenderPreview` (and SwiftUI canvas previews in general) operate against **whichever `Moolah.xcodeproj` is currently open in Xcode**. If Xcode is open on the main checkout but you're editing a worktree, the tool will read stale source from the main checkout — newly added `#Preview` blocks won't be discoverable, and SourceKit diagnostics in the worktree may reference types as "not in scope" even though `just build-mac` from the worktree succeeds.
+
+To use previews against a worktree:
+
+1. `just -d <worktree-path> --justfile <worktree-path>/justfile generate` — `xcodegen` produces a per-worktree `Moolah.xcodeproj` (the project file is gitignored, so each worktree has its own).
+2. Open the worktree's `Moolah.xcodeproj` in Xcode (`open <worktree-path>/Moolah.xcodeproj`). `mcp__xcode__RenderPreview` will then read from the worktree.
+
+If the build passes from the worktree (`just build-mac`) but SourceKit / RenderPreview disagrees, the cause is usually that Xcode is still indexed against the main checkout — switch Xcode to the worktree's project before re-rendering.
+
 ## Build & Test
 
 Always use `just` targets to ensure consistent builds and test runs:
