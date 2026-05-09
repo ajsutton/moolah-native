@@ -122,6 +122,12 @@ extension TransactionListView {
         costBasis: [:],
         on: Date()
       )
+      // The valuator cooperates with cancellation by breaking out of
+      // its per-row loop, but it cannot signal cancellation through the
+      // non-throwing return — re-check here so a stale (or partial)
+      // `rows` from a superseded task never overwrites the freshly-
+      // emitting one.
+      guard !Task.isCancelled else { return }
       positionsInput = PositionsViewInput(
         title: positionsTitle,
         hostCurrency: positionsHostCurrency,

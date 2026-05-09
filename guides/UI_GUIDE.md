@@ -87,40 +87,58 @@ See [Sheets & Dialogs](#sheets--dialogs) in Section 6 for full guidance on sheet
 
 ### View-tree stability for views with `.searchable` / `.toolbar`
 
-Any view that registers a `.searchable(...)` or `.toolbar { ToolbarItem }` modifier (e.g. `TransactionListView`, `RecentlyAddedView`, `EarmarksView`) MUST keep a stable structural position inside its parent. SwiftUI's AppKit toolbar bridge tracks toolbar items by view identity and silently re-installs them when an ancestor re-mounts the host. If the search-bearing view ends up at a different structural index between two renders, the bridge attempts to insert `com.apple.SwiftUI.search` while the previous registration is still live and AppKit crashes the app:
+The detail column wraps every leaf in `NavigationStack { … }.id(selection)`
+(see `App/ContentView.swift`). The `.id(selection)` is load-bearing: it
+forces SwiftUI to fully tear down the previous leaf's `NavigationStack`
+(and its `NSToolbar` host) before mounting the next leaf. Two `NSToolbar`s
+never coexist, so the AppKit toolbar bridge cannot double-register
+`com.apple.SwiftUI.search`.
 
-```
-NSInternalInconsistencyException: NSToolbar already contains an item
-with the identifier com.apple.SwiftUI.search. Duplicate items of this
-type are not allowed.
-```
+Two prior incidents drove this design — `InvestmentAccountView` flipping
+between `legacyValuationsLayout` and `positionTrackedLayout` after `.task`
+resolved (commit `010fb55b`), and the crypto-account `accountDetail`
+wrapping the wallet header + `TransactionListView` in a `VStack` whose
+first child appeared/disappeared with `account.type == .crypto` (PR #821,
+commit `08a99a2d`). Both fired the same
+`NSInternalInconsistencyException: NSToolbar already contains an item
+with the identifier com.apple.SwiftUI.search` assertion. The structural
+fix eliminates the failure mode at its source rather than patching each
+new instance.
 
-The crash is timing-dependent (appears once a parent re-render races a toolbar update), so it routinely passes review and lands in production before reproducing on a user's machine. Two prior incidents in this repo: `InvestmentAccountView` flipping between `legacyValuationsLayout` and `positionTrackedLayout` after `.task` resolved (commit `010fb55b`), and `accountDetail` wrapping the wallet header + `TransactionListView` in a `VStack` whose first child appeared/disappeared based on `account.type == .crypto` (PR #TBD).
+**Searchable invariant (two-part rule, exhaustive):**
 
-**Rules:**
+1. Any leaf that contains a `TransactionListView` (e.g.,
+   `StandardAccountView`, `CryptoWalletAccountView`, `AllTransactionsView`,
+   `EarmarkDetailView`, `InvestmentAccountView`, `UpcomingView`) registers
+   exactly one `.searchable(text:)`, and it lives inside
+   `TransactionListView`. No other code in such a leaf may register
+   `.searchable`.
+2. Any leaf that does NOT contain a `TransactionListView` (e.g.,
+   `CategoriesView`) may register at most one `.searchable(text:)` directly
+   on its own root view. Two `.searchable` modifiers in the same leaf are
+   forbidden regardless of leaf type.
 
-1. **Never wrap a `.searchable` / `.toolbar`-bearing view in an outer container whose body branches** (e.g. an `if` whose two arms differ in shape, or a `VStack` whose child count changes between renders). Either give every parent branch the same structural shape, or hoist the search-bearing view to the root and let its surroundings vary.
-2. **Use `safeAreaInset(edge:)` for per-context headers** instead of wrapping. `TransactionListView` exposes a `topAccessory` parameter for exactly this reason — pass the accessory there so the list stays at the root of the detail panel:
+**Toolbar accumulation:** `TransactionListView` owns the standard
+transaction-list toolbar items (filter / refresh / add). Leaves that need
+additional toolbar items add them via a sibling `.toolbar { … }` modifier
+on the leaf's body — SwiftUI accumulates these into the leaf's single
+`NSToolbar` because there is exactly one `NavigationStack` per leaf. There
+is no `extraToolbar:` parameter on `TransactionListView`.
 
-   ```swift
-   // ✅ stable — TransactionListView is always the root.
-   TransactionListView(/* … */) {
-     if account.type == .crypto, let header = walletHeader(for: account) {
-       header
-     }
-   }
+**Inspector placement:** the `.transactionInspector(...)` modifier
+attaches at the leaf's body level — i.e., inside the per-leaf
+`NavigationStack`, on the outermost view of the leaf's content. SwiftUI
+hoists the inspector to the window level for rendering, so the placement
+does not affect layout, but keeping the modifier at the leaf level scopes
+the inspector's binding to the leaf's `@State selectedTransaction`. Do
+not move it up to the `ContentView.detail` level.
 
-   // ❌ unstable — VStack child count flips with account type.
-   VStack(spacing: 0) {
-     if account.type == .crypto { walletHeader(for: account) }
-     TransactionListView(/* … */)
-   }
-   ```
+**Composition shells** (`PositionsTransactionsSplit`, and after PR-3 /
+PR-2: `RecordedValueInvestmentLayout`, `EarmarkOverviewWithTabs`) are
+content-only: they do not register `.toolbar` or `.searchable`.
 
-3. **Defer layout decisions until data is stable** when a `.task`-driven flag (e.g. `initialLoadComplete`, `hasLegacyValuations`) chooses between two structurally different bodies. Render a `ProgressView()` until the flag flips, then commit to one branch and stay there. Mark each branch with a distinct `.id(...)` so SwiftUI fully tears down the previous one before mounting the next, e.g. `legacyLayout.id(ValuationMode.recordedValue)` vs `positionLayout.id(ValuationMode.calculatedFromTrades)`. `InvestmentAccountView` is the reference implementation.
-4. **Don't host two `.searchable` modifiers in the same `NavigationSplitView` column.** AppKit collapses both into a single `NSToolbar`; even if neither view-tree flips, the bridge still hits the duplicate-item assertion.
-
-The `code-review` and `ui-review` agents flag any new view that places a `.searchable` or `.toolbar`-bearing child inside a structurally-flipping parent. Treat agent findings on this rule as Critical.
+The `code-review` and `ui-review` agents flag any new view that violates
+the searchable invariant. Treat agent findings on this rule as Critical.
 
 ---
 

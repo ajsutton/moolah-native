@@ -163,6 +163,13 @@ struct ContentView: View {
   }
 
   @ViewBuilder private var detail: some View {
+    NavigationStack {
+      detailLeaf
+    }
+    .id(selection)
+  }
+
+  @ViewBuilder private var detailLeaf: some View {
     switch selection {
     case .account(let id):
       accountDetail(id: id)
@@ -179,9 +186,7 @@ struct ContentView: View {
     case .recentlyAdded:
       RecentlyAddedView(backend: session.backend)
     case .allTransactions:
-      TransactionListView(
-        title: "All Transactions",
-        filter: TransactionFilter(),
+      AllTransactionsView(
         accounts: accountStore.accounts,
         categories: categoryStore.categories,
         earmarks: earmarkStore.earmarks,
@@ -332,7 +337,8 @@ extension ContentView {
   @ViewBuilder
   private func accountDetail(id: UUID) -> some View {
     if let account = accountStore.accounts.by(id: id) {
-      if account.type == .investment {
+      switch account.type {
+      case .investment:
         InvestmentAccountView(
           account: account,
           accounts: accountStore.accounts,
@@ -340,50 +346,25 @@ extension ContentView {
           earmarks: earmarkStore.earmarks,
           investmentStore: investmentStore,
           transactionStore: transactionStore)
-      } else {
-        // Crypto wallets get a header bar above the transaction list
-        // showing the full wallet address, chain, last-synced state,
-        // and a Sync now action. The header is passed as `topAccessory`
-        // and rendered inside `TransactionListView` as a
-        // `safeAreaInset(edge: .top)`, rather than wrapping the list in
-        // a `VStack`. Wrapping shifts the structural position of
-        // `TransactionListView` between the two possible parent layouts
-        // (with vs. without the header), which re-mounts its `.toolbar`
-        // / `.searchable` registrations and reproducibly crashes
-        // AppKit's toolbar bridge with a duplicate
-        // `com.apple.SwiftUI.search` item. See `guides/UI_GUIDE.md` §3
-        // — view-tree stability for views with toolbars. Same root cause
-        // as the prior `InvestmentAccountView` initial-load fix.
-        //
-        // Non-crypto accounts (and crypto accounts whose `chainId`
-        // couldn't be resolved — defensive against a config gap) pass an
-        // `EmptyView()` so the structural slot is identical across types.
-        TransactionListView(
-          title: account.name,
-          filter: TransactionFilter(accountId: account.id),
+      case .crypto:
+        CryptoWalletAccountView(
+          account: account,
           accounts: accountStore.accounts,
           categories: categoryStore.categories,
           earmarks: earmarkStore.earmarks,
           transactionStore: transactionStore,
           positions: accountStore.positions(for: account.id),
-          positionsHostCurrency: account.instrument,
-          positionsTitle: account.name,
           conversionService: session.backend.conversionService,
-          // Drives a re-fire of the per-row valuator when the user
-          // marks a token as `.spam` from preferences — issue #790.
-          registrationsVersion: session.cryptoTokenStore?.registrationsVersion ?? 0
-        ) {
-          if account.type == .crypto, let chainId = account.chainId,
-            let chain = ChainConfig.config(for: chainId),
-            let cryptoSyncStore = session.cryptoSyncStore
-          {
-            WalletAccountHeaderView(
-              account: account,
-              chain: chain,
-              cryptoSyncStore: cryptoSyncStore,
-              hasApiKey: session.cryptoTokenStore?.hasAlchemyApiKey ?? false)
-          }
-        }
+          session: session)
+      default:
+        StandardAccountView(
+          account: account,
+          positions: accountStore.positions(for: account.id),
+          accounts: accountStore.accounts,
+          categories: categoryStore.categories,
+          earmarks: earmarkStore.earmarks,
+          transactionStore: transactionStore,
+          conversionService: session.backend.conversionService)
       }
     }
   }
