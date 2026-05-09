@@ -4,6 +4,7 @@
 
 import CloudKit
 import Foundation
+import GRDB
 import OSLog
 import SwiftData
 import SwiftUI
@@ -222,6 +223,39 @@ extension MoolahApp {
   /// hook closure captures the manager and coordinator weakly so a
   /// cleanup hop after profile deletion doesn't keep them alive past
   /// the app's lifetime.
+  /// Runs the SwiftData→GRDB profile-index migration and then the
+  /// shared-registry union runner, in that order, in a single
+  /// detached `Task`. Returned for tests that need to `await` first-
+  /// launch completion.
+  static func runProfileIndexAndUnionMigrations(
+    setup: ContainerSetup
+  ) -> Task<Void, Never> {
+    Task { [containerManager = setup.manager] in
+      await Self.runProfileIndexMigrationIfNeeded(setup: setup)
+      let profileIds = await containerManager.allProfileIds()
+      await SharedRegistryUnionRunner.run(
+        sharedQueue: containerManager.profileIndexDatabase,
+        profileIds: profileIds)
+    }
+  }
+
+  /// Constructs the app-level shared `GRDBInstrumentRegistryRepository`
+  /// pointed at the profile-index DB. Mutation hooks are no-ops in
+  /// this stage — the registry is wired into `SyncCoordinator` for
+  /// downlink dispatch only. Production mutations still flow through
+  /// the per-profile registry constructed by
+  /// `ProfileSession+CloudKitBackendBuild.makeInstrumentRegistry`
+  /// until a later stage migrates Settings views and the search
+  /// service to read from this shared instance.
+  ///
+  /// See `plans/2026-05-09-shared-instrument-registry-design.md` and
+  /// `plans/2026-05-09-shared-instrument-registry-plan.md` (Task 12).
+  static func makeSharedInstrumentRegistry(
+    database: any DatabaseWriter
+  ) -> GRDBInstrumentRegistryRepository {
+    GRDBInstrumentRegistryRepository(database: database)
+  }
+
   static func makeSessionManager(
     setup: ContainerSetup, store: ProfileStore, coordinator: SyncCoordinator
   ) -> SessionManager {
