@@ -15,23 +15,59 @@ import OSLog
 /// in the build only as the one-shot migrator's source, copying any
 /// existing rows into `profile-index.sqlite` on first launch.
 ///
+/// **Dispatch by record type.** The handler dispatches by
+/// `recordType` so that the profile-index zone can carry both
+/// `ProfileRow` and `InstrumentRow` records (the latter from
+/// "shared instrument registry" in
+/// `plans/2026-05-09-shared-instrument-registry-design.md`). When an
+/// `instrumentRepository` is supplied, instrument-shaped records are
+/// applied / built / system-field-managed via the dispatched paths;
+/// when nil, every instrument-shaped recordID is silently ignored
+/// (legacy callers who don't yet wire the registry to this zone).
+///
 /// **Concurrency.** Nonisolated and `Sendable`. Every synchronous method
 /// calls into the repository's `*Sync(...)` helpers which block the
 /// calling thread on the GRDB queue. Declaring this `@MainActor` would
 /// force every caller to block the UI thread; instead, callers that
 /// care can hop off-actor (`Task.detached { handler.deleteLocalData() }`).
 /// All stored properties are themselves `Sendable` (`CKRecordZone.ID`,
-/// `GRDBProfileIndexRepository`, `Logger`), so the conformance holds
-/// without `@unchecked`.
+/// `GRDBProfileIndexRepository`, optional `GRDBInstrumentRegistryRepository`,
+/// `Logger`, `@Sendable` closure), so the conformance holds without
+/// `@unchecked`.
 final class ProfileIndexSyncHandler: Sendable {
   let zoneID: CKRecordZone.ID
   let repository: GRDBProfileIndexRepository
 
-  private let logger = Logger(
+  /// Set when this handler is constructed by the shared-instrument
+  /// scope; nil for legacy fixtures that pre-date the dispatch
+  /// extension. When nil, every instrument-shaped record is silently
+  /// dropped (the path is unreachable in production once the boot
+  /// path wires the scope, by Task 12 of the plan).
+  let instrumentRepository: GRDBInstrumentRegistryRepository?
+
+  /// Fired synchronously after `applyRemoteChanges` writes one or
+  /// more `InstrumentRow`s. The caller is expected to hop to
+  /// `@MainActor` (this handler is nonisolated `Sendable`) and call
+  /// `GRDBInstrumentRegistryRepository.notifyExternalChange()` so
+  /// `observeChanges()` subscribers fan out the signal. Default is
+  /// `{}` so the handler stays usable in legacy fixtures.
+  ///
+  /// Mirrors `ProfileDataSyncHandler.onInstrumentRemoteChange`'s
+  /// shape exactly — same `nonisolated let @Sendable () -> Void`
+  /// pattern, same fire-on-batch-with-instruments semantics.
+  nonisolated let onInstrumentRemoteChange: @Sendable () -> Void
+
+  let logger = Logger(
     subsystem: "com.moolah.app", category: "ProfileIndexSyncHandler")
 
-  init(repository: GRDBProfileIndexRepository) {
+  init(
+    repository: GRDBProfileIndexRepository,
+    instrumentRepository: GRDBInstrumentRegistryRepository? = nil,
+    onInstrumentRemoteChange: @escaping @Sendable () -> Void = {}
+  ) {
     self.repository = repository
+    self.instrumentRepository = instrumentRepository
+    self.onInstrumentRemoteChange = onInstrumentRemoteChange
     self.zoneID = CKRecordZone.ID(
       zoneName: "profile-index",
       ownerName: CKCurrentUserDefaultName
@@ -41,43 +77,52 @@ final class ProfileIndexSyncHandler: Sendable {
   // MARK: - Applying Remote Changes
 
   /// Applies remote changes (inserts/updates/deletions) to the local GRDB store.
-  /// The whole batch runs inside a single GRDB write so a mid-batch failure
-  /// rolls back cleanly — required by the rollback contract in
-  /// `guides/DATABASE_CODE_GUIDE.md`.
+  /// Each repository's `applyRemoteChangesSync` opens its own write
+  /// transaction; that's acceptable here because the two record types
+  /// are independent (no `InstrumentRow` references a `ProfileRow` or
+  /// vice versa), so a partial-success outcome — profiles applied,
+  /// instruments failed — is a recoverable state the next sync cycle
+  /// re-attempts via `unsyncedRowIdsSync()`.
   func applyRemoteChanges(saved: [CKRecord], deleted: [CKRecord.ID]) -> ApplyResult {
-    var savedRows: [ProfileRow] = []
-    savedRows.reserveCapacity(saved.count)
-    for ckRecord in saved {
-      guard ckRecord.recordType == ProfileRow.recordType else { continue }
-      guard var values = ProfileRow.fieldValues(from: ckRecord) else {
-        logger.error(
-          "applyRemoteChanges: malformed recordID '\(ckRecord.recordID.recordName)' (recordType \(ckRecord.recordType, privacy: .public)) — skipping"
-        )
-        continue
-      }
-      values.encodedSystemFields = ckRecord.encodedSystemFields
-      savedRows.append(values)
-    }
+    let savedSplit = Self.partitionSaved(saved, logger: logger)
+    let deletedSplit = Self.partitionDeleted(deleted, logger: logger)
 
-    var deletedIds: [UUID] = []
-    deletedIds.reserveCapacity(deleted.count)
-    for recordID in deleted {
-      guard let profileId = recordID.uuid else {
-        logger.error(
-          "applyRemoteChanges: malformed deleted recordID '\(recordID.recordName)' — skipping"
-        )
-        continue
-      }
-      deletedIds.append(profileId)
-    }
-
+    // Profiles first.
     do {
-      try repository.applyRemoteChangesSync(saved: savedRows, deleted: deletedIds)
-      return .success(changedTypes: Set(saved.map(\.recordType)))
+      try repository.applyRemoteChangesSync(
+        saved: savedSplit.profileRows, deleted: deletedSplit.profileIds)
     } catch {
       logger.error("Failed to save remote profile changes: \(error, privacy: .public)")
       return .saveFailed(error.localizedDescription)
     }
+
+    // Instruments next (skipped when no instrument repository is wired).
+    if let instrumentRepository,
+      !savedSplit.instrumentRows.isEmpty || !deletedSplit.instrumentIds.isEmpty
+    {
+      do {
+        try instrumentRepository.applyRemoteChangesSync(
+          saved: savedSplit.instrumentRows, deleted: deletedSplit.instrumentIds)
+        // Cross-zone observer signal — fired synchronously to keep the
+        // hop into MainActor under control of the closure body.
+        onInstrumentRemoteChange()
+      } catch {
+        logger.error(
+          "Failed to save remote instrument changes: \(error, privacy: .public)")
+        return .saveFailed(error.localizedDescription)
+      }
+    }
+
+    var changedTypes: Set<String> = []
+    if !savedSplit.profileRows.isEmpty || !deletedSplit.profileIds.isEmpty {
+      changedTypes.insert(ProfileRow.recordType)
+    }
+    if instrumentRepository != nil,
+      !savedSplit.instrumentRows.isEmpty || !deletedSplit.instrumentIds.isEmpty
+    {
+      changedTypes.insert(InstrumentRow.recordType)
+    }
+    return .success(changedTypes: changedTypes)
   }
 
   // MARK: - Building CKRecords
@@ -108,94 +153,133 @@ final class ProfileIndexSyncHandler: Sendable {
 
   // MARK: - Record Lookup for Upload
 
-  /// Looks up a ProfileRow by CKRecord.ID and builds a CKRecord for upload.
+  /// Looks up the row matching `recordID` and builds a CKRecord for
+  /// upload. Dispatches by record-name shape: a UUID-decoding name
+  /// goes to the profile path; any other string is treated as an
+  /// instrument id and dispatched to `instrumentRepository`.
   func recordToSave(for recordID: CKRecord.ID) -> CKRecord? {
-    guard let profileId = recordID.uuid else { return nil }
-    do {
-      guard let row = try repository.fetchRowSync(id: profileId) else { return nil }
-      return buildCKRecord(for: row)
-    } catch {
-      logger.error("recordToSave: failed to fetch row: \(error, privacy: .public)")
-      return nil
+    if let profileId = recordID.uuid {
+      do {
+        guard let row = try repository.fetchRowSync(id: profileId) else { return nil }
+        return buildCKRecord(for: row)
+      } catch {
+        logger.error("recordToSave: failed to fetch profile row: \(error, privacy: .public)")
+        return nil
+      }
     }
+    return instrumentRecordToSave(for: recordID)
   }
 
   // MARK: - Queue All Existing Records
 
-  /// Scans all ProfileRows in the local store and returns their CKRecord.IDs.
-  /// Called on first start when there's no saved sync state.
-  /// Returns record IDs for the coordinator to queue.
+  /// Scans every `ProfileRow` and (when wired) every `InstrumentRow`
+  /// in the local store and returns their CKRecord.IDs. Called on
+  /// first start when there's no saved sync state, and from the
+  /// startup self-heal path that re-queues rows whose
+  /// `encoded_system_fields` is NULL.
+  ///
+  /// SYNC_GUIDE Rule 14 (queue dependency order): the two record
+  /// types in this zone have no inter-record dependencies — a
+  /// `ProfileRow` does not reference an `InstrumentRow` and vice
+  /// versa. The combined list is therefore returned in
+  /// profile-then-instrument order purely for log readability; the
+  /// merge queue and CKSyncEngine treat the order as immaterial.
   func queueAllExistingRecords() -> [CKRecord.ID] {
-    let ids: [UUID]
+    let profileRecordIDs = collectProfileRecordIDs()
+    let instrumentRecordIDs = collectInstrumentRecordIDs()
+    let combined = profileRecordIDs + instrumentRecordIDs
+    if !combined.isEmpty {
+      logger.info(
+        "Collected \(profileRecordIDs.count) profile + \(instrumentRecordIDs.count) instrument records for upload"
+      )
+    }
+    return combined
+  }
+
+  private func collectProfileRecordIDs() -> [CKRecord.ID] {
     do {
-      ids = try repository.allRowIdsSync()
+      let ids = try repository.allRowIdsSync()
+      return ids.map { id in
+        CKRecord.ID(
+          recordType: ProfileRow.recordType, uuid: id, zoneID: zoneID)
+      }
     } catch {
-      logger.error("queueAllExistingRecords: failed to fetch row ids: \(error, privacy: .public)")
+      logger.error(
+        "queueAllExistingRecords: failed to fetch profile row ids: \(error, privacy: .public)"
+      )
       return []
     }
-    guard !ids.isEmpty else { return [] }
+  }
 
-    let recordIDs = ids.map { id in
-      CKRecord.ID(
-        recordType: ProfileRow.recordType, uuid: id, zoneID: zoneID)
+  private func collectInstrumentRecordIDs() -> [CKRecord.ID] {
+    guard let instrumentRepository else { return [] }
+    do {
+      let ids = try instrumentRepository.allRowIdsSync()
+      return ids.map { id in
+        CKRecord.ID(recordName: id, zoneID: zoneID)
+      }
+    } catch {
+      logger.error(
+        "queueAllExistingRecords: failed to fetch instrument row ids: \(error, privacy: .public)"
+      )
+      return []
     }
-    logger.info("Collected \(recordIDs.count) existing profiles for upload")
-    return recordIDs
   }
 
   // MARK: - Local Data Deletion
 
-  /// Deletes all local ProfileRows.
-  /// Called on account sign-out, account switch, and zone deletion.
+  /// Deletes all local profile-index data — `profile`, `instrument`,
+  /// and the six rate-cache tables — atomically. Called on account
+  /// sign-out, account switch, zone deletion, and zone purge.
+  ///
+  /// Atomicity rationale: a process kill mid-wipe would otherwise
+  /// leave price-cache rows that reference instruments now gone, or
+  /// profiles whose instruments survived. Sign-out semantics demand
+  /// "the DB is empty"; partial wipes are not safe.
   func deleteLocalData() {
     do {
-      try repository.deleteAllSync()
-      logger.info("Deleted all local profile index data")
+      try repository.deleteAllProfileIndexDataSync()
+      logger.info("Deleted all profile-index data")
     } catch {
-      logger.error("Failed to delete local profile data: \(error, privacy: .public)")
+      logger.error("Failed to delete profile-index data: \(error, privacy: .public)")
     }
   }
 
   // MARK: - System Fields Management
 
-  /// Clears encoded system fields on all ProfileRows.
-  /// Called on encrypted data reset where we keep data but must re-upload fresh.
+  /// Clears `encoded_system_fields` on `profile` and `instrument`
+  /// rows in one transaction. Called on encrypted-data reset where
+  /// the data stays but the change tags must be re-uploaded.
   func clearAllSystemFields() {
     do {
-      try repository.clearAllSystemFieldsSync()
+      try repository.clearAllProfileIndexSystemFieldsSync(
+        instrumentRepository: instrumentRepository)
     } catch {
       logger.error("Failed to clear system fields: \(error, privacy: .public)")
     }
   }
 
-  /// Updates `encoded_system_fields` on the ProfileRow matching the given record ID.
+  /// Updates `encoded_system_fields` on the row matching `recordID`.
+  /// Dispatches by record-name shape (UUID → profile, otherwise →
+  /// instrument).
   func updateEncodedSystemFields(_ recordID: CKRecord.ID, data: Data) {
-    guard let profileId = recordID.uuid else { return }
-    do {
-      _ = try repository.setEncodedSystemFieldsSync(id: profileId, data: data)
-    } catch {
-      logger.error("Failed to save updated system fields: \(error, privacy: .public)")
-    }
+    writeSystemFields(for: recordID, to: data)
   }
 
-  /// Clears `encoded_system_fields` on the ProfileRow matching the given record ID.
-  /// Called on `.unknownItem` — the server deleted the record, so the stale change tag
-  /// must be cleared so the next upload creates a fresh record.
+  /// Clears `encoded_system_fields` on the row matching `recordID`.
+  /// Called on `.unknownItem` — the server deleted the record, so
+  /// the stale change tag must be cleared so the next upload creates
+  /// a fresh record.
   func clearEncodedSystemFields(_ recordID: CKRecord.ID) {
-    guard let profileId = recordID.uuid else { return }
-    do {
-      _ = try repository.setEncodedSystemFieldsSync(id: profileId, data: nil)
-    } catch {
-      logger.error(
-        "Failed to save cleared system fields for record: \(error, privacy: .public)")
-    }
+    writeSystemFields(for: recordID, to: nil)
   }
 
   // MARK: - Handle Sent Record Zone Changes
 
   /// Processes results from a successful CKSyncEngine send.
   /// Updates system fields on successfully saved records, classifies failures,
-  /// and handles conflict/unknownItem system fields updates.
+  /// and handles conflict/unknownItem system fields updates. Conflicts
+  /// are dispatched by record type to the appropriate merge.
   /// Returns classified failures for the coordinator to re-queue.
   func handleSentRecordZoneChanges(
     savedRecords: [CKRecord],
@@ -209,13 +293,22 @@ final class ProfileIndexSyncHandler: Sendable {
       logger: logger)
     resolveSystemFields(for: failures)
     for (_, serverRecord) in failures.conflicts {
-      applyServerRecordChangedMerge(serverRecord: serverRecord)
+      switch serverRecord.recordType {
+      case ProfileRow.recordType:
+        applyServerRecordChangedMerge(serverRecord: serverRecord)
+      case InstrumentRow.recordType:
+        applyInstrumentServerRecordChangedMerge(serverRecord: serverRecord)
+      default:
+        logger.error(
+          "handleSentRecordZoneChanges: unexpected recordType '\(serverRecord.recordType, privacy: .public)' on profile-index zone — ignoring"
+        )
+      }
     }
     return failures
   }
 
-  /// Persist updated CKRecord system fields onto matching `ProfileRow` rows
-  /// after a successful upload.
+  /// Persist updated CKRecord system fields onto matching rows after
+  /// a successful upload. Dispatches by record-name shape.
   private func persistSystemFields(for savedRecords: [CKRecord]) {
     guard !savedRecords.isEmpty else { return }
     for saved in savedRecords {
@@ -223,8 +316,8 @@ final class ProfileIndexSyncHandler: Sendable {
     }
   }
 
-  /// Apply server-side system fields from conflicts, and clear system fields for
-  /// records the server has already deleted.
+  /// Apply server-side system fields from conflicts, and clear system
+  /// fields for records the server has already deleted.
   private func resolveSystemFields(for failures: SyncErrorRecovery.ClassifiedFailures) {
     guard !failures.conflicts.isEmpty || !failures.unknownItems.isEmpty else { return }
     for (_, serverRecord) in failures.conflicts {
@@ -235,14 +328,27 @@ final class ProfileIndexSyncHandler: Sendable {
     }
   }
 
-  /// Look up a `ProfileRow` by id and replace its cached system fields blob.
+  /// Look up a row by id and replace its cached system fields blob.
+  /// Dispatches by record-name shape: a UUID-decoding name goes to
+  /// the profile path; otherwise the name is the instrument id.
   private func writeSystemFields(for recordID: CKRecord.ID, to data: Data?) {
-    guard let profileId = recordID.uuid else { return }
+    if let profileId = recordID.uuid {
+      do {
+        _ = try repository.setEncodedSystemFieldsSync(id: profileId, data: data)
+      } catch {
+        logger.error(
+          "Failed to save profile system fields for \(recordID.recordName, privacy: .public): \(error, privacy: .public)"
+        )
+      }
+      return
+    }
+    guard let instrumentRepository else { return }
     do {
-      _ = try repository.setEncodedSystemFieldsSync(id: profileId, data: data)
+      _ = try instrumentRepository.setEncodedSystemFieldsSync(
+        id: recordID.recordName, data: data)
     } catch {
       logger.error(
-        "Failed to save system fields for \(recordID.recordName, privacy: .public): \(error, privacy: .public)"
+        "Failed to save instrument system fields for \(recordID.recordName, privacy: .public): \(error, privacy: .public)"
       )
     }
   }
