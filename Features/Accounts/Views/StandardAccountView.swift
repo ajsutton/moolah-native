@@ -115,6 +115,7 @@ private func seedStandardAccountPreview(
       transactionStore: store,
       conversionService: backend.conversionService)
   }
+  .previewProfileEnvironment()
   .task {
     await seedStandardAccountPreview(backend: backend, accountId: accountId, store: store)
   }

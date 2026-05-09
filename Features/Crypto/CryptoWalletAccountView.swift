@@ -102,4 +102,5 @@ struct CryptoWalletAccountView: View {
       conversionService: session.backend.conversionService,
       session: session)
   }
+  .previewProfileEnvironment(session: session)
 }

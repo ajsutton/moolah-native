@@ -55,8 +55,8 @@ private func seedPositionValuations(backend: any BackendProvider, account: Accou
       investmentStore: investmentStore,
       transactionStore: transactionStore
     )
-    .environment(session)
   }
+  .previewProfileEnvironment(session: session)
   .frame(width: 720, height: 560)
   .task { await seedLegacyValuations(backend: backend, account: account, store: investmentStore) }
 }
@@ -89,8 +89,8 @@ private func seedPositionValuations(backend: any BackendProvider, account: Accou
       investmentStore: investmentStore,
       transactionStore: transactionStore
     )
-    .environment(session)
   }
+  .previewProfileEnvironment(session: session)
   .frame(width: 720, height: 600)
   .task { await seedPositionValuations(backend: backend, account: account) }
 }

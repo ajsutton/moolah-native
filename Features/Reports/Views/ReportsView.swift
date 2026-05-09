@@ -220,7 +220,7 @@ private func seedReportsPreview(
     earmarks: Earmarks(from: []),
     transactionStore: transactionStore
   )
-  .environment(session)
+  .previewProfileEnvironment(session: session)
   .frame(width: 900, height: 600)
   .task {
     await seedReportsPreview(backend: backend, account: account, ids: ids)

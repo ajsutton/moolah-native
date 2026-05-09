@@ -257,6 +257,7 @@ private func previewEarmark() -> Earmark {
     )
     .environment(earmarkStore)
   }
+  .previewProfileEnvironment()
   .task {
     await seedEarmarkDetailPreview(
       backend: backend, earmark: earmark, earmarkStore: earmarkStore, store: store)
