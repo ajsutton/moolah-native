@@ -14,10 +14,16 @@ struct CoinGeckoClient: CryptoPriceClient, Sendable {
     URL(string: "https://api.coingecko.com/api/v3") ?? URL(fileURLWithPath: "/")
   private let session: URLSession
   private let apiKey: String
+  private let rateLimitGate: RateLimitGate
 
-  init(session: URLSession = .shared, apiKey: String) {
+  init(
+    session: URLSession = .shared,
+    apiKey: String,
+    rateLimitGate: RateLimitGate = RateLimitGate()
+  ) {
     self.session = session
     self.apiKey = apiKey
+    self.rateLimitGate = rateLimitGate
   }
 
   /// Resolves the base URL by key presence: non-empty → Pro host,
@@ -54,7 +60,8 @@ struct CoinGeckoClient: CryptoPriceClient, Sendable {
       calendar.dateComponents([.day], from: range.lowerBound, to: range.upperBound).day ?? 1
     )
     let url = Self.marketChartURL(coinId: coinId, days: days, apiKey: apiKey)
-    let (data, response) = try await session.data(for: URLRequest(url: url))
+    let (data, response) = try await session.dataRespectingRateLimit(
+      for: URLRequest(url: url), gate: rateLimitGate)
     guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
       throw URLError(.badServerResponse)
     }
@@ -72,7 +79,8 @@ struct CoinGeckoClient: CryptoPriceClient, Sendable {
     guard !idToMapping.isEmpty else { return [:] }
 
     let url = Self.simplePriceURL(coinIds: Array(idToMapping.keys), apiKey: apiKey)
-    let (data, response) = try await session.data(for: URLRequest(url: url))
+    let (data, response) = try await session.dataRespectingRateLimit(
+      for: URLRequest(url: url), gate: rateLimitGate)
     guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
       throw URLError(.badServerResponse)
     }

@@ -9,14 +9,16 @@ import Foundation
 /// `shortname` is missing or empty after trimming.
 struct YahooFinanceStockSearchClient: StockSearchClient {
   private let session: URLSession
+  private let rateLimitGate: RateLimitGate
   private static let baseURL: URL = {
     guard let url = URL(string: "https://query1.finance.yahoo.com/v1/finance/search")
     else { preconditionFailure("malformed Yahoo search URL — fix the literal") }
     return url
   }()
 
-  init(session: URLSession = .shared) {
+  init(session: URLSession = .shared, rateLimitGate: RateLimitGate = RateLimitGate()) {
     self.session = session
+    self.rateLimitGate = rateLimitGate
   }
 
   func search(query: String) async throws -> [StockSearchHit] {
@@ -31,7 +33,8 @@ struct YahooFinanceStockSearchClient: StockSearchClient {
     var request = URLRequest(url: url)
     request.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
 
-    let (data, response) = try await session.data(for: request)
+    let (data, response) = try await session.dataRespectingRateLimit(
+      for: request, gate: rateLimitGate)
     guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
       throw URLError(.badServerResponse)
     }

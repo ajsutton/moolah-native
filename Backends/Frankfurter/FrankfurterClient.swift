@@ -13,9 +13,11 @@ struct FrankfurterClient: ExchangeRateClient, Sendable {
     URL(string: "https://api.frankfurter.app/") ?? URL(fileURLWithPath: "/")
   private static let logger = Logger(subsystem: "com.moolah.app", category: "FrankfurterClient")
   private let session: URLSession
+  private let rateLimitGate: RateLimitGate
 
-  init(session: URLSession = .shared) {
+  init(session: URLSession = .shared, rateLimitGate: RateLimitGate = RateLimitGate()) {
     self.session = session
+    self.rateLimitGate = rateLimitGate
   }
 
   func fetchRates(
@@ -34,7 +36,8 @@ struct FrankfurterClient: ExchangeRateClient, Sendable {
 
     let requestURL = components.url ?? url
     let request = URLRequest(url: requestURL)
-    let (data, response) = try await session.data(for: request)
+    let (data, response) = try await session.dataRespectingRateLimit(
+      for: request, gate: rateLimitGate)
 
     guard let httpResponse = response as? HTTPURLResponse,
       (200...299).contains(httpResponse.statusCode)
