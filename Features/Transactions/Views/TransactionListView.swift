@@ -6,7 +6,7 @@
 import SwiftData
 import SwiftUI
 
-struct TransactionListView<TopAccessory: View>: View {
+struct TransactionListView: View {
   let title: String
   let baseFilter: TransactionFilter
   let accounts: Accounts
@@ -24,17 +24,6 @@ struct TransactionListView<TopAccessory: View>: View {
   /// drop-spam-from-positions UX of issue #790. Optional with a default
   /// of `0` so non-crypto call sites need not thread it through.
   var registrationsVersion: Int = 0
-
-  /// Optional content rendered as `.safeAreaInset(edge: .top)` above the
-  /// list — used for per-account headers (e.g. the wallet header on a
-  /// crypto account). Callers MUST pass any such header here rather than
-  /// wrapping `TransactionListView` in a `VStack`: wrapping breaks the
-  /// view-tree identity that `.searchable` and `.toolbar` register
-  /// against, and reproducibly crashes AppKit's toolbar bridge with a
-  /// duplicate `com.apple.SwiftUI.search` item the next time the parent's
-  /// body re-evaluates. See `guides/UI_GUIDE.md` §3 — view-tree stability
-  /// for views with toolbars.
-  let topAccessory: TopAccessory
 
   /// When non-nil, the parent owns the selection and handles the inspector.
   /// When nil, TransactionListView manages its own selection and inspector.
@@ -78,11 +67,6 @@ struct TransactionListView<TopAccessory: View>: View {
 
   private var handlesOwnInspector: Bool { _externalSelection == nil }
 
-  /// Default init — TransactionListView owns selection and shows its own
-  /// inspector. `topAccessory` is rendered as a top safe-area inset above
-  /// the list (use `EmptyView()` when no header is needed; the
-  /// `where TopAccessory == EmptyView` extension provides a no-arg
-  /// convenience).
   init(
     title: String,
     filter: TransactionFilter,
@@ -94,8 +78,7 @@ struct TransactionListView<TopAccessory: View>: View {
     positionsHostCurrency: Instrument = .AUD,
     positionsTitle: String = "Balances",
     conversionService: (any InstrumentConversionService)? = nil,
-    registrationsVersion: Int = 0,
-    @ViewBuilder topAccessory: () -> TopAccessory
+    registrationsVersion: Int = 0
   ) {
     self.title = title
     self.baseFilter = filter
@@ -108,13 +91,14 @@ struct TransactionListView<TopAccessory: View>: View {
     self.positionsTitle = positionsTitle
     self.conversionService = conversionService
     self.registrationsVersion = registrationsVersion
-    self.topAccessory = topAccessory()
     self._externalSelection = nil
     self._activeFilter = State(initialValue: filter)
   }
 
   /// Embedded init — parent provides selection binding and handles the
-  /// inspector. See `topAccessory` doc on the default init.
+  /// inspector. Used by `InvestmentAccountView` and `EarmarkDetailView` so
+  /// their leaf-owned `@State selectedTransaction` survives inner-leaf
+  /// `.id(...)` tear-downs.
   init(
     title: String,
     filter: TransactionFilter,
@@ -127,8 +111,7 @@ struct TransactionListView<TopAccessory: View>: View {
     positionsTitle: String = "Balances",
     conversionService: (any InstrumentConversionService)? = nil,
     registrationsVersion: Int = 0,
-    selectedTransaction: Binding<Transaction?>,
-    @ViewBuilder topAccessory: () -> TopAccessory
+    selectedTransaction: Binding<Transaction?>
   ) {
     self.title = title
     self.baseFilter = filter
@@ -141,7 +124,6 @@ struct TransactionListView<TopAccessory: View>: View {
     self.positionsTitle = positionsTitle
     self.conversionService = conversionService
     self.registrationsVersion = registrationsVersion
-    self.topAccessory = topAccessory()
     self._externalSelection = selectedTransaction
     self._activeFilter = State(initialValue: filter)
   }
@@ -161,7 +143,6 @@ struct TransactionListView<TopAccessory: View>: View {
 
   var body: some View {
     listView
-      .safeAreaInset(edge: .top, spacing: 0) { topAccessory }
       .modifier(
         OptionalTransactionInspector(
           enabled: handlesOwnInspector,
@@ -315,59 +296,5 @@ struct TransactionListView<TopAccessory: View>: View {
     return transactionStore.transactions.filter {
       $0.transaction.payee?.localizedCaseInsensitiveContains(searchText) ?? false
     }
-  }
-}
-
-extension TransactionListView where TopAccessory == EmptyView {
-  /// Convenience init when no top accessory is needed. Forwards to the
-  /// designated init with `EmptyView()` so the call site stays as it was
-  /// before `topAccessory` was introduced.
-  init(
-    title: String,
-    filter: TransactionFilter,
-    accounts: Accounts,
-    categories: Categories,
-    earmarks: Earmarks,
-    transactionStore: TransactionStore,
-    positions: [Position] = [],
-    positionsHostCurrency: Instrument = .AUD,
-    positionsTitle: String = "Balances",
-    conversionService: (any InstrumentConversionService)? = nil,
-    registrationsVersion: Int = 0
-  ) {
-    self.init(
-      title: title, filter: filter,
-      accounts: accounts, categories: categories, earmarks: earmarks,
-      transactionStore: transactionStore,
-      positions: positions, positionsHostCurrency: positionsHostCurrency,
-      positionsTitle: positionsTitle, conversionService: conversionService,
-      registrationsVersion: registrationsVersion,
-      topAccessory: { EmptyView() })
-  }
-
-  /// Convenience embedded init when no top accessory is needed.
-  init(
-    title: String,
-    filter: TransactionFilter,
-    accounts: Accounts,
-    categories: Categories,
-    earmarks: Earmarks,
-    transactionStore: TransactionStore,
-    positions: [Position] = [],
-    positionsHostCurrency: Instrument = .AUD,
-    positionsTitle: String = "Balances",
-    conversionService: (any InstrumentConversionService)? = nil,
-    registrationsVersion: Int = 0,
-    selectedTransaction: Binding<Transaction?>
-  ) {
-    self.init(
-      title: title, filter: filter,
-      accounts: accounts, categories: categories, earmarks: earmarks,
-      transactionStore: transactionStore,
-      positions: positions, positionsHostCurrency: positionsHostCurrency,
-      positionsTitle: positionsTitle, conversionService: conversionService,
-      registrationsVersion: registrationsVersion,
-      selectedTransaction: selectedTransaction,
-      topAccessory: { EmptyView() })
   }
 }
