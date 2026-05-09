@@ -143,6 +143,23 @@ struct TransactionListView: View {
         if new != nil { searchFieldFocused = false }
       }
       .focusedSceneValue(\.selectedTransaction, selectedTransactionBinding)
+      .focusedSceneValue(
+        \.editTransactionAction,
+        selectedTransaction != nil
+          ? {
+            // Re-asserting the binding is a stable no-op when the inspector
+            // is already open; when it's closed (e.g. after the user dismissed
+            // it but selection was preserved), this re-opens it.
+            selectedTransaction = selectedTransaction
+          }
+          : nil
+      )
+      .focusedSceneValue(
+        \.deleteTransactionAction,
+        selectedTransaction != nil
+          ? { transactionPendingDelete = selectedTransaction?.id }
+          : nil
+      )
       .alert("Error", isPresented: $showError) {
         Button("OK", role: .cancel) {}
       } message: {
@@ -178,18 +195,6 @@ struct TransactionListView: View {
         Button("Cancel", role: .cancel) { transactionPendingDelete = nil }
       } message: {
         Text("This action cannot be undone.")
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .requestTransactionEdit)) { note in
-        guard let id = note.object as? Transaction.ID,
-          let entry = filteredTransactions.first(where: { $0.transaction.id == id })
-        else { return }
-        selectedTransaction = entry.transaction
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .requestTransactionDelete)) { note in
-        guard let id = note.object as? Transaction.ID,
-          filteredTransactions.contains(where: { $0.transaction.id == id })
-        else { return }
-        transactionPendingDelete = id
       }
       .modifier(
         TransactionListCSVImportAddons(
