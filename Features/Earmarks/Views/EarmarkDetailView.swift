@@ -4,11 +4,6 @@ import SwiftData
 import SwiftUI
 
 struct EarmarkDetailView: View {
-  private enum DetailTab: String, CaseIterable {
-    case transactions = "Transactions"
-    case budget = "Budget"
-  }
-
   let earmark: Earmark
   let accounts: Accounts
   let categories: Categories
@@ -16,43 +11,29 @@ struct EarmarkDetailView: View {
   let transactionStore: TransactionStore
   let analysisRepository: AnalysisRepository
   @State private var showEditSheet = false
-  @State private var selectedTab: DetailTab = .transactions
   @State private var selectedTransaction: Transaction?
   @Environment(EarmarkStore.self) private var earmarkStore
   @Environment(ProfileSession.self) private var session
 
   var body: some View {
-    VStack(spacing: 0) {
+    EarmarkOverviewWithTabs {
       overviewPanel
-      Divider()
-
-      Picker("View", selection: $selectedTab) {
-        ForEach(DetailTab.allCases, id: \.self) { tab in
-          Text(tab.rawValue).tag(tab)
-        }
-      }
-      .pickerStyle(.segmented)
-      .padding(.horizontal)
-      .padding(.vertical, 8)
-
-      switch selectedTab {
-      case .transactions:
-        TransactionListView(
-          title: earmark.name,
-          filter: TransactionFilter(earmarkId: earmark.id),
-          accounts: accounts,
-          categories: categories,
-          earmarks: earmarks,
-          transactionStore: transactionStore,
-          selectedTransaction: $selectedTransaction
-        )
-      case .budget:
-        EarmarkBudgetSectionView(
-          earmark: earmark,
-          categories: categories,
-          analysisRepository: analysisRepository
-        )
-      }
+    } transactions: {
+      TransactionListView(
+        title: earmark.name,
+        filter: TransactionFilter(earmarkId: earmark.id),
+        accounts: accounts,
+        categories: categories,
+        earmarks: earmarks,
+        transactionStore: transactionStore,
+        selectedTransaction: $selectedTransaction
+      )
+    } budget: {
+      EarmarkBudgetSectionView(
+        earmark: earmark,
+        categories: categories,
+        analysisRepository: analysisRepository
+      )
     }
     .transactionInspector(
       selectedTransaction: $selectedTransaction,
