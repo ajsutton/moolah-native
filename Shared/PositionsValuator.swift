@@ -47,6 +47,12 @@ struct PositionsValuator: Sendable {
     // of positions per account this view targets. If profiling later shows cold
     // loads are user-visible, switching to withTaskGroup is a self-contained change.
     for position in positions {
+      // Cancellation cooperative: when the consuming `.task(id:)` is
+      // torn down (filter change / unmount) skip remaining positions
+      // and return what we have. The caller is expected to re-check
+      // `Task.isCancelled` before publishing the result so the partial
+      // list never lands on screen.
+      guard !Task.isCancelled else { break }
       if let entry = await row(
         for: position, hostCurrency: hostCurrency, costBasis: costBasis, on: date)
       {
