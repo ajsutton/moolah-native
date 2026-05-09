@@ -12,9 +12,11 @@ struct YahooFinanceClient: StockPriceClient, Sendable {
     URL(string: "https://query2.finance.yahoo.com/v8/finance/chart/")
     ?? URL(fileURLWithPath: "/")
   private let session: URLSession
+  private let rateLimitGate: RateLimitGate
 
-  init(session: URLSession = .shared) {
+  init(session: URLSession = .shared, rateLimitGate: RateLimitGate = RateLimitGate()) {
     self.session = session
+    self.rateLimitGate = rateLimitGate
   }
 
   func fetchDailyPrices(ticker: String, from: Date, to: Date) async throws -> StockPriceResponse {
@@ -33,7 +35,8 @@ struct YahooFinanceClient: StockPriceClient, Sendable {
       forHTTPHeaderField: "User-Agent"
     )
 
-    let (data, response) = try await session.data(for: request)
+    let (data, response) = try await session.dataRespectingRateLimit(
+      for: request, gate: rateLimitGate)
 
     guard let httpResponse = response as? HTTPURLResponse,
       (200...299).contains(httpResponse.statusCode)

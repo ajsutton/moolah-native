@@ -5,9 +5,11 @@ struct CryptoCompareClient: CryptoPriceClient, Sendable {
   private static let baseURL =
     URL(string: "https://min-api.cryptocompare.com") ?? URL(fileURLWithPath: "/")
   private let session: URLSession
+  private let rateLimitGate: RateLimitGate
 
-  init(session: URLSession = .shared) {
+  init(session: URLSession = .shared, rateLimitGate: RateLimitGate = RateLimitGate()) {
     self.session = session
+    self.rateLimitGate = rateLimitGate
   }
 
   func dailyPrice(for mapping: CryptoProviderMapping, on date: Date) async throws -> Decimal {
@@ -27,7 +29,8 @@ struct CryptoCompareClient: CryptoPriceClient, Sendable {
         tokenId: mapping.instrumentId, provider: "CryptoCompare")
     }
     let url = Self.histodayURL(symbol: symbol, from: range.lowerBound, to: range.upperBound)
-    let (data, response) = try await session.data(for: URLRequest(url: url))
+    let (data, response) = try await session.dataRespectingRateLimit(
+      for: URLRequest(url: url), gate: rateLimitGate)
     guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
       throw URLError(.badServerResponse)
     }
@@ -45,7 +48,8 @@ struct CryptoCompareClient: CryptoPriceClient, Sendable {
     guard !symbolToMapping.isEmpty else { return [:] }
 
     let url = Self.priceMultiURL(symbols: Array(symbolToMapping.keys))
-    let (data, response) = try await session.data(for: URLRequest(url: url))
+    let (data, response) = try await session.dataRespectingRateLimit(
+      for: URLRequest(url: url), gate: rateLimitGate)
     guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
       throw URLError(.badServerResponse)
     }
