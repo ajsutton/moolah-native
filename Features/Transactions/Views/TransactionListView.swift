@@ -23,16 +23,6 @@ struct TransactionListView: View {
   let transactionStore: TransactionStore
   let grouping: Grouping
   @Environment(ImportStore.self) private var importStore
-  var positions: [Position] = []
-  var positionsHostCurrency: Instrument = .AUD
-  var positionsTitle: String = "Balances"
-  var conversionService: (any InstrumentConversionService)?
-  /// Bumped on every successful crypto-registration mutation so the
-  /// `.task(id:)` driving the per-row valuator re-fires when the user
-  /// flips a token's `pricingStatus` (e.g. "Mark as Spam"). Drives the
-  /// drop-spam-from-positions UX of issue #790. Optional with a default
-  /// of `0` so non-crypto call sites need not thread it through.
-  var registrationsVersion: Int = 0
 
   /// When non-nil, the parent owns the selection and handles the inspector.
   /// When nil, TransactionListView manages its own selection and inspector.
@@ -83,11 +73,6 @@ struct TransactionListView: View {
     categories: Categories,
     earmarks: Earmarks,
     transactionStore: TransactionStore,
-    positions: [Position] = [],
-    positionsHostCurrency: Instrument = .AUD,
-    positionsTitle: String = "Balances",
-    conversionService: (any InstrumentConversionService)? = nil,
-    registrationsVersion: Int = 0,
     grouping: Grouping = .flat
   ) {
     self.title = title
@@ -96,11 +81,6 @@ struct TransactionListView: View {
     self.categories = categories
     self.earmarks = earmarks
     self.transactionStore = transactionStore
-    self.positions = positions
-    self.positionsHostCurrency = positionsHostCurrency
-    self.positionsTitle = positionsTitle
-    self.conversionService = conversionService
-    self.registrationsVersion = registrationsVersion
     self.grouping = grouping
     self._externalSelection = nil
     self._activeFilter = State(initialValue: filter)
@@ -117,11 +97,6 @@ struct TransactionListView: View {
     categories: Categories,
     earmarks: Earmarks,
     transactionStore: TransactionStore,
-    positions: [Position] = [],
-    positionsHostCurrency: Instrument = .AUD,
-    positionsTitle: String = "Balances",
-    conversionService: (any InstrumentConversionService)? = nil,
-    registrationsVersion: Int = 0,
     grouping: Grouping = .flat,
     selectedTransaction: Binding<Transaction?>
   ) {
@@ -131,21 +106,10 @@ struct TransactionListView: View {
     self.categories = categories
     self.earmarks = earmarks
     self.transactionStore = transactionStore
-    self.positions = positions
-    self.positionsHostCurrency = positionsHostCurrency
-    self.positionsTitle = positionsTitle
-    self.conversionService = conversionService
-    self.registrationsVersion = registrationsVersion
     self.grouping = grouping
     self._externalSelection = selectedTransaction
     self._activeFilter = State(initialValue: filter)
   }
-
-  // See note above on `activeFilter`/`showFilterSheet`: widened from
-  // `private` to module-internal so the file-scope extension in
-  // `TransactionListView+List.swift` can bind to these.
-  @State var positionsInput: PositionsViewInput?
-  @State var positionsRange: PositionsTimeRange = .threeMonths
 
   @State private var showError = false
   @State private var errorMessage = ""
@@ -155,7 +119,7 @@ struct TransactionListView: View {
   @State var createRuleFromTransaction: Transaction?
 
   var body: some View {
-    listView
+    transactionsList
       .modifier(
         OptionalTransactionInspector(
           enabled: handlesOwnInspector,
