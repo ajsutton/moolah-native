@@ -1,18 +1,27 @@
-// Reason: SwiftUI declarative chains (List, ForEach, modifier groups) wrap
-// arguments across multiple lines for readability; enforcing the rule would
-// fight the formatter and the SwiftUI idiom without improving clarity.
-// swiftlint:disable multiline_arguments
-
 import SwiftData
 import SwiftUI
 
 struct TransactionListView: View {
+  /// Grouping for the rendered list. Default `.flat` keeps existing
+  /// callers unchanged. `.scheduledStatus` bundles a `pendingPayId`
+  /// binding that the row's Pay action writes into; the binding is
+  /// structurally required when the caller selects that case (no
+  /// `Binding<>` defaults to silently-discarding `.constant(nil)`).
+  ///
+  /// Grouping is @MainActor-only; do not add Sendable conformance —
+  /// `Binding<T>`'s closures are MainActor-isolated.
+  enum Grouping {
+    case flat
+    case scheduledStatus(today: Date, pendingPayId: Binding<Transaction.ID?>)
+  }
+
   let title: String
   let baseFilter: TransactionFilter
   let accounts: Accounts
   let categories: Categories
   let earmarks: Earmarks
   let transactionStore: TransactionStore
+  let grouping: Grouping
   @Environment(ImportStore.self) private var importStore
   var positions: [Position] = []
   var positionsHostCurrency: Instrument = .AUD
@@ -78,7 +87,8 @@ struct TransactionListView: View {
     positionsHostCurrency: Instrument = .AUD,
     positionsTitle: String = "Balances",
     conversionService: (any InstrumentConversionService)? = nil,
-    registrationsVersion: Int = 0
+    registrationsVersion: Int = 0,
+    grouping: Grouping = .flat
   ) {
     self.title = title
     self.baseFilter = filter
@@ -91,6 +101,7 @@ struct TransactionListView: View {
     self.positionsTitle = positionsTitle
     self.conversionService = conversionService
     self.registrationsVersion = registrationsVersion
+    self.grouping = grouping
     self._externalSelection = nil
     self._activeFilter = State(initialValue: filter)
   }
@@ -111,6 +122,7 @@ struct TransactionListView: View {
     positionsTitle: String = "Balances",
     conversionService: (any InstrumentConversionService)? = nil,
     registrationsVersion: Int = 0,
+    grouping: Grouping = .flat,
     selectedTransaction: Binding<Transaction?>
   ) {
     self.title = title
@@ -124,6 +136,7 @@ struct TransactionListView: View {
     self.positionsTitle = positionsTitle
     self.conversionService = conversionService
     self.registrationsVersion = registrationsVersion
+    self.grouping = grouping
     self._externalSelection = selectedTransaction
     self._activeFilter = State(initialValue: filter)
   }
@@ -154,7 +167,7 @@ struct TransactionListView: View {
           viewingAccountId: filter.accountId
         )
       )
-      .focusedSceneValue(\.newTransactionAction, createNewTransaction)
+      .focusedSceneValue(\.newTransactionAction, newTransactionAction)
       .focusedSceneValue(\.findInListAction) { searchFieldFocused = true }
       .searchFocused($searchFieldFocused)
       // When the inspector opens, release our claim on the `.searchable`
@@ -248,44 +261,6 @@ struct TransactionListView: View {
       _ = await importStore.ingest(
         data: data,
         source: .droppedFile(url: url, forcedAccountId: forcedAccountId))
-    }
-  }
-
-  func createNewTransaction() {
-    let instrument = accounts.ordered.first?.instrument ?? .AUD
-
-    // Build the placeholder with its own UUID and send that exact
-    // transaction through `store.create`. CloudKit's repository echoes
-    // the input transaction, so `selectedTransaction.id` stays stable
-    // across the persist — the inspector's `.id(selected.id)` does not
-    // force a view recreation and the detail view's focus state survives.
-    let placeholder: Transaction?
-    if let earmarkId = filter.earmarkId, filter.accountId == nil {
-      placeholder = Transaction(
-        date: Date(),
-        payee: "",
-        legs: [
-          TransactionLeg(
-            accountId: nil, instrument: instrument, quantity: 0, type: .income,
-            earmarkId: earmarkId)
-        ]
-      )
-    } else if let acctId = filter.accountId ?? accounts.ordered.first?.id {
-      placeholder = Transaction(
-        date: Date(),
-        payee: "",
-        legs: [
-          TransactionLeg(accountId: acctId, instrument: instrument, quantity: 0, type: .expense)
-        ]
-      )
-    } else {
-      placeholder = nil
-    }
-
-    selectedTransaction = placeholder
-    guard let placeholder else { return }
-    Task {
-      _ = await transactionStore.create(placeholder)
     }
   }
 

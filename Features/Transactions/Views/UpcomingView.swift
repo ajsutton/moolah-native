@@ -9,198 +9,53 @@ struct UpcomingView: View {
   let earmarks: Earmarks
   let transactionStore: TransactionStore
 
-  @Environment(ProfileSession.self) private var session
+  /// The embedded init of `TransactionListView` is used here so this leaf
+  /// can apply `.transactionInspector(showRecurrence: true)` at the leaf
+  /// body level — the standard TransactionListView-owned inspector defaults
+  /// to `showRecurrence: false`, which would hide the recurrence editor that
+  /// users need on scheduled transactions.
   @State private var selectedTransaction: Transaction?
-  @State private var transactionPendingDelete: Transaction.ID?
+  @State private var pendingPayId: Transaction.ID?
 
   var body: some View {
-    listView
-      .transactionInspector(
-        selectedTransaction: $selectedTransaction,
-        accounts: accounts,
-        categories: categories,
-        earmarks: earmarks,
-        transactionStore: transactionStore,
-        showRecurrence: true
-      )
-      .focusedSceneValue(\.selectedTransaction, $selectedTransaction)
-      .focusedSceneValue(\.newTransactionAction, createNewScheduledTransaction)
-      .confirmationDialog(
-        "Delete this transaction?",
-        isPresented: Binding(
-          get: { transactionPendingDelete != nil },
-          set: { if !$0 { transactionPendingDelete = nil } }
-        ),
-        titleVisibility: .visible
-      ) {
-        Button("Delete Transaction", role: .destructive) {
-          if let id = transactionPendingDelete {
-            Task { await transactionStore.delete(id: id) }
-          }
-          transactionPendingDelete = nil
-        }
-        Button("Cancel", role: .cancel) { transactionPendingDelete = nil }
-      } message: {
-        Text("This action cannot be undone.")
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .requestTransactionEdit)) { note in
-        guard let id = note.object as? Transaction.ID,
-          let match = transactionStore.transactions.first(where: { $0.transaction.id == id })
-        else { return }
-        selectedTransaction = match.transaction
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .requestTransactionDelete)) { note in
-        guard let id = note.object as? Transaction.ID,
-          transactionStore.transactions.contains(where: { $0.transaction.id == id })
-        else { return }
-        transactionPendingDelete = id
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .requestTransactionPay)) { note in
-        guard let id = note.object as? Transaction.ID,
-          let match = transactionStore.transactions.first(where: { $0.transaction.id == id })
-        else { return }
-        Task { await payTransaction(match.transaction) }
-      }
-  }
-
-  private var listView: some View {
-    List(selection: $selectedTransaction) {
-      overdueSection
-      upcomingSection
-    }
-    .profileNavigationTitle("Upcoming")
-    .toolbar {
-      ToolbarItem(placement: .primaryAction) {
-        Button {
-          createNewScheduledTransaction()
-        } label: {
-          Label("Add Scheduled Transaction", systemImage: "plus")
-        }
-      }
-    }
-    .task {
-      // View-driven reactive subscription — runs the for-await loop in
-      // the store until this `.task` is cancelled (view unmount).
-      await transactionStore.observe(filter: TransactionFilter(scheduled: .scheduledOnly))
-    }
-    .refreshable {
-      await transactionStore.load(filter: TransactionFilter(scheduled: .scheduledOnly))
-    }
-    .overlay {
-      if !transactionStore.isLoading && transactionStore.transactions.isEmpty {
-        ContentUnavailableView(
-          "No Scheduled Transactions",
-          systemImage: "calendar",
-          description: Text(
-            PlatformActionVerb.emptyStatePrompt(
-              buttonLabel: "+",
-              suffix: "to add a recurring transaction."
-            )
-          )
-        )
-      }
-    }
-  }
-
-  @ViewBuilder private var overdueSection: some View {
-    if !overdueTransactions.isEmpty {
-      Section("Overdue") {
-        ForEach(overdueTransactions) { entry in
-          row(for: entry, isOverdue: true)
-        }
-      }
-    }
-  }
-
-  @ViewBuilder private var upcomingSection: some View {
-    if !upcomingTransactions.isEmpty {
-      Section("Upcoming") {
-        ForEach(upcomingTransactions) { entry in
-          row(for: entry, isOverdue: false)
-        }
-      }
-    }
-  }
-
-  @ViewBuilder
-  private func row(for entry: TransactionWithBalance, isOverdue: Bool) -> some View {
-    UpcomingTransactionRow(
-      transaction: entry.transaction,
+    TransactionListView(
+      title: "Upcoming",
+      filter: TransactionFilter(scheduled: .scheduledOnly),
       accounts: accounts,
       categories: categories,
       earmarks: earmarks,
-      displayAmount: entry.displayAmount,
-      isOverdue: isOverdue,
-      isDueToday: isOverdue ? false : isDueToday(entry.transaction),
-      onPay: { Task { await payTransaction(entry.transaction) } }
+      transactionStore: transactionStore,
+      grouping: .scheduledStatus(today: Date(), pendingPayId: $pendingPayId),
+      selectedTransaction: $selectedTransaction
     )
-    .tag(entry.transaction)
-    .contextMenu { rowContextMenu(for: entry.transaction) }
-    .swipeActions(edge: .trailing) {
-      Button(role: .destructive) {
-        transactionPendingDelete = entry.transaction.id
-      } label: {
-        Label("Delete Transaction", systemImage: "trash")
+    .transactionInspector(
+      selectedTransaction: $selectedTransaction,
+      accounts: accounts,
+      categories: categories,
+      earmarks: earmarks,
+      transactionStore: transactionStore,
+      showRecurrence: true
+    )
+    .onChange(of: pendingPayId) { _, newId in
+      guard let id = newId,
+        let match = transactionStore.transactions.first(where: { $0.transaction.id == id })
+      else { return }
+      Task {
+        await payTransaction(match.transaction)
+        pendingPayId = nil
       }
     }
-    .swipeActions(edge: .leading) {
-      Button {
-        Task { await payTransaction(entry.transaction) }
-      } label: {
-        Label("Pay Scheduled Transaction", systemImage: "checkmark.circle")
-      }
-      .tint(.green)
+    // `.requestTransactionPay` handler is genuinely additive — there is no
+    // counterpart inside `TransactionListView` (Pay is unique to the
+    // scheduled-status grouping). Window-menu commands need a path to
+    // trigger Pay on the visible leaf, and routing through `pendingPayId`
+    // keeps the in-progress visual firing regardless of trigger source.
+    .onReceive(NotificationCenter.default.publisher(for: .requestTransactionPay)) { note in
+      guard let id = note.object as? Transaction.ID,
+        transactionStore.transactions.contains(where: { $0.transaction.id == id })
+      else { return }
+      pendingPayId = id
     }
-  }
-
-  @ViewBuilder
-  private func rowContextMenu(for transaction: Transaction) -> some View {
-    Button("Pay Scheduled Transaction", systemImage: "checkmark.circle") {
-      Task { await payTransaction(transaction) }
-    }
-    Button("Edit Transaction\u{2026}", systemImage: "pencil") {
-      selectedTransaction = transaction
-    }
-    Divider()
-    Button("Delete Transaction\u{2026}", systemImage: "trash", role: .destructive) {
-      transactionPendingDelete = transaction.id
-    }
-  }
-
-  private func createNewScheduledTransaction() {
-    let instrument = accounts.ordered.first?.instrument ?? .AUD
-    let fallbackAccountId = accounts.ordered.first?.id
-
-    // Build the placeholder with its own UUID and persist that exact
-    // transaction — CloudKit's repository echoes the input, so
-    // `selectedTransaction.id` stays stable through the create and the
-    // inspector doesn't recreate its detail view (preserves focus state).
-    let placeholder: Transaction? = fallbackAccountId.map { id in
-      Transaction(
-        date: Date(),
-        payee: "",
-        recurPeriod: .month,
-        recurEvery: 1,
-        legs: [TransactionLeg(accountId: id, instrument: instrument, quantity: 0, type: .expense)]
-      )
-    }
-    selectedTransaction = placeholder
-    guard let placeholder else { return }
-    Task {
-      _ = await transactionStore.create(placeholder)
-    }
-  }
-
-  private var overdueTransactions: [TransactionWithBalance] {
-    transactionStore.scheduledOverdueTransactions
-  }
-
-  private var upcomingTransactions: [TransactionWithBalance] {
-    transactionStore.scheduledUpcomingTransactions
-  }
-
-  private func isDueToday(_ transaction: Transaction) -> Bool {
-    Calendar.current.isDateInToday(transaction.date)
   }
 
   private func payTransaction(_ scheduledTransaction: Transaction) async {

@@ -3,6 +3,8 @@
 import SwiftUI
 
 extension TransactionListView {
+  // MARK: - Top-Level View Composition
+
   /// Stable structural-branch guard: pins `transactionsList` to a fixed
   /// view-tree position so the asynchronous resolution of `positionsInput`
   /// can't flip the layout mid-load and cancel the initial transactions
@@ -35,10 +37,7 @@ extension TransactionListView {
 
   private var transactionsList: some View {
     List(selection: selectedTransactionBinding) {
-      ForEach(filteredTransactions) { entry in
-        transactionRow(for: entry)
-      }
-      loadMoreFooter
+      listContent
     }
     #if os(macOS)
       .listStyle(.inset)
@@ -72,11 +71,7 @@ extension TransactionListView {
       }
 
       ToolbarItem(placement: .primaryAction) {
-        Button {
-          createNewTransaction()
-        } label: {
-          Label("Add Transaction", systemImage: "plus")
-        }
+        addToolbarButton
       }
     }
     .sheet(isPresented: $showFilterSheet) {
@@ -145,6 +140,61 @@ extension TransactionListView {
     }
   }
 
+  // MARK: - List Content & Toolbar
+
+  /// The List content, branched on `grouping`. The `.flat` case renders
+  /// today's flat list; `.scheduledStatus` sections rows into Overdue /
+  /// Upcoming via the store's pre-computed paths. Both branches share the
+  /// surrounding modifier chain on `transactionsList` so future modifier
+  /// additions don't have to be duplicated.
+  @ViewBuilder private var listContent: some View {
+    switch grouping {
+    case .flat:
+      ForEach(filteredTransactions) { entry in
+        transactionRow(for: entry)
+      }
+      loadMoreFooter
+    case .scheduledStatus:
+      let overdue = transactionStore.scheduledOverdueTransactions
+      let upcoming = transactionStore.scheduledUpcomingTransactions
+      if !overdue.isEmpty {
+        Section("Overdue") {
+          ForEach(overdue) { entry in
+            transactionRow(for: entry)
+          }
+        }
+      }
+      if !upcoming.isEmpty {
+        Section("Upcoming") {
+          ForEach(upcoming) { entry in
+            transactionRow(for: entry)
+          }
+        }
+      }
+    }
+  }
+
+  /// The toolbar's primary-action Add button. Branches on `grouping` so
+  /// the `.scheduledStatus` mode shows "Add Scheduled Transaction" with a
+  /// `calendar.badge.plus` icon and creates a recurring placeholder.
+  @ViewBuilder private var addToolbarButton: some View {
+    if case .scheduledStatus = grouping {
+      Button {
+        createNewScheduledTransaction()
+      } label: {
+        Label("Add Scheduled Transaction", systemImage: "calendar.badge.plus")
+      }
+    } else {
+      Button {
+        createNewTransaction()
+      } label: {
+        Label("Add Transaction", systemImage: "plus")
+      }
+    }
+  }
+
+  // MARK: - Row Rendering & Per-Row Helpers
+
   private var scopeReferenceInstrument: Instrument {
     if let accountId = filter.accountId, let account = accounts.by(id: accountId) {
       return account.instrument
@@ -157,23 +207,38 @@ extension TransactionListView {
 
   @ViewBuilder
   private func transactionRow(for entry: TransactionWithBalance) -> some View {
+    let scheduled = scheduledRowConfig(for: entry)
     TransactionRowView(
       transaction: entry.transaction, accounts: accounts,
       categories: categories, earmarks: earmarks, displayAmounts: entry.displayAmounts,
       balance: entry.balance, scopeReferenceInstrument: scopeReferenceInstrument,
-      hideEarmark: filter.earmarkId != nil, viewingAccountId: filter.accountId
+      hideEarmark: filter.earmarkId != nil, viewingAccountId: filter.accountId,
+      isOverdue: scheduled?.isOverdue ?? false,
+      isDueToday: scheduled?.isDueToday ?? false,
+      onPay: scheduled?.onPay,
+      pendingPayId: scheduled?.pendingPayId
     )
     .tag(entry.transaction)
     .accessibilityIdentifier(
       UITestIdentifiers.TransactionList.transaction(entry.transaction.id)
     )
     .contentShape(Rectangle())
-    .contextMenu { rowContextMenu(for: entry.transaction) }
+    .contextMenu { rowContextMenu(for: entry.transaction, isScheduled: scheduled != nil) }
     .swipeActions(edge: .trailing) {
       Button(role: .destructive) {
         transactionPendingDelete = entry.transaction.id
       } label: {
         Label("Delete Transaction", systemImage: "trash")
+      }
+    }
+    .swipeActions(edge: .leading) {
+      if let scheduled {
+        Button {
+          scheduled.onPay()
+        } label: {
+          Label("Pay Scheduled Transaction", systemImage: "checkmark.circle")
+        }
+        .tint(.green)
       }
     }
     .task {
@@ -183,8 +248,43 @@ extension TransactionListView {
     }
   }
 
+  /// Cached set of overdue transaction ids, hoisted out of
+  /// `scheduledRowConfig(for:)` so it's computed once per body evaluation
+  /// rather than per row. Empty for any non-scheduled grouping.
+  private var overdueTransactionIds: Set<Transaction.ID> {
+    Set(transactionStore.scheduledOverdueTransactions.map(\.transaction.id))
+  }
+
+  /// Per-row scheduled context. Returns `nil` for any non-scheduled
+  /// grouping; the row then renders with all defaults (no overdue
+  /// styling, no Pay button, no leading swipe). For `.scheduledStatus`,
+  /// it computes the row's overdue / due-today flags against the store's
+  /// pre-computed sectioning (so a row's section assignment and its
+  /// `isOverdue` flag can never disagree) and exposes a typed Pay
+  /// closure that writes the row id into the case's binding.
+  private func scheduledRowConfig(for entry: TransactionWithBalance) -> ScheduledRowConfig? {
+    guard case .scheduledStatus(let today, let pendingPayId) = grouping else {
+      return nil
+    }
+    let isOverdue = overdueTransactionIds.contains(entry.transaction.id)
+    let isDueToday =
+      !isOverdue
+      && Calendar.current.isDate(entry.transaction.date, inSameDayAs: today)
+    return ScheduledRowConfig(
+      isOverdue: isOverdue,
+      isDueToday: isDueToday,
+      pendingPayId: pendingPayId.wrappedValue,
+      onPay: { pendingPayId.wrappedValue = entry.transaction.id }
+    )
+  }
+
   @ViewBuilder
-  private func rowContextMenu(for transaction: Transaction) -> some View {
+  private func rowContextMenu(for transaction: Transaction, isScheduled: Bool) -> some View {
+    if isScheduled, case .scheduledStatus(_, let pendingPayId) = grouping {
+      Button("Pay Scheduled Transaction\u{2026}", systemImage: "checkmark.circle") {
+        pendingPayId.wrappedValue = transaction.id
+      }
+    }
     Button("Edit Transaction\u{2026}", systemImage: "pencil") {
       selectedTransaction = transaction
     }
@@ -202,71 +302,20 @@ extension TransactionListView {
     }
   }
 
-  @ViewBuilder private var loadMoreFooter: some View {
-    if transactionStore.isLoading {
-      HStack {
-        Spacer()
-        if let total = transactionStore.totalCount, total > 0 {
-          VStack(spacing: 4) {
-            ProgressView(value: Double(transactionStore.loadedCount), total: Double(total))
-              .frame(maxWidth: 200)
-            Text("Loading \(transactionStore.loadedCount) of \(total)")
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .monospacedDigit()
-          }
-        } else {
-          ProgressView()
-        }
-        Spacer()
-      }
-    }
-  }
+}
 
-  /// Empty-state overlay, differentiated by context:
-  /// - Active search with no matches → system search empty state.
-  /// - Loaded transactions exist but none match the current (filter + search) → hint to
-  ///   clear filters/search.
-  /// - No transactions loaded at all with an active filter → filter excludes everything.
-  /// - Otherwise (new / empty account) → encourage adding the first transaction.
-  @ViewBuilder private var emptyStateOverlay: some View {
-    if transactionStore.isLoading {
-      EmptyView()
-    } else if filteredTransactions.isEmpty {
-      let hasSearch = !searchText.isEmpty
-      let hasFilter = activeFilter != baseFilter
-      let hasAnyLoaded = !transactionStore.transactions.isEmpty
+// MARK: - Supporting Types
 
-      if hasSearch && hasAnyLoaded {
-        // Some transactions are loaded; the search is narrowing them to zero.
-        ContentUnavailableView.search(text: searchText)
-      } else if hasFilter {
-        ContentUnavailableView {
-          Label("No Matches", systemImage: "line.3.horizontal.decrease.circle")
-        } description: {
-          Text("No transactions match the current filter.")
-        } actions: {
-          Button("Clear Filter") {
-            activeFilter = baseFilter
-          }
-        }
-      } else if hasSearch {
-        // No transactions are loaded at all, but a search term is present.
-        ContentUnavailableView.search(text: searchText)
-      } else {
-        ContentUnavailableView(
-          "No Transactions",
-          systemImage: "tray",
-          description: Text(
-            PlatformActionVerb.emptyStatePrompt(
-              buttonLabel: "+",
-              suffix: "to add your first transaction."
-            )
-          )
-        )
-      }
-    }
-  }
+/// Per-row scheduled context bundle. Held as a `let` on the row so the
+/// nil-vs-non-nil distinction (no scheduled context vs. scheduled
+/// context) drives both the row's flags and the leading-swipe Pay
+/// action — keeps the row's "is this a scheduled row" check on a
+/// single source of truth.
+private struct ScheduledRowConfig {
+  let isOverdue: Bool
+  let isDueToday: Bool
+  let pendingPayId: Transaction.ID?
+  let onPay: () -> Void
 }
 
 /// Groups the CSV-import-specific modifiers (create-rule sheet + drop
