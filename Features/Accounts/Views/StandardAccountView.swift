@@ -39,10 +39,12 @@ struct StandardAccountView: View {
       accounts: accounts,
       categories: categories,
       earmarks: earmarks,
-      transactionStore: transactionStore,
+      transactionStore: transactionStore
+    )
+    .multiInstrumentPositionsSplit(
       positions: positions,
-      positionsHostCurrency: account.instrument,
-      positionsTitle: account.name,
+      hostCurrency: account.instrument,
+      title: account.name,
       conversionService: conversionService)
   }
 }
