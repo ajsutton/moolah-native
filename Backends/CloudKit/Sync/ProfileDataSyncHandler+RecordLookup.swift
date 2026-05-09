@@ -25,8 +25,27 @@ extension ProfileDataSyncHandler {
   /// for upload. Dispatches by the recordType prefix encoded in the
   /// recordName (`<recordType>|<UUID>`); unprefixed recordNames are
   /// treated as string IDs and routed to the Instrument lookup.
+  ///
+  /// **Logged warning for `InstrumentRecord` on per-profile zones.**
+  /// After stage 12b, production code reroutes `InstrumentRecord`
+  /// writes through the shared registry on the profile-index zone.
+  /// A pending change for an `InstrumentRecord` arriving here is
+  /// either residual state from a pre-12b binary (benign — fetch
+  /// returns nil, the engine drops the change) or a regression of
+  /// the spam-once-everywhere contract. Logging makes both paths
+  /// observable without crashing tests that intentionally use the
+  /// per-profile registry path.
   func recordToSave(for recordID: CKRecord.ID) -> CKRecord? {
     if let recordType = recordID.prefixedRecordType, let uuid = recordID.uuid {
+      if recordType == InstrumentRow.recordType {
+        logger.warning(
+          """
+          InstrumentRecord queued for per-profile zone \
+          \(self.zoneID.zoneName, privacy: .public) — should land on \
+          profile-index zone via the shared registry post-stage-12b
+          """
+        )
+      }
       return fetchAndBuild(recordType: recordType, uuid: uuid)
     }
     return fetchInstrumentRow(id: recordID.recordName).map { row in
