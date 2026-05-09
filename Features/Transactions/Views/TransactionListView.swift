@@ -7,12 +7,27 @@ import SwiftData
 import SwiftUI
 
 struct TransactionListView: View {
+  /// Grouping for the rendered list. Default `.flat` keeps existing
+  /// callers unchanged. `.scheduledStatus` bundles a `pendingPayId`
+  /// binding that the row's Pay action writes into; the binding is
+  /// structurally required when the caller selects that case (no
+  /// `Binding<>` defaults to silently-discarding `.constant(nil)`).
+  ///
+  /// Grouping is @MainActor-only; do not add Sendable conformance —
+  /// `Binding<T>`'s closures are MainActor-isolated.
+  enum Grouping {
+    case flat
+    case byDate
+    case scheduledStatus(today: Date, pendingPayId: Binding<Transaction.ID?>)
+  }
+
   let title: String
   let baseFilter: TransactionFilter
   let accounts: Accounts
   let categories: Categories
   let earmarks: Earmarks
   let transactionStore: TransactionStore
+  let grouping: Grouping
   @Environment(ImportStore.self) private var importStore
   var positions: [Position] = []
   var positionsHostCurrency: Instrument = .AUD
@@ -78,7 +93,8 @@ struct TransactionListView: View {
     positionsHostCurrency: Instrument = .AUD,
     positionsTitle: String = "Balances",
     conversionService: (any InstrumentConversionService)? = nil,
-    registrationsVersion: Int = 0
+    registrationsVersion: Int = 0,
+    grouping: Grouping = .flat
   ) {
     self.title = title
     self.baseFilter = filter
@@ -91,6 +107,7 @@ struct TransactionListView: View {
     self.positionsTitle = positionsTitle
     self.conversionService = conversionService
     self.registrationsVersion = registrationsVersion
+    self.grouping = grouping
     self._externalSelection = nil
     self._activeFilter = State(initialValue: filter)
   }
@@ -111,6 +128,7 @@ struct TransactionListView: View {
     positionsTitle: String = "Balances",
     conversionService: (any InstrumentConversionService)? = nil,
     registrationsVersion: Int = 0,
+    grouping: Grouping = .flat,
     selectedTransaction: Binding<Transaction?>
   ) {
     self.title = title
@@ -124,6 +142,7 @@ struct TransactionListView: View {
     self.positionsTitle = positionsTitle
     self.conversionService = conversionService
     self.registrationsVersion = registrationsVersion
+    self.grouping = grouping
     self._externalSelection = selectedTransaction
     self._activeFilter = State(initialValue: filter)
   }
