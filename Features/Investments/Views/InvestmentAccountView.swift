@@ -117,10 +117,11 @@ struct InvestmentAccountView: View {
   }
 
   @ViewBuilder private var legacyValuationsLayout: some View {
-    VStack(spacing: 0) {
+    RecordedValueInvestmentLayout {
       legacySummary
+    } chartAndValuations: {
       legacyChartAndValuations
-      Divider()
+    } transactions: {
       makeAccountTransactionList()
     }
   }
