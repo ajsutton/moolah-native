@@ -1,0 +1,68 @@
+// Features/Crypto/CryptoWalletAccountView.swift
+import SwiftUI
+
+/// Detail view for a crypto wallet account. Composes the wallet header
+/// (full address, chain, last-synced state, Sync now button) above the
+/// transaction list as siblings in a `VStack(spacing: 0)`.
+///
+/// This composition no longer goes through `TransactionListView`'s
+/// removed `topAccessory` slot — the leaf is its own `NavigationStack`
+/// (provided by `ContentView.detail`'s `.id(selection)` wrap), so the
+/// wallet header and the transaction list are structurally local to
+/// this leaf and cannot race against another leaf's `.toolbar` /
+/// `.searchable` registrations.
+///
+/// The header renders only when `chainId`, the chain config, AND a
+/// `cryptoSyncStore` all resolve; otherwise the `@ViewBuilder` returns
+/// `EmptyView`. Within this leaf's `NavigationStack` a
+/// `VStack(spacing: 0) { EmptyView; TransactionListView }` is safe —
+/// the previously-observed `safeAreaInset+EmptyView+NSHostingView`
+/// zero-size collapse fired only when the EmptyView-bearing layout
+/// crossed an `NSHostingView` column boundary (the
+/// `ResizableVSplit`'s arranged subviews used by
+/// `InvestmentAccountView.calculatedFromTrades`). Inside a SwiftUI-
+/// owned `NavigationStack` column there is no NSHostingView wrapping
+/// at this level, so the bug does not apply.
+struct CryptoWalletAccountView: View {
+  let account: Account
+  let accounts: Accounts
+  let categories: Categories
+  let earmarks: Earmarks
+  let transactionStore: TransactionStore
+  let positions: [Position]
+  let conversionService: any InstrumentConversionService
+  let session: ProfileSession
+
+  var body: some View {
+    VStack(spacing: 0) {
+      walletHeader
+      TransactionListView(
+        title: account.name,
+        filter: TransactionFilter(accountId: account.id),
+        accounts: accounts,
+        categories: categories,
+        earmarks: earmarks,
+        transactionStore: transactionStore,
+        positions: positions,
+        positionsHostCurrency: account.instrument,
+        positionsTitle: account.name,
+        conversionService: conversionService,
+        // Drives a re-fire of the per-row valuator when the user marks
+        // a token as `.spam` from preferences — issue #790.
+        registrationsVersion: session.cryptoTokenStore?.registrationsVersion ?? 0)
+    }
+  }
+
+  @ViewBuilder private var walletHeader: some View {
+    if let chainId = account.chainId,
+      let chain = ChainConfig.config(for: chainId),
+      let cryptoSyncStore = session.cryptoSyncStore
+    {
+      WalletAccountHeaderView(
+        account: account,
+        chain: chain,
+        cryptoSyncStore: cryptoSyncStore,
+        hasApiKey: session.cryptoTokenStore?.hasAlchemyApiKey ?? false)
+    }
+  }
+}
