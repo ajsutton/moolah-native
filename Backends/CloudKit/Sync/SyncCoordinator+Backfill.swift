@@ -147,6 +147,32 @@ extension SyncCoordinator {
     return queued
   }
 
+  /// Re-queues shared `InstrumentRecord` rows whose
+  /// `encoded_system_fields` is `NULL`. Closes the residual idempotency
+  /// gap between "shared-registry GRDB write committed" and
+  /// "CKSyncEngine state file persisted" — if the app crashes between
+  /// those two events, the union-runner row still exists in the shared
+  /// DB but no pending change ever queued. The next launch catches it
+  /// here.
+  ///
+  /// Idempotent — CKSyncEngine dedupes against any pending changes
+  /// already in flight, and successful uploads stamp
+  /// `encoded_system_fields`, so subsequent scans skip the row.
+  /// Cheap: O(rows in shared `instrument` table) — typically a few
+  /// hundred.
+  @discardableResult
+  func queueUnsyncedSharedInstruments() -> [CKRecord.ID] {
+    let recordIDs = profileIndexHandler.queueUnsyncedSharedInstrumentRecords()
+    if !recordIDs.isEmpty {
+      syncEngine?.state.add(
+        pendingRecordZoneChanges: recordIDs.map { .saveRecord($0) })
+      refreshPendingUploadsMirror()
+      logger.info(
+        "Self-heal queued \(recordIDs.count) unsynced shared instrument(s)")
+    }
+    return recordIDs
+  }
+
   func queueAllExistingRecordsForAllZones() async {
     // Queue profile-index records
     let indexRecordIDs = profileIndexHandler.queueAllExistingRecords()
