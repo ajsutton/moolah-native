@@ -79,16 +79,18 @@ struct SidebarScreen {
     }
   }
 
-  /// Switches the centre column to a named sidebar leaf (Upcoming,
-  /// Analysis, Reports, Categories, All Transactions, Recently Added).
+  /// Switches the centre column to the named top-level view.
   ///
-  /// Unlike `switchToAccount(_:)`, this does **not** wait on a
-  /// post-condition identifier: each named leaf renders a structurally
-  /// different surface (analytics chart, category tree, transaction
-  /// list, …) with no single shared accessibility identifier. The next
-  /// driver call's own `waitForExistence` provides natural quiescence,
-  /// and `UI_TEST_GUIDE.md`'s no-sleep rule forbids inserting an
-  /// unconditional pause here.
+  /// Returns once the named row's click resolves. For `allTransactions`
+  /// — the only named item that renders a `TransactionListView` (via
+  /// `AllTransactionsView`) — also waits on
+  /// `UITestIdentifiers.TransactionList.container` as a post-condition.
+  /// For the others (`upcoming`, `recentlyAdded`, `analysis`, `reports`,
+  /// `categories`) the leaf is its own custom surface (e.g.
+  /// `RecentlyAddedView`, `UpcomingView`) with no shared identifier, so
+  /// the next driver call's `waitForExistence` provides natural
+  /// quiescence — per `UI_TEST_GUIDE.md`'s no-sleep rule, no explicit
+  /// sleep is added.
   func switchToNamed(_ item: SidebarNamedItem) {
     Trace.record(detail: "named=\(item.rawValue)")
     let identifier = UITestIdentifiers.Sidebar.view(item.rawValue)
@@ -99,5 +101,22 @@ struct SidebarScreen {
       return
     }
     row.click()
+
+    // Post-condition for `allTransactions`, the only named leaf that
+    // renders a `TransactionListView`: wait on the canonical list
+    // container so the test exits this driver call only after the leaf
+    // has rendered.
+    switch item {
+    case .allTransactions:
+      let listContainer = app.element(for: UITestIdentifiers.TransactionList.container)
+      if !listContainer.waitForExistence(timeout: 3) {
+        Trace.recordFailure(
+          "transaction list container did not appear after switching to \(item.rawValue)")
+        XCTFail("Transaction list did not render within 3s after \(item.rawValue)")
+      }
+    case .upcoming, .recentlyAdded, .analysis, .reports, .categories:
+      // No shared identifier — see docstring.
+      break
+    }
   }
 }
