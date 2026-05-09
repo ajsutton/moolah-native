@@ -20,3 +20,23 @@ func drainPendingMutations(_ store: ProfileStore) async {
     await Task.yield()
   }
 }
+
+/// Inserts a `Profile` row into the GRDB profile-index backing the
+/// supplied container. The default fields match the values most
+/// `ProfileStore` tests don't care about; pass an explicit `label` if
+/// the test seeds more than one profile and the assertions need to
+/// distinguish them.
+@discardableResult
+func seedCloudProfile(
+  _ container: ProfileContainerManager,
+  label: String = "Household"
+) async throws -> Profile {
+  let profile = Profile(
+    id: UUID(),
+    label: label,
+    currencyCode: "AUD",
+    financialYearStartMonth: 7
+  )
+  try await container.profileIndexRepository.upsert(profile)
+  return profile
+}
