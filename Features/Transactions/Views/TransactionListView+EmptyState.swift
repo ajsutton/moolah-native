@@ -84,7 +84,7 @@ extension TransactionListView {
   /// paths; everything else falls back to `filteredTransactions`.
   var isEmptyForCurrentGrouping: Bool {
     switch grouping {
-    case .flat, .byDate:
+    case .flat:
       return filteredTransactions.isEmpty
     case .scheduledStatus:
       return transactionStore.scheduledOverdueTransactions.isEmpty

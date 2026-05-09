@@ -3,6 +3,8 @@
 import SwiftUI
 
 extension TransactionListView {
+  // MARK: - Top-Level View Composition
+
   /// Stable structural-branch guard: pins `transactionsList` to a fixed
   /// view-tree position so the asynchronous resolution of `positionsInput`
   /// can't flip the layout mid-load and cancel the initial transactions
@@ -138,14 +140,16 @@ extension TransactionListView {
     }
   }
 
-  /// The List content, branched on `grouping`. The `.flat` / `.byDate`
-  /// cases render today's flat list; `.scheduledStatus` sections rows
-  /// into Overdue / Upcoming via the store's pre-computed paths. Both
-  /// branches share the surrounding modifier chain on `transactionsList`
-  /// so future modifier additions don't have to be duplicated.
+  // MARK: - List Content & Toolbar
+
+  /// The List content, branched on `grouping`. The `.flat` case renders
+  /// today's flat list; `.scheduledStatus` sections rows into Overdue /
+  /// Upcoming via the store's pre-computed paths. Both branches share the
+  /// surrounding modifier chain on `transactionsList` so future modifier
+  /// additions don't have to be duplicated.
   @ViewBuilder private var listContent: some View {
     switch grouping {
-    case .flat, .byDate:
+    case .flat:
       ForEach(filteredTransactions) { entry in
         transactionRow(for: entry)
       }
@@ -188,6 +192,8 @@ extension TransactionListView {
       }
     }
   }
+
+  // MARK: - Row Rendering & Per-Row Helpers
 
   private var scopeReferenceInstrument: Instrument {
     if let accountId = filter.accountId, let account = accounts.by(id: accountId) {
@@ -242,6 +248,13 @@ extension TransactionListView {
     }
   }
 
+  /// Cached set of overdue transaction ids, hoisted out of
+  /// `scheduledRowConfig(for:)` so it's computed once per body evaluation
+  /// rather than per row. Empty for any non-scheduled grouping.
+  private var overdueTransactionIds: Set<Transaction.ID> {
+    Set(transactionStore.scheduledOverdueTransactions.map(\.transaction.id))
+  }
+
   /// Per-row scheduled context. Returns `nil` for any non-scheduled
   /// grouping; the row then renders with all defaults (no overdue
   /// styling, no Pay button, no leading swipe). For `.scheduledStatus`,
@@ -253,10 +266,7 @@ extension TransactionListView {
     guard case .scheduledStatus(let today, let pendingPayId) = grouping else {
       return nil
     }
-    let overdueIds = Set(
-      transactionStore.scheduledOverdueTransactions.map(\.transaction.id)
-    )
-    let isOverdue = overdueIds.contains(entry.transaction.id)
+    let isOverdue = overdueTransactionIds.contains(entry.transaction.id)
     let isDueToday =
       !isOverdue
       && Calendar.current.isDate(entry.transaction.date, inSameDayAs: today)
@@ -293,6 +303,8 @@ extension TransactionListView {
   }
 
 }
+
+// MARK: - Supporting Types
 
 /// Per-row scheduled context bundle. Held as a `let` on the row so the
 /// nil-vs-non-nil distinction (no scheduled context vs. scheduled

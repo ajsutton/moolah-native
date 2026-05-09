@@ -12,7 +12,6 @@ struct TransactionListView: View {
   /// `Binding<T>`'s closures are MainActor-isolated.
   enum Grouping {
     case flat
-    case byDate
     case scheduledStatus(today: Date, pendingPayId: Binding<Transaction.ID?>)
   }
 
