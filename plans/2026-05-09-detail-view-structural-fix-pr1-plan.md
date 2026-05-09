@@ -103,7 +103,7 @@ If the named items lack identifiers, that's part of Task 1 — see Step 3.
 
 - [ ] **Step 3: Add accessibility identifiers + driver helper for named sidebar items (if missing)**
 
-If grep in Step 2 showed no identifiers on the Upcoming / All Transactions / Recently Added / Analysis rows, add them. Each `NavigationLink` needs an identifier built from `UITestIdentifiers.Sidebar.named(_:)`.
+If grep in Step 2 showed no identifiers on the Upcoming / All Transactions / Recently Added / Analysis rows, add them. Each `NavigationLink` needs an identifier built from `UITestIdentifiers.Sidebar.view(_:)`.
 
 Modify `Features/Navigation/SidebarView.swift` `navigationSection` (lines 215-241):
 
@@ -113,27 +113,27 @@ Modify `Features/Navigation/SidebarView.swift` `navigationSection` (lines 215-24
     NavigationLink(value: SidebarSelection.analysis) {
       Label("Analysis", systemImage: "chart.bar.xaxis")
     }
-    .accessibilityIdentifier(UITestIdentifiers.Sidebar.named("analysis"))
+    .accessibilityIdentifier(UITestIdentifiers.Sidebar.view("analysis"))
     NavigationLink(value: SidebarSelection.reports) {
       Label("Reports", systemImage: "chart.bar.fill")
     }
-    .accessibilityIdentifier(UITestIdentifiers.Sidebar.named("reports"))
+    .accessibilityIdentifier(UITestIdentifiers.Sidebar.view("reports"))
     NavigationLink(value: SidebarSelection.categories) {
       Label("Categories", systemImage: "tag")
     }
-    .accessibilityIdentifier(UITestIdentifiers.Sidebar.named("categories"))
+    .accessibilityIdentifier(UITestIdentifiers.Sidebar.view("categories"))
     NavigationLink(value: SidebarSelection.upcomingTransactions) {
       Label("Upcoming", systemImage: "calendar")
     }
-    .accessibilityIdentifier(UITestIdentifiers.Sidebar.named("upcoming"))
+    .accessibilityIdentifier(UITestIdentifiers.Sidebar.view("upcoming"))
     NavigationLink(value: SidebarSelection.recentlyAdded) {
       recentlyAddedLabel
     }
-    .accessibilityIdentifier(UITestIdentifiers.Sidebar.named("recentlyAdded"))
+    .accessibilityIdentifier(UITestIdentifiers.Sidebar.view("recentlyAdded"))
     NavigationLink(value: SidebarSelection.allTransactions) {
       Label("All Transactions", systemImage: "list.bullet")
     }
-    .accessibilityIdentifier(UITestIdentifiers.Sidebar.named("allTransactions"))
+    .accessibilityIdentifier(UITestIdentifiers.Sidebar.view("allTransactions"))
     #if os(iOS)
       Toggle(isOn: $showHidden) {
         Label("Show Hidden", systemImage: "eye.slash")
@@ -143,18 +143,7 @@ Modify `Features/Navigation/SidebarView.swift` `navigationSection` (lines 215-24
 }
 ```
 
-The `UITestIdentifiers.Sidebar.named(_:)` helper already exists per `UITestIdentifiers.swift` line 29 ("Sidebar row for a named top-level view (e.g. `\"upcoming\"`, `\"analysis\"`)") — verify its existence and signature before relying on it. If it doesn't exist, add it to `UITestSupport/UITestIdentifiers.swift`:
-
-```swift
-public enum Sidebar {
-  // … existing cases …
-
-  /// Sidebar row for a named top-level view (e.g. `"upcoming"`, `"analysis"`).
-  public static func named(_ name: String) -> String {
-    "sidebar.named.\(name)"
-  }
-}
-```
+The `UITestIdentifiers.Sidebar.view(_:)` helper already exists at `UITestSupport/UITestIdentifiers.swift:30-32` and produces identifiers of the form `sidebar.view.<name>`. **No change to `UITestIdentifiers.swift` is required for Task 1** — only adding `.accessibilityIdentifier(...)` to the `NavigationLink`s in `SidebarView.swift` (Step 3 above).
 
 - [ ] **Step 4: Add `switchToNamed` to `SidebarScreen`**
 
@@ -183,7 +172,7 @@ struct SidebarScreen {
   /// Returns once the corresponding detail-column root has rendered.
   func switchToNamed(_ item: SidebarNamedItem) {
     Trace.record(detail: "named=\(item.rawValue)")
-    let identifier = UITestIdentifiers.Sidebar.named(item.rawValue)
+    let identifier = UITestIdentifiers.Sidebar.view(item.rawValue)
     let row = app.element(for: identifier)
     if !row.waitForExistence(timeout: 3) {
       Trace.recordFailure("sidebar row '\(identifier)' did not appear")
@@ -203,7 +192,7 @@ struct SidebarScreen {
 
 - [ ] **Step 5: Run the test (production code unchanged from `main`) to verify it fails with the *bug*, not a build error**
 
-At this step the worktree contains: the new test file, the new sidebar identifiers in `Features/Navigation/SidebarView.swift`, the `UITestIdentifiers.Sidebar.named(_:)` helper, and the new `SidebarScreen.switchToNamed(_:)` driver. Production code under `App/`, `Features/Transactions/`, `Features/Accounts/`, etc. is **unchanged from `main`**. The app compiles; the test compiles; the test then exercises the unfixed bug.
+At this step the worktree contains: the new test file, the new sidebar identifiers in `Features/Navigation/SidebarView.swift`, the `UITestIdentifiers.Sidebar.view(_:)` helper, and the new `SidebarScreen.switchToNamed(_:)` driver. Production code under `App/`, `Features/Transactions/`, `Features/Accounts/`, etc. is **unchanged from `main`**. The app compiles; the test compiles; the test then exercises the unfixed bug.
 
 Run:
 ```bash
