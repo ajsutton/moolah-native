@@ -9,9 +9,13 @@ struct UpcomingView: View {
   let earmarks: Earmarks
   let transactionStore: TransactionStore
 
+  /// The embedded init of `TransactionListView` is used here so this leaf
+  /// can apply `.transactionInspector(showRecurrence: true)` at the leaf
+  /// body level — the standard TransactionListView-owned inspector defaults
+  /// to `showRecurrence: false`, which would hide the recurrence editor that
+  /// users need on scheduled transactions.
   @State private var selectedTransaction: Transaction?
   @State private var pendingPayId: Transaction.ID?
-  @State private var transactionPendingDelete: Transaction.ID?
 
   var body: some View {
     TransactionListView(
@@ -32,50 +36,20 @@ struct UpcomingView: View {
       transactionStore: transactionStore,
       showRecurrence: true
     )
-    .focusedSceneValue(\.selectedTransaction, $selectedTransaction)
     .onChange(of: pendingPayId) { _, newId in
       guard let id = newId,
         let match = transactionStore.transactions.first(where: { $0.transaction.id == id })
       else { return }
       Task {
         await payTransaction(match.transaction)
-        await MainActor.run { pendingPayId = nil }
+        pendingPayId = nil
       }
     }
-    .confirmationDialog(
-      "Delete this transaction?",
-      isPresented: Binding(
-        get: { transactionPendingDelete != nil },
-        set: { if !$0 { transactionPendingDelete = nil } }
-      ),
-      titleVisibility: .visible
-    ) {
-      Button("Delete Transaction", role: .destructive) {
-        if let id = transactionPendingDelete {
-          Task { await transactionStore.delete(id: id) }
-        }
-        transactionPendingDelete = nil
-      }
-      Button("Cancel", role: .cancel) { transactionPendingDelete = nil }
-    } message: {
-      Text("This action cannot be undone.")
-    }
-    .onReceive(NotificationCenter.default.publisher(for: .requestTransactionEdit)) { note in
-      guard let id = note.object as? Transaction.ID,
-        let match = transactionStore.transactions.first(where: { $0.transaction.id == id })
-      else { return }
-      selectedTransaction = match.transaction
-    }
-    .onReceive(NotificationCenter.default.publisher(for: .requestTransactionDelete)) { note in
-      guard let id = note.object as? Transaction.ID,
-        transactionStore.transactions.contains(where: { $0.transaction.id == id })
-      else { return }
-      transactionPendingDelete = id
-    }
-    // Per design §10, .requestTransactionPay handler also stays —
-    // window-menu commands need a path to trigger Pay on the visible
-    // leaf. Routes through the same pendingPayId binding so the
-    // in-progress visual fires regardless of trigger source.
+    // `.requestTransactionPay` handler is genuinely additive — there is no
+    // counterpart inside `TransactionListView` (Pay is unique to the
+    // scheduled-status grouping). Window-menu commands need a path to
+    // trigger Pay on the visible leaf, and routing through `pendingPayId`
+    // keeps the in-progress visual firing regardless of trigger source.
     .onReceive(NotificationCenter.default.publisher(for: .requestTransactionPay)) { note in
       guard let id = note.object as? Transaction.ID,
         transactionStore.transactions.contains(where: { $0.transaction.id == id })
