@@ -317,3 +317,24 @@ final class ProfileStore {
   }
 
 }
+
+extension ProfileStore {
+  /// Creates a no-backend `ProfileStore` suitable for `#Preview` blocks
+  /// (and any other preview-host without a real CloudKit / GRDB stack).
+  /// Pass `profiles` to seed the list — empty by default; pass a single
+  /// fixture to exercise the single-profile branch of
+  /// `profileNavigationTitle`; pass two or more to exercise the
+  /// multi-profile branch (which appends the profile label to the title).
+  ///
+  /// `defaults`, `containerManager`, and `syncCoordinator` are all `nil`
+  /// — no persistence, no CloudKit. The store is read-only for the
+  /// duration of the preview.
+  static func preview(profiles: [Profile] = []) -> ProfileStore {
+    let store = ProfileStore()
+    if !profiles.isEmpty {
+      store.profiles = profiles
+      store.activeProfileID = profiles.first?.id
+    }
+    return store
+  }
+}
