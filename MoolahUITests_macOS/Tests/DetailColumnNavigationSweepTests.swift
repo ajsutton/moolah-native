@@ -1,57 +1,56 @@
 import XCTest
 
-/// Regression test for the AppKit toolbar bridge crash that fired when
-/// SwiftUI re-mounted a `.searchable` / `.toolbar`-bearing detail-column
-/// leaf while the previous leaf's registration was still live:
+/// Smoke test for navigation across heterogeneous detail-column leaves.
 ///
-///     NSInternalInconsistencyException: NSToolbar already contains an
-///     item with the identifier com.apple.SwiftUI.search.
+/// Originally written to reproduce the AppKit toolbar bridge crash
+/// (`NSInternalInconsistencyException: NSToolbar already contains an
+/// item with the identifier com.apple.SwiftUI.search`) that fires when
+/// SwiftUI re-mounts a `.searchable` / `.toolbar`-bearing leaf while
+/// the previous leaf's registration is still live. The crash fires
+/// during sub-second navigation in production, but XCUITest's natural
+/// `waitForExistence` pacing (~1-2 s per click) is too slow to surface
+/// the race in a deterministic test — the sweep takes ~110 s end to
+/// end and never reproduces. So this test serves a different role:
 ///
-/// Before this PR the failure was reproducible by sweeping rapidly across
-/// detail-column leaves of differing structural shape. The structural fix
-/// wraps each leaf in its own `NavigationStack { … }.id(selection)` so the
-/// previous `NSToolbar` host is fully torn down between selections — the
-/// bridge can no longer race against itself.
+/// **As a navigation smoke test**, it catches accidental regressions
+/// to the navigation graph: a missing `accessibilityIdentifier`, a
+/// removed `SidebarSelection` case, a leaf view that fails to render
+/// the transaction-list container after a sidebar selection. Those
+/// kinds of breakage would silently land otherwise.
 ///
-/// This test sweeps a fixed sequence of leaves five times and asserts the
-/// app remains responsive after each step (XCTest fails the test if the
-/// app crashes; we additionally assert the transaction-list container
-/// re-appears for transaction-bearing leaves so a silent
-/// "the toolbar disappeared" regression also fails).
+/// **The toolbar bridge bug itself** is fixed by the per-leaf
+/// `NavigationStack { … }.id(selection)` wrap in `ContentView.detail`
+/// (see `guides/UI_GUIDE.md` §3) and verified by manual sweep per the
+/// per-PR verification matrix. Don't expect this test to fail on a
+/// regression of that fix — only manual sweeping reproduces the race
+/// in a reasonable time budget.
 @MainActor
 final class DetailColumnNavigationSweepTests: MoolahUITestCase {
-  func test_rapidSweepAcrossDetailLeaves_doesNotCrashTheToolbarBridge() {
+  func test_navigationSweep_acrossDetailLeaves_landsCleanly() {
     let app = launch(seed: .tradeBaseline)
     let sidebar = app.sidebar
 
-    // Five cycles × eight selections per cycle. The exact count is
-    // calibrated to the production reproduction — fewer cycles caught the
-    // race only intermittently. The mix deliberately interleaves
-    // transaction-list leaves (account, allTransactions, upcoming) with
-    // structurally-different leaves (analysis, recentlyAdded) so the
-    // toolbar-bridge tear-down path is exercised between every adjacent
-    // pair.
-    for cycleIndex in 0..<5 {
-      Trace.record(detail: "cycle=\(cycleIndex)")
+    // One cycle of eight selections is enough to confirm every named
+    // sidebar item routes to a renderable leaf. Multiple cycles were
+    // tried and added ~20 s/cycle of CI time without catching anything
+    // additional — XCUITest's pacing makes it useless for the
+    // toolbar-bridge race regardless of cycle count.
+    sidebar.switchToAccount(.checking)
+    sidebar.switchToAccount(.brokerage)
+    sidebar.switchToNamed(.upcoming)
+    sidebar.switchToAccount(.tradesBrokerage)
+    sidebar.switchToNamed(.allTransactions)
+    sidebar.switchToNamed(.analysis)
+    sidebar.switchToAccount(.checking)
+    sidebar.switchToNamed(.recentlyAdded)
 
-      sidebar.switchToAccount(.checking)
-      sidebar.switchToAccount(.brokerage)
-      sidebar.switchToNamed(.upcoming)
-      sidebar.switchToAccount(.tradesBrokerage)
-      sidebar.switchToNamed(.allTransactions)
-      sidebar.switchToNamed(.analysis)
-      sidebar.switchToAccount(.checking)
-      sidebar.switchToNamed(.recentlyAdded)
-    }
-
-    // Final responsiveness check: the app is still alive (XCTest would
-    // have failed the test on crash). Land on a transaction list and
-    // confirm the container is in the accessibility tree.
+    // Land on a transaction list and confirm the container is in the
+    // accessibility tree. Catches a silent "leaf renders empty" regression.
     sidebar.switchToAccount(.checking)
     let listContainer = app.element(for: UITestIdentifiers.TransactionList.container)
     XCTAssertTrue(
       listContainer.waitForExistence(timeout: 3),
-      "Transaction list container missing after the sweep — the structural "
-        + "fix did not preserve list rendering across rapid navigation.")
+      "Transaction list container missing after the navigation sweep — "
+        + "a leaf view stopped rendering the transaction list.")
   }
 }
