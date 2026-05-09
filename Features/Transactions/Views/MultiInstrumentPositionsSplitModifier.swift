@@ -6,10 +6,13 @@ import SwiftUI
 /// valuator `.task(id:)` so the wrapping leaf doesn't need to manage
 /// the valuation lifecycle.
 ///
-/// **Decision predicate** — `shouldShow` returns true iff there are
-/// positions AND the set of non-zero instruments contains anything
-/// other than the host currency. This matches the predicate that used
-/// to live inside `TransactionListView.shouldShowPositionsSplit`.
+/// **Decision predicate** — see `shouldShow(rawPositions:hostCurrency:positionsInput:)`.
+/// Once the valuator has produced a `positionsInput`, that becomes
+/// authoritative because it has already dropped `.knownZero` (`.spam`
+/// / `.unpriced`) rows; relying on the raw-positions heuristic alone
+/// can otherwise leave the split rendered with an inner
+/// `PositionsView` that returns `EmptyView`, manifesting as a large
+/// blank pane above the transactions list.
 ///
 /// **Re-fire trigger** — the `.task(id:)` re-fires whenever the
 /// positions list changes OR the crypto-registry version bumps (e.g.
@@ -26,12 +29,37 @@ struct MultiInstrumentPositionsSplitModifier: ViewModifier {
   @State private var positionsInput: PositionsViewInput?
   @State private var positionsRange: PositionsTimeRange = .threeMonths
 
-  private var shouldShow: Bool {
-    guard !positions.isEmpty else { return false }
+  /// Pure decision helper. Once the valuator produces a
+  /// `positionsInput`, that becomes authoritative — its `shouldHide`
+  /// has already filtered out `.knownZero` (spam / unpriced) positions
+  /// and so agrees with what the inner `PositionsView` will actually
+  /// render. Pre-valuation, fall back to a heuristic on raw positions
+  /// so the split can render with a `ProgressView` while the valuator
+  /// works.
+  ///
+  /// `nonisolated` so unit tests can call this without spinning up a
+  /// `@MainActor` context — the body touches only value-type inputs
+  /// (no view state, no actor-isolated dependencies).
+  nonisolated static func shouldShow(
+    rawPositions: [Position],
+    hostCurrency: Instrument,
+    positionsInput: PositionsViewInput?
+  ) -> Bool {
+    if let positionsInput {
+      return !positionsInput.shouldHide
+    }
+    guard !rawPositions.isEmpty else { return false }
     let nonZeroInstruments = Set(
-      positions.lazy.filter { $0.quantity != 0 }.map(\.instrument)
+      rawPositions.lazy.filter { $0.quantity != 0 }.map(\.instrument)
     )
     return nonZeroInstruments != [hostCurrency]
+  }
+
+  private var shouldShow: Bool {
+    Self.shouldShow(
+      rawPositions: positions,
+      hostCurrency: hostCurrency,
+      positionsInput: positionsInput)
   }
 
   func body(content: Content) -> some View {
