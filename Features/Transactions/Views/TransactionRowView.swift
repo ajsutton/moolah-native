@@ -1,5 +1,3 @@
-// swiftlint:disable multiline_arguments
-
 import SwiftUI
 
 struct TransactionRowView: View {
@@ -12,6 +10,27 @@ struct TransactionRowView: View {
   let scopeReferenceInstrument: Instrument
   var hideEarmark: Bool = false
   var viewingAccountId: UUID?
+
+  /// When true, the payee header shows a red `exclamationmark.triangle.fill`
+  /// leading icon and the payee text renders in red. Used by the
+  /// `.scheduledStatus` grouping for overdue rows.
+  var isOverdue: Bool = false
+
+  /// When true, the date in the meta row renders in orange and bold,
+  /// indicating the scheduled transaction is due today. Used by the
+  /// `.scheduledStatus` grouping.
+  var isDueToday: Bool = false
+
+  /// Optional inline Pay button. When non-nil, the row renders a trailing
+  /// "Pay" button that invokes the closure. When nil (the default), no
+  /// button is rendered. Used by the `.scheduledStatus` grouping.
+  var onPay: (() -> Void)?
+
+  /// When non-nil and equal to this row's transaction id, the inline Pay
+  /// area is replaced by a small `ProgressView` with a payee-parameterised
+  /// `.accessibilityLabel`, and the row is `.disabled(true)`. Used by the
+  /// `.scheduledStatus` grouping for the in-progress pay flow.
+  var pendingPayId: Transaction.ID?
 
   #if os(macOS)
     @ScaledMetric private var verticalPadding: CGFloat = 8
@@ -28,23 +47,45 @@ struct TransactionRowView: View {
       infoColumn
       Spacer()
       amountColumn
+      payAffordance
     }
     .padding(.vertical, verticalPadding)
+    .disabled(isPaying)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityDescription)
   }
 
   private var infoColumn: some View {
     VStack(alignment: .leading, spacing: 2) {
-      Text(titleText).lineLimit(1)
+      titleRow
       metadataRow
+    }
+  }
+
+  private var titleRow: some View {
+    HStack(spacing: 4) {
+      if isOverdue {
+        Image(systemName: "exclamationmark.triangle.fill")
+          .foregroundStyle(.red)
+          .imageScale(.small)
+          .accessibilityHidden(true)
+      }
+      Text(titleText)
+        .lineLimit(1)
+        .foregroundStyle(isOverdue ? AnyShapeStyle(.red) : AnyShapeStyle(.primary))
     }
   }
 
   private var metadataRow: some View {
     HStack(spacing: 4) {
       Text(transaction.date, format: .dateTime.day().month(.abbreviated).year())
+        .foregroundStyle(isDueToday ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+        .fontWeight(isDueToday ? .semibold : .regular)
         .monospacedDigit()
+      if let recurrence = recurrenceDescription {
+        Text("·")
+        Text(recurrence)
+      }
       ForEach(categoryNames, id: \.self) { name in
         Text("·")
         Label(name, systemImage: "tag")
@@ -64,6 +105,38 @@ struct TransactionRowView: View {
     }
     .font(.caption)
     .foregroundStyle(.secondary)
+  }
+
+  @ViewBuilder private var payAffordance: some View {
+    if isPaying {
+      ProgressView()
+        .controlSize(.small)
+        .accessibilityLabel("Paying \(displayPayee), please wait")
+    } else if let onPay {
+      Button("Pay") { onPay() }
+        #if os(iOS)
+          .buttonStyle(.borderedProminent)
+          .controlSize(.regular)
+        #else
+          .buttonStyle(.bordered)
+          .controlSize(.small)
+        #endif
+        .accessibilityLabel("Pay \(displayPayee)")
+    }
+  }
+
+  private var isPaying: Bool {
+    pendingPayId != nil && pendingPayId == transaction.id
+  }
+
+  private var recurrenceDescription: String? {
+    guard let period = transaction.recurPeriod,
+      let every = transaction.recurEvery,
+      period != .once
+    else {
+      return nil
+    }
+    return period.recurrenceDescription(every: every)
   }
 
   private var amountColumn: some View {
@@ -96,12 +169,25 @@ struct TransactionRowView: View {
     } else {
       typeStr = "Custom transaction"
     }
-    if let balance {
-      return
-        "\(typeStr), \(titleText), \(amountStr), \(dateStr), balance \(balance.formatted)"
-    } else {
-      return "\(typeStr), \(titleText), \(amountStr), \(dateStr)"
+    var parts: [String] = []
+    if isOverdue {
+      parts.append("Overdue")
     }
+    parts.append(typeStr)
+    parts.append(titleText)
+    parts.append(amountStr)
+    if isDueToday {
+      parts.append("due today, \(dateStr)")
+    } else {
+      parts.append(dateStr)
+    }
+    if let balance {
+      parts.append("balance \(balance.formatted)")
+    }
+    if let recurrence = recurrenceDescription {
+      parts.append("repeats \(recurrence)")
+    }
+    return parts.joined(separator: ", ")
   }
 
   private var iconName: String {
@@ -249,138 +335,6 @@ private struct WrappedHStack: Layout {
         x += size.width + spacing
       }
       y += lineHeight + spacing
-    }
-  }
-}
-
-private struct TransactionRowPreviewData {
-  let sourceId = UUID()
-  let savingsId = UUID()
-  let groceriesId = UUID()
-  let holidayFundId = UUID()
-
-  var accounts: Accounts {
-    Accounts(from: [
-      Account(
-        id: savingsId, name: "Savings", type: .bank, instrument: .AUD,
-        positions: [Position(instrument: .AUD, quantity: 5000)])
-    ])
-  }
-  var categories: Categories {
-    Categories(from: [
-      Category(id: groceriesId, name: "Groceries"),
-      Category(name: "Transport"),
-    ])
-  }
-  var earmarks: Earmarks {
-    Earmarks(from: [
-      Earmark(id: holidayFundId, name: "Holiday Fund", instrument: .AUD)
-    ])
-  }
-}
-
-private func previewRow(
-  data: TransactionRowPreviewData,
-  payee: String? = nil,
-  legs: [TransactionLeg],
-  displayAmounts: [InstrumentAmount],
-  balance: Decimal,
-  scopeReferenceInstrument: Instrument = .AUD,
-  viewingAccountId: UUID? = nil
-) -> TransactionRowView {
-  TransactionRowView(
-    transaction: Transaction(date: Date(), payee: payee ?? "", legs: legs),
-    accounts: data.accounts, categories: data.categories, earmarks: data.earmarks,
-    displayAmounts: displayAmounts,
-    balance: InstrumentAmount(quantity: balance, instrument: .AUD),
-    scopeReferenceInstrument: scopeReferenceInstrument,
-    viewingAccountId: viewingAccountId)
-}
-
-private struct PreviewRowSpec {
-  let payee: String?
-  let legs: [TransactionLeg]
-  let displayAmounts: [InstrumentAmount]
-  let balance: Decimal
-  var viewingAccountId: UUID?
-}
-
-private func previewRowSpecs(data: TransactionRowPreviewData) -> [PreviewRowSpec] {
-  simplePreviewSpecs(data: data) + tradePreviewSpecs(data: data)
-}
-
-private func simplePreviewSpecs(data: TransactionRowPreviewData) -> [PreviewRowSpec] {
-  [
-    PreviewRowSpec(
-      payee: "Woolworths",
-      legs: [
-        TransactionLeg(
-          accountId: data.sourceId, instrument: .AUD, quantity: -50.23, type: .expense,
-          categoryId: data.groceriesId)
-      ],
-      displayAmounts: [InstrumentAmount(quantity: -50.23, instrument: .AUD)],
-      balance: 1000),
-    PreviewRowSpec(
-      payee: "Employer Pty Ltd",
-      legs: [
-        TransactionLeg(
-          accountId: data.sourceId, instrument: .AUD, quantity: 3500, type: .income,
-          earmarkId: data.holidayFundId)
-      ],
-      displayAmounts: [InstrumentAmount(quantity: 3500, instrument: .AUD)],
-      balance: 1050.23),
-    PreviewRowSpec(
-      payee: nil,
-      legs: [
-        TransactionLeg(
-          accountId: data.sourceId, instrument: .AUD, quantity: -1000, type: .transfer),
-        TransactionLeg(
-          accountId: data.savingsId, instrument: .AUD, quantity: 1000, type: .transfer),
-      ],
-      displayAmounts: [InstrumentAmount(quantity: -1000, instrument: .AUD)],
-      balance: -2449.77, viewingAccountId: data.sourceId),
-    PreviewRowSpec(
-      payee: "Rent Split",
-      legs: [
-        TransactionLeg(
-          accountId: data.sourceId, instrument: .AUD, quantity: -500, type: .transfer),
-        TransactionLeg(
-          accountId: data.savingsId, instrument: .AUD, quantity: 500, type: .transfer),
-      ],
-      displayAmounts: [InstrumentAmount(quantity: -500, instrument: .AUD)],
-      balance: -1449.77, viewingAccountId: data.sourceId),
-  ]
-}
-
-private func tradePreviewSpecs(data: TransactionRowPreviewData) -> [PreviewRowSpec] {
-  [
-    PreviewRowSpec(
-      payee: "Stock Trade",
-      legs: [
-        TransactionLeg(
-          accountId: data.sourceId, instrument: .AUD, quantity: -1000, type: .transfer),
-        TransactionLeg(
-          accountId: data.savingsId, instrument: .AUD, quantity: 950, type: .transfer),
-        TransactionLeg(
-          accountId: data.sourceId, instrument: .AUD, quantity: -50, type: .expense),
-      ],
-      displayAmounts: [
-        InstrumentAmount(quantity: -1000, instrument: .AUD),
-        InstrumentAmount(quantity: 950, instrument: .AUD),
-        InstrumentAmount(quantity: -50, instrument: .AUD),
-      ],
-      balance: -2499.77, viewingAccountId: data.sourceId)
-  ]
-}
-
-#Preview {
-  let data = TransactionRowPreviewData()
-  return List {
-    ForEach(Array(previewRowSpecs(data: data).enumerated()), id: \.offset) { _, spec in
-      previewRow(
-        data: data, payee: spec.payee, legs: spec.legs,
-        displayAmounts: spec.displayAmounts, balance: spec.balance,
-        viewingAccountId: spec.viewingAccountId)
     }
   }
 }
