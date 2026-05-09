@@ -59,3 +59,55 @@ struct AllTransactionsView: View {
       transactionStore: transactionStore)
   }
 }
+
+// MARK: - Preview
+
+// Preview covers `StandardAccountView` only — `AllTransactionsView` is
+// structurally identical (a bare `TransactionListView` with an empty
+// filter), so one preview demonstrates the per-leaf wrapper pattern
+// for both.
+@MainActor
+private func seedStandardAccountPreview(
+  backend: any BackendProvider,
+  accountId: UUID,
+  store: TransactionStore
+) async {
+  _ = try? await backend.transactions.create(
+    Transaction(
+      date: Date(), payee: "Woolworths",
+      legs: [
+        TransactionLeg(accountId: accountId, instrument: .AUD, quantity: -50.23, type: .expense)
+      ]))
+  _ = try? await backend.transactions.create(
+    Transaction(
+      date: Date().addingTimeInterval(-86400), payee: "Employer",
+      legs: [
+        TransactionLeg(accountId: accountId, instrument: .AUD, quantity: 3500, type: .income)
+      ]))
+  await store.load(filter: TransactionFilter(accountId: accountId))
+}
+
+#Preview {
+  let accountId = UUID()
+  let account = Account(
+    id: accountId, name: "Checking", type: .bank, instrument: .AUD,
+    positions: [Position(instrument: .AUD, quantity: 3449.77)])
+  let (backend, _) = PreviewBackend.create()
+  let store = TransactionStore(
+    repository: backend.transactions,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD)
+  return NavigationStack {
+    StandardAccountView(
+      account: account,
+      positions: account.positions,
+      accounts: Accounts(from: [account]),
+      categories: Categories(from: []),
+      earmarks: Earmarks(from: []),
+      transactionStore: store,
+      conversionService: backend.conversionService)
+  }
+  .task {
+    await seedStandardAccountPreview(backend: backend, accountId: accountId, store: store)
+  }
+}
