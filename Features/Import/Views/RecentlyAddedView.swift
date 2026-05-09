@@ -20,6 +20,15 @@ struct RecentlyAddedView: View {
       RecentlyAddedNeedsSetupPanel(backend: backend, staging: importStore.staging)
       mainContent
     }
+    // The .searchable lives at the body level (not inside sessionList) so it
+    // is registered exactly once and at a stable view-tree position regardless
+    // of mainContent's loading/empty/list branches. Per UI_GUIDE.md §3
+    // (post-PR-1) the new invariant is "leaves without a TransactionListView
+    // may register at most one .searchable directly" — RecentlyAddedView
+    // qualifies (it has no TransactionListView) and this is its single
+    // .searchable. Issue #824 root-caused the original placement inside
+    // sessionList as the structural-variance source the rule guards against.
+    .searchable(text: $searchText, prompt: "Search description, payee, or notes")
     .navigationTitle("Recently Added")
     .dropDestination(for: URL.self) { urls, _ in
       Task { await ingestDroppedURLs(urls) }
@@ -133,7 +142,6 @@ struct RecentlyAddedView: View {
         }
       }
     }
-    .searchable(text: $searchText, prompt: "Search description, payee, or notes")
   }
 
   private var reloadKey: ReloadKey {
