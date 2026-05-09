@@ -5,37 +5,7 @@ import SwiftUI
 extension TransactionListView {
   // MARK: - Top-Level View Composition
 
-  /// Stable structural-branch guard: pins `transactionsList` to a fixed
-  /// view-tree position so the asynchronous resolution of `positionsInput`
-  /// can't flip the layout mid-load and cancel the initial transactions
-  /// fetch. Same root cause as #412.
-  var shouldShowPositionsSplit: Bool {
-    guard !positions.isEmpty else { return false }
-    let nonZeroInstruments = Set(
-      positions.lazy.filter { $0.quantity != 0 }.map(\.instrument)
-    )
-    return nonZeroInstruments != [positionsHostCurrency]
-  }
-
-  @ViewBuilder var listView: some View {
-    if shouldShowPositionsSplit {
-      PositionsTransactionsSplit(defaultTab: .transactions) {
-        if let positionsInput {
-          PositionsView(input: positionsInput, range: $positionsRange)
-        } else {
-          ProgressView()
-            .frame(maxWidth: .infinity)
-            .padding()
-        }
-      } transactions: {
-        transactionsList
-      }
-    } else {
-      transactionsList
-    }
-  }
-
-  private var transactionsList: some View {
+  var transactionsList: some View {
     List(selection: selectedTransactionBinding) {
       listContent
     }
@@ -99,36 +69,6 @@ extension TransactionListView {
       // or unmount). The for-await body lives in the store, not here
       // (per the thin-view rule from spec Section 5).
       await transactionStore.observe(filter: activeFilter)
-    }
-    // Composite id: re-fire when the raw positions list changes, AND
-    // when the registry version bumps (e.g. user marks a token as
-    // `.spam`). Without the version dimension a spam flip in
-    // preferences leaves a stale `valuedPositions` on screen until the
-    // user navigates away and back. Issue #790.
-    .task(id: PositionsTaskKey(positions: positions, registrationsVersion: registrationsVersion)) {
-      guard let conversionService, !positions.isEmpty else {
-        positionsInput = nil
-        return
-      }
-      let valuator = PositionsValuator(conversionService: conversionService)
-      let rows = await valuator.valuate(
-        positions: positions,
-        hostCurrency: positionsHostCurrency,
-        costBasis: [:],
-        on: Date()
-      )
-      // The valuator cooperates with cancellation by breaking out of
-      // its per-row loop, but it cannot signal cancellation through the
-      // non-throwing return — re-check here so a stale (or partial)
-      // `rows` from a superseded task never overwrites the freshly-
-      // emitting one.
-      guard !Task.isCancelled else { return }
-      positionsInput = PositionsViewInput(
-        title: positionsTitle,
-        hostCurrency: positionsHostCurrency,
-        positions: rows,
-        historicalValue: nil
-      )
     }
     .refreshable {
       await transactionStore.load(
@@ -202,7 +142,7 @@ extension TransactionListView {
     if let earmarkId = filter.earmarkId, let earmark = earmarks.by(id: earmarkId) {
       return earmark.instrument
     }
-    return positionsHostCurrency
+    return transactionStore.targetInstrument
   }
 
   @ViewBuilder
@@ -342,13 +282,4 @@ struct TransactionListCSVImportAddons: ViewModifier {
         return !urls.isEmpty
       }
   }
-}
-
-/// Composite id for the position-valuation `.task(id:)`. Rebuilds the
-/// valued rows when either the raw positions list changes OR the
-/// crypto registry version bumps (a `.spam` flip in preferences).
-/// Issue #790.
-private struct PositionsTaskKey: Hashable {
-  let positions: [Position]
-  let registrationsVersion: Int
 }
