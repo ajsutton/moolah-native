@@ -66,3 +66,38 @@ struct CryptoWalletAccountView: View {
     }
   }
 }
+
+// MARK: - Preview
+
+// Minimal preview: the leaf takes a `ProfileSession` as a `let` and
+// reaches into `session.cryptoSyncStore` / `session.cryptoTokenStore`
+// from `walletHeader`. `ProfileSession.preview()` builds an in-memory
+// session whose crypto wiring is `nil`, so `walletHeader` returns
+// `EmptyView` and the preview renders `VStack { EmptyView;
+// TransactionListView }` — still useful for verifying the leaf's
+// structural shape without launching the app.
+#Preview {
+  let account = Account(
+    id: UUID(),
+    name: "Preview Wallet",
+    type: .crypto,
+    instrument: ChainConfig.ethereum.nativeInstrument,
+    valuationMode: .calculatedFromTrades,
+    walletAddress: "0x0000000000000000000000000000000000000000",
+    chainId: 1)
+  // In-memory preview session can't fail in practice: opens an ephemeral
+  // GRDB queue with no disk access. A trap here is acceptable in #Preview.
+  // swiftlint:disable:next force_try
+  let session = try! ProfileSession.preview()
+  return NavigationStack {
+    CryptoWalletAccountView(
+      account: account,
+      accounts: Accounts(from: [account]),
+      categories: Categories(from: []),
+      earmarks: Earmarks(from: []),
+      transactionStore: session.transactionStore,
+      positions: [],
+      conversionService: session.backend.conversionService,
+      session: session)
+  }
+}
