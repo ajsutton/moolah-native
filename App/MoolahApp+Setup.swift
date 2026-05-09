@@ -240,20 +240,45 @@ extension MoolahApp {
   }
 
   /// Constructs the app-level shared `GRDBInstrumentRegistryRepository`
-  /// pointed at the profile-index DB. Mutation hooks are no-ops in
-  /// this stage — the registry is wired into `SyncCoordinator` for
-  /// downlink dispatch only. Production mutations still flow through
-  /// the per-profile registry constructed by
-  /// `ProfileSession+CloudKitBackendBuild.makeInstrumentRegistry`
-  /// until a later stage migrates Settings views and the search
-  /// service to read from this shared instance.
-  ///
-  /// See `plans/2026-05-09-shared-instrument-registry-design.md` and
-  /// `plans/2026-05-09-shared-instrument-registry-plan.md` (Task 12).
+  /// pointed at the profile-index DB. Sync hooks are no-ops at
+  /// construction time and rotated in via
+  /// `attachSharedInstrumentRegistrySyncHooks` once the
+  /// `SyncCoordinator` exists (chicken-and-egg: the coordinator's
+  /// init takes the registry, so the registry can't capture the
+  /// coordinator at its own init).
   static func makeSharedInstrumentRegistry(
     database: any DatabaseWriter
   ) -> GRDBInstrumentRegistryRepository {
     GRDBInstrumentRegistryRepository(database: database)
+  }
+
+  /// Wires the shared registry's mutation hooks to the coordinator's
+  /// `queueSave` / `queueDeletion` against the profile-index zone.
+  /// Called immediately after `SyncCoordinator.init`, which takes the
+  /// registry as a constructor argument.
+  ///
+  /// The `Task { @MainActor in … }` hop matches the per-profile
+  /// pattern in `ProfileSession+CloudKitBackendBuild.makeInstrumentRegistry`:
+  /// registry callbacks fire on the GRDB serial executor
+  /// (off-MainActor) and `SyncCoordinator.queueSave/Deletion` is
+  /// `@MainActor`-isolated.
+  static func attachSharedInstrumentRegistrySyncHooks(
+    registry: GRDBInstrumentRegistryRepository,
+    coordinator: SyncCoordinator
+  ) {
+    let zoneID = CKRecordZone.ID(
+      zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
+    registry.attachSyncHooks(
+      onRecordChanged: { [weak coordinator] recordName in
+        Task { @MainActor [weak coordinator] in
+          coordinator?.queueSave(recordName: recordName, zoneID: zoneID)
+        }
+      },
+      onRecordDeleted: { [weak coordinator] recordName in
+        Task { @MainActor [weak coordinator] in
+          coordinator?.queueDeletion(recordName: recordName, zoneID: zoneID)
+        }
+      })
   }
 
   static func makeSessionManager(

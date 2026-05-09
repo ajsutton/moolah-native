@@ -111,6 +111,8 @@ struct MoolahApp: App {
     let coordinator = SyncCoordinator(
       containerManager: setup.manager,
       sharedInstrumentRegistry: sharedInstrumentRegistry)
+    Self.attachSharedInstrumentRegistrySyncHooks(
+      registry: sharedInstrumentRegistry, coordinator: coordinator)
     containerManager = setup.manager
     syncCoordinator = coordinator
     uiTestingProfileId = setup.uiTestingProfileId

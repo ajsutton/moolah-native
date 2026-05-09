@@ -26,14 +26,27 @@ extension ProfileSession {
     let zoneID = CKRecordZone.ID(
       zoneName: "profile-\(profile.id.uuidString)",
       ownerName: CKCurrentUserDefaultName)
-    let registry = makeInstrumentRegistry(
-      database: database, zoneID: zoneID, syncCoordinator: syncCoordinator)
-    // Wire the inverse direction: when the per-profile data handler
-    // applies a remote pull that touches `Instrument` rows, fan out to
-    // the registry's local subscribers so the picker UI refreshes
-    // without waiting for an app relaunch.
-    wireInstrumentRemoteChangeFanOut(
-      registry: registry, profileId: profile.id, syncCoordinator: syncCoordinator)
+    // Prefer the app-level shared registry when the coordinator was
+    // constructed with one. All sessions on the same iCloud account
+    // then share a single registry instance, so spam classifications
+    // and discovered-token resolutions propagate without per-profile
+    // duplication. Fall back to a per-profile registry for legacy
+    // callers (preview / tests) that didn't pass a shared instance
+    // through `SyncCoordinator.init`.
+    let registry: GRDBInstrumentRegistryRepository
+    if let shared = syncCoordinator?.sharedInstrumentRegistry {
+      registry = shared
+    } else {
+      registry = makeInstrumentRegistry(
+        database: database, zoneID: zoneID, syncCoordinator: syncCoordinator)
+      // Per-profile registry only — wire the legacy remote-change fan-out.
+      // Shared registries already get the equivalent fan-out from the
+      // profile-index handler's `onInstrumentRemoteChange` closure
+      // installed by `SyncCoordinator.init`, so this call would be
+      // redundant for them.
+      wireInstrumentRemoteChangeFanOut(
+        registry: registry, profileId: profile.id, syncCoordinator: syncCoordinator)
+    }
     // CloudKit profiles need full stock+crypto conversion support. The
     // closure reads the profile's registry on each conversion so
     // registrations added at runtime become usable without rebuilding the

@@ -157,6 +157,16 @@ final class SyncCoordinator {
   /// read the handler without a MainActor hop.
   nonisolated let profileIndexHandler: ProfileIndexSyncHandler
 
+  /// The app-level shared `GRDBInstrumentRegistryRepository`. Exposed
+  /// so `ProfileSession.makeCloudKitBackend` can hand the same instance
+  /// to every session's `CloudKitBackend`. Stage 12b migrates Settings
+  /// views, the search service, and the conversion service from
+  /// per-profile registries to this shared instance.
+  ///
+  /// `nil` for legacy callers (e.g. tests) that don't pass a shared
+  /// registry — those continue with the per-profile registry path.
+  nonisolated let sharedInstrumentRegistry: GRDBInstrumentRegistryRepository?
+
   // Cross-file-access note: members below this MARK that sibling extension
   // files (Lifecycle / Zones / Backfill / RecordChanges / Delegate) touch are
   // `internal` rather than `private`. Swift does not treat extensions in
@@ -319,6 +329,7 @@ final class SyncCoordinator {
     self.containerManager = containerManager
     self.userDefaults = userDefaults
     self.progress = SyncProgress(userDefaults: userDefaults)
+    self.sharedInstrumentRegistry = sharedInstrumentRegistry
     self.profileIndexHandler = ProfileIndexSyncHandler(
       repository: containerManager.profileIndexRepository,
       instrumentRepository: sharedInstrumentRegistry,
