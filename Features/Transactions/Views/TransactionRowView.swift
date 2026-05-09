@@ -38,6 +38,8 @@ struct TransactionRowView: View {
     @ScaledMetric private var verticalPadding: CGFloat = 12
   #endif
 
+  // MARK: - Body & View Builders
+
   var body: some View {
     HStack(alignment: .firstTextBaseline) {
       Image(systemName: iconName)
@@ -72,14 +74,14 @@ struct TransactionRowView: View {
       }
       Text(titleText)
         .lineLimit(1)
-        .foregroundStyle(isOverdue ? AnyShapeStyle(.red) : AnyShapeStyle(.primary))
+        .foregroundStyle(isOverdue ? Color.red : Color.primary)
     }
   }
 
   private var metadataRow: some View {
     HStack(spacing: 4) {
       Text(transaction.date, format: .dateTime.day().month(.abbreviated).year())
-        .foregroundStyle(isDueToday ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+        .foregroundStyle(isDueToday ? Color.orange : Color.secondary)
         .fontWeight(isDueToday ? .semibold : .regular)
         .monospacedDigit()
       if let recurrence = recurrenceDescription {
@@ -124,6 +126,8 @@ struct TransactionRowView: View {
         .accessibilityLabel("Pay \(displayPayee)")
     }
   }
+
+  // MARK: - Computed Display Properties
 
   private var isPaying: Bool {
     pendingPayId != nil && pendingPayId == transaction.id
@@ -249,6 +253,8 @@ struct TransactionRowView: View {
     return payee
   }
 }
+
+// MARK: - Supporting Types
 
 /// Inline-with-wrap layout for the row's per-instrument amount entries.
 /// Lays out children horizontally with hairline spacing; wraps to a new
