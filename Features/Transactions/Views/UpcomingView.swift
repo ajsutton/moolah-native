@@ -45,17 +45,16 @@ struct UpcomingView: View {
         pendingPayId = nil
       }
     }
-    // `.requestTransactionPay` handler is genuinely additive — there is no
-    // counterpart inside `TransactionListView` (Pay is unique to the
-    // scheduled-status grouping). Window-menu commands need a path to
-    // trigger Pay on the visible leaf, and routing through `pendingPayId`
-    // keeps the in-progress visual firing regardless of trigger source.
-    .onReceive(NotificationCenter.default.publisher(for: .requestTransactionPay)) { note in
-      guard let id = note.object as? Transaction.ID,
-        transactionStore.transactions.contains(where: { $0.transaction.id == id })
-      else { return }
-      pendingPayId = id
-    }
+    // Routing the menu Pay command through `pendingPayId` keeps the
+    // in-progress visual firing regardless of trigger source (toolbar,
+    // row swipe, or menu). Published only when a recurring transaction
+    // is selected so the menu item disables otherwise.
+    .focusedSceneValue(
+      \.payTransactionAction,
+      selectedTransaction?.recurPeriod != nil
+        ? { pendingPayId = selectedTransaction?.id }
+        : nil
+    )
   }
 
   private func payTransaction(_ scheduledTransaction: Transaction) async {

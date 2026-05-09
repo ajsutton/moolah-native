@@ -83,7 +83,6 @@ struct ShowHiddenCommands: Commands {
 /// CommandMenus are inlined here (rather than references to per-feature structs)
 /// to keep the opaque `some Commands` return type inferable.
 struct MoolahDomainCommands: Commands {
-  @FocusedValue(\.selectedTransaction) private var selectedTransaction
   @FocusedValue(\.selectedAccount) private var selectedAccount
   @FocusedValue(\.selectedEarmark) private var selectedEarmark
   @FocusedValue(\.selectedCategory) private var selectedCategory
@@ -92,18 +91,16 @@ struct MoolahDomainCommands: Commands {
   @FocusedValue(\.goForwardAction) private var goForwardAction
   @FocusedValue(\.findInListAction) private var findInListAction
   @FocusedValue(\.setTransactionTypeAction) private var setTransactionTypeAction
+  @FocusedValue(\.editTransactionAction) private var editTransactionAction
+  @FocusedValue(\.deleteTransactionAction) private var deleteTransactionAction
+  @FocusedValue(\.payTransactionAction) private var payTransactionAction
   @Environment(\.openWindow) private var openWindow
   @Environment(\.openURL) private var openURL
 
   var body: some Commands {
     CommandMenu("Transaction") {
-      Button("Edit Transaction\u{2026}") {
-        NotificationCenter.default.post(
-          name: .requestTransactionEdit,
-          object: selectedTransaction?.wrappedValue?.id
-        )
-      }
-      .disabled(selectedTransaction?.wrappedValue == nil)
+      Button("Edit Transaction\u{2026}") { editTransactionAction?() }
+        .disabled(editTransactionAction == nil)
 
       Button("Duplicate Transaction") {}.disabled(true)
 
@@ -112,23 +109,13 @@ struct MoolahDomainCommands: Commands {
       }
       .disabled(setTransactionTypeAction == nil)
 
-      Button("Pay Scheduled Transaction") {
-        NotificationCenter.default.post(
-          name: .requestTransactionPay,
-          object: selectedTransaction?.wrappedValue?.id
-        )
-      }
-      .disabled(selectedTransaction?.wrappedValue?.recurPeriod == nil)
+      Button("Pay Scheduled Transaction") { payTransactionAction?() }
+        .disabled(payTransactionAction == nil)
 
       Divider()
 
-      Button("Delete Transaction\u{2026}", role: .destructive) {
-        NotificationCenter.default.post(
-          name: .requestTransactionDelete,
-          object: selectedTransaction?.wrappedValue?.id
-        )
-      }
-      .disabled(selectedTransaction?.wrappedValue == nil)
+      Button("Delete Transaction\u{2026}", role: .destructive) { deleteTransactionAction?() }
+        .disabled(deleteTransactionAction == nil)
     }
 
     CommandMenu("Go") {

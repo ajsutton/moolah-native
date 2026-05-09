@@ -143,6 +143,28 @@ struct TransactionListView: View {
         if new != nil { searchFieldFocused = false }
       }
       .focusedSceneValue(\.selectedTransaction, selectedTransactionBinding)
+      .focusedSceneValue(
+        \.editTransactionAction,
+        selectedTransaction != nil
+          ? {
+            // Discoverability affordance: under the current architecture
+            // dismissing the inspector clears `selectedTransaction` (see
+            // `TransactionInspectorModifier.isPresented`), so this action is
+            // only published when the inspector is already open and the
+            // self-assign is a no-op. The menu item exists so users can
+            // discover that Edit is available without right-clicking the row.
+            // If the inspector ever stops clearing selection on dismissal,
+            // this self-assign needs to become an explicit reopen path.
+            selectedTransaction = selectedTransaction
+          }
+          : nil
+      )
+      .focusedSceneValue(
+        \.deleteTransactionAction,
+        selectedTransaction != nil
+          ? { transactionPendingDelete = selectedTransaction?.id }
+          : nil
+      )
       .alert("Error", isPresented: $showError) {
         Button("OK", role: .cancel) {}
       } message: {
@@ -178,18 +200,6 @@ struct TransactionListView: View {
         Button("Cancel", role: .cancel) { transactionPendingDelete = nil }
       } message: {
         Text("This action cannot be undone.")
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .requestTransactionEdit)) { note in
-        guard let id = note.object as? Transaction.ID,
-          let entry = filteredTransactions.first(where: { $0.transaction.id == id })
-        else { return }
-        selectedTransaction = entry.transaction
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .requestTransactionDelete)) { note in
-        guard let id = note.object as? Transaction.ID,
-          filteredTransactions.contains(where: { $0.transaction.id == id })
-        else { return }
-        transactionPendingDelete = id
       }
       .modifier(
         TransactionListCSVImportAddons(

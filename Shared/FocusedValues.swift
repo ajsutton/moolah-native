@@ -40,6 +40,27 @@ struct SelectedTransactionKey: FocusedValueKey {
   typealias Value = Binding<Transaction?>
 }
 
+/// Trigger action for Transaction > Edit Transaction… Published by the
+/// leaf that owns the transaction selection; `nil` when no transaction is
+/// selected (which disables the menu item).
+struct EditTransactionActionKey: FocusedValueKey {
+  typealias Value = () -> Void
+}
+
+/// Trigger action for Transaction > Delete Transaction… Published by the
+/// leaf that owns the transaction selection; `nil` when no transaction is
+/// selected (which disables the menu item).
+struct DeleteTransactionActionKey: FocusedValueKey {
+  typealias Value = () -> Void
+}
+
+/// Trigger action for Transaction > Pay Scheduled Transaction. Published
+/// by the Upcoming leaf when a scheduled (recurring) transaction is
+/// selected; `nil` otherwise (which disables the menu item).
+struct PayTransactionActionKey: FocusedValueKey {
+  typealias Value = () -> Void
+}
+
 /// The account currently selected in the focused window (for Account menu items).
 struct SelectedAccountKey: FocusedValueKey {
   typealias Value = Binding<Account?>
@@ -122,6 +143,18 @@ extension FocusedValues {
   var selectedTransaction: SelectedTransactionKey.Value? {
     get { self[SelectedTransactionKey.self] }
     set { self[SelectedTransactionKey.self] = newValue }
+  }
+  var editTransactionAction: EditTransactionActionKey.Value? {
+    get { self[EditTransactionActionKey.self] }
+    set { self[EditTransactionActionKey.self] = newValue }
+  }
+  var deleteTransactionAction: DeleteTransactionActionKey.Value? {
+    get { self[DeleteTransactionActionKey.self] }
+    set { self[DeleteTransactionActionKey.self] = newValue }
+  }
+  var payTransactionAction: PayTransactionActionKey.Value? {
+    get { self[PayTransactionActionKey.self] }
+    set { self[PayTransactionActionKey.self] = newValue }
   }
   var selectedAccount: SelectedAccountKey.Value? {
     get { self[SelectedAccountKey.self] }
