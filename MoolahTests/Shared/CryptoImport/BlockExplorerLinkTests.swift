@@ -99,4 +99,58 @@ struct BlockExplorerLinkTests {
       #expect((addressURL?.absoluteString.components(separatedBy: "//").count ?? 0) == 2)
     }
   }
+
+  // MARK: - transactionURL(chainId:externalId:)
+
+  /// Wallet-importer transfer legs persist `externalId` in Alchemy's
+  /// `uniqueId` form `<hash>:<category>:<index>` so a multi-event
+  /// transaction can produce multiple legs without tripping the
+  /// schema's partial unique index. The transaction-detail "View on
+  /// block explorer" link must strip the `:<suffix>` to recover the
+  /// bare hash — passing the full `externalId` to the explorer
+  /// produced a 404 (issue #848).
+  @Test("strips Alchemy transfer-leg uniqueId suffix to recover bare hash")
+  func stripsTransferLegUniqueIdSuffix() {
+    let externalId = "\(Self.txHash):external:0"
+    let url = BlockExplorerLink.transactionURL(chainId: 1, externalId: externalId)
+    #expect(url?.absoluteString == "https://etherscan.io/tx/\(Self.txHash)")
+  }
+
+  /// `TransferReceiptCoalescer` tags the gas leg `<hash>:gas` so it
+  /// shares the `(accountId, externalId)` namespace with the transfer
+  /// legs. The strip rule must cover this form too.
+  @Test("strips gas-leg :gas suffix to recover bare hash")
+  func stripsGasLegSuffix() {
+    let externalId = "\(Self.txHash):gas"
+    let url = BlockExplorerLink.transactionURL(chainId: 137, externalId: externalId)
+    #expect(url?.absoluteString == "https://polygonscan.com/tx/\(Self.txHash)")
+  }
+
+  /// A bare hash (no colon) is valid input — the wallet importer is
+  /// the only producer of the `<hash>:<suffix>` form today, but
+  /// callers passing the bare hash should get the correct URL too.
+  @Test("accepts a bare hash with no suffix")
+  func acceptsBareHash() {
+    let url = BlockExplorerLink.transactionURL(chainId: 1, externalId: Self.txHash)
+    #expect(url?.absoluteString == "https://etherscan.io/tx/\(Self.txHash)")
+  }
+
+  /// An empty externalId — or one whose hash portion is empty
+  /// (`":gas"`) — has nothing to link to. Return `nil` so the caller
+  /// can omit the row rather than building a malformed URL.
+  @Test("returns nil for empty externalId / empty hash before colon")
+  func returnsNilForEmptyHash() {
+    #expect(BlockExplorerLink.transactionURL(chainId: 1, externalId: "") == nil)
+    #expect(BlockExplorerLink.transactionURL(chainId: 1, externalId: ":gas") == nil)
+  }
+
+  /// Unsupported chains continue to return `nil` even when the
+  /// externalId is well-formed — the chain-config gate happens after
+  /// the suffix strip.
+  @Test("returns nil for unsupported chain even with well-formed externalId")
+  func returnsNilForUnsupportedChain() {
+    #expect(
+      BlockExplorerLink.transactionURL(chainId: 42_161, externalId: "\(Self.txHash):external:0")
+        == nil)
+  }
 }

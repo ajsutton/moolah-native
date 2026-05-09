@@ -126,13 +126,11 @@ public enum UITestIdentifiers {
       "transactionDetail.trade.feeRemove.\(index)"
     }
 
-    /// "View on block explorer" link for the leg at the given index.
-    /// Only rendered when the leg has a non-nil `externalId` (the on-chain
-    /// transaction hash recorded by the wallet importer) and a chain id
-    /// resolvable through `ChainConfig`.
-    public static func blockExplorerLink(legIndex: Int) -> String {
-      "detail.leg.\(legIndex).blockExplorer"
-    }
+    /// "View on block explorer" link in the transaction detail. One
+    /// row per unique on-chain hash carried by the transaction — for
+    /// the typical wallet-imported transaction (transfer + gas legs
+    /// sharing one hash), this resolves to a single row.
+    public static let blockExplorerLink = "detail.blockExplorer"
 
     /// Truncated on-chain counterparty address row for the leg at the
     /// given index. Only rendered when the leg has a non-nil
