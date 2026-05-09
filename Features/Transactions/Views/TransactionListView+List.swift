@@ -5,6 +5,10 @@ import SwiftUI
 extension TransactionListView {
   // MARK: - Top-Level View Composition
 
+  /// Module-internal (not `private`) because `TransactionListView.body` in
+  /// the main `.swift` file references this directly. The `private` scope
+  /// SwiftLint would prefer is unavailable across files even within the
+  /// same type's extensions; module-internal is the smallest legal scope.
   var transactionsList: some View {
     List(selection: selectedTransactionBinding) {
       listContent
@@ -142,7 +146,13 @@ extension TransactionListView {
     if let earmarkId = filter.earmarkId, let earmark = earmarks.by(id: earmarkId) {
       return earmark.instrument
     }
-    return transactionStore.targetInstrument
+    // The fallback path is only reachable when the filter has neither an
+    // accountId nor an earmarkId — i.e., All Transactions / Recently Added.
+    // Use the account-aligned `currentTargetInstrument` (tracks the loaded
+    // account's instrument) rather than the profile-default `targetInstrument`
+    // so a no-account filter against a non-profile-currency view still resolves
+    // to the right reference instrument.
+    return transactionStore.currentTargetInstrument
   }
 
   @ViewBuilder

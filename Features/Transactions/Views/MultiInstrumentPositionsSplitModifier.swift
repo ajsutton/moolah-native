@@ -110,3 +110,41 @@ extension View {
         registrationsVersion: registrationsVersion))
   }
 }
+
+// MARK: - Preview
+
+@MainActor
+private func multiInstrumentSplitPreviewContent(
+  positions: [Position],
+  title: String
+) -> some View {
+  let (backend, _) = PreviewBackend.create()
+  return Text("Transactions list goes here")
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .multiInstrumentPositionsSplit(
+      positions: positions,
+      hostCurrency: .AUD,
+      title: title,
+      conversionService: backend.conversionService)
+}
+
+/// Multi-instrument positions exercise the split-shown branch. The
+/// host currency is AUD; the positions include a USD holding so
+/// `shouldShow` returns true and the wrapper renders the split.
+#Preview("Split shown — multi-instrument") {
+  multiInstrumentSplitPreviewContent(
+    positions: [
+      Position(instrument: .AUD, quantity: 1_000),
+      Position(instrument: .USD, quantity: 250),
+    ],
+    title: "Multi-currency Account")
+}
+
+/// Single-instrument positions in the host currency exercise the
+/// no-op branch — `shouldShow` returns false and the wrapper passes
+/// the content through unchanged.
+#Preview("Split hidden — host-currency only") {
+  multiInstrumentSplitPreviewContent(
+    positions: [Position(instrument: .AUD, quantity: 1_000)],
+    title: "Plain Account")
+}
