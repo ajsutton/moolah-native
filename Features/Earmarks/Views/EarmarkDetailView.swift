@@ -176,8 +176,10 @@ struct EarmarkDetailView: View {
     }
   }
 
-  private func timeRemaining(until endDate: Date) -> String? {
-    let now = Date()
+  /// `now` is defaulted to the current clock at the boundary so production
+  /// callers stay terse; tests can pin a specific date for the
+  /// "Past due" / "Due today" / "N days left" branches.
+  private func timeRemaining(until endDate: Date, now: Date = Date()) -> String? {
     guard endDate > now else { return "Past due" }
 
     let components = Calendar.current.dateComponents([.day], from: now, to: endDate)
