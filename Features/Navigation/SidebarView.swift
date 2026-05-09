@@ -388,3 +388,37 @@ private func seedSidebarPreview(backend: any BackendProvider) async {
     Text("Detail")
   }
 }
+
+#Preview("Empty earmarks") {
+  let (backend, _) = PreviewBackend.create()
+  let accountStore = AccountStore(
+    repository: backend.accounts,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD)
+  let earmarkStore = EarmarkStore(
+    repository: backend.earmarks,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD)
+  // In-memory preview session can't fail in practice: opens an ephemeral
+  // GRDB queue with no disk access. A trap here is acceptable in #Preview.
+  // swiftlint:disable:next force_try
+  let session = try! ProfileSession.preview()
+
+  return NavigationSplitView {
+    SidebarView(selection: .constant(nil))
+      .environment(accountStore)
+      .environment(earmarkStore)
+      .environment(session)
+      .task {
+        // Seed only an account — no earmarks. Validates that the
+        // Earmarks section header (and its iOS "+" button) renders in
+        // the empty-state, and that the macOS toolbar shows both the
+        // "New Account" and "New Earmark" buttons.
+        _ = try? await backend.accounts.create(
+          Account(name: "Bank", type: .bank, instrument: .AUD),
+          openingBalance: InstrumentAmount(quantity: 1000, instrument: .AUD))
+      }
+  } detail: {
+    Text("Detail")
+  }
+}
