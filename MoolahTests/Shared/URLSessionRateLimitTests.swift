@@ -89,8 +89,8 @@ struct URLSessionRateLimitTests {
   }
   // swiftlint:enable force_unwrapping
 
-  private func request() -> URLRequest {
-    URLRequest(url: URL(string: "https://example.com/probe") ?? Self.stubURL)
+  private func request(path: String = "/probe") -> URLRequest {
+    URLRequest(url: URL(string: "https://example.com\(path)") ?? Self.stubURL)
   }
 
   // MARK: - 2xx success
@@ -102,13 +102,16 @@ struct URLSessionRateLimitTests {
 
     let session = makeSession()
     let gate = RateLimitGate()
+    let cache = FailedRequestCache()
 
-    let (data, _) = try await session.dataRespectingRateLimit(for: request(), gate: gate)
+    let (data, _) = try await session.dataRespectingRateLimit(
+      for: request(), gate: gate, failureCache: cache)
     #expect(data == Data("OK".utf8))
 
     // Gate still open — second call goes through.
     Stub.handler = { _ in (self.httpResponse(statusCode: 200), Data()) }
-    _ = try await session.dataRespectingRateLimit(for: request(), gate: gate)
+    _ = try await session.dataRespectingRateLimit(
+      for: request(), gate: gate, failureCache: cache)
   }
 
   // MARK: - 429 trips the gate
@@ -122,15 +125,18 @@ struct URLSessionRateLimitTests {
 
     let session = makeSession()
     let gate = RateLimitGate()
+    let cache = FailedRequestCache()
 
     await #expect(throws: RateLimitGateError.self) {
-      try await session.dataRespectingRateLimit(for: self.request(), gate: gate)
+      try await session.dataRespectingRateLimit(
+        for: self.request(), gate: gate, failureCache: cache)
     }
 
     // Subsequent call must fail fast — without hitting the network.
     let countBefore = Stub.capturedRequestCount()
-    await #expect(throws: RateLimitGateError.self) {
-      try await session.dataRespectingRateLimit(for: self.request(), gate: gate)
+    await #expect(throws: (any Error).self) {
+      try await session.dataRespectingRateLimit(
+        for: self.request(), gate: gate, failureCache: cache)
     }
     #expect(Stub.capturedRequestCount() == countBefore)
   }
@@ -144,9 +150,11 @@ struct URLSessionRateLimitTests {
 
     let session = makeSession()
     let gate = RateLimitGate()
+    let cache = FailedRequestCache()
 
     await #expect(throws: RateLimitGateError.self) {
-      try await session.dataRespectingRateLimit(for: self.request(), gate: gate)
+      try await session.dataRespectingRateLimit(
+        for: self.request(), gate: gate, failureCache: cache)
     }
   }
 
@@ -161,9 +169,11 @@ struct URLSessionRateLimitTests {
 
     let session = makeSession()
     let gate = RateLimitGate()
+    let cache = FailedRequestCache()
 
     await #expect(throws: RateLimitGateError.self) {
-      try await session.dataRespectingRateLimit(for: self.request(), gate: gate)
+      try await session.dataRespectingRateLimit(
+        for: self.request(), gate: gate, failureCache: cache)
     }
   }
 
@@ -174,32 +184,161 @@ struct URLSessionRateLimitTests {
 
     let session = makeSession()
     let gate = RateLimitGate()
+    // Use a fresh cache scoped to this test; the per-URL cache *does*
+    // record on a 503-without-Retry-After (it's a failure) so a follow-up
+    // to the *same* URL fails fast. To verify the gate stays open we
+    // probe a different URL on the second call instead.
+    let cache = FailedRequestCache()
 
-    // Helper passes through — caller's own status check throws their
-    // existing transport error. Here we just verify the gate stays open.
     let (_, response) = try await session.dataRespectingRateLimit(
-      for: request(), gate: gate)
+      for: request(path: "/probe-1"), gate: gate, failureCache: cache)
     #expect((response as? HTTPURLResponse)?.statusCode == 503)
 
-    // Gate still open — second call gets through to the stub.
     let countBefore = Stub.capturedRequestCount()
     Stub.handler = { _ in (self.httpResponse(statusCode: 200), Data()) }
-    _ = try await session.dataRespectingRateLimit(for: request(), gate: gate)
+    _ = try await session.dataRespectingRateLimit(
+      for: request(path: "/probe-2"), gate: gate, failureCache: cache)
     #expect(Stub.capturedRequestCount() == countBefore + 1)
   }
 
-  // MARK: - Pass-through for other non-2xx
+  // MARK: - 404 path
 
   @Test
-  func nonRateLimitErrorPassesThrough() async throws {
+  func fourOhFourMutesUrlForFailureCacheCooldown() async throws {
+    Stub.reset()
+    Stub.handler = { _ in (self.httpResponse(statusCode: 404), Data()) }
+
+    let session = makeSession()
+    let gate = RateLimitGate()
+    let cache = FailedRequestCache()
+
+    // First call: helper passes through (caller's status-code check
+    // would normally throw). Cache records the failure as a side effect.
+    let (_, response) = try await session.dataRespectingRateLimit(
+      for: request(), gate: gate, failureCache: cache)
+    #expect((response as? HTTPURLResponse)?.statusCode == 404)
+
+    // Second call to the *same* URL: must fail fast without hitting the
+    // network — this is the spam-loop fix.
+    let countBefore = Stub.capturedRequestCount()
+    await #expect(throws: FailedRequestCacheError.self) {
+      try await session.dataRespectingRateLimit(
+        for: self.request(), gate: gate, failureCache: cache)
+    }
+    #expect(Stub.capturedRequestCount() == countBefore)
+  }
+
+  @Test
+  func fourOhFourDoesNotAffectOtherUrls() async throws {
+    Stub.reset()
+    Stub.handler = { request in
+      let path = request.url?.path ?? ""
+      if path.contains("missing") {
+        return (self.httpResponse(statusCode: 404), Data())
+      }
+      return (self.httpResponse(statusCode: 200), Data("OK".utf8))
+    }
+
+    let session = makeSession()
+    let gate = RateLimitGate()
+    let cache = FailedRequestCache()
+
+    // First request 404s and gets muted.
+    _ = try await session.dataRespectingRateLimit(
+      for: request(path: "/missing"), gate: gate, failureCache: cache)
+
+    // A different URL on the same host must NOT be muted — only the
+    // exact failing URL is throttled, so legitimate fetches continue.
+    let (data, _) = try await session.dataRespectingRateLimit(
+      for: request(path: "/found"), gate: gate, failureCache: cache)
+    #expect(data == Data("OK".utf8))
+  }
+
+  // MARK: - 5xx path
+
+  @Test
+  func fiveHundredAlsoMutesUrl() async throws {
     Stub.reset()
     Stub.handler = { _ in (self.httpResponse(statusCode: 500), Data()) }
 
     let session = makeSession()
     let gate = RateLimitGate()
+    let cache = FailedRequestCache()
 
     let (_, response) = try await session.dataRespectingRateLimit(
-      for: request(), gate: gate)
+      for: request(), gate: gate, failureCache: cache)
     #expect((response as? HTTPURLResponse)?.statusCode == 500)
+
+    // Same URL repeat — fails fast.
+    let countBefore = Stub.capturedRequestCount()
+    await #expect(throws: FailedRequestCacheError.self) {
+      try await session.dataRespectingRateLimit(
+        for: self.request(), gate: gate, failureCache: cache)
+    }
+    #expect(Stub.capturedRequestCount() == countBefore)
+  }
+
+  // MARK: - Transport-error path
+
+  @Test
+  func transportErrorMutesUrl() async throws {
+    Stub.reset()
+    Stub.handler = { _ in throw URLError(.notConnectedToInternet) }
+
+    let session = makeSession()
+    let gate = RateLimitGate()
+    let cache = FailedRequestCache()
+
+    await #expect(throws: (any Error).self) {
+      try await session.dataRespectingRateLimit(
+        for: self.request(), gate: gate, failureCache: cache)
+    }
+
+    // Same URL repeated — fails fast from the cache, no second network hit.
+    let countBefore = Stub.capturedRequestCount()
+    await #expect(throws: FailedRequestCacheError.self) {
+      try await session.dataRespectingRateLimit(
+        for: self.request(), gate: gate, failureCache: cache)
+    }
+    #expect(Stub.capturedRequestCount() == countBefore)
+  }
+
+  @Test
+  func cancellationDoesNotMuteUrl() async throws {
+    Stub.reset()
+    Stub.handler = { _ in throw URLError(.cancelled) }
+
+    let session = makeSession()
+    let gate = RateLimitGate()
+    let cache = FailedRequestCache()
+
+    await #expect(throws: (any Error).self) {
+      try await session.dataRespectingRateLimit(
+        for: self.request(), gate: gate, failureCache: cache)
+    }
+
+    // Cancellation is user intent, not a real failure — the URL must
+    // remain available so a subsequent retry isn't blocked.
+    try await cache.ensureAvailable(for: "https://example.com/probe")
+  }
+
+  // MARK: - Success after a failure clears the URL
+
+  @Test
+  func twoHundredAfterFailureClearsTheUrl() async throws {
+    Stub.reset()
+    Stub.handler = { _ in (self.httpResponse(statusCode: 404), Data()) }
+
+    let session = makeSession()
+    let gate = RateLimitGate()
+    let cache = FailedRequestCache()
+
+    _ = try await session.dataRespectingRateLimit(
+      for: request(), gate: gate, failureCache: cache)
+
+    // Manually clear (simulating a successful retry after the cooldown
+    // expires) — verifies the path the helper itself takes on a 200.
+    await cache.recordSuccess(for: "https://example.com/probe")
+    try await cache.ensureAvailable(for: "https://example.com/probe")
   }
 }

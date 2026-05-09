@@ -14,10 +14,16 @@ struct FrankfurterClient: ExchangeRateClient, Sendable {
   private static let logger = Logger(subsystem: "com.moolah.app", category: "FrankfurterClient")
   private let session: URLSession
   private let rateLimitGate: RateLimitGate
+  private let failureCache: FailedRequestCache
 
-  init(session: URLSession = .shared, rateLimitGate: RateLimitGate = RateLimitGate()) {
+  init(
+    session: URLSession = .shared,
+    rateLimitGate: RateLimitGate = RateLimitGate(),
+    failureCache: FailedRequestCache = FailedRequestCache()
+  ) {
     self.session = session
     self.rateLimitGate = rateLimitGate
+    self.failureCache = failureCache
   }
 
   func fetchRates(
@@ -37,7 +43,7 @@ struct FrankfurterClient: ExchangeRateClient, Sendable {
     let requestURL = components.url ?? url
     let request = URLRequest(url: requestURL)
     let (data, response) = try await session.dataRespectingRateLimit(
-      for: request, gate: rateLimitGate)
+      for: request, gate: rateLimitGate, failureCache: failureCache)
 
     guard let httpResponse = response as? HTTPURLResponse,
       (200...299).contains(httpResponse.statusCode)
