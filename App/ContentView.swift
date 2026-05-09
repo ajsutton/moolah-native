@@ -163,51 +163,52 @@ struct ContentView: View {
   }
 
   @ViewBuilder private var detail: some View {
-    switch selection {
-    case .account(let id):
-      accountDetail(id: id)
-    case .earmark(let id):
-      if let earmark = earmarkStore.earmarks.by(id: id) {
-        EarmarkDetailView(
-          earmark: earmark,
+    NavigationStack {
+      switch selection {
+      case .account(let id):
+        accountDetail(id: id)
+      case .earmark(let id):
+        if let earmark = earmarkStore.earmarks.by(id: id) {
+          EarmarkDetailView(
+            earmark: earmark,
+            accounts: accountStore.accounts,
+            categories: categoryStore.categories,
+            earmarks: earmarkStore.earmarks,
+            transactionStore: transactionStore,
+            analysisRepository: analysisStore.repository)
+        }
+      case .recentlyAdded:
+        RecentlyAddedView(backend: session.backend)
+      case .allTransactions:
+        AllTransactionsView(
           accounts: accountStore.accounts,
           categories: categoryStore.categories,
           earmarks: earmarkStore.earmarks,
-          transactionStore: transactionStore,
-          analysisRepository: analysisStore.repository)
+          transactionStore: transactionStore)
+      case .upcomingTransactions:
+        UpcomingView(
+          accounts: accountStore.accounts,
+          categories: categoryStore.categories,
+          earmarks: earmarkStore.earmarks,
+          transactionStore: transactionStore)
+      case .categories:
+        CategoriesView(categoryStore: categoryStore)
+      case .reports:
+        ReportsView(
+          reportingStore: reportingStore,
+          categories: categoryStore.categories,
+          accounts: accountStore.accounts,
+          earmarks: earmarkStore.earmarks,
+          transactionStore: transactionStore)
+      case .analysis:
+        AnalysisView(store: analysisStore)
+      case nil:
+        ContentUnavailableView(
+          "Select an Account", systemImage: "sidebar.left",
+          description: Text("Choose an account from the sidebar to view transactions."))
       }
-    case .recentlyAdded:
-      RecentlyAddedView(backend: session.backend)
-    case .allTransactions:
-      TransactionListView(
-        title: "All Transactions",
-        filter: TransactionFilter(),
-        accounts: accountStore.accounts,
-        categories: categoryStore.categories,
-        earmarks: earmarkStore.earmarks,
-        transactionStore: transactionStore)
-    case .upcomingTransactions:
-      UpcomingView(
-        accounts: accountStore.accounts,
-        categories: categoryStore.categories,
-        earmarks: earmarkStore.earmarks,
-        transactionStore: transactionStore)
-    case .categories:
-      CategoriesView(categoryStore: categoryStore)
-    case .reports:
-      ReportsView(
-        reportingStore: reportingStore,
-        categories: categoryStore.categories,
-        accounts: accountStore.accounts,
-        earmarks: earmarkStore.earmarks,
-        transactionStore: transactionStore)
-    case .analysis:
-      AnalysisView(store: analysisStore)
-    case nil:
-      ContentUnavailableView(
-        "Select an Account", systemImage: "sidebar.left",
-        description: Text("Choose an account from the sidebar to view transactions."))
     }
+    .id(selection)
   }
 
   private func pasteCSVFromClipboard() async {
