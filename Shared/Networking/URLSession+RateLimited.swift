@@ -21,26 +21,30 @@ extension URLSession {
   ///   This is what stops a hot loop from re-issuing the same failed
   ///   request tens of times per session.
   ///
-  /// **Post-flight:** classifies the outcome.
+  /// **Post-flight:** classifies the outcome and records into the
+  /// failure cache using the variant that matches the error class —
+  /// HTTP failures get a fixed-length cooldown, transport failures
+  /// get per-URL exponential backoff (capped at 2 minutes by default).
   ///
   /// - Network call threw (DNS failure, offline, timeout, server hang
-  ///   up, etc., except cancellation): records the URL as failing in
-  ///   `failureCache` and rethrows. Cancellation propagates without
-  ///   muting — it is user-driven, not a real failure.
+  ///   up, etc., except cancellation): records via
+  ///   `failureCache.recordTransportFailure(for:)` and rethrows.
+  ///   Cancellation propagates without muting — it is user-driven,
+  ///   not a real failure.
   /// - Response is `2xx`: records success on both `gate` and
   ///   `failureCache`, returns `(data, response)` for the caller's
   ///   existing decode path.
   /// - Response is `429` / `418`: trips the host-wide gate (via
-  ///   `Retry-After` or exponential backoff), records into
-  ///   `failureCache`, throws `RateLimitGateError.cooldown`.
+  ///   `Retry-After` or exponential backoff), records via
+  ///   `recordHTTPFailure`, throws `RateLimitGateError.cooldown`.
   /// - Response is `503` with `Retry-After`: trips the gate the same
-  ///   way and records into `failureCache`. A `503` without
+  ///   way and records via `recordHTTPFailure`. A `503` without
   ///   `Retry-After` doesn't trip the gate (the host as a whole is
-  ///   still responding) but still records to `failureCache` so the
-  ///   next caller doesn't immediately re-probe.
-  /// - Any other non-2xx (e.g. `404`, `400`, `500`): records to
-  ///   `failureCache` and returns `(data, response)` so the caller's
-  ///   existing status-check throws its usual error.
+  ///   still responding) but still records via `recordHTTPFailure` so
+  ///   the next caller doesn't immediately re-probe.
+  /// - Any other non-2xx (e.g. `404`, `400`, `500`): records via
+  ///   `recordHTTPFailure` and returns `(data, response)` so the
+  ///   caller's existing status-check throws its usual error.
   /// - Non-`HTTPURLResponse`: returns `(data, response)` unchanged
   ///   without recording (extremely unlikely for HTTP requests).
   ///
@@ -71,7 +75,7 @@ extension URLSession {
       (data, response) = try await self.data(for: request)
     } catch {
       if !Self.isCancellation(error), let cacheKey {
-        let deadline = await failureCache.recordFailure(for: cacheKey)
+        let deadline = await failureCache.recordTransportFailure(for: cacheKey)
         rateLimitedFetchLogger.notice(
           """
           Transport failure for \(request.url?.host ?? "?", privacy: .public): \
@@ -130,7 +134,7 @@ extension URLSession {
       )
     default:
       if let cacheKey {
-        let deadline = await failureCache.recordFailure(for: cacheKey)
+        let deadline = await failureCache.recordHTTPFailure(for: cacheKey)
         rateLimitedFetchLogger.notice(
           """
           Request failed (HTTP \(http.statusCode, privacy: .public)) for \
@@ -159,7 +163,7 @@ extension URLSession {
   ) async throws {
     let deadline = await gate.recordRateLimit(retryAfter: outcome.retryAfter)
     if let cacheKey {
-      await failureCache.recordFailure(for: cacheKey)
+      await failureCache.recordHTTPFailure(for: cacheKey)
     }
     rateLimitedFetchLogger.warning(
       """
