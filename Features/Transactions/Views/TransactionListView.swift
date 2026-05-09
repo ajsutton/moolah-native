@@ -34,12 +34,6 @@ struct TransactionListView<TopAccessory: View>: View {
   /// duplicate `com.apple.SwiftUI.search` item the next time the parent's
   /// body re-evaluates. See `guides/UI_GUIDE.md` §3 — view-tree stability
   /// for views with toolbars.
-  ///
-  /// When `TopAccessory == EmptyView` (the no-arg convenience init),
-  /// `safeAreaInset` is skipped entirely. Applying the inset with an
-  /// `EmptyView` payload trips a SwiftUI/AppKit interop bug that
-  /// collapses the modified view to zero size when it's hosted inside
-  /// an `NSHostingView` — see `listWithOptionalTopAccessory`.
   let topAccessory: TopAccessory
 
   /// When non-nil, the parent owns the selection and handles the inspector.
@@ -165,27 +159,9 @@ struct TransactionListView<TopAccessory: View>: View {
   @State var transactionPendingDelete: Transaction.ID?
   @State var createRuleFromTransaction: Transaction?
 
-  /// `listView` with `safeAreaInset` applied only when there is a real
-  /// accessory to render. Skipping the inset when `TopAccessory == EmptyView`
-  /// works around a SwiftUI/AppKit interop bug where
-  /// `safeAreaInset(edge: .top, spacing: 0) { EmptyView() }` collapses the
-  /// modified view to zero size when hosted inside an `NSHostingView`
-  /// (`ResizableVSplit`'s arranged subviews) — the symptom is the embedded
-  /// transactions list disappearing entirely in
-  /// `InvestmentAccountView.positionTrackedLayout`. `_ConditionalContent`
-  /// branches are constant for a given concrete `TransactionListView<T>`
-  /// because `T` doesn't change at runtime, so SwiftUI's view-tree identity
-  /// for `listView` is stable across re-renders.
-  @ViewBuilder private var listWithOptionalTopAccessory: some View {
-    if TopAccessory.self == EmptyView.self {
-      listView
-    } else {
-      listView.safeAreaInset(edge: .top, spacing: 0) { topAccessory }
-    }
-  }
-
   var body: some View {
-    listWithOptionalTopAccessory
+    listView
+      .safeAreaInset(edge: .top, spacing: 0) { topAccessory }
       .modifier(
         OptionalTransactionInspector(
           enabled: handlesOwnInspector,
