@@ -13,19 +13,6 @@ struct ProfileStoreAutoActivateGuardTests {
     return defaults
   }
 
-  private func seedCloudProfile(
-    _ container: ProfileContainerManager
-  ) async throws -> Profile {
-    let profile = Profile(
-      id: UUID(),
-      label: "Household",
-      currencyCode: "AUD",
-      financialYearStartMonth: 7
-    )
-    try await container.profileIndexRepository.upsert(profile)
-    return profile
-  }
-
   @Test("loadCloudProfiles auto-activates when welcomePhase == .landing")
   func autoActivatesWhenLanding() async throws {
     let manager = try ProfileContainerManager.forTesting()

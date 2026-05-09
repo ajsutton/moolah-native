@@ -88,9 +88,9 @@ extension ProfileStore {
       )
     }
 
-    // Handle profiles deleted on another device. Skipped on the
-    // initial load for the same reason as the empty-result guard
-    // above: a stale-empty read could otherwise erase the active
+    // Tear down stores for profiles deleted on another device. Skipped
+    // on the initial load for the same reason as the empty-result
+    // guard above: a stale-empty read could otherwise erase the active
     // profile and tear down its store before later loads return the
     // real list.
     if !isInitialLoad {
@@ -101,16 +101,32 @@ extension ProfileStore {
         containerManager?.deleteStore(for: oldProfile.id)
         onProfileRemoved?(oldProfile.id)
       }
+    }
 
-      if let activeProfileID,
-        !profiles.contains(where: { $0.id == activeProfileID })
-      {
-        self.activeProfileID = profiles.first?.id
-        saveActiveProfileID()
-        logger.debug(
-          "Active profile was removed remotely, switched to: \(self.activeProfileID?.uuidString ?? "nil")"
-        )
-      }
+    // Recover from a stale `activeProfileID` that points to a profile
+    // not in the loaded set. Two ways to reach this state:
+    // (1) the profile was deleted on another device while this device
+    //     was offline; or
+    // (2) the user switched between Debug and Release builds — both
+    //     share the bundle id (and so the UserDefaults domain), but
+    //     they target different CloudKit containers
+    //     (`iCloud.rocks.moolah.app.test` vs `…app.v2`), so the saved
+    //     id can be valid in one container and unknown in the other.
+    // The recovery runs on the initial load too, gated on a non-empty
+    // result so a stale-empty initial read can't drop a legitimate
+    // active id. `welcomePhase != .creating` mirrors the auto-activate
+    // path's race protection so an in-flight WelcomeView "Create
+    // Profile" tap isn't overwritten by a concurrent cloud load.
+    if !profiles.isEmpty,
+      let staleID = activeProfileID,
+      !profiles.contains(where: { $0.id == staleID }),
+      welcomePhase != .creating
+    {
+      self.activeProfileID = profiles.first?.id
+      saveActiveProfileID()
+      logger.debug(
+        "stale activeProfileID \(staleID) → \(self.activeProfileID?.uuidString ?? "nil")"
+      )
     }
   }
 
