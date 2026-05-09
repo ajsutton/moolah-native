@@ -313,13 +313,17 @@ final class SyncCoordinator {
   init(
     containerManager: ProfileContainerManager,
     userDefaults: UserDefaults = .standard,
-    isCloudKitAvailable: Bool = CloudKitAuthProvider.isCloudKitAvailable
+    isCloudKitAvailable: Bool = CloudKitAuthProvider.isCloudKitAvailable,
+    sharedInstrumentRegistry: GRDBInstrumentRegistryRepository? = nil
   ) {
     self.containerManager = containerManager
     self.userDefaults = userDefaults
     self.progress = SyncProgress(userDefaults: userDefaults)
     self.profileIndexHandler = ProfileIndexSyncHandler(
-      repository: containerManager.profileIndexRepository)
+      repository: containerManager.profileIndexRepository,
+      instrumentRepository: sharedInstrumentRegistry,
+      onInstrumentRemoteChange: Self.makeInstrumentRemoteChangeFanOut(
+        registry: sharedInstrumentRegistry))
     self.isCloudKitAvailable = isCloudKitAvailable
     if !isCloudKitAvailable {
       applyICloudAvailability(.unavailable(reason: .entitlementsMissing))
@@ -328,6 +332,26 @@ final class SyncCoordinator {
     // The closures it installs capture `[weak self]` and depend on every
     // stored property of SyncCoordinator being assigned.
     wireProfileIndexHooks()
+  }
+
+  /// Builds the `@Sendable` closure that the profile-index handler
+  /// fires after applying remote `InstrumentRecord` rows. The closure
+  /// hops to `@MainActor` to invoke `notifyExternalChange()` on the
+  /// `@MainActor`-isolated registry.
+  ///
+  /// `nil` registry → no-op closure. Keeps the handler's
+  /// `nonisolated let` non-optional shape with the existing safe-by-
+  /// default behaviour for legacy callers that don't wire a shared
+  /// registry.
+  private static func makeInstrumentRemoteChangeFanOut(
+    registry: GRDBInstrumentRegistryRepository?
+  ) -> @Sendable () -> Void {
+    guard let registry else { return {} }
+    return { [weak registry] in
+      Task { @MainActor [weak registry] in
+        registry?.notifyExternalChange()
+      }
+    }
   }
 
   // MARK: - Fetch-Session Book-keeping
