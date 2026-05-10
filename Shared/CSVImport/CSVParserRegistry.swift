@@ -17,6 +17,7 @@ struct CSVParserRegistry: Sendable {
   static let `default` = CSVParserRegistry(parsers: [
     SelfWealthMovementsParser(),
     SelfWealthCashReportParser(),
+    CustomTradeCSVParser(),
     GenericBankCSVParser(),
   ])
 
