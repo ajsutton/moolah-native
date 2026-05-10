@@ -94,7 +94,9 @@ extension ProfileDataSyncHandler {
   /// the two callers in lock-step.
   private func collectGRDBRecordIDs(source: GRDBIdSource) -> [CKRecord.ID] {
     var recordIDs: [CKRecord.ID] = []
-    collectInstrumentIds(source: source, into: &recordIDs)
+    // Instrument ids are queued by the shared registry on the
+    // profile-index zone via SyncCoordinator.queueUnsyncedSharedInstruments.
+    // The per-profile path no longer enumerates them — stage 14.
     collectCategoryIds(source: source, into: &recordIDs)
     collectAccountIds(source: source, into: &recordIDs)
     collectEarmarkIds(source: source, into: &recordIDs)
@@ -105,19 +107,6 @@ extension ProfileDataSyncHandler {
     collectCSVImportProfileIds(source: source, into: &recordIDs)
     collectImportRuleIds(source: source, into: &recordIDs)
     return recordIDs
-  }
-
-  private func collectInstrumentIds(
-    source: GRDBIdSource, into recordIDs: inout [CKRecord.ID]
-  ) {
-    let repo = grdbRepositories.instruments
-    let ids: () throws -> [String] = {
-      switch source {
-      case .all: return try repo.allRowIdsSync()
-      case .unsynced: return try repo.unsyncedRowIdsSync()
-      }
-    }
-    collectAllGRDBStrings(ids: ids, recordType: InstrumentRow.recordType, into: &recordIDs)
   }
 
   private func collectCategoryIds(

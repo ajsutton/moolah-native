@@ -15,10 +15,7 @@ extension ProfileSession {
   /// work is gated on `coordinator != nil`; task cancellation runs
   /// unconditionally so nil-coordinator builds (preview / some tests) do
   /// not leak `setUpTask` etc. past teardown.
-  func cleanupSync(coordinator: SyncCoordinator?) {
-    if let coordinator {
-      coordinator.removeInstrumentRemoteChangeCallback(profileId: profile.id)
-    }
+  func cleanupSync(coordinator _: SyncCoordinator?) {
     catalogRefreshTask?.cancel()
     catalogRefreshTask = nil
     cryptoSyncStore?.cancelTimer()

@@ -37,15 +37,13 @@ extension ProfileSession {
     if let shared = syncCoordinator?.sharedInstrumentRegistry {
       registry = shared
     } else {
+      // Per-profile fallback for legacy callers (preview / tests).
+      // The shared-registry path drives all remote-change fan-out via
+      // `SyncCoordinator.makeInstrumentRemoteChangeFanOut` (installed
+      // by `SyncCoordinator.init` on the profile-index handler), so
+      // no extra wiring is needed here.
       registry = makeInstrumentRegistry(
         database: database, zoneID: zoneID, syncCoordinator: syncCoordinator)
-      // Per-profile registry only — wire the legacy remote-change fan-out.
-      // Shared registries already get the equivalent fan-out from the
-      // profile-index handler's `onInstrumentRemoteChange` closure
-      // installed by `SyncCoordinator.init`, so this call would be
-      // redundant for them.
-      wireInstrumentRemoteChangeFanOut(
-        registry: registry, profileId: profile.id, syncCoordinator: syncCoordinator)
     }
     // CloudKit profiles need full stock+crypto conversion support. The
     // closure reads the profile's registry on each conversion so
@@ -167,21 +165,8 @@ extension ProfileSession {
     )
   }
 
-  /// Registers the closure that the per-profile data handler invokes when
-  /// a remote pull touches an `InstrumentRow`. The registry is
-  /// captured weakly so the coordinator-held closure does not retain it
-  /// beyond the session's natural lifetime; the `Task { @MainActor }` hop
-  /// is required because `notifyExternalChange()` is `@MainActor`-isolated.
-  /// No-op when there is no `SyncCoordinator` (test backends, previews).
-  private static func wireInstrumentRemoteChangeFanOut(
-    registry: GRDBInstrumentRegistryRepository,
-    profileId: UUID,
-    syncCoordinator: SyncCoordinator?
-  ) {
-    syncCoordinator?.setInstrumentRemoteChangeCallback(profileId: profileId) { [weak registry] in
-      Task { @MainActor [weak registry] in
-        registry?.notifyExternalChange()
-      }
-    }
-  }
+  // `wireInstrumentRemoteChangeFanOut` was removed in stage 14 — the
+  // shared registry on the profile-index zone now drives every
+  // InstrumentRecord remote-change fan-out via
+  // `SyncCoordinator.makeInstrumentRemoteChangeFanOut`.
 }

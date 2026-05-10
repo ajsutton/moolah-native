@@ -94,12 +94,15 @@ struct SyncCoordinatorTestsExtra {
     let queued = await coordinator.queueAllRecordsAfterImport(for: profileId)
     let names = Set(queued.map(\.recordName))
 
+    // Stage 14: instrument ids are queued by the shared registry on
+    // the profile-index zone, not by the per-profile handler. The
+    // seeded `AUD` instrument is therefore absent from the
+    // per-profile queue.
     #expect(
       names
         == Set([
           "\(AccountRow.recordType)|\(accountId.uuidString)",
           "\(TransactionRow.recordType)|\(txnId.uuidString)",
-          "AUD",
         ]))
     for recordID in queued {
       #expect(recordID.zoneID.zoneName == "profile-\(profileId.uuidString)")

@@ -36,15 +36,6 @@ final class ProfileDataSyncHandler {
   /// engine's wire layer.
   nonisolated let grdbRepositories: ProfileGRDBRepositories
 
-  /// Closure fired from `applyRemoteChanges` whenever a remote pull touches
-  /// any `InstrumentRecord` row (insert, update, or delete). Wired by
-  /// `ProfileSession` to call `CloudKitInstrumentRegistryRepository.notifyExternalChange()`
-  /// so picker UIs that subscribe via `observeChanges()` refresh after a
-  /// token registered on another device arrives — without this, the
-  /// registry's notify path only fires on local writes. Defaults to a
-  /// no-op so non-iCloud and test callers don't need to provide one.
-  nonisolated let onInstrumentRemoteChange: @Sendable () -> Void
-
   nonisolated let logger = Logger(
     subsystem: "com.moolah.app", category: "ProfileDataSyncHandler")
 
@@ -56,14 +47,12 @@ final class ProfileDataSyncHandler {
     profileId: UUID,
     zoneID: CKRecordZone.ID,
     modelContainer: ModelContainer,
-    grdbRepositories: ProfileGRDBRepositories,
-    onInstrumentRemoteChange: @escaping @Sendable () -> Void = {}
+    grdbRepositories: ProfileGRDBRepositories
   ) {
     self.profileId = profileId
     self.zoneID = zoneID
     self.modelContainer = modelContainer
     self.grdbRepositories = grdbRepositories
-    self.onInstrumentRemoteChange = onInstrumentRemoteChange
   }
 
   // MARK: - Building CKRecords

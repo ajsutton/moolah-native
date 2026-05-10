@@ -134,14 +134,15 @@ extension ProfileDataSyncHandler {
       saveCount: saved.count,
       deleteCount: deleted.count)
     let changedTypes = Set(saved.map(\.recordType) + deleted.map(\.1))
-    // Fan out the instrument-touched signal exactly once per batch (not
-    // per record). Picker UIs subscribe to the registry's
-    // `observeChanges()` stream, which is local-write-driven; without
-    // this hop a token registered on another device would not surface
-    // until the next app launch.
-    if changedTypes.contains(InstrumentRow.recordType) {
-      onInstrumentRemoteChange()
-    }
+    // Note: pre-stage-14 this dispatched an `onInstrumentRemoteChange()`
+    // fan-out for `InstrumentRow.recordType` deliveries on the
+    // per-profile zone. After stages 12b/13 every `InstrumentRecord`
+    // flows through the shared registry on the profile-index zone, so
+    // any straggler delivery here from a not-yet-upgraded peer device
+    // is benign — `applyRemoteChanges` writes the row into the
+    // per-profile `instrument` table (which the follow-up
+    // `v10_drop_shared_instrument_legacy` migration will drop), but
+    // no UI consumer reads from it anymore.
     return .success(changedTypes: changedTypes)
   }
 

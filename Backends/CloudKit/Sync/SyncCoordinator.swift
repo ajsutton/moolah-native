@@ -267,13 +267,6 @@ final class SyncCoordinator {
   /// Cached profile data handlers, keyed by profile UUID.
   var dataHandlers: [UUID: ProfileDataSyncHandler] = [:]
 
-  /// Per-profile callback fired by the handler whenever a remote pull touches
-  /// any `InstrumentRecord` row. Registered by `ProfileSession` ahead of the
-  /// first sync session so it is available when the handler is lazily created
-  /// in `handlerForProfileZone(profileId:zoneID:)`. Sendable so the closure
-  /// can be captured into the handler's `nonisolated` storage.
-  var instrumentRemoteChangeCallbacks: [UUID: @Sendable () -> Void] = [:]
-
   /// Per-profile cache of auto-constructed GRDB repository bundles, keyed by
   /// profile UUID. Populated on first access in
   /// `resolveGRDBRepositories(for:)` and retained so subsequent calls to
