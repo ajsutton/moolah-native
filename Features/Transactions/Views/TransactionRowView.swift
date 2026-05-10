@@ -38,19 +38,19 @@ struct TransactionRowView: View {
     @ScaledMetric private var verticalPadding: CGFloat = 12
   #endif
 
-  @Environment(\.spamInstruments) private var spamInstruments
+  // `internal` so the leading-icon helpers in the `+Icon.swift` extension
+  // can read the env-injected spam set when computing `rowIsSpam`.
+  @Environment(\.spamInstruments) var spamInstruments
 
   // MARK: - Body & View Builders
 
   var body: some View {
     HStack(alignment: .firstTextBaseline) {
-      Image(systemName: iconName)
-        .foregroundStyle(iconColor)
-        .frame(width: UIConstants.IconSize.listIcon, height: UIConstants.IconSize.listIcon)
-        .accessibilityHidden(true)
+      typeIconWithSpamBadge
       infoColumn
       Spacer()
       amountColumn
+        .opacity(rowIsSpam ? 0.5 : 1.0)
       payAffordance
     }
     .padding(.vertical, verticalPadding)
@@ -64,6 +64,7 @@ struct TransactionRowView: View {
   private var infoColumn: some View {
     VStack(alignment: .leading, spacing: 2) {
       titleRow
+        .opacity(rowIsSpam ? 0.5 : 1.0)
       metadataRow
     }
   }
@@ -82,10 +83,11 @@ struct TransactionRowView: View {
     }
   }
 
-  /// Composed title for the row. For trade transactions, builds a `Text`
-  /// concatenation that may include inline spam markers (red SF Symbol +
-  /// "Spam" substituted for the spam-flagged leg's instrument symbol). For
-  /// other transactions, returns the plain payee.
+  /// Composed title for the row. Trade transactions show the
+  /// "Bought 100 SCAM" / "Sold X" / "Swapped X for Y" sentence. Spam-flagged
+  /// legs render their symbol with an inline yellow octagon badge + strike-
+  /// through (see `TradeTitleSegment.text`) so the reader is warned not to
+  /// trust the claimed name (e.g. a fake "USDC").
   private var titleTextValue: Text {
     let payee = displayPayee
     if let sentence = transaction.tradeTitleText(
@@ -101,9 +103,9 @@ struct TransactionRowView: View {
   }
 
   /// Plain-string equivalent of the title used by `accessibilityDescription`.
-  /// Reuses `tradeTitleSegments` and joins via `accessibilityString` so spam
-  /// magnitudes read as "<magnitude> spam token" instead of triggering the
-  /// glyph-as-punctuation announcement that `tradeTitleText` would emit.
+  /// Spam-flagged legs still read as "<magnitude> spam token" via
+  /// `accessibilityString` so VoiceOver users get an audible signal even
+  /// though the visual treatment relies on grey-out + leading icon.
   private var titleAccessibilityString: String {
     let payee = displayPayee
     let segments = transaction.tradeTitleSegments(
@@ -191,15 +193,10 @@ struct TransactionRowView: View {
           .foregroundStyle(.secondary)
           .monospacedDigit()
       } else {
-        TransactionAmountFlow(
-          amounts: displayAmounts,
-          spamInstruments: spamInstruments)
+        TransactionAmountFlow(amounts: displayAmounts)
       }
       if let balance {
-        SpamAwareAmountView(
-          amount: balance,
-          spamInstruments: spamInstruments,
-          font: .caption)
+        InstrumentAmountView(amount: balance, font: .caption)
       }
     }
   }
@@ -243,36 +240,6 @@ struct TransactionRowView: View {
       parts.append("repeats \(recurrence)")
     }
     return parts.joined(separator: ", ")
-  }
-
-  // MARK: - Icon
-
-  private var iconName: String {
-    if transaction.isTrade { return "arrow.up.arrow.down" }
-    guard transaction.isSimple, let type = transaction.legs.first?.type else {
-      return "arrow.trianglehead.branch"
-    }
-    switch type {
-    case .income: return "arrow.up"
-    case .expense: return "arrow.down"
-    case .transfer: return "arrow.left.arrow.right"
-    case .openingBalance: return "flag.fill"
-    case .trade: return "arrow.up.arrow.down"
-    }
-  }
-
-  private var iconColor: Color {
-    if transaction.isTrade { return .indigo }
-    guard transaction.isSimple, let type = transaction.legs.first?.type else {
-      return .purple
-    }
-    switch type {
-    case .income: return .green
-    case .expense: return .red
-    case .transfer: return .blue
-    case .openingBalance: return .orange
-    case .trade: return .indigo
-    }
   }
 
   private var categoryNames: [String] {

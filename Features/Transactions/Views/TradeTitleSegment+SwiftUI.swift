@@ -6,10 +6,12 @@ extension TradeTitleSegment {
   /// SwiftUI `Text` rendering of a single segment.
   ///
   /// `.literal` and `.magnitude` pass through unstyled. `.spamMagnitude`
-  /// emits the formatted quantity followed by a red `exclamationmark.triangle.fill`
-  /// SF Symbol and the word "Spam" in red, composed via `Text` string
-  /// interpolation (the non-deprecated replacement for `Text + Text` on
-  /// macOS 26+).
+  /// emits the formatted quantity followed by a yellow
+  /// `exclamationmark.octagon.fill` palette badge and the instrument's
+  /// `displayLabel` with strikethrough — the badge warns that the token's
+  /// claimed name may be impersonating a legitimate token (a common
+  /// crypto-spam tactic), and the strikethrough discourages the reader
+  /// from trusting the name as-is.
   var text: Text {
     switch self {
     case .literal(let string):
@@ -17,10 +19,13 @@ extension TradeTitleSegment {
     case .magnitude(let amount):
       return Text(verbatim: amount.formatted)
     case .spamMagnitude(let amount):
-      let warning = Text(Image(systemName: "exclamationmark.triangle.fill"))
-        .foregroundStyle(.red)
-      let label = Text("Spam").foregroundStyle(.red)
-      return Text("\(amount.formatNoSymbolVariablePrecision) \(warning) \(label)")
+      // Strike through the instrument's claimed display label so the reader
+      // doesn't trust the name — spam tokens routinely impersonate
+      // legitimate tickers. Row-level signal is the leading-icon yellow
+      // octagon overlay; this rendering avoids stacking another badge here.
+      let magnitude = Text(verbatim: amount.formatNoSymbolVariablePrecision)
+      let symbol = Text(verbatim: amount.instrument.displayLabel).strikethrough()
+      return Text("\(magnitude) \(symbol)")
     }
   }
 }
