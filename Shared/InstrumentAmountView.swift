@@ -27,9 +27,6 @@ struct InstrumentAmountView: View {
   }
 
   private var effectiveColor: Color {
-    if let colorOverride { return colorOverride }
-    if amount.isPositive { return .green }
-    if amount.isNegative { return .red }
-    return .primary
+    colorOverride ?? amount.magnitudeColor
   }
 }

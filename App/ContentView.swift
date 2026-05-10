@@ -72,6 +72,7 @@ struct ContentView: View {
       detail
     }
     .navigationSplitViewStyle(.balanced)
+    .environment(\.spamInstruments, session.cryptoTokenStore?.spamInstruments ?? [])
     .safeAreaInset(edge: .top, spacing: 0) {
       SyncStatusBanner()
     }

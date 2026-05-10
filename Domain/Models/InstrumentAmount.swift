@@ -34,6 +34,27 @@ struct InstrumentAmount: Codable, Sendable, Hashable, Comparable {
     quantity.formatted(.number.precision(.fractionLength(instrument.decimals)))
   }
 
+  /// Quantity-only formatting matching the variable-precision rule used
+  /// by `formatted` for stocks and crypto (no trailing zeros). Used by
+  /// the spam-token row indicator where the symbol is replaced by a
+  /// SwiftUI `Text` segment instead of being concatenated into the
+  /// number string.
+  var formatNoSymbolVariablePrecision: String {
+    quantity.formatted(.number.precision(.fractionLength(0...instrument.decimals)))
+  }
+
+  /// VoiceOver-safe rendering for this amount. When `isSpam` is true,
+  /// substitutes `"<magnitude> spam token"` so the SF Symbol
+  /// `exclamationmark.triangle.fill` used in the row's spam display is
+  /// never announced as punctuation by VoiceOver. When false, returns
+  /// `formatted` unchanged.
+  func accessibilityString(isSpam: Bool) -> String {
+    if isSpam {
+      return "\(formatNoSymbolVariablePrecision) spam token"
+    }
+    return formatted
+  }
+
   // MARK: - Storage (Int64 scaled by 10^8)
 
   var storageValue: Int64 {
