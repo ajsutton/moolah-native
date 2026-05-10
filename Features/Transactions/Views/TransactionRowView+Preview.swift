@@ -145,7 +145,7 @@ private func tradePreviewSpecs(data: PreviewData) -> [PreviewRowSpec] {
       ],
       balance: -2499.77, viewingAccountId: data.sourceId),
     PreviewRowSpec(
-      payee: "Suspicious Wallet",
+      payee: "",
       legs: [
         TransactionLeg(
           accountId: data.sourceId, instrument: .AUD, quantity: -100, type: .trade),

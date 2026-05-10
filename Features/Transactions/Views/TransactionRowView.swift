@@ -110,15 +110,15 @@ struct TransactionRowView: View {
   }
 
   /// Composed title for the row. Trade transactions show the
-  /// "Bought 100 SCAM" / "Sold X" / "Swapped X for Y" sentence using the
-  /// instrument's normal display label — the spam-flagged-leg substitution
-  /// is intentionally disabled here; row-level treatment (grey-out + spam
-  /// leading icon) signals "this is spam" instead.
+  /// "Bought 100 SCAM" / "Sold X" / "Swapped X for Y" sentence. Spam-flagged
+  /// legs render their symbol with an inline yellow octagon badge + strike-
+  /// through (see `TradeTitleSegment.text`) so the reader is warned not to
+  /// trust the claimed name (e.g. a fake "USDC").
   private var titleTextValue: Text {
     let payee = displayPayee
     if let sentence = transaction.tradeTitleText(
       scopeReference: scopeReferenceInstrument,
-      spamInstruments: []
+      spamInstruments: spamInstruments
     ) {
       if payee.isEmpty {
         return sentence
