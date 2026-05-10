@@ -157,6 +157,15 @@ extension SyncCoordinator {
     // by the repository mutation hooks (or will be by the unsynced backfill
     // below).
     purgeStaleBareUUIDPendingChanges()
+    // Drop any leftover `InstrumentRecord` pending changes routed to a
+    // per-profile zone. Post-PR #861 the only legitimate path for an
+    // instrument write is the shared registry on the `profile-index`
+    // zone, and `ProfileDataSyncHandler.recordToSave` traps in DEBUG
+    // when one reaches the per-profile handler — left in the queue,
+    // a single such entry crashes the process the next time
+    // CKSyncEngine asks for the next batch. See
+    // `SyncCoordinator+LegacyInstrumentDrain.swift`.
+    purgeLegacyInstrumentPendingChanges()
 
     let shouldBackfillUnsynced = !isFirstLaunch
     let runFirstLaunchQueue = isFirstLaunch
