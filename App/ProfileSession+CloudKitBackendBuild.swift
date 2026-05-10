@@ -50,6 +50,15 @@ extension ProfileSession {
     // closure reads the profile's registry on each conversion so
     // registrations added at runtime become usable without rebuilding the
     // service. See issue #102.
+    //
+    // `observeRates()` watches the rate-cache tables for change ticks.
+    // Stage 13 moved the shared price services onto the profile-index
+    // DB, so the observation must follow — watching the per-profile DB
+    // would silently miss every cache write. Fall back to the
+    // per-profile DB only for legacy callers that didn't pass a
+    // coordinator with shared services (preview / tests).
+    let rateObservationDatabase: any DatabaseWriter =
+      syncCoordinator?.containerManager.profileIndexDatabase ?? database
     let conversionService = FullConversionService(
       exchangeRates: marketData.exchangeRates,
       stockPrices: marketData.stockPrices,
@@ -57,7 +66,7 @@ extension ProfileSession {
       cryptoRegistrations: {
         try await registry.allCryptoRegistrations()
       },
-      database: database
+      database: rateObservationDatabase
     )
     let hooks = grdbRepoHooks(zoneID: zoneID, syncCoordinator: syncCoordinator)
     return CloudKitBackend(

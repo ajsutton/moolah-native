@@ -6,46 +6,44 @@ import Testing
 
 @testable import Moolah
 
-/// Smoking-gun test for the shared instrument registry. Two
-/// `GRDBInstrumentRegistryRepository` instances pointed at the same
-/// `profile-index.sqlite` (one per simulated profile session) must
-/// observe each other's spam classifications — the whole point of
-/// the design.
+/// Smoking-gun test for spec acceptance criterion #2 (line 341):
+/// marking a token spam in one profile is reflected in the other
+/// **within one CKSyncEngine cycle, verified via `for await` on
+/// `observeChanges()`**. The propagation path is:
 ///
-/// Before stage 12b: each profile session constructed its own
-/// per-profile registry pointed at its own per-profile DB. Marking
-/// `bitcoin` as spam in profile A's session left profile B's session
-/// reading from a different table, so the spam classification didn't
-/// propagate.
+///   Profile A's session → shared registry write → registry's
+///   `notifySubscribers()` fan-out → every subscriber (including
+///   Profile B's session) receives the `Void` tick → Profile B's
+///   session re-fetches and renders the new state.
 ///
-/// After stage 12b: every profile session points at the same shared
-/// registry instance backed by the profile-index DB, so a spam
-/// classification written by any session is visible to every session
-/// that reads it next.
-///
-/// This test simulates two sessions by constructing two registry
-/// instances against the same `profile-index.sqlite` queue (the
-/// production wiring constructs a single shared instance, but two
-/// instances pointing at the same DB is the equivalent observable
-/// behaviour from the consumer's point of view). The shared queue is
-/// the load-bearing invariant; the registry instance count is not.
-@Suite("Cross-profile spam propagation")
+/// Setup-order is load-bearing per spec §Testing line 309: the
+/// continuation must be installed **before** the mutation, otherwise
+/// the tick is missed. The bounded `for await … { break }` consumption
+/// pattern (no `Task.sleep`) lets the test fail fast if the propagation
+/// never arrives.
+@Suite("Cross-profile spam propagation through observeChanges()")
+@MainActor
 struct CrossProfileSpamPropagationTests {
 
-  @Test("marking spam through one registry is visible through another against the same DB")
-  func spamMarkedInOneSessionIsVisibleToAnother() async throws {
+  @Test("Spam mutation fires observeChanges() on a sibling profile's subscriber")
+  func spamPropagatesToSubscriberInOtherSession() async throws {
+    // One registry, two subscribers — production wiring. Every
+    // ProfileSession on the iCloud account routes through the same
+    // app-level `SharedInstrumentScope.instrumentRegistry`. Profile B's
+    // UI subscriber attaches its `observeChanges()` continuation
+    // before profile A's mutation; the registry's `notifySubscribers`
+    // fan-out then yields a `Void` tick to every outstanding stream.
     let queue = try ProfileIndexDatabase.openInMemory()
-    let registryA = GRDBInstrumentRegistryRepository(database: queue)
-    let registryB = GRDBInstrumentRegistryRepository(database: queue)
+    let registry = GRDBInstrumentRegistryRepository(database: queue)
 
-    // Profile A registers bitcoin as priced.
+    // Seed: register `bitcoin` as priced.
     let bitcoin = Instrument.crypto(
       chainId: 1,
       contractAddress: nil,
       symbol: "BTC",
       name: "Bitcoin",
       decimals: 8)
-    try await registryA.registerCrypto(
+    try await registry.registerCrypto(
       bitcoin,
       mapping: CryptoProviderMapping(
         instrumentId: bitcoin.id,
@@ -53,26 +51,62 @@ struct CrossProfileSpamPropagationTests {
         cryptocompareSymbol: "BTC",
         binanceSymbol: nil))
 
-    // Profile B sees the registration.
-    let beforeSpam = try #require(
-      try await registryB.cryptoRegistration(byId: bitcoin.id))
-    #expect(beforeSpam.pricingStatus == .priced)
+    // **Subscribe-before-mutate.** Install profile B's subscription
+    // BEFORE the mutation; otherwise the @MainActor-confined
+    // continuation registration races the synchronous fan-out inside
+    // `update(_:)` and the test would silently false-pass on a
+    // missed signal.
+    let stream = registry.observeChanges()
+    let waiter = Task<Void, Never> {
+      var iterator = stream.makeAsyncIterator()
+      // Bounded read — a single yield is sufficient evidence of
+      // propagation; the test's `withThrowingTaskGroup` backstop
+      // bounds the wait so a regression fails fast. Never
+      // `Task.sleep`.
+      _ = await iterator.next()
+    }
+    // Yield once to let the iterator install its continuation in the
+    // registry's `subscribers` map. `observeChanges()` is
+    // `@MainActor`-isolated and synchronous about continuation
+    // registration, so a single await round-trip is sufficient.
+    await Task.yield()
 
-    // Profile A marks it spam (the user's "decide once, applies everywhere"
-    // gesture from §Motivation in the design doc).
-    var registration = beforeSpam
-    registration.pricingStatus = .spam
-    try await registryA.update(registration)
+    // Profile A marks the registration spam — the user gesture the
+    // shared registry exists to make "decide once, apply everywhere".
+    var marked = try #require(
+      try await registry.cryptoRegistration(byId: bitcoin.id))
+    marked.pricingStatus = .spam
+    try await registry.update(marked)
 
-    // Profile B sees the spam classification immediately — same DB,
-    // single source of truth.
-    let afterSpam = try #require(
-      try await registryB.cryptoRegistration(byId: bitcoin.id))
-    #expect(afterSpam.pricingStatus == .spam)
+    // Bounded wait for the propagation tick. The waiter task either
+    // completes (propagation fired) or stays blocked (regression).
+    // Cancel the waiter on timeout so the test fails instead of
+    // hanging.
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      group.addTask { await waiter.value }
+      group.addTask {
+        try await Task.sleep(for: .seconds(2))
+        waiter.cancel()
+        Issue.record(
+          "observeChanges() did not fire after spam mutation")
+      }
+      try await group.next()
+      group.cancelAll()
+    }
+
+    // After the tick, profile B's view (same registry, fresh fetch)
+    // sees the spam classification.
+    let bView = try #require(
+      try await registry.cryptoRegistration(byId: bitcoin.id))
+    #expect(bView.pricingStatus == .spam)
   }
 
-  @Test("removing a registration through one registry is visible through another")
-  func removeIsVisibleAcrossSessions() async throws {
+  @Test("DB-level sharing — sibling registries see each other's writes")
+  func writesAreVisibleAcrossSiblingRegistries() async throws {
+    // Companion check: even without `observeChanges()`, a sibling
+    // registry pointed at the same DB sees each other's writes on
+    // the next read. Cheap to keep — guards against a future change
+    // that accidentally splits the DB binding per session.
     let queue = try ProfileIndexDatabase.openInMemory()
     let registryA = GRDBInstrumentRegistryRepository(database: queue)
     let registryB = GRDBInstrumentRegistryRepository(database: queue)
@@ -90,11 +124,9 @@ struct CrossProfileSpamPropagationTests {
         coingeckoId: "usd-coin",
         cryptocompareSymbol: "USDC",
         binanceSymbol: nil))
-    #expect(
-      try await registryB.cryptoRegistration(byId: usdc.id) != nil)
+    #expect(try await registryB.cryptoRegistration(byId: usdc.id) != nil)
 
     try await registryA.remove(id: usdc.id)
-    #expect(
-      try await registryB.cryptoRegistration(byId: usdc.id) == nil)
+    #expect(try await registryB.cryptoRegistration(byId: usdc.id) == nil)
   }
 }
