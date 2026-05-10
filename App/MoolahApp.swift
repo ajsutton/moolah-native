@@ -79,40 +79,14 @@ struct MoolahApp: App {
     }
     let setup = Self.makeContainerSetup(uiTestingSeed: uiTestingSeed)
 
-    // Shared instrument registry — one instance per app, pointed at
-    // the profile-index DB. Wired into the SyncCoordinator below so
-    // the profile-index zone can carry `InstrumentRecord` rows; later
-    // stages of the shared-registry plan migrate consumer code paths
-    // (Settings views, search service, conversion service) to read
-    // from this same instance instead of constructing per-profile
-    // registries.
-    //
-    // Mutation hooks queue saves / deletes against the profile-index
-    // zone. The hop to `@MainActor` mirrors the per-profile pattern
-    // in `makeInstrumentRegistry`.
-    let sharedInstrumentRegistry = Self.makeSharedInstrumentRegistry(
-      database: setup.manager.profileIndexDatabase)
-
-    // Fire-and-forget: SwiftUI's `App` requires `init` to be non-async,
-    // and the migration completes well before the user can navigate
-    // from the welcome screen to any view that reads the GRDB
-    // profile-index. Errors are logged inside the helper; the next
-    // launch retries automatically. Held in `profileIndexMigrationTask`
-    // so tests can `await` completion if needed.
-    //
-    // Runs (a) the SwiftData → GRDB migration that pre-dated the
-    // shared registry, then (b) the one-shot SharedRegistryUnionRunner
-    // that walks every per-profile DB and merges its instrument +
-    // price-cache rows into the shared profile-index DB. The runner
-    // is gated by a UserDefaults flag, so subsequent launches are
-    // no-ops.
-    profileIndexMigrationTask = Self.runProfileIndexAndUnionMigrations(
-      setup: setup)
-    let coordinator = SyncCoordinator(
-      containerManager: setup.manager,
-      sharedInstrumentRegistry: sharedInstrumentRegistry)
-    Self.attachSharedInstrumentRegistrySyncHooks(
-      registry: sharedInstrumentRegistry, coordinator: coordinator)
+    // Shared-registry plan stages 12+12b+13. The helper builds the
+    // registry + market-data services pointed at the profile-index
+    // DB, fires the SwiftData→GRDB + union migrations on a detached
+    // task, constructs the SyncCoordinator, and rotates the
+    // registry's sync hooks in. See MoolahApp+Setup for details.
+    let bootstrap = Self.bootstrapSyncCoordinator(setup: setup)
+    profileIndexMigrationTask = bootstrap.migrationTask
+    let coordinator = bootstrap.coordinator
     containerManager = setup.manager
     syncCoordinator = coordinator
     uiTestingProfileId = setup.uiTestingProfileId

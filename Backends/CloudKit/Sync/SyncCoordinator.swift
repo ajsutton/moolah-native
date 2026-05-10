@@ -167,6 +167,15 @@ final class SyncCoordinator {
   /// registry — those continue with the per-profile registry path.
   nonisolated let sharedInstrumentRegistry: GRDBInstrumentRegistryRepository?
 
+  /// App-level shared `MarketDataServices` (exchange / stock / crypto
+  /// price services + Yahoo client + CoinGecko key) pointed at the
+  /// profile-index DB. Stage 13: when wired, every profile session
+  /// reads through these instead of constructing per-profile copies,
+  /// so price-cache writes land in the same DB and feed the
+  /// `notifyRateCacheChange` observation. `nil` for tests that don't
+  /// pass shared services.
+  nonisolated let sharedMarketData: ProfileSession.MarketDataServices?
+
   // Cross-file-access note: members below this MARK that sibling extension
   // files (Lifecycle / Zones / Backfill / RecordChanges / Delegate) touch are
   // `internal` rather than `private`. Swift does not treat extensions in
@@ -324,12 +333,14 @@ final class SyncCoordinator {
     containerManager: ProfileContainerManager,
     userDefaults: UserDefaults = .standard,
     isCloudKitAvailable: Bool = CloudKitAuthProvider.isCloudKitAvailable,
-    sharedInstrumentRegistry: GRDBInstrumentRegistryRepository? = nil
+    sharedInstrumentRegistry: GRDBInstrumentRegistryRepository? = nil,
+    sharedMarketData: ProfileSession.MarketDataServices? = nil
   ) {
     self.containerManager = containerManager
     self.userDefaults = userDefaults
     self.progress = SyncProgress(userDefaults: userDefaults)
     self.sharedInstrumentRegistry = sharedInstrumentRegistry
+    self.sharedMarketData = sharedMarketData
     self.profileIndexHandler = ProfileIndexSyncHandler(
       repository: containerManager.profileIndexRepository,
       instrumentRepository: sharedInstrumentRegistry,
@@ -346,14 +357,9 @@ final class SyncCoordinator {
   }
 
   /// Builds the `@Sendable` closure that the profile-index handler
-  /// fires after applying remote `InstrumentRecord` rows. The closure
-  /// hops to `@MainActor` to invoke `notifyExternalChange()` on the
-  /// `@MainActor`-isolated registry.
-  ///
-  /// `nil` registry → no-op closure. Keeps the handler's
-  /// `nonisolated let` non-optional shape with the existing safe-by-
-  /// default behaviour for legacy callers that don't wire a shared
-  /// registry.
+  /// fires after applying remote `InstrumentRecord` rows. Hops to
+  /// `@MainActor` to invoke `notifyExternalChange()` on the registry;
+  /// `nil` registry → no-op closure.
   private static func makeInstrumentRemoteChangeFanOut(
     registry: GRDBInstrumentRegistryRepository?
   ) -> @Sendable () -> Void {
