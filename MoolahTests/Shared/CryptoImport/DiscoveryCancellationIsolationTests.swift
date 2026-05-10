@@ -96,8 +96,22 @@ struct DiscoveryCancellationIsolationTests {
     // Wait for the resolver to be entered before cancelling. Once
     // `callCount` is 1 we know the actor's underlying task is running
     // inside `resolveRegistration`'s `await withCheckedContinuation`.
-    while await resolver.callCount() == 0 {
-      await Task.yield()
+    // Bounded by a `ContinuousClock`-deadline backstop so a regression
+    // (resolver never enters) fails the test fast instead of hanging.
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      group.addTask {
+        while await resolver.callCount() == 0 {
+          await Task.yield()
+        }
+      }
+      group.addTask {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        try await ContinuousClock().sleep(until: deadline)
+        Issue.record(
+          "Resolver was never entered — discovery actor coalescing may be broken")
+      }
+      try await group.next()
+      group.cancelAll()
     }
 
     // Tear down "session A" — cancelling its coroutine simulates the

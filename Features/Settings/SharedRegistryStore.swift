@@ -13,9 +13,10 @@ import OSLog
 /// `registrationsVersion`) and the methods that mutate the shared
 /// registry (`setStatus`, `removeRegistration`, `loadRegistrations`).
 /// Per-session UI state — `isLoading`, `error`, `onRegistrationsChanged`
-/// — lives in the per-session `SettingsCryptoStore` (introduced
-/// alongside this type) and on existing per-session stores like
-/// `InvestmentStore`.
+/// — lives in the per-session `CryptoTokenStore` façade, which proxies
+/// data reads through this store and catches mutation errors locally
+/// so a transient failure in one session doesn't leak onto every
+/// Settings screen.
 ///
 /// The shared store does **not** carry an `error` field. Mutation
 /// methods throw to the caller; the per-session wrapper catches and
@@ -82,8 +83,13 @@ final class SharedRegistryStore {
   deinit {
     // Swift 6 makes `deinit` nonisolated; reading the `@MainActor`-
     // isolated `observationTask` requires `MainActor.assumeIsolated`.
-    // The store is owned by main-actor code (the `SharedInstrumentScope`
-    // holder), so the assumption holds in practice.
+    // The store is owned by `SyncCoordinator.sharedRegistryStore`,
+    // which is `@MainActor`, so the only deallocation path is from
+    // the main actor (e.g., when the coordinator itself releases the
+    // last strong reference during sign-out / account-switch). The
+    // assumption therefore holds in practice; if a future refactor
+    // adds a non-`@MainActor` owner this trap fires immediately
+    // instead of silently racing the observation infrastructure.
     MainActor.assumeIsolated {
       observationTask?.cancel()
     }
@@ -97,8 +103,8 @@ final class SharedRegistryStore {
   /// force a refresh.
   ///
   /// Errors are logged via `os.Logger`; the previous data is left in
-  /// place. Per-session UI surfaces invoke this through
-  /// `SettingsCryptoStore` which converts thrown errors into UI
+  /// place. Per-session UI surfaces invoke this through the
+  /// `CryptoTokenStore` façade, which converts thrown errors into UI
   /// state — this method's call from the observation task has no UI
   /// caller and intentionally does not propagate.
   func loadRegistrations() async {

@@ -241,40 +241,7 @@ enum SharedRegistryUnionRunner {
   }
 }
 
-/// Snapshot of one per-profile DB. `Database` handles never escape
-/// the read closure; the snapshot is a `Sendable` value type.
-struct PerProfileSnapshot: Sendable {
-  let profileId: UUID
-  let instruments: [InstrumentRow]
-  let cryptoPrices: [CryptoPriceRecord]
-  let stockPrices: [StockPriceRecord]
-  let exchangeRates: [ExchangeRateRecord]
-  let cryptoTokenMeta: [CryptoTokenMetaRecord]
-  let stockTickerMeta: [StockTickerMetaRecord]
-  let exchangeRateMeta: [ExchangeRateMetaRecord]
-
-  /// Reads every relevant table from the per-profile queue into Swift
-  /// value types so the snapshot can be passed to the shared-DB write
-  /// transaction without a live `Database` handle escaping.
-  init(profileId: UUID, queue: DatabaseQueue) async throws {
-    self.profileId = profileId
-    let snapshot = try await queue.read { database in
-      try (
-        InstrumentRow.fetchAll(database),
-        CryptoPriceRecord.fetchAll(database),
-        StockPriceRecord.fetchAll(database),
-        ExchangeRateRecord.fetchAll(database),
-        CryptoTokenMetaRecord.fetchAll(database),
-        StockTickerMetaRecord.fetchAll(database),
-        ExchangeRateMetaRecord.fetchAll(database)
-      )
-    }
-    self.instruments = snapshot.0
-    self.cryptoPrices = snapshot.1
-    self.stockPrices = snapshot.2
-    self.exchangeRates = snapshot.3
-    self.cryptoTokenMeta = snapshot.4
-    self.stockTickerMeta = snapshot.5
-    self.exchangeRateMeta = snapshot.6
-  }
-}
+// `PerProfileSnapshot` lives in
+// `Backends/GRDB/Migration/PerProfileSnapshot.swift` so the GRDB
+// record types it bundles never have to be named at the App layer
+// (CODE_GUIDE §3 — records never leave `Backends/GRDB/`).

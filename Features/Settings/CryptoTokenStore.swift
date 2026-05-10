@@ -123,8 +123,15 @@ final class CryptoTokenStore {
   }
 
   deinit {
-    // Swift 6 nonisolated deinit; the task is owned by main-actor
-    // code (the `ProfileSession`), so the assumption holds.
+    // Swift 6 nonisolated deinit; the task is owned by the per-
+    // session `CryptoTokenStore` instance, which `ProfileSession`
+    // (`@MainActor`) holds as a stored let property. The only
+    // deallocation path is when `ProfileSession` releases the last
+    // strong reference, and that release happens on the main actor
+    // (`SessionManager`'s teardown is `@MainActor`-isolated). The
+    // assumption therefore holds; a future refactor that introduces
+    // a non-`@MainActor` owner traps immediately instead of racing
+    // the observation infrastructure.
     MainActor.assumeIsolated {
       observationTask?.cancel()
     }
@@ -210,7 +217,11 @@ final class CryptoTokenStore {
       // rather than serving a now-orphan cached price.
       await cryptoPriceService.purgeCache(instrumentId: registration.id)
       error = nil
-      onRegistrationsChanged?()
+      // `onRegistrationsChanged` is fired centrally by
+      // `handleRegistryChangeTick` on the next observation tick — the
+      // local mutation we just performed will trigger that tick via
+      // the registry's `notifySubscribers`. Firing it here too would
+      // double-invoke `InvestmentStore.revaluateLoadedPositions`.
     } catch {
       logger.error("Failed to remove registration: \(error, privacy: .public)")
       self.error = error.localizedDescription
@@ -253,7 +264,10 @@ final class CryptoTokenStore {
       // store flushes this session's `FullConversionService` cache.
       await conversionService.invalidateCache(for: registration.instrument)
       error = nil
-      onRegistrationsChanged?()
+      // `onRegistrationsChanged` fires from `handleRegistryChangeTick`
+      // on the upcoming registry tick (triggered by the mutation
+      // above). Firing here too would double-invoke
+      // `InvestmentStore.revaluateLoadedPositions`.
     } catch {
       logger.error("Failed to set pricing status: \(error, privacy: .public)")
       self.error = error.localizedDescription

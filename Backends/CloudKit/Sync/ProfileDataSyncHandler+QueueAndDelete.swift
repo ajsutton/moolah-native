@@ -279,24 +279,9 @@ extension ProfileDataSyncHandler {
     }
   }
 
-  /// String-keyed counterpart of `collectAllGRDBUUIDs`. Currently only
-  /// used for the `Instrument` table.
-  private func collectAllGRDBStrings(
-    ids: () throws -> [String],
-    recordType: String,
-    into recordIDs: inout [CKRecord.ID]
-  ) {
-    do {
-      for id in try ids() {
-        recordIDs.append(CKRecord.ID(recordName: id, zoneID: zoneID))
-      }
-    } catch {
-      logger.error(
-        """
-        GRDB fetch failed for \(recordType, privacy: .public) on profile \
-        \(self.profileId, privacy: .public): \
-        \(error.localizedDescription, privacy: .public)
-        """)
-    }
-  }
+  // `collectAllGRDBStrings` was the string-keyed counterpart of
+  // `collectAllGRDBUUIDs`, used by the now-decommissioned per-profile
+  // `queueUnsyncedInstrumentRecords` path. Removed alongside its only
+  // caller — instrument-id enumeration lives entirely on the shared
+  // registry via `SyncCoordinator.queueUnsyncedSharedInstruments`.
 }

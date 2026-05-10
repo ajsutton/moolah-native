@@ -47,18 +47,44 @@ extension ProfileIndexSyncHandler {
   }
 
   /// Partitions deleted record IDs into `(profileIds, instrumentIds)`
-  /// by record-name shape. UUID-decoding names go to the profile
-  /// bucket; everything else is treated as an instrument id.
+  /// by record-name shape. The two recognised shapes on the
+  /// profile-index zone are `<ProfileRow.recordType>|<UUID>` (profile
+  /// tombstones) and a bare string id (instrument tombstones; see
+  /// `InstrumentRow+CloudKit.swift` — instruments use the bare-id
+  /// recordName form on purpose). Anything else (an unknown prefixed
+  /// record type, or a hypothetical legacy bare-UUID profile tombstone
+  /// from a pre-prefix peer) is dropped with a logged warning so a
+  /// future record type added to this zone can't silently misroute
+  /// into the instrument bucket.
   static func partitionDeleted(
-    _ deleted: [CKRecord.ID], logger _: Logger
+    _ deleted: [CKRecord.ID], logger: Logger
   ) -> (profileIds: [UUID], instrumentIds: [String]) {
     var profileIds: [UUID] = []
     var instrumentIds: [String] = []
     for recordID in deleted {
-      if let profileId = recordID.uuid {
-        profileIds.append(profileId)
-      } else {
+      switch recordID.prefixedRecordType {
+      case ProfileRow.recordType:
+        // `<ProfileRow>|<UUID>` form — UUID component must parse.
+        if let profileId = recordID.uuid {
+          profileIds.append(profileId)
+        } else {
+          logger.error(
+            """
+            partitionDeleted: ProfileRow tombstone with unparseable UUID \
+            component '\(recordID.recordName, privacy: .public)' — skipping.
+            """
+          )
+        }
+      case nil:
+        // No `|` separator — bare-string instrument id.
         instrumentIds.append(recordID.recordName)
+      case let other?:
+        logger.error(
+          """
+          partitionDeleted: unexpected prefixed recordType '\(other, privacy: .public)' \
+          on profile-index zone deletion '\(recordID.recordName, privacy: .public)' — skipping.
+          """
+        )
       }
     }
     return (profileIds, instrumentIds)

@@ -187,7 +187,13 @@ final class SyncCoordinator {
   /// store so a transient failure in one session doesn't leak onto
   /// every Settings screen. `nil` for legacy callers (preview /
   /// tests) that don't construct a shared store.
-  nonisolated let sharedRegistryStore: SharedRegistryStore?
+  ///
+  /// Not `nonisolated`: `SharedRegistryStore` is `@MainActor
+  /// @Observable` and reading it from a non-`@MainActor` context
+  /// would race the observation infrastructure. `SyncCoordinator`
+  /// itself is `@MainActor`, so all access is already isolated and
+  /// the keyword is unnecessary.
+  let sharedRegistryStore: SharedRegistryStore?
 
   // Cross-file-access note: members below this MARK that sibling extension
   // files (Lifecycle / Zones / Backfill / RecordChanges / Delegate) touch are

@@ -24,8 +24,22 @@ extension SyncCoordinator {
 
   /// Removes the persisted serialised state — invoked on sign-out and
   /// account-switch lifecycle paths so the next launch fetches a
-  /// fresh changeset rather than replaying stale cursor state.
+  /// fresh changeset rather than replaying stale cursor state. A
+  /// failure to delete leaves stale state on disk, which would silently
+  /// drive the next launch off the wrong cursor; logging here is the
+  /// only signal a future debugger has.
   func deleteStateSerialization() {
-    try? FileManager.default.removeItem(at: stateFileURL)
+    do {
+      try FileManager.default.removeItem(at: stateFileURL)
+    } catch CocoaError.fileNoSuchFile {
+      // Already gone — no-op.
+    } catch {
+      logger.error(
+        """
+        Failed to delete sync state at \(self.stateFileURL.path, privacy: .public): \
+        \(error.localizedDescription, privacy: .public)
+        """
+      )
+    }
   }
 }

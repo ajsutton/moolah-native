@@ -20,8 +20,15 @@ extension ProfileDataSyncHandler {
   /// keeps a future maintainer from getting them out of step when a
   /// new record type is added.
   private func clearOperations() -> [(String, () throws -> Void)] {
+    // `InstrumentRow.recordType` intentionally omitted: the per-profile
+    // `instrument` table is decommissioned (stage 12b). System fields
+    // on those rows are never consulted by any upload path, and
+    // `queueAllExistingRecords()` no longer enumerates them — clearing
+    // the field on encrypted-data-reset would leave the table in a
+    // spuriously "unsynced" state with no upload path to resolve it.
+    // The follow-up `v10_drop_shared_instrument_legacy` migration
+    // drops the table entirely.
     [
-      (InstrumentRow.recordType, grdbRepositories.instruments.clearAllSystemFieldsSync),
       (CategoryRow.recordType, grdbRepositories.categories.clearAllSystemFieldsSync),
       (AccountRow.recordType, grdbRepositories.accounts.clearAllSystemFieldsSync),
       (EarmarkRow.recordType, grdbRepositories.earmarks.clearAllSystemFieldsSync),

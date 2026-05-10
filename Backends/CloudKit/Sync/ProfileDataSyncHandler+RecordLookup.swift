@@ -219,9 +219,10 @@ extension ProfileDataSyncHandler {
     fetchRowOrLog { try grdbRepositories.investmentValues.fetchRowSync(id: id) }
   }
 
-  private func fetchInstrumentRow(id: String) -> InstrumentRow? {
-    fetchRowOrLog { try grdbRepositories.instruments.fetchRowSync(id: id) }
-  }
+  // `fetchInstrumentRow(id: String)` was the per-profile InstrumentRow
+  // string-keyed lookup. Removed when `recordToSave` swapped to a
+  // DEBUG trap on the per-profile zone — string-keyed instrument
+  // lookups no longer have a legitimate caller here.
 
   private func fetchCSVImportProfileRow(id: UUID) -> CSVImportProfileRow? {
     fetchRowOrLog { try grdbRepositories.csvImportProfiles.fetchRowSync(id: id) }
