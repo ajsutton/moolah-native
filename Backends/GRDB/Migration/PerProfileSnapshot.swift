@@ -32,23 +32,41 @@ struct PerProfileSnapshot: Sendable {
   /// transaction without a live `Database` handle escaping.
   init(profileId: UUID, queue: DatabaseQueue) async throws {
     self.profileId = profileId
-    let snapshot = try await queue.read { database in
-      try (
-        InstrumentRow.fetchAll(database),
-        CryptoPriceRecord.fetchAll(database),
-        StockPriceRecord.fetchAll(database),
-        ExchangeRateRecord.fetchAll(database),
-        CryptoTokenMetaRecord.fetchAll(database),
-        StockTickerMetaRecord.fetchAll(database),
-        ExchangeRateMetaRecord.fetchAll(database)
-      )
-    }
-    self.instruments = snapshot.0
-    self.cryptoPrices = snapshot.1
-    self.stockPrices = snapshot.2
-    self.exchangeRates = snapshot.3
-    self.cryptoTokenMeta = snapshot.4
-    self.stockTickerMeta = snapshot.5
-    self.exchangeRateMeta = snapshot.6
+    // Named-field intermediate avoids the `.0`–`.6` positional
+    // destructure pattern — swapping any two `fetchAll` lines below
+    // would silently misassign fields with the tuple form.
+    let raw = try await queue.read(Self.fetchRaw(_:))
+    self.instruments = raw.instruments
+    self.cryptoPrices = raw.cryptoPrices
+    self.stockPrices = raw.stockPrices
+    self.exchangeRates = raw.exchangeRates
+    self.cryptoTokenMeta = raw.cryptoTokenMeta
+    self.stockTickerMeta = raw.stockTickerMeta
+    self.exchangeRateMeta = raw.exchangeRateMeta
+  }
+
+  /// Captures the seven `fetchAll` results as a named-field struct so
+  /// the closure body can't accidentally swap the assignment order
+  /// (the previous 7-element anonymous-tuple form was positional).
+  /// Local to the snapshot so no other file can construct one.
+  private struct RawFetch: Sendable {
+    let instruments: [InstrumentRow]
+    let cryptoPrices: [CryptoPriceRecord]
+    let stockPrices: [StockPriceRecord]
+    let exchangeRates: [ExchangeRateRecord]
+    let cryptoTokenMeta: [CryptoTokenMetaRecord]
+    let stockTickerMeta: [StockTickerMetaRecord]
+    let exchangeRateMeta: [ExchangeRateMetaRecord]
+  }
+
+  private static func fetchRaw(_ database: Database) throws -> RawFetch {
+    RawFetch(
+      instruments: try InstrumentRow.fetchAll(database),
+      cryptoPrices: try CryptoPriceRecord.fetchAll(database),
+      stockPrices: try StockPriceRecord.fetchAll(database),
+      exchangeRates: try ExchangeRateRecord.fetchAll(database),
+      cryptoTokenMeta: try CryptoTokenMetaRecord.fetchAll(database),
+      stockTickerMeta: try StockTickerMetaRecord.fetchAll(database),
+      exchangeRateMeta: try ExchangeRateMetaRecord.fetchAll(database))
   }
 }
