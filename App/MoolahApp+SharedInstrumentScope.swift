@@ -1,0 +1,93 @@
+// App/MoolahApp+SharedInstrumentScope.swift
+
+import CloudKit
+import Foundation
+import GRDB
+
+/// Boot-time setup for the app-level shared instrument registry and
+/// the coordinated `MarketDataServices`. Extracted from
+/// `MoolahApp+Setup` so neither file overruns SwiftLint's
+/// `file_length` budget.
+extension MoolahApp {
+
+  /// Bundle returned by `bootstrapSyncCoordinator` so `MoolahApp.init`
+  /// consumes the result in two lines and stays under the
+  /// `function_body_length` threshold.
+  struct SyncBootstrap {
+    let coordinator: SyncCoordinator
+    let migrationTask: Task<Void, Never>
+  }
+
+  /// Boot-time sync setup: shared registry + market-data services
+  /// pointed at the profile-index DB, the boot migration task
+  /// (SwiftData→GRDB + shared-registry union), and the constructed
+  /// `SyncCoordinator` with the registry's sync hooks rotated in.
+  static func bootstrapSyncCoordinator(setup: ContainerSetup) -> SyncBootstrap {
+    let scope = makeSharedInstrumentScope(setup: setup)
+    let migrationTask = runProfileIndexAndUnionMigrations(setup: setup)
+    let coordinator = SyncCoordinator(
+      containerManager: setup.manager,
+      sharedInstrumentRegistry: scope.registry,
+      sharedMarketData: scope.marketData)
+    attachSharedInstrumentRegistrySyncHooks(
+      registry: scope.registry, coordinator: coordinator)
+    return SyncBootstrap(coordinator: coordinator, migrationTask: migrationTask)
+  }
+
+  /// Constructs the app-level shared `GRDBInstrumentRegistryRepository`
+  /// pointed at the profile-index DB. Sync hooks are no-ops at
+  /// construction time and rotated in via
+  /// `attachSharedInstrumentRegistrySyncHooks` once the
+  /// `SyncCoordinator` exists (chicken-and-egg: the coordinator's
+  /// init takes the registry, so the registry can't capture the
+  /// coordinator at its own init).
+  static func makeSharedInstrumentRegistry(
+    database: any DatabaseWriter
+  ) -> GRDBInstrumentRegistryRepository {
+    GRDBInstrumentRegistryRepository(database: database)
+  }
+
+  /// Bundles the shared registry + market-data services, both pointed
+  /// at the profile-index DB. Tuple shape keeps `MoolahApp.init` short.
+  static func makeSharedInstrumentScope(
+    setup: ContainerSetup
+  ) -> (
+    registry: GRDBInstrumentRegistryRepository,
+    marketData: ProfileSession.MarketDataServices
+  ) {
+    let database = setup.manager.profileIndexDatabase
+    return (
+      registry: makeSharedInstrumentRegistry(database: database),
+      marketData: ProfileSession.makeMarketDataServices(database: database)
+    )
+  }
+
+  /// Wires the shared registry's mutation hooks to the coordinator's
+  /// `queueSave` / `queueDeletion` against the profile-index zone.
+  /// Called immediately after `SyncCoordinator.init`, which takes the
+  /// registry as a constructor argument.
+  ///
+  /// The `Task { @MainActor in … }` hop matches the per-profile
+  /// pattern in `ProfileSession+CloudKitBackendBuild.makeInstrumentRegistry`:
+  /// registry callbacks fire on the GRDB serial executor
+  /// (off-MainActor) and `SyncCoordinator.queueSave/Deletion` is
+  /// `@MainActor`-isolated.
+  static func attachSharedInstrumentRegistrySyncHooks(
+    registry: GRDBInstrumentRegistryRepository,
+    coordinator: SyncCoordinator
+  ) {
+    let zoneID = CKRecordZone.ID(
+      zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
+    registry.attachSyncHooks(
+      onRecordChanged: { [weak coordinator] recordName in
+        Task { @MainActor [weak coordinator] in
+          coordinator?.queueSave(recordName: recordName, zoneID: zoneID)
+        }
+      },
+      onRecordDeleted: { [weak coordinator] recordName in
+        Task { @MainActor [weak coordinator] in
+          coordinator?.queueDeletion(recordName: recordName, zoneID: zoneID)
+        }
+      })
+  }
+}

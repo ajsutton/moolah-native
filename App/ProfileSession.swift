@@ -144,7 +144,16 @@ final class ProfileSession: Identifiable {
       override: database, profile: profile, containerManager: containerManager)
     self.database = resolvedDatabase
 
-    let services = Self.makeMarketDataServices(database: resolvedDatabase)
+    // Prefer the app-level shared `MarketDataServices` (pointed at
+    // the profile-index DB) when the coordinator was constructed
+    // with one. All sessions then share price-cache writes / reads,
+    // so a CoinGecko fetch for `bitcoin` in profile A populates the
+    // cache that profile B reads next. Falls back to per-profile
+    // construction for legacy callers (preview / tests) that didn't
+    // pass shared services through `SyncCoordinator.init`.
+    let services =
+      syncCoordinator?.sharedMarketData
+      ?? Self.makeMarketDataServices(database: resolvedDatabase)
     self.exchangeRateService = services.exchangeRate
     self.stockPriceService = services.stockPrice
     self.cryptoPriceService = services.cryptoPrice
