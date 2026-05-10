@@ -117,7 +117,7 @@ final class CryptoTokenStore {
     let stream = registry.observeChanges()
     self.observationTask = Task { @MainActor [weak self] in
       for await _ in stream {
-        await self?.handleRegistryChangeTick()
+        self?.handleRegistryChangeTick()
       }
     }
   }
@@ -290,7 +290,7 @@ final class CryptoTokenStore {
   /// inside `setStatus(_:for:)` for the local-mutation path; the
   /// next conversion call after a remote-arriving status change
   /// re-reads the registry on cache miss.
-  private func handleRegistryChangeTick() async {
+  private func handleRegistryChangeTick() {
     onRegistrationsChanged?()
   }
 

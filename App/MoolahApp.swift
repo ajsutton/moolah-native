@@ -79,10 +79,10 @@ struct MoolahApp: App {
     }
     let setup = Self.makeContainerSetup(uiTestingSeed: uiTestingSeed)
 
-    // Shared-registry plan stages 12+12b+13. The helper builds the
-    // registry + market-data services pointed at the profile-index
-    // DB, fires the SwiftData→GRDB + union migrations on a detached
-    // task, constructs the SyncCoordinator, and rotates the
+    // Build the app-level shared instrument registry + market-data
+    // services pointed at the profile-index DB, fire the
+    // SwiftData→GRDB + union migrations on a detached task, construct
+    // the SyncCoordinator, and rotate the
     // registry's sync hooks in. See MoolahApp+Setup for details.
     let bootstrap = Self.bootstrapSyncCoordinator(setup: setup)
     profileIndexMigrationTask = bootstrap.migrationTask
