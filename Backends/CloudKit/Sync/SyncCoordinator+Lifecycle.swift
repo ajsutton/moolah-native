@@ -197,6 +197,12 @@ extension SyncCoordinator {
       // pending list dedupes against rows already queued via the new
       // hook plumbing.
       _ = await self.queueUnsyncedInstrumentsForAllProfiles()
+      // Shared-registry self-heal — re-queues any `instrument` row in
+      // the profile-index DB whose `encoded_system_fields` is NULL.
+      // Closes the gap between "union runner committed" and "engine
+      // state file persisted" by catching first-launch rows that
+      // never made it into the pending list. Cheap and idempotent.
+      _ = self.queueUnsyncedSharedInstruments()
       if self.hasPendingChanges {
         self.logger.info("Zones ready — sending pending changes")
         await self.sendChanges()

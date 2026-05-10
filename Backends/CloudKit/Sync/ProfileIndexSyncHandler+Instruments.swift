@@ -98,6 +98,28 @@ extension ProfileIndexSyncHandler {
     return freshRecord
   }
 
+  /// Returns CKRecord.IDs for every shared `instrument` row whose
+  /// `encoded_system_fields` is `NULL`. Used by the coordinator's
+  /// startup self-heal scan: rows that didn't sync-roundtrip (because
+  /// the union runner committed but CKSyncEngine state never
+  /// persisted, or because a registry mutation fired its hook before
+  /// the engine was ready) get re-queued on the next launch.
+  ///
+  /// Returns an empty list when no `instrumentRepository` is wired —
+  /// no shared registry to scan.
+  func queueUnsyncedSharedInstrumentRecords() -> [CKRecord.ID] {
+    guard let instrumentRepository else { return [] }
+    do {
+      let ids = try instrumentRepository.unsyncedRowIdsSync()
+      return ids.map { CKRecord.ID(recordName: $0, zoneID: zoneID) }
+    } catch {
+      logger.error(
+        "queueUnsyncedSharedInstrumentRecords: failed: \(error, privacy: .public)"
+      )
+      return []
+    }
+  }
+
   /// Applies the spam-wins conflict merge for `InstrumentRecord`
   /// when CKSyncEngine reports `.serverRecordChanged`. The merge
   /// rule is the same one the downlink path runs in
