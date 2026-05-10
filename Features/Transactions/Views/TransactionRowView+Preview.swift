@@ -12,6 +12,9 @@ private struct PreviewData {
   let savingsId = UUID()
   let groceriesId = UUID()
   let holidayFundId = UUID()
+  let scam = Instrument.crypto(
+    chainId: 1, contractAddress: "0xdeadbeef", symbol: "SCAM",
+    name: "Scam Token", decimals: 18)
 
   var accounts: Accounts {
     Accounts(from: [
@@ -140,7 +143,20 @@ private func tradePreviewSpecs(data: PreviewData) -> [PreviewRowSpec] {
         InstrumentAmount(quantity: 950, instrument: .AUD),
         InstrumentAmount(quantity: -50, instrument: .AUD),
       ],
-      balance: -2499.77, viewingAccountId: data.sourceId)
+      balance: -2499.77, viewingAccountId: data.sourceId),
+    PreviewRowSpec(
+      payee: "Suspicious Wallet",
+      legs: [
+        TransactionLeg(
+          accountId: data.sourceId, instrument: .AUD, quantity: -100, type: .trade),
+        TransactionLeg(
+          accountId: data.savingsId, instrument: data.scam, quantity: 1_000_000, type: .trade),
+      ],
+      displayAmounts: [
+        InstrumentAmount(quantity: -100, instrument: .AUD),
+        InstrumentAmount(quantity: 1_000_000, instrument: data.scam),
+      ],
+      balance: -1_549.77, viewingAccountId: data.sourceId),
   ]
 }
 
@@ -154,6 +170,7 @@ private func tradePreviewSpecs(data: PreviewData) -> [PreviewRowSpec] {
         viewingAccountId: spec.viewingAccountId)
     }
   }
+  .environment(\.spamInstruments, [data.scam])
 }
 
 @MainActor

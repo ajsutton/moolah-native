@@ -107,6 +107,15 @@ final class CryptoTokenStore {
     registrations.filter { $0.pricingStatus == .spam }
   }
 
+  /// The instruments of all `.spam`-flagged registrations.
+  ///
+  /// Derived from `spamRegistrations`; updates automatically whenever
+  /// `registrations` changes. Returns an empty set when no registrations
+  /// carry `.spam` status.
+  var spamInstruments: Set<Instrument> {
+    Set(spamRegistrations.map(\.instrument))
+  }
+
   func loadRegistrations() async {
     isLoading = true
     defer { isLoading = false }

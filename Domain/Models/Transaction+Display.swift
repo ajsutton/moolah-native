@@ -1,13 +1,5 @@
 import Foundation
 
-extension Array where Element: Hashable {
-  /// Returns elements in order of first appearance, removing duplicates.
-  func uniqued() -> [Element] {
-    var seen = Set<Element>()
-    return filter { seen.insert($0).inserted }
-  }
-}
-
 // MARK: - Display Helpers
 
 extension Transaction {
@@ -50,9 +42,9 @@ extension Transaction {
 
     if isTrade {
       // Trade-shaped transactions defer the action sentence to
-      // `tradeTitleSentence(scopeReference:)`, which the row's `titleText`
-      // appends in parentheses after the payee. Return just the payee here
-      // (or empty), never the "(N sub-transactions)" custom label.
+      // `tradeTitleSegments(scopeReference:spamInstruments:)`, which the row's
+      // `titleTextValue` joins in parentheses after the payee. Return just the
+      // payee here (or empty), never the "(N sub-transactions)" custom label.
       if let payee, !payee.isEmpty { return payee }
       return ""
     }
@@ -81,16 +73,23 @@ extension Transaction {
 // MARK: - Trade Title
 
 extension Transaction {
-  /// The action sentence for a `.trade`-shaped transaction row title.
-  /// Returns `nil` for non-trade transactions. See design §4.3.
+  /// Builds the action sentence segments for a `.trade` row title. Returns
+  /// an empty array for non-trade transactions or trades that don't have
+  /// exactly two `.trade` legs.
   ///
   /// `scopeReference` is the row's reference instrument: the account's
   /// instrument when account-scoped, the earmark's instrument when
-  /// earmark-scoped, otherwise the profile currency.
-  func tradeTitleSentence(scopeReference: Instrument) -> String? {
-    guard isTrade else { return nil }
+  /// earmark-scoped, otherwise the profile currency. `spamInstruments`
+  /// is the set of instruments currently flagged `pricingStatus == .spam`;
+  /// any leg whose instrument falls in that set is emitted as
+  /// `.spamMagnitude(...)` so the renderer can swap it for the spam marker.
+  func tradeTitleSegments(
+    scopeReference: Instrument,
+    spamInstruments: Set<Instrument>
+  ) -> [TradeTitleSegment] {
+    guard isTrade else { return [] }
     let tradeLegs = legs.filter { $0.type == .trade }
-    guard tradeLegs.count == 2 else { return nil }
+    guard tradeLegs.count == 2 else { return [] }
     let (legA, legB) = (tradeLegs[0], tradeLegs[1])
 
     let aMatches = legA.instrument == scopeReference
@@ -99,20 +98,30 @@ extension Transaction {
       let matching = aMatches ? legA : legB
       let other = aMatches ? legB : legA
       let verb = matching.quantity < 0 ? "Bought" : "Sold"
-      return "\(verb) \(formatLegMagnitude(other))"
+      return [
+        .literal("\(verb) "),
+        magnitudeSegment(for: other, spamInstruments: spamInstruments),
+      ]
     }
-    // Neither matches, or both match — render Paid → Received.
     let paid = legA.quantity < 0 ? legA : legB
     let received = legA.quantity < 0 ? legB : legA
-    return "Swapped \(formatLegMagnitude(paid)) for \(formatLegMagnitude(received))"
+    return [
+      .literal("Swapped "),
+      magnitudeSegment(for: paid, spamInstruments: spamInstruments),
+      .literal(" for "),
+      magnitudeSegment(for: received, spamInstruments: spamInstruments),
+    ]
   }
 
-  /// Formats the absolute magnitude of `leg` as a positive
-  /// `InstrumentAmount.formatted` — locale-currency symbol for fiat,
-  /// `"{number} {ticker}"` for stocks and crypto — for use in trade title
-  /// sentences. `abs()` here produces a *display* magnitude only; the stored
-  /// sign is not modified.
-  private func formatLegMagnitude(_ leg: TransactionLeg) -> String {
-    InstrumentAmount(quantity: abs(leg.quantity), instrument: leg.instrument).formatted
+  private func magnitudeSegment(
+    for leg: TransactionLeg,
+    spamInstruments: Set<Instrument>
+  ) -> TradeTitleSegment {
+    let amount = InstrumentAmount(
+      quantity: abs(leg.quantity), instrument: leg.instrument)
+    if spamInstruments.contains(leg.instrument) {
+      return .spamMagnitude(amount)
+    }
+    return .magnitude(amount)
   }
 }
