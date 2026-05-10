@@ -128,6 +128,20 @@ enum SharedRegistryUnionRunner {
     // transaction; that's acceptable here because the per-profile
     // batches are independent and a mid-batch failure is logged + the
     // outer loop moves on to the next profile.
+    //
+    // **`encoded_system_fields` carryover.** `snapshot.instruments`
+    // includes whatever blob the per-profile row carries, copied
+    // byte-for-byte (per spec §Migration step 2 line 263 — "copied
+    // verbatim, never decoded"). Those blobs encode CKSyncEngine
+    // metadata for the **per-profile** zone; replaying them onto a
+    // shared-zone row means the first upload to the profile-index
+    // zone may receive a `.serverRecordChanged` and self-recover via
+    // `applyInstrumentServerRecordChangedMerge`. Acceptable per the
+    // spec; the blob stays opaque and never gets decoded across the
+    // zone boundary. NULL blobs (rows that were never
+    // sync-roundtripped on this device) flow through unchanged and
+    // produce a fresh CKRecord create on first upload — covered by
+    // `SharedRegistryUnionRunnerTests.unionPreservesNullEncodedSystemFields`.
     try registry.applyRemoteChangesSync(
       saved: snapshot.instruments, deleted: [])
 

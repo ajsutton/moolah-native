@@ -206,4 +206,54 @@ struct SharedRegistryUnionRunnerTests {
     #expect(count == 1, "profile A's row should still be merged despite profile-F failing")
     #expect(fixture.defaults.bool(forKey: SharedRegistryUnionRunner.unionFlagKey))
   }
+
+  /// Spec §Migration step 2 (line 263): when the winning per-profile
+  /// row's `encoded_system_fields` is NULL — i.e. the row was never
+  /// sync-roundtripped on this device — the merged shared-registry
+  /// row must inherit NULL so the next upload to the profile-index
+  /// zone produces a fresh `CKRecord` create rather than chasing a
+  /// stale change-tag through `.serverRecordChanged` recovery.
+  @Test(
+    "union preserves NULL encoded_system_fields so first upload is a fresh CKRecord create"
+  )
+  func unionPreservesNullEncodedSystemFields() async throws {
+    let profileA = try #require(UUID(uuidString: "00000000-0000-0000-0000-00000000000a"))
+    let fixture = try Fixture(perProfileSeeds: [
+      (
+        profileA,
+        { database in
+          // Seed a non-fiat instrument with NULL `encoded_system_fields`
+          // explicitly. The default-value path on the schema is
+          // already nullable; spelling NULL here documents the
+          // load-bearing precondition for the assertion below.
+          try database.execute(
+            sql: """
+              INSERT INTO instrument
+              (id, record_name, kind, name, decimals, coingecko_id, pricing_status, encoded_system_fields)
+              VALUES (?, ?, 'cryptoToken', ?, 18, ?, 'priced', NULL)
+              """,
+            arguments: ["bitcoin", "bitcoin", "Bitcoin", "bitcoin"])
+        }
+      )
+    ])
+
+    await SharedRegistryUnionRunner.run(
+      sharedQueue: fixture.sharedQueue,
+      profileIds: [profileA],
+      perProfileDatabase: Self.makeOpener(profileQueues: fixture.profileQueues),
+      perProfileDatabaseURL: { _ in URL(fileURLWithPath: "/tmp/fake.sqlite") },
+      fileManager: AlwaysExistsFileManager(),
+      defaults: fixture.defaults)
+
+    // The merged shared row must carry NULL system fields so the
+    // first upload to the profile-index zone is a fresh CKRecord
+    // create, per spec §Migration step 2 line 263.
+    let blob: Data?? = try await fixture.sharedQueue.read { database in
+      try Data?.fetchOne(
+        database,
+        sql: "SELECT encoded_system_fields FROM instrument WHERE id = 'bitcoin'")
+    }
+    let resolved = try #require(blob)
+    #expect(resolved == nil, "winning row's NULL blob must propagate to the merged row")
+  }
 }
