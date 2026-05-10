@@ -1,5 +1,3 @@
-// swiftlint:disable multiline_arguments
-
 import Foundation
 
 /// Parser for a custom trade CSV format.
@@ -91,59 +89,22 @@ struct CustomTradeCSVParser: CSVParser, Sendable {
     let buyUnit = safe(row, columns.buyUnit).trimmingCharacters(in: .whitespaces)
     let fee = parseDecimal(safe(row, columns.fee)) ?? 0
 
-    var legs: [ParsedLeg] = []
-
-    // Sell side
-    if sellAmount != 0 {
-      legs.append(
-        ParsedLeg(
-          accountId: nil,
-          instrument: instrument(for: sellUnit),
-          quantity: -sellAmount,
-          type: .trade,
-          isInstrumentPlaceholder: sellUnit == "AUD"
-        ))
-    }
-
-    // Buy side
-    if buyAmount != 0 {
-      legs.append(
-        ParsedLeg(
-          accountId: nil,
-          instrument: instrument(for: buyUnit),
-          quantity: buyAmount,
-          type: .trade,
-          isInstrumentPlaceholder: buyUnit == "AUD"
-        ))
-    }
-
-    // Fee
-    if fee != 0 {
-      legs.append(
-        ParsedLeg(
-          accountId: nil,
-          instrument: .AUD,
-          quantity: -fee,
-          type: .expense,
-          isInstrumentPlaceholder: true
-        ))
-    }
+    let legs = buildLegs(
+      sellAmount: sellAmount,
+      sellUnit: sellUnit,
+      buyAmount: buyAmount,
+      buyUnit: buyUnit,
+      fee: fee)
 
     if legs.isEmpty {
       return .skip(reason: "row has no amounts")
     }
 
-    // Determine rawAmount for display/dedupe logic.
-    // If it's a trade involving AUD, use the AUD magnitude as the "amount".
-    let rawAmount: Decimal
-    if buyUnit == "AUD" {
-      rawAmount = buyAmount
-    } else if sellUnit == "AUD" {
-      rawAmount = -sellAmount
-    } else {
-      // Non-AUD trade (rare for this source), pick buy side.
-      rawAmount = buyAmount != 0 ? buyAmount : -sellAmount
-    }
+    let rawAmount = calculateRawAmount(
+      buyAmount: buyAmount,
+      buyUnit: buyUnit,
+      sellAmount: sellAmount,
+      sellUnit: sellUnit)
 
     return .transaction(
       ParsedTransaction(
@@ -157,7 +118,69 @@ struct CustomTradeCSVParser: CSVParser, Sendable {
       ))
   }
 
+  private func buildLegs(
+    sellAmount: Decimal,
+    sellUnit: String,
+    buyAmount: Decimal,
+    buyUnit: String,
+    fee: Decimal
+  ) -> [ParsedLeg] {
+    var legs: [ParsedLeg] = []
+
+    if sellAmount != 0 {
+      legs.append(
+        ParsedLeg(
+          accountId: nil,
+          instrument: instrument(for: sellUnit),
+          quantity: -sellAmount,
+          type: .trade,
+          isInstrumentPlaceholder: sellUnit == "AUD"
+        ))
+    }
+
+    if buyAmount != 0 {
+      legs.append(
+        ParsedLeg(
+          accountId: nil,
+          instrument: instrument(for: buyUnit),
+          quantity: buyAmount,
+          type: .trade,
+          isInstrumentPlaceholder: buyUnit == "AUD"
+        ))
+    }
+
+    if fee != 0 {
+      legs.append(
+        ParsedLeg(
+          accountId: nil,
+          instrument: .AUD,
+          quantity: -fee,
+          type: .expense,
+          isInstrumentPlaceholder: true
+        ))
+    }
+
+    return legs
+  }
+
+  private func calculateRawAmount(
+    buyAmount: Decimal,
+    buyUnit: String,
+    sellAmount: Decimal,
+    sellUnit: String
+  ) -> Decimal {
+    if buyUnit == "AUD" {
+      return buyAmount
+    } else if sellUnit == "AUD" {
+      return -sellAmount
+    } else {
+      // Non-AUD trade (rare for this source), pick buy side.
+      return buyAmount != 0 ? buyAmount : -sellAmount
+    }
+  }
+
   private func instrument(for unit: String) -> Instrument {
+
     if unit == "AUD" {
       return .AUD
     }
