@@ -200,15 +200,15 @@ final class ProfileSession: Identifiable {
     self.folderScanner = importPipeline.scanner
     self.folderWatcher = importPipeline.watcher
 
-    finishInit(
-      cryptoRegistry: registryWiring.registry,
-      cryptoPriceService: services.cryptoPrice)
+    finishInit()
   }
 
   /// Tail of the initialiser — kept as a separate method so `init`
   /// stays under SwiftLint's `function_body_length` threshold. Wires
   /// the crypto-wallet sync stores and starts the hourly
-  /// `PRAGMA optimize` tick (issue #576).
+  /// `PRAGMA optimize` tick (issue #576). Reads everything it needs
+  /// from `self` (every stored property is fully initialised by the
+  /// time `init` calls this).
   ///
   /// Cross-store propagation is handled reactively: every store
   /// subscribes to its repository's GRDB `ValueObservation` stream in
@@ -216,17 +216,14 @@ final class ProfileSession: Identifiable {
   /// without an explicit reload step. The session no longer needs a
   /// reference to `SyncCoordinator` here — apply still drives GRDB
   /// writes and the observation streams take it from there.
-  private func finishInit(
-    cryptoRegistry: (any InstrumentRegistryRepository)?,
-    cryptoPriceService: CryptoPriceService
-  ) {
+  private func finishInit() {
     let cryptoWiring = Self.makeCryptoSyncWiring(
       backend: backend,
-      registry: cryptoRegistry,
+      registry: instrumentRegistry,
       cryptoPriceService: cryptoPriceService)
     self.cryptoSyncStore = cryptoWiring?.store
     self.cryptoTokenDiscovery = cryptoWiring?.discovery
-    seedBuiltInCryptoPresets(registry: cryptoRegistry)
+    seedBuiltInCryptoPresets(registry: instrumentRegistry)
     wireCrossStoreSideEffects()
     startPeriodicPragmaOptimize()
   }

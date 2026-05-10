@@ -89,8 +89,8 @@ struct RegistryInvariantTests {
         cryptocompareSymbol: "USDC",
         binanceSymbol: nil))
 
-    let rows = try await queue.read { db in
-      try InstrumentRow.fetchAll(db)
+    let rows = try await queue.read { database in
+      try InstrumentRow.fetchAll(database)
     }
     #expect(rows.count == 2)
     for row in rows {

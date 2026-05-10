@@ -388,18 +388,6 @@ final class SyncCoordinator {
   // instrument-change callback registry live on `+HandlerAccess`.)
 
   // MARK: - State Persistence
-  // (Load of the state serialization happens off-actor in `prepareEngine`, on `+Lifecycle`.)
-
-  func saveStateSerialization(_ serialization: CKSyncEngine.State.Serialization) {
-    do {
-      let data = try JSONEncoder().encode(serialization)
-      try data.write(to: stateFileURL, options: .atomic)
-    } catch {
-      logger.error("Failed to save sync state: \(error, privacy: .public)")
-    }
-  }
-
-  func deleteStateSerialization() {
-    try? FileManager.default.removeItem(at: stateFileURL)
-  }
+  // (Load happens off-actor in `prepareEngine` on `+Lifecycle`; the
+  // write / delete paths live on `+StatePersistence`.)
 }
