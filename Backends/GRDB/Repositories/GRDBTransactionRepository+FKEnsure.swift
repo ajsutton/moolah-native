@@ -21,22 +21,25 @@ import GRDB
 extension GRDBTransactionRepository {
   /// Inserts a placeholder `instrument` row for any non-fiat
   /// instrument a leg references that isn't already present. Returns
-  /// the instrument id when an insert actually happened so the caller
-  /// can fan out the sync hook AFTER the surrounding write commits;
-  /// returns `nil` for fiat legs and for legs whose instrument was
-  /// already in the registry.
+  /// the full `Instrument` value when an insert actually happened so
+  /// the caller can fan it out to the shared registry AFTER the
+  /// surrounding write commits; returns `nil` for fiat legs and for
+  /// legs whose instrument was already in the per-profile copy.
   ///
   /// Required so `fetchAll` can resolve the full `Instrument` domain
-  /// value on read AND so the new row reaches CloudKit — without the
-  /// hook fan-out the row would live only on the device that created
-  /// it. Sibling devices would receive the leg but no `InstrumentRow`,
-  /// `fetchInstrumentMap` would fall back to
-  /// `Instrument.fiat(code: id)`, and stock conversions would route
-  /// through the fiat-only Frankfurter API and 404.
+  /// value on read against this profile's DB. The shared registry on
+  /// the profile-index zone is the canonical source of cross-device
+  /// truth; the auto-publish path (`onInstrumentChanged`) routes the
+  /// returned `Instrument` through `registerStock` /
+  /// `registerCrypto` so the row reaches CloudKit. Without the
+  /// shared-registry fan-out, sibling devices would receive the leg
+  /// but no `InstrumentRecord`, `fetchInstrumentMap` would fall back
+  /// to `Instrument.fiat(code: id)`, and stock conversions would
+  /// route through the fiat-only Frankfurter API and 404.
   static func ensureInstrumentReadable(
     database: Database,
     leg: TransactionLeg
-  ) throws -> String? {
+  ) throws -> Instrument? {
     guard leg.instrument.kind != .fiatCurrency else { return nil }
     let exists =
       try InstrumentRow
@@ -44,6 +47,6 @@ extension GRDBTransactionRepository {
       .fetchOne(database)
     guard exists == nil else { return nil }
     try InstrumentRow(domain: leg.instrument).insert(database)
-    return leg.instrument.id
+    return leg.instrument
   }
 }

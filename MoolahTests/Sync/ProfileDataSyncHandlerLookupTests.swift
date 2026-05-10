@@ -50,23 +50,14 @@ struct ProfileDataSyncHandlerLookupTests {
     #expect(result?["name"] as? String == "Found")
   }
 
-  @Test
-  func recordToSaveFindsInstrumentByStringID() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
-
-    let context = ModelContext(container)
-    context.insert(
-      InstrumentRecord(
-        id: "ASX:BHP.AX", kind: "stock", name: "BHP Group", decimals: 2,
-        ticker: "BHP.AX", exchange: "ASX"))
-    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
-
-    let recordID = CKRecord.ID(recordName: "ASX:BHP.AX", zoneID: handler.zoneID)
-    let result = handler.recordToSave(for: recordID)
-    #expect(result != nil)
-    #expect(result?.recordType == "InstrumentRecord")
-    #expect(result?["name"] as? String == "BHP Group")
-  }
+  // `recordToSaveFindsInstrumentByStringID` was removed when the
+  // shared-instrument-registry rollout decommissioned the per-profile
+  // `InstrumentRecord` upload path. `ProfileDataSyncHandler.recordToSave`
+  // now traps in DEBUG (logs+returns nil in release) for any
+  // InstrumentRecord routed to a per-profile zone — see
+  // `ProfileDataSyncHandler+RecordLookup.swift`. The replacement
+  // upload path is exercised by
+  // `ProfileIndexInstrumentDispatchTests`.
 
   @Test
   func recordToSaveReturnsNilForMissingRecord() throws {

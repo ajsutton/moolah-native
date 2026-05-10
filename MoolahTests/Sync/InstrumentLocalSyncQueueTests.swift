@@ -24,15 +24,17 @@ struct InstrumentLocalSyncQueueTests {
   /// the repository can append into the buffer without crossing actors.
   @MainActor
   final class Capture {
-    var instrumentIds: [String] = []
+    var instruments: [Instrument] = []
+    /// Convenience for assertions that only care about identity.
+    var instrumentIds: [String] { instruments.map(\.id) }
   }
 
   private func makeInstrumentChangedHook(
     _ capture: Capture
-  ) -> @Sendable (String) -> Void {
-    { instrumentId in
+  ) -> @Sendable (Instrument) -> Void {
+    { instrument in
       Task { @MainActor in
-        capture.instrumentIds.append(instrumentId)
+        capture.instruments.append(instrument)
       }
     }
   }
@@ -179,7 +181,7 @@ struct InstrumentLocalSyncQueueTests {
       ])
     _ = try await repo.create(original)
     try await drainHookHops()
-    capture.instrumentIds.removeAll()
+    capture.instruments.removeAll()
 
     // Replace with a stock leg, which should auto-insert the InstrumentRow
     // and fire the hook.

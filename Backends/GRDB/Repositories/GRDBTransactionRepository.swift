@@ -72,13 +72,17 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   private let onRecordChanged: @Sendable (String, UUID) -> Void
   private let onRecordDeleted: @Sendable (String, UUID) -> Void
   /// Receives the `Instrument.id` (which doubles as the InstrumentRow's
-  /// CloudKit recordName) of any non-fiat instrument that
-  /// `ensureInstrumentReadable` had to auto-insert into the registry to
-  /// satisfy a leg referenced by `create` / `update`. Without this hook
-  /// the auto-inserted row never reaches CloudKit and sibling devices
-  /// fall back to `Instrument.fiat(code: id)` — see
-  /// `InstrumentLocalSyncQueueTests`.
-  private let onInstrumentChanged: @Sendable (String) -> Void
+  /// `Instrument` value of any non-fiat instrument that
+  /// `ensureInstrumentReadable` had to auto-insert into the per-profile
+  /// `instrument` table to satisfy a leg referenced by `create` /
+  /// `update`. The wired closure publishes the value to the shared
+  /// registry on the profile-index zone so sibling devices see it; the
+  /// per-profile copy stays for read paths. Without this hook the new
+  /// row would never reach CloudKit, sibling devices would receive the
+  /// leg but no `InstrumentRecord`, and stock conversions would fall
+  /// back to `Instrument.fiat(code: id)` and 404 against the fiat-only
+  /// Frankfurter API — see `InstrumentLocalSyncQueueTests`.
+  private let onInstrumentChanged: @Sendable (Instrument) -> Void
 
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "GRDBTransactionRepository")
@@ -89,7 +93,7 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     conversionService: any InstrumentConversionService,
     onRecordChanged: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
     onRecordDeleted: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
-    onInstrumentChanged: @escaping @Sendable (String) -> Void = { _ in }
+    onInstrumentChanged: @escaping @Sendable (Instrument) -> Void = { _ in }
   ) {
     self.database = database
     self.defaultInstrument = defaultInstrument
@@ -145,7 +149,7 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
       // De-dup so two legs sharing one new instrument fire the hook
       // exactly once. Order-preserving — the first occurrence wins so
       // the hook order is stable for tests.
-      var insertedInstrumentIds: [String] = []
+      var insertedInstruments: [Instrument] = []
       var seenInstrumentIds: Set<String> = []
       for (index, leg) in transaction.legs.enumerated() {
         // Ensure non-fiat instrument rows exist so `fetchAll` can resolve
@@ -154,9 +158,9 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
         // is allowed to land as-is — see `+FKEnsure.swift` and SYNC_GUIDE.
         if let inserted = try Self.ensureInstrumentReadable(
           database: database, leg: leg),
-          seenInstrumentIds.insert(inserted).inserted
+          seenInstrumentIds.insert(inserted.id).inserted
         {
-          insertedInstrumentIds.append(inserted)
+          insertedInstruments.append(inserted)
         }
         let legRow = TransactionLegRow(
           id: leg.id,
@@ -166,27 +170,27 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
         try legRow.insert(database)
         legIds.append(leg.id)
       }
-      return CreateOutcome(legIds: legIds, instrumentIds: insertedInstrumentIds)
+      return CreateOutcome(legIds: legIds, instruments: insertedInstruments)
     }
 
     onRecordChanged(TransactionRow.recordType, transaction.id)
     for legId in result.legIds {
       onRecordChanged(TransactionLegRow.recordType, legId)
     }
-    for instrumentId in result.instrumentIds {
-      onInstrumentChanged(instrumentId)
+    for instrument in result.instruments {
+      onInstrumentChanged(instrument)
     }
     return transaction
   }
 
   /// Bundle returned by `create`'s write block: the legs that were
-  /// inserted (for the per-leg sync hook) and the instrument ids that
+  /// inserted (for the per-leg sync hook) and the instruments that
   /// the leg-level `ensureInstrumentReadable` had to auto-insert (for
-  /// the new instrument-side sync hook). Replaces a tuple to satisfy
+  /// the shared-registry publish hook). Replaces a tuple to satisfy
   /// SwiftLint's `large_tuple` policy.
   private struct CreateOutcome: Sendable {
     let legIds: [UUID]
-    let instrumentIds: [String]
+    let instruments: [Instrument]
   }
 
   func update(_ transaction: Transaction) async throws -> Transaction {
@@ -203,8 +207,8 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     for legId in outcome.deletedLegIds {
       onRecordDeleted(TransactionLegRow.recordType, legId)
     }
-    for instrumentId in outcome.insertedInstrumentIds {
-      onInstrumentChanged(instrumentId)
+    for instrument in outcome.insertedInstruments {
+      onInstrumentChanged(instrument)
     }
     return transaction
   }

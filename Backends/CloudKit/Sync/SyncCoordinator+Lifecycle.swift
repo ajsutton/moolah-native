@@ -188,20 +188,20 @@ extension SyncCoordinator {
       if shouldBackfillUnsynced {
         _ = await self.queueUnsyncedRecordsForAllProfiles()
       }
-      // Targeted instrument-only reconciliation. Runs unconditionally
-      // because the bug it fixes (auto-inserted stock/crypto rows that
-      // never reached CloudKit due to `ensureInstrumentReadable` not
-      // firing the sync hook) produces state that the flag-gated
-      // backfill above has already skipped on every prior launch.
-      // Idempotent: the instrument table is small and CKSyncEngine's
-      // pending list dedupes against rows already queued via the new
-      // hook plumbing.
-      _ = await self.queueUnsyncedInstrumentsForAllProfiles()
       // Shared-registry self-heal — re-queues any `instrument` row in
       // the profile-index DB whose `encoded_system_fields` is NULL.
       // Closes the gap between "union runner committed" and "engine
       // state file persisted" by catching first-launch rows that
       // never made it into the pending list. Cheap and idempotent.
+      //
+      // The previous per-profile-zone instrument backfill (which
+      // queued auto-inserted stock/crypto rows for upload to each
+      // `profile-<UUID>` zone) is decommissioned: post-stage-12b every
+      // instrument upload routes through the shared registry to the
+      // profile-index zone. The DEBUG trap in
+      // `ProfileDataSyncHandler.recordToSave` now refuses any
+      // residual per-profile-zone `InstrumentRecord` upload, so the
+      // self-heal lives entirely on the shared side.
       _ = self.queueUnsyncedSharedInstruments()
       if self.hasPendingChanges {
         self.logger.info("Zones ready — sending pending changes")

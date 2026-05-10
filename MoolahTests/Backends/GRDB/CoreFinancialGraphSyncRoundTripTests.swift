@@ -26,8 +26,17 @@ struct CoreFinancialGraphSyncRoundTripTests {
 
   // MARK: - InstrumentRow
 
-  @Test("Instrument upsert round-trips through CKSyncEngine apply")
-  func instrumentRoundTrip() async throws {
+  /// Decommissioned: post-shared-instrument-registry, every
+  /// `InstrumentRecord` lives on the profile-index zone. A delivery
+  /// to a per-profile zone is straggler state from a not-yet-upgraded
+  /// peer device — `applyRemoteChanges` must log-and-skip rather than
+  /// write into the per-profile `instrument` table that the v10
+  /// follow-up release deletes outright (spec §"Per-profile handler
+  /// decommissioning").
+  @Test(
+    "InstrumentRecord straggler on per-profile zone is silently ignored"
+  )
+  func instrumentApplyOnPerProfileZoneIsIgnored() async throws {
     let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
     let id = "1:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
     let source = InstrumentRow(
@@ -54,11 +63,7 @@ struct CoreFinancialGraphSyncRoundTripTests {
     let row = try await harness.database.read { database in
       try InstrumentRow.filter(InstrumentRow.Columns.id == id).fetchOne(database)
     }
-    let resolved = try #require(row)
-    #expect(resolved.id == id)
-    #expect(resolved.kind == "cryptoToken")
-    #expect(resolved.coingeckoId == "usd-coin")
-    #expect(resolved.encodedSystemFields == ckRecord.encodedSystemFields)
+    #expect(row == nil, "InstrumentRecord must not be applied to per-profile instrument table")
   }
 
   // MARK: - CategoryRow

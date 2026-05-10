@@ -87,12 +87,18 @@ protocol InstrumentRegistryRepository: Sendable {
   /// `all()` or `allCryptoRegistrations()` to obtain the updated snapshot —
   /// the `Void` payload is a signal, not a diff.
   ///
-  /// Scope: this stream fires only for *local* mutations on this
-  /// repository instance. Remote-change notifications delivered by
-  /// `CKSyncEngine` apply to `InstrumentRecord` via `batchUpsertInstruments`
-  /// and do NOT fan out through this stream — consumers that must react
-  /// to remote changes also subscribe to the existing per-profile
-  /// `SyncCoordinator` observer signal.
+  /// Scope: the stream fires for **both local mutations and
+  /// remote-arriving changes** on the registry's underlying storage.
+  /// Local mutations fan out synchronously inside the corresponding
+  /// `register…` / `update` / `remove` method; remote-arriving rows
+  /// from `ProfileIndexSyncHandler.applyRemoteChanges` (the
+  /// profile-index zone now carries `InstrumentRecord` after the
+  /// shared-instrument-registry rollout) fan out via the handler's
+  /// injected `onInstrumentRemoteChange` closure, which calls
+  /// `notifyExternalChange()` on the @MainActor-confined repository.
+  /// Subscribers therefore see both directions through this single
+  /// stream — no second per-profile `SyncCoordinator` subscription is
+  /// required.
   ///
   /// `@MainActor`-isolated because the implementation registers the
   /// continuation in a `@MainActor`-confined dictionary synchronously —

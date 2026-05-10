@@ -103,49 +103,12 @@ extension SyncCoordinator {
     return queued
   }
 
-  /// Targeted reconciliation that scans every cloud profile's
-  /// `instrument` table for non-fiat rows whose `encoded_system_fields`
-  /// is `NULL` and queues them for upload. Runs on every coordinator
-  /// start — *unconditionally*, not gated by the per-profile backfill
-  /// flag — because the bug it fixes (auto-inserted stock/crypto rows
-  /// that never reached CloudKit, see
-  /// `GRDBTransactionRepository+FKEnsure.ensureInstrumentReadable`)
-  /// produced state that the flag-gated `queueUnsyncedRecordsForAllProfiles`
-  /// has already skipped on every prior launch. The instrument table is
-  /// small (typically <100 rows) so the scan is cheap, and CKSyncEngine
-  /// dedupes against any row that's already in the pending list — so
-  /// running this alongside the regular hooks is idempotent.
-  ///
-  /// Returns the record IDs that were queued (empty if every profile
-  /// already had its non-fiat rows synced).
-  @discardableResult
-  func queueUnsyncedInstrumentsForAllProfiles() async -> [CKRecord.ID] {
-    var queued: [CKRecord.ID] = []
-    let allProfiles = await containerManager.allProfileIds()
-    for profileId in allProfiles {
-      let zoneID = CKRecordZone.ID(
-        zoneName: "profile-\(profileId.uuidString)",
-        ownerName: CKCurrentUserDefaultName)
-      guard let handler = try? handlerForProfileZone(profileId: profileId, zoneID: zoneID)
-      else {
-        logger.error(
-          "Failed to get handler for instrument backfill, profile \(profileId)")
-        continue
-      }
-      let recordIDs = handler.queueUnsyncedInstrumentRecords()
-      if !recordIDs.isEmpty {
-        syncEngine?.state.add(
-          pendingRecordZoneChanges: recordIDs.map { .saveRecord($0) })
-        refreshPendingUploadsMirror()
-        queued.append(contentsOf: recordIDs)
-      }
-    }
-    if !queued.isEmpty {
-      logger.info(
-        "Instrument-backfill scan queued \(queued.count) unsynced non-fiat instruments")
-    }
-    return queued
-  }
+  // `queueUnsyncedInstrumentsForAllProfiles` was removed when the
+  // shared-instrument-registry rollout finished. It used to scan
+  // every per-profile `instrument` table for unsynced non-fiat rows
+  // and queue them for upload to each `profile-<UUID>` zone — a path
+  // the new shared registry on the profile-index zone owns end-to-end.
+  // The replacement is `queueUnsyncedSharedInstruments()` below.
 
   /// Re-queues shared `InstrumentRecord` rows whose
   /// `encoded_system_fields` is `NULL`. Closes the residual idempotency

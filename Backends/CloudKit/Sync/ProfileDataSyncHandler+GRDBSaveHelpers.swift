@@ -49,21 +49,27 @@ extension ProfileDataSyncHandler {
     }
   }
 
+  /// **Decommissioned per-profile-zone apply path.** Every
+  /// `InstrumentRecord` save now lives on the profile-index zone (the
+  /// shared registry). A delivery on a per-profile zone is either
+  /// straggler state from a not-yet-upgraded peer device or a
+  /// pre-`v10_drop_shared_instrument_legacy` migration replay; either
+  /// way, applying it would write into the per-profile `instrument`
+  /// table that the v10 follow-up release deletes outright. Spec
+  /// §"Per-profile handler decommissioning" requires we silently log
+  /// and skip — never apply.
   nonisolated func applyBatchSaveInstrument(
     ckRecords: [CKRecord], systemFields: [String: Data]
   ) throws {
-    let context = GRDBBatchSaveContext(
-      ckRecords: ckRecords,
-      systemFields: systemFields,
-      site: "applyGRDBBatchSave[Instrument]")
-    let rows = mapRows(
-      context: context,
-      fieldValues: InstrumentRow.fieldValues(from:),
-      idKey: { $0.id },
-      stamp: stampSystemFields)
-    try writeRemote(site: context.site) {
-      try grdbRepositories.instruments.applyRemoteChangesSync(saved: rows, deleted: [])
-    }
+    guard !ckRecords.isEmpty else { return }
+    logger.warning(
+      """
+      Ignoring \(ckRecords.count, privacy: .public) straggler \
+      InstrumentRecord save(s) delivered to per-profile zone \
+      \(self.zoneID.zoneName, privacy: .public) — shared registry on \
+      the profile-index zone is the canonical source.
+      """
+    )
   }
 
   nonisolated func applyBatchSaveAccount(

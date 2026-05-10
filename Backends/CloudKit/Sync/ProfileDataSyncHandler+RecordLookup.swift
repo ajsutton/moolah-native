@@ -26,31 +26,47 @@ extension ProfileDataSyncHandler {
   /// recordName (`<recordType>|<UUID>`); unprefixed recordNames are
   /// treated as string IDs and routed to the Instrument lookup.
   ///
-  /// **Logged warning for `InstrumentRecord` on per-profile zones.**
-  /// After stage 12b, production code reroutes `InstrumentRecord`
-  /// writes through the shared registry on the profile-index zone.
-  /// A pending change for an `InstrumentRecord` arriving here is
-  /// either residual state from a pre-12b binary (benign — fetch
-  /// returns nil, the engine drops the change) or a regression of
-  /// the spam-once-everywhere contract. Logging makes both paths
-  /// observable without crashing tests that intentionally use the
-  /// per-profile registry path.
+  /// **DEBUG trap for `InstrumentRecord` on per-profile zones.**
+  /// After the shared-instrument-registry rollout, every `InstrumentRecord`
+  /// upload routes through the shared registry on the profile-index
+  /// zone. A pending change for `InstrumentRecord` reaching this
+  /// per-profile handler is a programmer error: a callsite either
+  /// retained the legacy per-profile-zone queueing path or a regression
+  /// re-introduced one. The DEBUG `preconditionFailure` fails the test
+  /// suite immediately so the regression cannot land. Release builds
+  /// log the violation and return `nil`, letting CKSyncEngine drop the
+  /// change — the spec's audit-before-merge code-search is the primary
+  /// guard; this trap is the backstop.
+  ///
+  /// String-keyed recordIDs (the bare `recordName` form previously
+  /// reserved for `InstrumentRecord`) are also caught here: they no
+  /// longer have a legitimate per-profile path either, so the same
+  /// trap applies symmetrically.
   func recordToSave(for recordID: CKRecord.ID) -> CKRecord? {
     if let recordType = recordID.prefixedRecordType, let uuid = recordID.uuid {
       if recordType == InstrumentRow.recordType {
-        logger.warning(
-          """
-          InstrumentRecord queued for per-profile zone \
-          \(self.zoneID.zoneName, privacy: .public) — should land on \
-          profile-index zone via the shared registry post-stage-12b
-          """
-        )
+        return trapInstrumentOnPerProfileZone(detail: "prefixed UUID upload")
       }
       return fetchAndBuild(recordType: recordType, uuid: uuid)
     }
-    return fetchInstrumentRow(id: recordID.recordName).map { row in
-      buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
-    }
+    return trapInstrumentOnPerProfileZone(
+      detail: "string-keyed recordName \(recordID.recordName)")
+  }
+
+  private func trapInstrumentOnPerProfileZone(detail: String) -> CKRecord? {
+    let message =
+      """
+      InstrumentRecord upload routed to per-profile zone \
+      \(self.zoneID.zoneName) (\(detail)) — every InstrumentRecord \
+      write must go through the shared registry on the profile-index \
+      zone. Audit the callsite that produced this pending change.
+      """
+    #if DEBUG
+      preconditionFailure(message)
+    #else
+      logger.error("\(message, privacy: .public)")
+      return nil
+    #endif
   }
 
   // MARK: - Per-Type Dispatch

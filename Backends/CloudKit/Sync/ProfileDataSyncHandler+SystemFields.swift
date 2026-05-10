@@ -113,22 +113,18 @@ extension ProfileDataSyncHandler {
   private func applySystemFields(from ckRecord: CKRecord) {
     let data = ckRecord.encodedSystemFields
     if ckRecord.recordType == InstrumentRow.recordType {
-      let id = ckRecord.recordID.systemFieldsKey
-      do {
-        let applied = try self.grdbRepositories.instruments
-          .setEncodedSystemFieldsSync(id: id, data: data)
-        if !applied {
-          logger.warning(
-            "No GRDB row to cache system fields for \(InstrumentRow.recordType, privacy: .public) \(id, privacy: .public)"
-          )
-        }
-      } catch {
-        logger.error(
-          """
-          GRDB system-fields update failed for \(InstrumentRow.recordType, privacy: .public) \
-          \(id, privacy: .public): \(error.localizedDescription, privacy: .public)
-          """)
-      }
+      // Decommissioned: every InstrumentRecord lives on the
+      // profile-index zone now. A per-profile-zone delivery is
+      // straggler state; skip without writing system fields back to
+      // the per-profile `instrument` table (which the v10 follow-up
+      // drops outright).
+      logger.warning(
+        """
+        Ignoring straggler InstrumentRecord system-fields apply for \
+        \(ckRecord.recordID.recordName, privacy: .public) on per-profile zone \
+        \(self.zoneID.zoneName, privacy: .public).
+        """
+      )
       return
     }
     guard let uuid = ckRecord.recordID.uuid else {
@@ -148,16 +144,17 @@ extension ProfileDataSyncHandler {
     for recordID: CKRecord.ID, recordType: String
   ) {
     if recordType == InstrumentRow.recordType {
-      let id = recordID.systemFieldsKey
-      do {
-        _ = try self.grdbRepositories.instruments.setEncodedSystemFieldsSync(id: id, data: nil)
-      } catch {
-        logger.error(
-          """
-          GRDB system-fields clear failed for \(InstrumentRow.recordType, privacy: .public) \
-          \(id, privacy: .public): \(error.localizedDescription, privacy: .public)
-          """)
-      }
+      // Decommissioned: see `applySystemFields(from:)` above. The
+      // per-profile `instrument` table is no longer the source of
+      // truth, so clearing its system fields in response to an
+      // unknown-item failure on a per-profile zone is unnecessary.
+      logger.warning(
+        """
+        Ignoring straggler InstrumentRecord system-fields clear for \
+        \(recordID.recordName, privacy: .public) on per-profile zone \
+        \(self.zoneID.zoneName, privacy: .public).
+        """
+      )
       return
     }
     guard let uuid = recordID.uuid else {
