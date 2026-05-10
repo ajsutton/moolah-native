@@ -15,7 +15,12 @@ struct SharedRegistryUnionRunnerTests {
 
   // MARK: - Fixtures
 
-  private struct Fixture {
+  // `UserDefaults` is thread-safe but not declared `Sendable` in
+  // Foundation, so opt out of the auto-derived check. The fixture
+  // itself escapes to `nonisolated SharedRegistryUnionRunner.run` and
+  // we touch `fixture.defaults` again on the main actor afterwards;
+  // the underlying Obj-C class handles concurrent access internally.
+  private struct Fixture: @unchecked Sendable {
     let sharedQueue: DatabaseQueue
     let profileQueues: [UUID: DatabaseQueue]
     let defaults: UserDefaults
