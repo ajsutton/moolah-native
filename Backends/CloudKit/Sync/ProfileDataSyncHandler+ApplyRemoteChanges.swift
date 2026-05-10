@@ -139,10 +139,11 @@ extension ProfileDataSyncHandler {
     // per-profile zone. After stages 12b/13 every `InstrumentRecord`
     // flows through the shared registry on the profile-index zone, so
     // any straggler delivery here from a not-yet-upgraded peer device
-    // is benign — `applyRemoteChanges` writes the row into the
-    // per-profile `instrument` table (which the follow-up
-    // `v10_drop_shared_instrument_legacy` migration will drop), but
-    // no UI consumer reads from it anymore.
+    // is silently logged and skipped by
+    // `applyBatchSaveInstrument` / `applyGRDBBatchDeletion` — never
+    // applied to the per-profile `instrument` table that the
+    // follow-up `v10_drop_shared_instrument_legacy` migration will
+    // drop. No UI consumer reads from that table anymore.
     return .success(changedTypes: changedTypes)
   }
 
