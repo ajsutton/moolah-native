@@ -3,9 +3,11 @@ import SwiftUI
 /// "Block explorer" section in the transaction detail. Shown when at
 /// least one of the transaction's legs has an `externalId` (the on-chain
 /// tx hash recorded by the wallet importer) and a resolvable chain id.
-/// One link per qualifying leg — for a multi-leg merged transfer with
-/// gas + value legs sharing the same hash, both legs render their own
-/// row so the user can see explicit per-leg provenance.
+/// One link per **unique on-chain hash**: a wallet-imported transaction
+/// typically has multiple legs (e.g. transfer + gas) that all share the
+/// same hash, so a single explorer link covers the whole transaction.
+/// On the rare path where legs span multiple hashes, each unique URL
+/// renders once.
 ///
 /// We deliberately render this as plain `Link` rows rather than a
 /// stylised "Open in Etherscan" pill: explorers across chains use
@@ -14,55 +16,49 @@ import SwiftUI
 struct TransactionDetailBlockExplorerSection: View {
   let transaction: Transaction
 
-  /// Legs with both an `externalId` and a chain id resolvable via
-  /// `ChainConfig`, paired with their canonical explorer URL.
-  /// Computed once per render so the body is straight-line code.
-  private var entries: [Entry] {
-    transaction.legs.enumerated().compactMap { index, leg -> Entry? in
-      guard let externalId = leg.externalId,
-        let chainId = leg.instrument.chainId,
-        let url = BlockExplorerLink.transactionURL(chainId: chainId, hash: externalId)
-      else { return nil }
-      return Entry(legIndex: index, url: url, ticker: leg.instrument.displayLabel)
-    }
-  }
-
-  /// Whether the section should render at all. Hidden when no leg has a
-  /// usable explorer link so the section header doesn't appear empty.
-  var isApplicable: Bool { !entries.isEmpty }
+  /// Whether the section should render at all. Hidden when no leg has
+  /// a usable explorer link so the section header doesn't appear empty.
+  var isApplicable: Bool { !Self.explorerURLs(for: transaction.legs).isEmpty }
 
   var body: some View {
-    if isApplicable {
-      let legs = entries
+    let urls = Self.explorerURLs(for: transaction.legs)
+    if !urls.isEmpty {
       Section("Block Explorer") {
-        ForEach(legs) { entry in
-          Link(destination: entry.url) {
+        ForEach(urls, id: \.self) { url in
+          Link(destination: url) {
             Label("View on block explorer", systemImage: "arrow.up.right.square")
-              .accessibilityLabel(accessibilityLabel(for: entry, totalLegs: legs.count))
           }
-          .accessibilityIdentifier(
-            UITestIdentifiers.Detail.blockExplorerLink(legIndex: entry.legIndex))
+          .accessibilityIdentifier(UITestIdentifiers.Detail.blockExplorerLink)
         }
       }
     }
   }
 
-  /// VoiceOver label that disambiguates per-leg links in the multi-leg
-  /// case ("View ETH leg on block explorer") and stays terse in the
-  /// common single-leg case ("View on block explorer").
-  private func accessibilityLabel(for entry: Entry, totalLegs: Int) -> String {
-    totalLegs == 1
-      ? "View on block explorer"
-      : "View \(entry.ticker) leg on block explorer"
-  }
-
-  /// One renderable row. `legIndex` doubles as the `Identifiable` id —
-  /// stable across re-renders because the leg order is fixed by the
-  /// transaction.
-  private struct Entry: Identifiable {
-    let legIndex: Int
-    let url: URL
-    let ticker: String
-    var id: Int { legIndex }
+  /// Distinct block-explorer URLs for the supplied legs in first-seen
+  /// order. The `externalId` overload strips the `<category>:<index>`
+  /// (transfer leg) or `gas` (gas leg) suffix to recover the bare
+  /// on-chain hash the explorer expects — issue #848. The per-URL
+  /// dedup collapses the usual transfer-plus-gas pair (sharing one
+  /// hash) down to a single row, matching the user's mental model
+  /// that one transaction = one explorer link.
+  ///
+  /// `nonisolated` so the dedup logic is testable from a non-MainActor
+  /// suite without spinning up a SwiftUI context. Also exposed as a
+  /// static helper because the view is `@MainActor` and the body's
+  /// "is the section worth rendering" guard wants to share the same
+  /// computation that produces the rows.
+  nonisolated static func explorerURLs(for legs: [TransactionLeg]) -> [URL] {
+    var seen: Set<URL> = []
+    var result: [URL] = []
+    for leg in legs {
+      guard let externalId = leg.externalId,
+        let chainId = leg.instrument.chainId,
+        let url = BlockExplorerLink.transactionURL(chainId: chainId, externalId: externalId)
+      else { continue }
+      if seen.insert(url).inserted {
+        result.append(url)
+      }
+    }
+    return result
   }
 }

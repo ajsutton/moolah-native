@@ -39,4 +39,22 @@ enum BlockExplorerLink {
       .appendingPathComponent("address", isDirectory: false)
       .appendingPathComponent(address, isDirectory: false)
   }
+
+  /// Convenience for the per-leg "View on block explorer" link in the
+  /// transaction detail. Wallet-importer legs persist `externalId` in
+  /// Alchemy's `uniqueId` form `<hash>:<category>:<index>` (transfer
+  /// legs) or `<hash>:gas` (gas legs) — the suffix scopes the
+  /// `(accountId, externalId)` namespace so a multi-event transaction
+  /// can persist multiple legs from one on-chain hash. The explorer
+  /// expects the bare hash, so this method strips the first `:` and
+  /// everything after before forwarding to
+  /// `transactionURL(chainId:hash:)`. A bare hash (no `:`) is accepted
+  /// unchanged for non-importer call sites. An empty hash portion
+  /// returns `nil`. See issue #848.
+  static func transactionURL(chainId: Int, externalId: String) -> URL? {
+    let parts = externalId.split(
+      separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+    guard let first = parts.first, !first.isEmpty else { return nil }
+    return transactionURL(chainId: chainId, hash: String(first))
+  }
 }
