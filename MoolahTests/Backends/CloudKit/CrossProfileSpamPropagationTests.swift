@@ -79,13 +79,17 @@ struct CrossProfileSpamPropagationTests {
     try await registry.update(marked)
 
     // Bounded wait for the propagation tick. The waiter task either
-    // completes (propagation fired) or stays blocked (regression).
-    // Cancel the waiter on timeout so the test fails instead of
-    // hanging.
+    // completes (propagation fired) or stays blocked (regression). A
+    // `ContinuousClock`-deadline race lets the test fail fast on
+    // regression without `Task.sleep` (spec §Testing line 309: "Never
+    // `Task.sleep`" — the propagation-detection path uses
+    // `iterator.next()` directly; this deadline race is the
+    // fail-fast backstop).
     try await withThrowingTaskGroup(of: Void.self) { group in
       group.addTask { await waiter.value }
       group.addTask {
-        try await Task.sleep(for: .seconds(2))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        try await ContinuousClock().sleep(until: deadline)
         waiter.cancel()
         Issue.record(
           "observeChanges() did not fire after spam mutation")

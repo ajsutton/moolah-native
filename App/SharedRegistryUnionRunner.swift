@@ -79,7 +79,19 @@ enum SharedRegistryUnionRunner {
       return
     }
 
-    let sortedIds = profileIds.sorted { $0.uuidString < $1.uuidString }
+    // Spec §Migration step 2 line 257 — sort ascending by `profile.id`
+    // (BLOB UUID; SQLite `ORDER BY id` byte-order). The deterministic
+    // tie-breaker for conflicting non-null provider mappings depends on
+    // this exact order, so use the raw 16-byte representation rather
+    // than the canonical 36-char `uuidString` form (the two orderings
+    // can disagree once a hex digit crosses a half-byte boundary).
+    let sortedIds = profileIds.sorted { lhs, rhs in
+      withUnsafeBytes(of: lhs.uuid) { lhsBytes in
+        withUnsafeBytes(of: rhs.uuid) { rhsBytes in
+          lhsBytes.lexicographicallyPrecedes(rhsBytes)
+        }
+      }
+    }
     var successfulCount = 0
     var skippedCount = 0
     let registry = GRDBInstrumentRegistryRepository(database: sharedQueue)
