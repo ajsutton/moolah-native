@@ -19,6 +19,13 @@ import Testing
 /// In both cases `receipt.from != walletAddress`, and
 /// `TransferReceiptCoalescer.makeGasLeg` returns `nil`. The transfer
 /// leg is still produced; only the gas leg is suppressed.
+///
+/// The third path here is the *positive* case: the wallet signs a tx
+/// that only emits inbound (`to = wallet`) ERC-20 / internal events —
+/// e.g. a contract call that mints, claims, or buys a token for the
+/// wallet. The earlier predicate keyed receipt eligibility off "any
+/// transfer event has `from == wallet`" and missed these, dropping the
+/// gas leg even though the wallet paid the fee.
 @Suite("TransferEventBuilder — gas attribution gating")
 struct TransferEventBuilderGasAttributionTests {
   private static let wallet = "0x1111111111111111111111111111111111111111"
@@ -27,6 +34,7 @@ struct TransferEventBuilderGasAttributionTests {
 
   private static let gasUsed = Decimal(21_000)
   private static let gasPrice = Decimal(1_500_000_000)
+  private static let expectedFeeEth = dec("0.0000315")
 
   // MARK: - Outer-tx signed by someone else → no gas leg
 
@@ -36,9 +44,10 @@ struct TransferEventBuilderGasAttributionTests {
   func internalTransferSignedBySomeoneElseDoesNotEmitGasLeg() async throws {
     let subject = makeDiscoverySubject()
     let alchemy = RecordingAlchemyClientStub()
-    // Receipt is fetched (the outboundHashes heuristic still trips on
-    // `from == wallet` for any non-NFT transfer), but the EOA that
-    // signed the tx is the counterparty — wallet did not pay gas.
+    // Receipt is fetched — the wallet appears as `from` of a non-NFT
+    // event so the cheap pre-filter can't rule out wallet-signed. The
+    // authoritative gate is `receipt.from`: here the EOA that signed
+    // the tx is the counterparty, so the gas leg is suppressed.
     alchemy.setReceiptResponse(
       .receipt(
         AlchemyTransactionReceipt(
@@ -132,5 +141,102 @@ struct TransferEventBuilderGasAttributionTests {
         $0.externalId?.hasSuffix(":gas") == false
       })
     #expect(alchemy.recordedReceiptCalls == ["0xtransferfrom"])
+  }
+
+  // MARK: - Wallet-signed tx with only inbound events → gas leg attached
+
+  @Test(
+    "Inbound-only ERC-20 (wallet calls a contract that mints/claims tokens to it) → gas leg attached"
+  )
+  func inboundOnlyErc20WithWalletSignedReceiptEmitsGasLeg() async throws {
+    let subject = makeDiscoverySubject()
+    subject.resolver.script(
+      .init(chainId: 1, contractAddress: Self.usdcAddress.lowercased()),
+      .success(coingecko: "usd-coin", cryptocompare: nil, binance: nil))
+    let alchemy = RecordingAlchemyClientStub()
+    // Wallet signed the outer tx and paid the fee. The on-chain shape:
+    // wallet calls a contract; the contract emits an ERC-20 `Transfer`
+    // log with `to = wallet`. No transfer event has `from = wallet`,
+    // so the earlier `from == walletAddress` predicate skipped the
+    // receipt fetch and dropped the gas leg.
+    alchemy.setReceiptResponse(
+      .receipt(
+        AlchemyTransactionReceipt(
+          hash: "0xclaim",
+          gasUsed: Self.gasUsed,
+          effectiveGasPrice: Self.gasPrice,
+          from: Self.wallet)
+      ),
+      for: "0xclaim")
+
+    let account = makeCryptoAccount(walletAddress: Self.wallet, chain: .ethereum)
+    let origin = makeWalletImportOrigin(for: account.id)
+    let transfer = makeAlchemyTransfer(
+      hash: "0xclaim",
+      from: Self.counterparty,
+      to: Self.wallet,
+      category: .erc20,
+      asset: "USDC",
+      contractAddress: Self.usdcAddress,
+      decimalsHex: "0x6",
+      rawValueHex: "0x5f5e100")
+
+    let built = try await TransferEventBuilder().build(
+      transfers: [transfer],
+      account: account,
+      services: BuilderServices(
+        chain: .ethereum,
+        discovery: subject.service,
+        alchemy: alchemy),
+      importOrigin: origin)
+
+    let candidate = try #require(built.first)
+    let transferLeg = try #require(
+      candidate.transaction.legs.first(where: { $0.externalId == "0xclaim:0" }))
+    let gasLeg = try #require(
+      candidate.transaction.legs.first(where: { $0.externalId == "0xclaim:gas" }))
+    #expect(candidate.transaction.legs.count == 2)
+    #expect(transferLeg.type == .income)
+    #expect(transferLeg.instrument.contractAddress == Self.usdcAddress.lowercased())
+    #expect(gasLeg.type == .expense)
+    #expect(gasLeg.instrument == ChainConfig.ethereum.nativeInstrument)
+    #expect(gasLeg.quantity == -Self.expectedFeeEth)
+    #expect(alchemy.recordedReceiptCalls == ["0xclaim"])
+  }
+
+  @Test(
+    "Inbound-only `.external` (someone else sends ETH to wallet) → no receipt fetch, no gas leg"
+  )
+  func inboundExternalDoesNotTriggerReceiptFetch() async throws {
+    let subject = makeDiscoverySubject()
+    let alchemy = RecordingAlchemyClientStub()
+    // No receipt scripted — wallet was never the signer here, so the
+    // predicate must not request a receipt for this hash. `.external`
+    // is always a top-level call: `from` is the EOA, so we can prove
+    // the wallet didn't sign without a round-trip.
+    let account = makeCryptoAccount(walletAddress: Self.wallet, chain: .ethereum)
+    let origin = makeWalletImportOrigin(for: account.id)
+    let transfer = makeAlchemyTransfer(
+      hash: "0xpayme",
+      from: Self.counterparty,
+      to: Self.wallet,
+      category: .external)
+
+    let built = try await TransferEventBuilder().build(
+      transfers: [transfer],
+      account: account,
+      services: BuilderServices(
+        chain: .ethereum,
+        discovery: subject.service,
+        alchemy: alchemy),
+      importOrigin: origin)
+
+    let candidate = try #require(built.first)
+    #expect(candidate.transaction.legs.count == 1)
+    #expect(
+      candidate.transaction.legs.allSatisfy {
+        $0.externalId?.hasSuffix(":gas") == false
+      })
+    #expect(alchemy.recordedReceiptCalls.isEmpty)
   }
 }

@@ -79,16 +79,29 @@ enum TransferReceiptCoalescer {
   }
 
   /// Walks the grouped transfers and returns the set of `txHash` values
-  /// that have at least one outbound transfer for this wallet —
-  /// `external` for native sends, `erc20` (or `internal`) where this
-  /// wallet is the from-side token sender. The Alchemy transfer
-  /// endpoint reports `from` as the EOA on a top-level call
-  /// (`external`) and as the token sender on an `erc20` row; in the
-  /// simple `transfer()` case those are the same address, so a `from ==
-  /// walletAddress` match across any accepted category is a reliable
-  /// signal that this wallet paid the gas. NFT (`unknown`) categories
-  /// are filtered out — gas-leg attribution is only meaningful for
-  /// accepted categories.
+  /// for which we need to fetch the receipt to decide gas attribution.
+  /// The authoritative gate (`receipt.from == walletAddress`) lives in
+  /// `makeGasLeg`; this predicate is just the cheap pre-filter that
+  /// avoids a network round-trip for hashes we can already prove the
+  /// wallet didn't sign.
+  ///
+  /// A hash is eligible when any non-NFT event in the group either:
+  ///
+  /// - has `from == walletAddress` — the wallet may be the signer
+  ///   (`.external`), or appears as the token-sender row of a contract
+  ///   call (`.erc20` / `.internal`), and we can't tell from the
+  ///   transfer alone whether the wallet itself or a third-party router
+  ///   signed; or
+  /// - has any non-`.external` category, regardless of direction —
+  ///   `.erc20` and `.internal` rows can come from a contract call the
+  ///   wallet signed even when every transfer event has the wallet as
+  ///   `to` (a mint, claim, or contract-buy). `.external` is the only
+  ///   category that's always a top-level call: its `from` is the EOA,
+  ///   so an `.external` row with `from != walletAddress` proves the
+  ///   wallet didn't sign and a receipt fetch is unnecessary.
+  ///
+  /// NFT (`unknown`) categories are filtered out — gas-leg attribution
+  /// is only meaningful for accepted categories.
   ///
   /// The walk preserves first-seen order so receipt fetches retire in a
   /// deterministic sequence (helps with signpost tracing).
@@ -100,11 +113,12 @@ enum TransferReceiptCoalescer {
     var ordered: [String] = []
     for events in groups {
       guard let first = events.first else { continue }
-      let isOutbound = events.contains { event in
-        event.category != .unknown
-          && event.from.lowercased() == walletAddress
+      let needsReceipt = events.contains { event in
+        guard event.category != .unknown else { return false }
+        if event.from.lowercased() == walletAddress { return true }
+        return event.category != .external
       }
-      guard isOutbound, seen.insert(first.hash).inserted else { continue }
+      guard needsReceipt, seen.insert(first.hash).inserted else { continue }
       ordered.append(first.hash)
     }
     return ordered
