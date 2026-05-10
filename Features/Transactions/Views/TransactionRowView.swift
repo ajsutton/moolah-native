@@ -38,7 +38,9 @@ struct TransactionRowView: View {
     @ScaledMetric private var verticalPadding: CGFloat = 12
   #endif
 
-  @Environment(\.spamInstruments) private var spamInstruments
+  // `internal` so the leading-icon helpers in the `+Icon.swift` extension
+  // can read the env-injected spam set when computing `rowIsSpam`.
+  @Environment(\.spamInstruments) var spamInstruments
 
   // MARK: - Body & View Builders
 
@@ -55,34 +57,6 @@ struct TransactionRowView: View {
     .disabled(isPaying)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityDescription)
-  }
-
-  /// The row's leading type-icon (income/expense/transfer/swap arrow) at
-  /// its normal colour, dimmed to 50% when `rowIsSpam`, with a small yellow
-  /// `exclamationmark.octagon.fill` badge overlaid on its bottom-trailing
-  /// corner. The badge sits at full opacity so the spam signal stays vivid
-  /// against the muted icon.
-  private var typeIconWithSpamBadge: some View {
-    Image(systemName: iconName)
-      .foregroundStyle(iconColor)
-      .frame(width: UIConstants.IconSize.listIcon, height: UIConstants.IconSize.listIcon)
-      .opacity(rowIsSpam ? 0.5 : 1.0)
-      .overlay(alignment: .bottomTrailing) {
-        if rowIsSpam {
-          Image(systemName: "exclamationmark.octagon.fill")
-            .symbolRenderingMode(.palette)
-            .foregroundStyle(.black, .yellow)
-            .imageScale(.small)
-            .accessibilityHidden(true)
-        }
-      }
-      .accessibilityHidden(true)
-  }
-
-  /// True when any leg's instrument is in the env-injected `spamInstruments`
-  /// set. Drives the row-level grey-out and the leading-icon substitution.
-  private var rowIsSpam: Bool {
-    transaction.legs.contains { spamInstruments.contains($0.instrument) }
   }
 
   // MARK: - Title
@@ -271,36 +245,6 @@ struct TransactionRowView: View {
       parts.append("repeats \(recurrence)")
     }
     return parts.joined(separator: ", ")
-  }
-
-  // MARK: - Icon
-
-  private var iconName: String {
-    if transaction.isTrade { return "arrow.up.arrow.down" }
-    guard transaction.isSimple, let type = transaction.legs.first?.type else {
-      return "arrow.trianglehead.branch"
-    }
-    switch type {
-    case .income: return "arrow.up"
-    case .expense: return "arrow.down"
-    case .transfer: return "arrow.left.arrow.right"
-    case .openingBalance: return "flag.fill"
-    case .trade: return "arrow.up.arrow.down"
-    }
-  }
-
-  private var iconColor: Color {
-    if transaction.isTrade { return .indigo }
-    guard transaction.isSimple, let type = transaction.legs.first?.type else {
-      return .purple
-    }
-    switch type {
-    case .income: return .green
-    case .expense: return .red
-    case .transfer: return .blue
-    case .openingBalance: return .orange
-    case .trade: return .indigo
-    }
   }
 
   private var categoryNames: [String] {
