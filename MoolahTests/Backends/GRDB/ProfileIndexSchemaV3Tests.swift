@@ -8,9 +8,6 @@ import Testing
 
 /// Confirms `v3_shared_instrument_registry` creates the expected tables
 /// in their post-v8 / post-v4 final shape on `profile-index.sqlite`.
-///
-/// See `plans/2026-05-09-shared-instrument-registry-design.md` and
-/// `plans/2026-05-09-shared-instrument-registry-plan.md` (Task 1).
 @Suite("ProfileIndexSchema — v3_shared_instrument_registry")
 struct ProfileIndexSchemaV3Tests {
   private func makeMigratedDatabase() throws -> DatabaseQueue {

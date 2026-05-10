@@ -9,9 +9,6 @@ import Testing
 /// Confirms `SharedRegistryStore` reads, mutates, and observes the
 /// registry correctly. Errors propagate to the caller; the
 /// observation task auto-refreshes on every registry mutation.
-///
-/// See `plans/2026-05-09-shared-instrument-registry-design.md` and
-/// `plans/2026-05-09-shared-instrument-registry-plan.md` (Task 3).
 @MainActor
 @Suite("SharedRegistryStore")
 struct SharedRegistryStoreTests {
@@ -23,7 +20,7 @@ struct SharedRegistryStoreTests {
     // GRDBInstrumentRegistryRepository operates over that table.
     let queue = try ProfileIndexDatabase.openInMemory()
     let registry = GRDBInstrumentRegistryRepository(database: queue)
-    let store = makeStore(registry: registry, database: queue)
+    let store = makeStore(registry: registry)
 
     try await registry.registerCrypto(
       Instrument.crypto(
@@ -52,7 +49,7 @@ struct SharedRegistryStoreTests {
     // GRDBInstrumentRegistryRepository operates over that table.
     let queue = try ProfileIndexDatabase.openInMemory()
     let registry = GRDBInstrumentRegistryRepository(database: queue)
-    let store = makeStore(registry: registry, database: queue)
+    let store = makeStore(registry: registry)
 
     let registration = CryptoRegistration(
       instrument: Instrument.crypto(
@@ -79,7 +76,7 @@ struct SharedRegistryStoreTests {
     // GRDBInstrumentRegistryRepository operates over that table.
     let queue = try ProfileIndexDatabase.openInMemory()
     let registry = GRDBInstrumentRegistryRepository(database: queue)
-    let store = makeStore(registry: registry, database: queue)
+    let store = makeStore(registry: registry)
 
     try await registry.registerCrypto(
       Instrument.crypto(
@@ -105,19 +102,60 @@ struct SharedRegistryStoreTests {
     #expect(store.registrationsVersion == initialVersion &+ 1)
   }
 
+  @Test(
+    "removeRegistration drops the row from registrations / instruments / providerMappings and bumps the version"
+  )
+  func removeRegistrationDropsRowAndBumpsVersion() async throws {
+    let queue = try ProfileIndexDatabase.openInMemory()
+    let registry = GRDBInstrumentRegistryRepository(database: queue)
+    let store = makeStore(registry: registry)
+
+    let id = "1:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+    try await registry.registerCrypto(
+      Instrument.crypto(
+        chainId: 1,
+        contractAddress: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        symbol: "WETH",
+        name: "Wrapped Ether",
+        decimals: 18),
+      mapping: CryptoProviderMapping(
+        instrumentId: id,
+        coingeckoId: "weth",
+        cryptocompareSymbol: nil,
+        binanceSymbol: nil))
+    await store.loadRegistrations()
+    let initialVersion = store.registrationsVersion
+    let registration = try #require(store.registrations.first)
+
+    try await store.removeRegistration(registration)
+
+    #expect(store.registrations.isEmpty)
+    #expect(store.instruments.isEmpty)
+    #expect(store.providerMappings[id] == nil)
+    #expect(store.registrationsVersion == initialVersion &+ 1)
+  }
+
+  @Test("removeInstrument is a no-op when the instrument id is not registered")
+  func removeInstrumentNoOpsForUnknownInstrument() async throws {
+    let queue = try ProfileIndexDatabase.openInMemory()
+    let registry = GRDBInstrumentRegistryRepository(database: queue)
+    let store = makeStore(registry: registry)
+
+    let initialVersion = store.registrationsVersion
+    // No prior registration: removeInstrument should silently succeed
+    // without throwing or bumping the version.
+    try await store.removeInstrument(
+      Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP Group"))
+    #expect(store.registrations.isEmpty)
+    #expect(store.registrationsVersion == initialVersion)
+  }
+
   // MARK: - Helpers
 
-  @MainActor
+  // `@MainActor` propagates from the enclosing `@Suite` struct.
   private func makeStore(
-    registry: any InstrumentRegistryRepository,
-    database: any DatabaseWriter
+    registry: any InstrumentRegistryRepository
   ) -> SharedRegistryStore {
-    SharedRegistryStore(
-      registry: registry,
-      cryptoPriceService: CryptoPriceService(
-        clients: [],
-        database: database,
-        resolutionClient: FixedTokenResolutionClient()),
-      conversionService: FixedConversionService())
+    SharedRegistryStore(registry: registry)
   }
 }

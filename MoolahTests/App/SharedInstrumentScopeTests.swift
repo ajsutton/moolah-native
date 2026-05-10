@@ -9,9 +9,6 @@ import Testing
 /// Confirms `SharedInstrumentScope` constructs a passive holder of the
 /// shared registry and price-cache / search / discovery services and
 /// exposes them via its public surface.
-///
-/// See `plans/2026-05-09-shared-instrument-registry-design.md` and
-/// `plans/2026-05-09-shared-instrument-registry-plan.md` (Task 2).
 @MainActor
 @Suite("SharedInstrumentScope holder")
 struct SharedInstrumentScopeTests {

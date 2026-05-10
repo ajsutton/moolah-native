@@ -157,6 +157,43 @@ final class SyncCoordinator {
   /// read the handler without a MainActor hop.
   nonisolated let profileIndexHandler: ProfileIndexSyncHandler
 
+  /// The app-level shared `GRDBInstrumentRegistryRepository`. Exposed
+  /// so `ProfileSession.makeCloudKitBackend` can hand the same instance
+  /// to every session's `CloudKitBackend`. Settings views, the search
+  /// service, and the conversion service all read from this shared
+  /// instance rather than per-profile registries.
+  ///
+  /// `nil` for legacy callers (e.g. tests) that don't pass a shared
+  /// registry — those continue with the per-profile registry path.
+  nonisolated let sharedInstrumentRegistry: GRDBInstrumentRegistryRepository?
+
+  /// App-level shared `MarketDataServices` (exchange / stock / crypto
+  /// price services + Yahoo client + CoinGecko key) pointed at the
+  /// profile-index DB. When wired, every profile session reads through
+  /// these instead of constructing per-profile copies, so price-cache
+  /// writes land in the same DB and feed the `notifyRateCacheChange`
+  /// observation. `nil` for tests that don't pass shared services.
+  nonisolated let sharedMarketData: ProfileSession.MarketDataServices?
+
+  /// App-level shared `SharedRegistryStore` — owns the registry data
+  /// (`registrations`, `instruments`, `providerMappings`,
+  /// `registrationsVersion`) and subscribes to the registry's
+  /// `observeChanges()` so a mutation through any session (or a
+  /// remote-arriving CKSyncEngine apply) updates every session's
+  /// view on the next read. Per-session `CryptoTokenStore` instances
+  /// hold a reference and proxy data reads to this store; per-
+  /// session UI state (`error`, `isLoading`) stays on the per-session
+  /// store so a transient failure in one session doesn't leak onto
+  /// every Settings screen. `nil` for legacy callers (preview /
+  /// tests) that don't construct a shared store.
+  ///
+  /// Not `nonisolated`: `SharedRegistryStore` is `@MainActor
+  /// @Observable` and reading it from a non-`@MainActor` context
+  /// would race the observation infrastructure. `SyncCoordinator`
+  /// itself is `@MainActor`, so all access is already isolated and
+  /// the keyword is unnecessary.
+  let sharedRegistryStore: SharedRegistryStore?
+
   // Cross-file-access note: members below this MARK that sibling extension
   // files (Lifecycle / Zones / Backfill / RecordChanges / Delegate) touch are
   // `internal` rather than `private`. Swift does not treat extensions in
@@ -248,13 +285,6 @@ final class SyncCoordinator {
   /// Cached profile data handlers, keyed by profile UUID.
   var dataHandlers: [UUID: ProfileDataSyncHandler] = [:]
 
-  /// Per-profile callback fired by the handler whenever a remote pull touches
-  /// any `InstrumentRecord` row. Registered by `ProfileSession` ahead of the
-  /// first sync session so it is available when the handler is lazily created
-  /// in `handlerForProfileZone(profileId:zoneID:)`. Sendable so the closure
-  /// can be captured into the handler's `nonisolated` storage.
-  var instrumentRemoteChangeCallbacks: [UUID: @Sendable () -> Void] = [:]
-
   /// Per-profile cache of auto-constructed GRDB repository bundles, keyed by
   /// profile UUID. Populated on first access in
   /// `resolveGRDBRepositories(for:)` and retained so subsequent calls to
@@ -314,11 +344,16 @@ final class SyncCoordinator {
     containerManager: ProfileContainerManager,
     userDefaults: UserDefaults = .standard,
     isCloudKitAvailable: Bool = CloudKitAuthProvider.isCloudKitAvailable,
-    sharedInstrumentRegistry: GRDBInstrumentRegistryRepository? = nil
+    sharedInstrumentRegistry: GRDBInstrumentRegistryRepository? = nil,
+    sharedMarketData: ProfileSession.MarketDataServices? = nil,
+    sharedRegistryStore: SharedRegistryStore? = nil
   ) {
     self.containerManager = containerManager
     self.userDefaults = userDefaults
     self.progress = SyncProgress(userDefaults: userDefaults)
+    self.sharedInstrumentRegistry = sharedInstrumentRegistry
+    self.sharedMarketData = sharedMarketData
+    self.sharedRegistryStore = sharedRegistryStore
     self.profileIndexHandler = ProfileIndexSyncHandler(
       repository: containerManager.profileIndexRepository,
       instrumentRepository: sharedInstrumentRegistry,
@@ -335,14 +370,9 @@ final class SyncCoordinator {
   }
 
   /// Builds the `@Sendable` closure that the profile-index handler
-  /// fires after applying remote `InstrumentRecord` rows. The closure
-  /// hops to `@MainActor` to invoke `notifyExternalChange()` on the
-  /// `@MainActor`-isolated registry.
-  ///
-  /// `nil` registry → no-op closure. Keeps the handler's
-  /// `nonisolated let` non-optional shape with the existing safe-by-
-  /// default behaviour for legacy callers that don't wire a shared
-  /// registry.
+  /// fires after applying remote `InstrumentRecord` rows. Hops to
+  /// `@MainActor` to invoke `notifyExternalChange()` on the registry;
+  /// `nil` registry → no-op closure.
   private static func makeInstrumentRemoteChangeFanOut(
     registry: GRDBInstrumentRegistryRepository?
   ) -> @Sendable () -> Void {
@@ -363,18 +393,6 @@ final class SyncCoordinator {
   // instrument-change callback registry live on `+HandlerAccess`.)
 
   // MARK: - State Persistence
-  // (Load of the state serialization happens off-actor in `prepareEngine`, on `+Lifecycle`.)
-
-  func saveStateSerialization(_ serialization: CKSyncEngine.State.Serialization) {
-    do {
-      let data = try JSONEncoder().encode(serialization)
-      try data.write(to: stateFileURL, options: .atomic)
-    } catch {
-      logger.error("Failed to save sync state: \(error, privacy: .public)")
-    }
-  }
-
-  func deleteStateSerialization() {
-    try? FileManager.default.removeItem(at: stateFileURL)
-  }
+  // (Load happens off-actor in `prepareEngine` on `+Lifecycle`; the
+  // write / delete paths live on `+StatePersistence`.)
 }

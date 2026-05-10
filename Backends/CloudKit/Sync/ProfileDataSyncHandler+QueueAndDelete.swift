@@ -25,41 +25,13 @@ extension ProfileDataSyncHandler {
     return recordIDs
   }
 
-  /// Scans the `instrument` table only and returns CKRecord.IDs for
-  /// non-fiat rows that have never been successfully sent to CloudKit
-  /// (i.e. `encodedSystemFields == nil` AND `kind != 'fiatCurrency'`).
-  /// Run unconditionally on every coordinator start by
-  /// `queueUnsyncedInstrumentsForAllProfiles` so a row inserted by a
-  /// build that predated the `onInstrumentChanged` plumbing eventually
-  /// reaches CloudKit, even on profiles whose flag-gated full backfill
-  /// has already completed.
-  func queueUnsyncedInstrumentRecords() -> [CKRecord.ID] {
-    let signpostID = OSSignpostID(log: Signposts.sync)
-    os_signpost(
-      .begin,
-      log: Signposts.sync,
-      name: "queueUnsyncedInstrumentRecords",
-      signpostID: signpostID)
-    defer {
-      os_signpost(
-        .end,
-        log: Signposts.sync,
-        name: "queueUnsyncedInstrumentRecords",
-        signpostID: signpostID)
-    }
-
-    var recordIDs: [CKRecord.ID] = []
-    let repo = grdbRepositories.instruments
-    collectAllGRDBStrings(
-      ids: { try repo.unsyncedNonFiatRowIdsSync() },
-      recordType: InstrumentRow.recordType,
-      into: &recordIDs)
-    if !recordIDs.isEmpty {
-      logger.info(
-        "Collected \(recordIDs.count) unsynced non-fiat instrument records for upload")
-    }
-    return recordIDs
-  }
+  // `queueUnsyncedInstrumentRecords` was removed alongside
+  // `SyncCoordinator.queueUnsyncedInstrumentsForAllProfiles`. Auto-
+  // inserted non-fiat instruments now publish through the shared
+  // registry on the profile-index zone via the redirected
+  // `onInstrumentChanged` hook in `ProfileSession+CloudKitBackendBuild`,
+  // and the residual self-heal lives in
+  // `SyncCoordinator.queueUnsyncedSharedInstruments`.
 
   /// Scans all record types and returns CKRecord.IDs for records that have never been
   /// successfully sent to CloudKit (i.e. `encodedSystemFields == nil`). Used on startup
@@ -94,7 +66,10 @@ extension ProfileDataSyncHandler {
   /// the two callers in lock-step.
   private func collectGRDBRecordIDs(source: GRDBIdSource) -> [CKRecord.ID] {
     var recordIDs: [CKRecord.ID] = []
-    collectInstrumentIds(source: source, into: &recordIDs)
+    // Instrument ids are queued by the shared registry on the
+    // profile-index zone via
+    // `SyncCoordinator.queueUnsyncedSharedInstruments`; the per-profile
+    // path deliberately does not enumerate them.
     collectCategoryIds(source: source, into: &recordIDs)
     collectAccountIds(source: source, into: &recordIDs)
     collectEarmarkIds(source: source, into: &recordIDs)
@@ -105,19 +80,6 @@ extension ProfileDataSyncHandler {
     collectCSVImportProfileIds(source: source, into: &recordIDs)
     collectImportRuleIds(source: source, into: &recordIDs)
     return recordIDs
-  }
-
-  private func collectInstrumentIds(
-    source: GRDBIdSource, into recordIDs: inout [CKRecord.ID]
-  ) {
-    let repo = grdbRepositories.instruments
-    let ids: () throws -> [String] = {
-      switch source {
-      case .all: return try repo.allRowIdsSync()
-      case .unsynced: return try repo.unsyncedRowIdsSync()
-      }
-    }
-    collectAllGRDBStrings(ids: ids, recordType: InstrumentRow.recordType, into: &recordIDs)
   }
 
   private func collectCategoryIds(
@@ -247,6 +209,16 @@ extension ProfileDataSyncHandler {
     // to leaving local data in an inconsistent state.
     var clearedAll = true
     let wipes: [(String, () throws -> Void)] = [
+      // The per-profile `instrument` table is decommissioned but its
+      // rows survive on disk until the
+      // `v10_drop_shared_instrument_legacy` migration drops the table
+      // outright.
+      // Keep the wipe here — `deleteLocalData` runs on sign-out,
+      // account-switch, and zone purge, where the entire per-profile
+      // DB is meant to be cleared. Asymmetry with `clearOperations()`
+      // (which deliberately omits this row type) is intentional:
+      // there's no upload path left to resolve a "system fields
+      // cleared" state, but a hard delete is always correct.
       (InstrumentRow.recordType, { try self.grdbRepositories.instruments.deleteAllSync() }),
       (CategoryRow.recordType, { try self.grdbRepositories.categories.deleteAllSync() }),
       (AccountRow.recordType, { try self.grdbRepositories.accounts.deleteAllSync() }),
@@ -318,24 +290,9 @@ extension ProfileDataSyncHandler {
     }
   }
 
-  /// String-keyed counterpart of `collectAllGRDBUUIDs`. Currently only
-  /// used for the `Instrument` table.
-  private func collectAllGRDBStrings(
-    ids: () throws -> [String],
-    recordType: String,
-    into recordIDs: inout [CKRecord.ID]
-  ) {
-    do {
-      for id in try ids() {
-        recordIDs.append(CKRecord.ID(recordName: id, zoneID: zoneID))
-      }
-    } catch {
-      logger.error(
-        """
-        GRDB fetch failed for \(recordType, privacy: .public) on profile \
-        \(self.profileId, privacy: .public): \
-        \(error.localizedDescription, privacy: .public)
-        """)
-    }
-  }
+  // `collectAllGRDBStrings` was the string-keyed counterpart of
+  // `collectAllGRDBUUIDs`, used by the now-decommissioned per-profile
+  // `queueUnsyncedInstrumentRecords` path. Removed alongside its only
+  // caller — instrument-id enumeration lives entirely on the shared
+  // registry via `SyncCoordinator.queueUnsyncedSharedInstruments`.
 }

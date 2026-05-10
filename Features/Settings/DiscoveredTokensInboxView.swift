@@ -18,11 +18,10 @@ import SwiftUI
 ///   spamming the button cannot launch duplicate network round-trips.
 ///
 /// "Held by N accounts · X transactions" copy is intentionally left as
-/// a placeholder ("Held by — accounts") in this stage — Stage 12's
-/// wallet-account view introduces the leg-aggregation surface that
-/// will feed this metric. Once that's available we'll thread the count
-/// through the registry repository rather than inline a SQL query in
-/// the view layer.
+/// a placeholder ("Held by — accounts") until the wallet-account view's
+/// leg-aggregation surface lands. Once that's available we'll thread
+/// the count through the registry repository rather than inline a SQL
+/// query in the view layer.
 struct DiscoveredTokensInboxView: View {
   @Bindable var store: CryptoTokenStore
   let tokenDiscovery: CryptoTokenDiscoveryService?

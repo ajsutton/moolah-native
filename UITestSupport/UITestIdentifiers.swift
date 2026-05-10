@@ -273,7 +273,7 @@ public enum UITestIdentifiers {
     }
 
     /// Secure field for the Alchemy API key. Pinned so a UI test can
-    /// drive the Stage 11 settings flow end-to-end.
+    /// drive the settings flow end-to-end.
     public static let alchemyApiKeyField = "crypto.settings.alchemy.field"
 
     /// "Save" button next to the Alchemy API key entry field.

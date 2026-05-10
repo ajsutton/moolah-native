@@ -45,6 +45,15 @@ extension UITestSeedHydrator {
       exchange: fixtures.vgsaxExchange,
       name: fixtures.vgsaxName)
 
+    // Production sessions read non-fiat instruments from the shared
+    // profile-index registry, so `vgsax` must land in the shared
+    // `instrument` table before any per-profile read fans out a domain
+    // `Instrument` from a leg. Fiat (`audInstrument`) is left to the
+    // per-profile copy + ISO fallback like every other seed.
+    try manager.profileIndexDatabase.write { database in
+      try upsertInstrument(vgsax, in: database)
+    }
+
     try database.write { database in
       try upsertInstrument(audInstrument, in: database)
       try upsertAccount(

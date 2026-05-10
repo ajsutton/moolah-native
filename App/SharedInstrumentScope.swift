@@ -24,12 +24,9 @@ import Observation
 ///
 /// **`@Observable`** is applied even though every property is `let`
 /// today — the convention for `@MainActor` holders that participate
-/// in SwiftUI dependency injection is to be observable, so a future
-/// stage adding a mutable counter or `Bool` flag triggers view
-/// updates without a separate refactor.
-///
-/// See `plans/2026-05-09-shared-instrument-registry-design.md` and
-/// `plans/2026-05-09-shared-instrument-registry-plan.md` (Task 2).
+/// in SwiftUI dependency injection is to be observable, so adding a
+/// mutable counter or `Bool` flag later triggers view updates without
+/// a separate refactor.
 @MainActor
 @Observable
 final class SharedInstrumentScope {

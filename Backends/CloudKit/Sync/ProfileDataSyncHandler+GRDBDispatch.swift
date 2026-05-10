@@ -139,16 +139,26 @@ extension ProfileDataSyncHandler {
   }
 
   /// Companion to `applyGRDBBatchDeletion(recordType:ids:)` for record
-  /// types keyed by string ID (currently only `Instrument`). Returns
-  /// `true` when handled.
+  /// types keyed by string ID. `InstrumentRecord` lives on the
+  /// profile-index zone only, so any per-profile-zone deletion is a
+  /// straggler from a pre-rollout peer device — we log and skip
+  /// rather than apply. The function returns `true` to claim the
+  /// dispatch slot so the engine doesn't re-route the deletion
+  /// through a fallback path.
   nonisolated func applyGRDBBatchDeletion(
     recordType: String, names: [String]
   ) throws -> Bool {
     switch recordType {
     case InstrumentRow.recordType:
-      try writeRemote(site: "applyGRDBBatchDeletion[Instrument]") {
-        try grdbRepositories.instruments.applyRemoteChangesSync(saved: [], deleted: names)
-      }
+      guard !names.isEmpty else { return true }
+      logger.warning(
+        """
+        Ignoring \(names.count, privacy: .public) straggler \
+        InstrumentRecord deletion(s) delivered to per-profile zone \
+        \(self.zoneID.zoneName, privacy: .public) — shared registry on \
+        the profile-index zone is the canonical source.
+        """
+      )
       return true
     default:
       return false

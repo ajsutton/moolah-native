@@ -25,8 +25,7 @@ import GRDB
 ///   tables — moved here from per-profile so spam decisions,
 ///   discovered-token resolutions, and price-cache rows propagate
 ///   across every profile on the same iCloud account. See
-///   `ProfileIndexSchema+SharedInstrumentRegistry.swift` and
-///   `plans/2026-05-09-shared-instrument-registry-design.md`.
+///   `ProfileIndexSchema+SharedInstrumentRegistry.swift`.
 ///
 /// Each migration body is registered here. Once shipped, migration IDs
 /// are frozen forever; splitting later is fine, merging post-ship is

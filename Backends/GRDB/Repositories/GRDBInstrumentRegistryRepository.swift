@@ -3,6 +3,7 @@
 import Foundation
 import GRDB
 import OSLog
+import os
 
 /// GRDB-backed implementation of `InstrumentRegistryRepository`. Replaces
 /// the SwiftData-backed `CloudKitInstrumentRegistryRepository` for the
@@ -16,23 +17,12 @@ import OSLog
 /// mutations, and a non-protocol `notifyExternalChange()` method that the
 /// sync layer calls when remote pulls touch instrument rows.
 ///
-/// **`@unchecked Sendable` justification.** Unlike the all-`let`
-/// pattern of the other nine GRDB repositories, this one has a
-/// genuinely mutable stored property: `subscribers`, the
-/// `[UUID: AsyncStream<Void>.Continuation]` map that drives
-/// `observeChanges()`. That property is `@MainActor`-isolated, so
-/// every mutation (`observeChanges()`, the AsyncStream's
-/// `onTermination` callback, `notifyExternalChange()`) runs on the
-/// main actor. Swift can't propagate that property-level isolation
-/// into the enclosing class's `Sendable` check, so we use `@unchecked`
-/// to vouch for the runtime guarantee. The remaining stored
-/// properties are `let`: `database` (`any DatabaseWriter`) is itself
-/// `Sendable` (GRDB queue's serial executor mediates concurrent
-/// access); `onRecordChanged` / `onRecordDeleted` are `@Sendable`
-/// closures captured at init; `logger` is a value type. The
-/// `@MainActor`-confined dictionary plus the otherwise-immutable
-/// surface keeps the type race-free in practice.
-/// See `guides/CONCURRENCY_GUIDE.md` §2 "False Positives to Avoid",
+/// **`@unchecked Sendable` justification.** Has two mutable stored
+/// properties: `subscribers` (the `@MainActor`-confined
+/// AsyncStream-continuation map driving `observeChanges()`) and
+/// `hooks` (the lock-guarded `HookState` swapped in by
+/// `attachSyncHooks`). Both are race-free at runtime — see
+/// `guides/CONCURRENCY_GUIDE.md` §2 "False Positives to Avoid",
 /// Carve-out 3 (GRDB repositories).
 final class GRDBInstrumentRegistryRepository:
   InstrumentRegistryRepository, @unchecked Sendable
@@ -42,9 +32,26 @@ final class GRDBInstrumentRegistryRepository:
   // hosts `cryptoRegistration(byId:)` to keep this file under SwiftLint's
   // length budgets) can read from it. The other stored properties remain
   // private — only the database handle is shared across files.
+  /// Holds the post-init hook closures so they can be swapped in
+  /// atomically by `attachSyncHooks`. Mirrors the pattern used by
+  /// `GRDBProfileIndexRepository` — the shared registry is constructed
+  /// at app boot before the `SyncCoordinator` exists, so the hooks
+  /// arrive later via the lock-guarded swap.
+  ///
+  /// `internal` (default) so the sibling `+SyncHooks` extension file
+  /// can declare `attachSyncHooks` over it.
+  struct HookState {
+    var onRecordChanged: @Sendable (String) -> Void
+    var onRecordDeleted: @Sendable (String) -> Void
+  }
+
   let database: any DatabaseWriter
-  private let onRecordChanged: @Sendable (String) -> Void
-  private let onRecordDeleted: @Sendable (String) -> Void
+  // `internal` (default) so the sibling `+SyncHooks` extension file
+  // can read / mutate the lock-guarded hook closures. The lock itself
+  // is the threading primitive; the property's visibility is module-
+  // scoped because Swift extensions in separate files don't share
+  // `private` access.
+  let hooks: OSAllocatedUnfairLock<HookState>
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "InstrumentRegistry")
 
@@ -63,9 +70,19 @@ final class GRDBInstrumentRegistryRepository:
     onRecordDeleted: @escaping @Sendable (String) -> Void = { _ in }
   ) {
     self.database = database
-    self.onRecordChanged = onRecordChanged
-    self.onRecordDeleted = onRecordDeleted
+    self.hooks = OSAllocatedUnfairLock(
+      initialState: HookState(
+        onRecordChanged: onRecordChanged,
+        onRecordDeleted: onRecordDeleted))
   }
+
+  // MARK: - Cross-extension internals
+  //
+  // `attachSyncHooks` and the `fireOnRecord*` helpers live in
+  // `GRDBInstrumentRegistryRepository+SyncHooks.swift` so this file
+  // stays under SwiftLint's `file_length` / `type_body_length`
+  // thresholds. They access `hooks` directly via the `internal`
+  // visibility implied by Swift's same-module-extension scope.
 
   // MARK: - InstrumentRegistryRepository conformance
 
@@ -105,7 +122,7 @@ final class GRDBInstrumentRegistryRepository:
       try Self.upsertCrypto(
         database: database, instrument: instrument, mapping: mapping)
     }
-    onRecordChanged(instrument.id)
+    fireOnRecordChanged(instrument.id)
     await notifySubscribers()
   }
 
@@ -114,7 +131,7 @@ final class GRDBInstrumentRegistryRepository:
     try await database.write { database in
       try Self.upsertStock(database: database, instrument: instrument)
     }
-    onRecordChanged(instrument.id)
+    fireOnRecordChanged(instrument.id)
     await notifySubscribers()
   }
 
@@ -131,7 +148,7 @@ final class GRDBInstrumentRegistryRepository:
       return try InstrumentRow.deleteOne(database, key: id)
     }
     guard didDelete else { return }
-    onRecordDeleted(id)
+    fireOnRecordDeleted(id)
     await notifySubscribers()
   }
 
@@ -243,13 +260,12 @@ final class GRDBInstrumentRegistryRepository:
   func applyRemoteChangesSync(saved rows: [InstrumentRow], deleted ids: [String]) throws {
     try database.write { database in
       for var row in rows {
-        // Per spec §"`CryptoRegistration.pricingStatus`" — apply the
-        // field-level merge rule for `pricingStatus` before upserting.
-        // CKSyncEngine's default "server wins" would let the daily
-        // auto-resolver on one device clobber a `.spam` classification a
-        // user made on another. The rule is centralised in
-        // `PricingStatusMerge.merge` and unit-tested against the full
-        // 3x3 truth table.
+        // Apply the field-level merge rule for `pricingStatus` before
+        // upserting. CKSyncEngine's default "server wins" would let
+        // the daily auto-resolver on one device clobber a `.spam`
+        // classification a user made on another. The rule is
+        // centralised in `PricingStatusMerge.merge` and unit-tested
+        // against the full 3x3 truth table.
         //
         // Unrecognised raw values (only possible from a future-version
         // device sending an enum case this build doesn't compile against,
@@ -312,83 +328,15 @@ final class GRDBInstrumentRegistryRepository:
         "InstrumentRegistry: no row registered for id '\(registration.instrument.id)'"
       )
     }
-    onRecordChanged(registration.instrument.id)
+    fireOnRecordChanged(registration.instrument.id)
     await notifySubscribers()
   }
 
-  /// Writes (or clears) the cached system-fields blob on a single row.
-  /// Returns `true` when a row was found and updated.
-  @discardableResult
-  func setEncodedSystemFieldsSync(id: String, data: Data?) throws -> Bool {
-    try database.write { database in
-      try InstrumentRow
-        .filter(InstrumentRow.Columns.id == id)
-        .updateAll(database, [InstrumentRow.Columns.encodedSystemFields.set(to: data)])
-        > 0
-    }
-  }
-
-  /// Clears `encoded_system_fields` on every row. Used after an
-  /// `encryptedDataReset`.
-  func clearAllSystemFieldsSync() throws {
-    try database.write { database in
-      _ =
-        try InstrumentRow
-        .updateAll(
-          database,
-          [InstrumentRow.Columns.encodedSystemFields.set(to: nil)])
-    }
-  }
-
-  /// Returns IDs of rows whose `encoded_system_fields` is `NULL`.
-  func unsyncedRowIdsSync() throws -> [String] {
-    try database.read { database in
-      try InstrumentRow
-        .filter(InstrumentRow.Columns.encodedSystemFields == nil)
-        .select(InstrumentRow.Columns.id, as: String.self)
-        .fetchAll(database)
-    }
-  }
-
-  // `unsyncedNonFiatRowIdsSync` lives in
-  // `GRDBInstrumentRegistryRepository+Lookup.swift` to keep this file
-  // under SwiftLint's `type_body_length` and `file_length` budgets.
-
-  /// Returns IDs of every row in the table.
-  func allRowIdsSync() throws -> [String] {
-    try database.read { database in
-      try InstrumentRow
-        .select(InstrumentRow.Columns.id, as: String.self)
-        .fetchAll(database)
-    }
-  }
-
-  /// Looks up a single row by id. Used by the per-record upload path in
-  /// the sync handler.
-  func fetchRowSync(id: String) throws -> InstrumentRow? {
-    try database.read { database in
-      try InstrumentRow
-        .filter(InstrumentRow.Columns.id == id)
-        .fetchOne(database)
-    }
-  }
-
-  /// Batch lookup by ids — used by the batch-build phase of the sync
-  /// handler.
-  func fetchRowsSync(ids: [String]) throws -> [InstrumentRow] {
-    let idSet = Set(ids)
-    return try database.read { database in
-      try InstrumentRow
-        .filter(idSet.contains(InstrumentRow.Columns.id))
-        .fetchAll(database)
-    }
-  }
-
-  /// Deletes every row in the table. Used by `deleteLocalData` after a
-  /// remote zone deletion.
-  func deleteAllSync() throws {
-    try database.write { database in
-      _ = try InstrumentRow.deleteAll(database)
-    }
-  }
+  // The synchronous entry points used by `ProfileIndexSyncHandler`
+  // (`setEncodedSystemFieldsSync`, `clearAllSystemFieldsSync`,
+  // `unsyncedRowIdsSync`, `allRowIdsSync`, `fetchRowSync`,
+  // `fetchRowsSync`, `deleteAllSync`) live in the sibling
+  // `+SyncEntryPoints` extension file so this file stays under
+  // SwiftLint's length thresholds.
+  // `unsyncedNonFiatRowIdsSync` similarly lives in `+Lookup`.
 }

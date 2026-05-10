@@ -4,10 +4,9 @@ import OSLog
 
 extension ProfileSession {
   /// Returns the live Alchemy API key from the keychain, or `nil` when no
-  /// key is configured. Stage 9 ships only the read accessor — Stage 11
-  /// owns the settings UI for storing the key. Service / account
-  /// strings match `plans/2026-05-05-crypto-wallet-import-design.md`
-  /// §"API key management" so the eventual write side targets the same
+  /// key is configured. Read-only here; the settings UI owns the
+  /// write side. Service / account strings are pinned to the values
+  /// the settings UI writes against so both ends target the same
   /// keychain entry.
   ///
   /// `nonisolated` so it can be called from the `@Sendable` closure that
@@ -22,11 +21,11 @@ extension ProfileSession {
   }
 
   /// Output of `makeCryptoSyncWiring`. The discovery actor is plumbed
-  /// out alongside the store so the Stage 11 Discovered Tokens inbox
-  /// can drive `reResolve(_:chain:)` on the same actor instance the
-  /// sync engine uses — this preserves the in-flight coalescer's
-  /// "one round-trip per `(chainId, contractAddress)`" guarantee
-  /// across the manual + automatic re-resolution paths.
+  /// out alongside the store so the Discovered Tokens inbox can drive
+  /// `reResolve(_:chain:)` on the same actor instance the sync engine
+  /// uses — this preserves the in-flight coalescer's "one round-trip
+  /// per `(chainId, contractAddress)`" guarantee across the manual +
+  /// automatic re-resolution paths.
   struct CryptoSyncWiring {
     let store: CryptoSyncStore
     let discovery: CryptoTokenDiscoveryService

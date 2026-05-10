@@ -161,8 +161,8 @@ struct TransactionRepositoryAuxFilterTests {
 
   @Test("fetchPayeeSuggestions excludingTransactionId for unknown id is a no-op")
   func testPayeeSuggestionsExclusionUnknownIdNoOp() async throws {
-    // Acceptance criterion 2: an id that isn't in the repo (e.g. an unsaved
-    // draft) leaves the result identical to the no-exclusion path.
+    // An id that isn't in the repo (e.g. an unsaved draft) leaves the
+    // result identical to the no-exclusion path.
     let repository = try makeContractCloudKitTransactionRepository(
       initialTransactions: try makePayeeSuggestionContractTestTransactions())
 

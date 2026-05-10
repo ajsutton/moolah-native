@@ -41,28 +41,30 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   /// see `RepositoryHookRecordTypeTests`.
   private let onRecordChanged: @Sendable (String, UUID) -> Void
   private let onRecordDeleted: @Sendable (String, UUID) -> Void
-  /// Receives the `Instrument.id` (which doubles as the InstrumentRow's
-  /// CloudKit recordName) of any non-fiat instrument that
-  /// `performAccountInsert` had to auto-insert into the registry to
-  /// satisfy a stock / crypto account's denomination. Without this hook
-  /// the auto-inserted row never reaches CloudKit and sibling devices
-  /// fall back to `Instrument.fiat(code: id)` — see
+  /// `Instrument` value of any non-fiat instrument that
+  /// `performAccountInsert` had to auto-insert into the per-profile
+  /// `instrument` table to satisfy a stock / crypto account's
+  /// denomination. The wired closure publishes the value to the shared
+  /// registry on the profile-index zone so sibling devices see it; the
+  /// per-profile copy stays for read paths. Without this hook the new
+  /// row would never reach CloudKit and sibling devices would fall
+  /// back to `Instrument.fiat(code: id)` — see
   /// `InstrumentLocalSyncQueueTests`.
-  private let onInstrumentChanged: @Sendable (String) -> Void
+  private let onInstrumentChanged: @Sendable (Instrument) -> Void
   /// Single shared error channel for every `observeAll()` subscription
   /// returned by this repo instance. The bridge in
   /// `Backends/GRDB/Observation/AsyncValueObservation+AsyncStream.swift`
   /// is single-shot, so once `surfaceAndFinish(_:)` is called the
   /// channel terminates — subsequent observations from the same repo
   /// share that fate. This matches the design's "repository instance
-  /// owns the channel" rule (see Stage 1 of the reactive-sync plan).
+  /// owns the channel" rule.
   let errorChannel = ObservationErrorChannel()
 
   init(
     database: any DatabaseWriter,
     onRecordChanged: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
     onRecordDeleted: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
-    onInstrumentChanged: @escaping @Sendable (String) -> Void = { _ in }
+    onInstrumentChanged: @escaping @Sendable (Instrument) -> Void = { _ in }
   ) {
     self.database = database
     self.onRecordChanged = onRecordChanged
@@ -116,8 +118,8 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
     if let legId = inserts.legId {
       onRecordChanged(TransactionLegRow.recordType, legId)
     }
-    if let instrumentId = inserts.instrumentId {
-      onInstrumentChanged(instrumentId)
+    if let instrument = inserts.instrument {
+      onInstrumentChanged(instrument)
     }
     return account
   }

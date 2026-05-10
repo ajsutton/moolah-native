@@ -239,22 +239,11 @@ extension MoolahApp {
     }
   }
 
-  /// Constructs the app-level shared `GRDBInstrumentRegistryRepository`
-  /// pointed at the profile-index DB. Mutation hooks are no-ops in
-  /// this stage — the registry is wired into `SyncCoordinator` for
-  /// downlink dispatch only. Production mutations still flow through
-  /// the per-profile registry constructed by
-  /// `ProfileSession+CloudKitBackendBuild.makeInstrumentRegistry`
-  /// until a later stage migrates Settings views and the search
-  /// service to read from this shared instance.
-  ///
-  /// See `plans/2026-05-09-shared-instrument-registry-design.md` and
-  /// `plans/2026-05-09-shared-instrument-registry-plan.md` (Task 12).
-  static func makeSharedInstrumentRegistry(
-    database: any DatabaseWriter
-  ) -> GRDBInstrumentRegistryRepository {
-    GRDBInstrumentRegistryRepository(database: database)
-  }
+  // Shared-registry plumbing (`bootstrapSyncCoordinator`,
+  // `makeSharedInstrumentRegistry`, `makeSharedInstrumentScope`,
+  // `attachSharedInstrumentRegistrySyncHooks`) lives in the sibling
+  // `MoolahApp+SharedInstrumentScope.swift` file so this one stays
+  // under SwiftLint's `file_length` threshold.
 
   static func makeSessionManager(
     setup: ContainerSetup, store: ProfileStore, coordinator: SyncCoordinator

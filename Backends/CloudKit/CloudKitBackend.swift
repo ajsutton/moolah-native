@@ -57,12 +57,14 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
     let onTransactionLegChanged: @Sendable (String, UUID) -> Void
     let onTransactionLegDeleted: @Sendable (String, UUID) -> Void
     /// Fires when an account / transaction write auto-inserts a non-fiat
-    /// `InstrumentRow` to satisfy a leg or account denomination. Carries
-    /// the instrument id (which doubles as the InstrumentRecord
-    /// recordName) — the registry's own `register*` paths fire this
-    /// from a separate hook, so this surface only covers the
-    /// auto-insert path inside the transaction / account repositories.
-    let onInstrumentChanged: @Sendable (String) -> Void
+    /// `InstrumentRow` to satisfy a leg or account denomination.
+    /// Carries the full `Instrument` value so the production hook can
+    /// publish it to the shared registry (`registerStock` /
+    /// `registerCrypto`). The registry's own register paths fire a
+    /// separate hook on shared-DB writes, so this surface only covers
+    /// the auto-insert path inside the transaction / account
+    /// repositories.
+    let onInstrumentChanged: @Sendable (Instrument) -> Void
 
     static let noop = CloudKitBackendHooks(
       onCSVImportProfileChanged: { _, _ in },
@@ -83,7 +85,7 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
       onTransactionDeleted: { _, _ in },
       onTransactionLegChanged: { _, _ in },
       onTransactionLegDeleted: { _, _ in },
-      onInstrumentChanged: { _ in })
+      onInstrumentChanged: { (_: Instrument) in })
   }
 
   init(

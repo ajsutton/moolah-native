@@ -28,14 +28,16 @@ final class TradeFlowUITests: MoolahUITestCase {
     // matching the user's mental model ("I paid $300, balance goes down").
     // Received stores `+20` directly. Fees are entered in the Expense leg's
     // own sign convention (negative = outflow).
-    app.tradeForm.setPaid(amount: "300", instrumentId: "AUD")
+    let aud = UITestFixtures.TradeReady.profileCurrencyCode
+    app.tradeForm.setPaid(amount: "300", instrumentId: aud)
     app.tradeForm.setReceived(
       amount: "20", instrumentId: UITestFixtures.TradeReady.vgsaxInstrumentId)
     app.tradeForm.addFee(
       amount: "-10",
-      instrumentId: "AUD",
+      instrumentId: aud,
       category: UITestFixtures.TradeReady.brokerageCategoryName)
 
-    app.tradeForm.waitForTradeRow(containing: "Bought 20 VGS.AX")
+    app.tradeForm.waitForTradeRow(
+      containing: "Bought 20 \(UITestFixtures.TradeReady.vgsaxTicker)")
   }
 }

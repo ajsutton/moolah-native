@@ -2,12 +2,57 @@
 import Foundation
 import OSLog
 
+/// Per-session façade over the app-level `SharedRegistryStore`. Owns
+/// the per-session UI state (`error`, `isLoading`, the
+/// `onRegistrationsChanged` callback for cross-store side effects) and
+/// the per-session keychain reads. Registry data
+/// (`registrations`, `instruments`, `providerMappings`,
+/// `registrationsVersion`) lives on the shared store so a mutation
+/// from any session is immediately visible to every session's UI.
+///
+/// **Two construction shapes.** Production passes a `sharedStore`
+/// reference (production wires it from
+/// `SyncCoordinator.sharedRegistryStore`); legacy preview / test
+/// callers omit it and the store falls back to local storage —
+/// equivalent to the pre-shared-registry behaviour.
 @MainActor
 @Observable
 final class CryptoTokenStore {
-  private(set) var registrations: [CryptoRegistration] = []
-  private(set) var instruments: [Instrument] = []
-  private(set) var providerMappings: [String: CryptoProviderMapping] = [:]
+
+  /// Shared backing store, if wired. When non-nil, every data read
+  /// proxies through it so cross-session mutations are observed
+  /// transparently. When nil (preview / legacy tests), the store
+  /// keeps its own local copies and behaves as before.
+  private let sharedStore: SharedRegistryStore?
+
+  // MARK: - Local fallback storage (preview / legacy tests)
+
+  private var localRegistrations: [CryptoRegistration] = []
+  private var localInstruments: [Instrument] = []
+  private var localProviderMappings: [String: CryptoProviderMapping] = [:]
+  private var localRegistrationsVersion: Int = 0
+
+  // MARK: - Proxied data
+
+  var registrations: [CryptoRegistration] {
+    sharedStore?.registrations ?? localRegistrations
+  }
+  var instruments: [Instrument] {
+    sharedStore?.instruments ?? localInstruments
+  }
+  var providerMappings: [String: CryptoProviderMapping] {
+    sharedStore?.providerMappings ?? localProviderMappings
+  }
+  /// Monotonic version bumped after every successful registry mutation
+  /// (`setStatus`, `removeRegistration`). Views that derive per-account
+  /// valued positions pin a `.task(id:)` against this so a `.spam` flip
+  /// in preferences re-fires the per-row valuator without the user
+  /// having to navigate away. Issue #790.
+  var registrationsVersion: Int {
+    sharedStore?.registrationsVersion ?? localRegistrationsVersion
+  }
+
+  // MARK: - Per-session UI state
 
   private(set) var isLoading = false
 
@@ -21,13 +66,6 @@ final class CryptoTokenStore {
   /// `.spam` token from the account's position list. Issue #790.
   var onRegistrationsChanged: (@MainActor () -> Void)?
 
-  /// Monotonic version bumped after every successful registry mutation
-  /// (`setStatus`, `removeRegistration`). Views that derive per-account
-  /// valued positions pin a `.task(id:)` against this so a `.spam` flip
-  /// in preferences re-fires the per-row valuator without the user
-  /// having to navigate away. Issue #790.
-  private(set) var registrationsVersion: Int = 0
-
   private let registry: any InstrumentRegistryRepository
   private let cryptoPriceService: CryptoPriceService
   private let conversionService: any InstrumentConversionService
@@ -37,14 +75,21 @@ final class CryptoTokenStore {
   private let apiKeyStore: KeychainStore
 
   /// Keychain entry for the Alchemy API key, used by the crypto-wallet
-  /// auto-import (Stage 9 onward). Service / account strings match
-  /// `plans/2026-05-05-crypto-wallet-import-design.md` §"API key
-  /// management" so reads from `ProfileSession+CryptoSync` pick up the
-  /// value the settings UI writes here. Production wires this to the
-  /// iCloud-synced keychain (`synchronizable: true`); tests inject a
+  /// auto-import. Service / account strings are pinned to the values
+  /// `ProfileSession+CryptoSync` reads on the sync side so reads pick
+  /// up whatever the settings UI writes here. Production wires this
+  /// to the iCloud-synced keychain (`synchronizable: true`); tests
+  /// inject a
   /// non-synced `KeychainStore` since the test runner cannot write to
   /// the synced keychain in CI.
   private let alchemyKeyStore: KeychainStore
+
+  /// Subscription to the registry's change stream so per-session side
+  /// effects fire when ANY session (including this one) mutates the
+  /// shared registry. The `onRegistrationsChanged` callback drives
+  /// `InvestmentStore` revaluation; cross-session conversion-cache
+  /// invalidation also fires here.
+  private var observationTask: Task<Void, Never>?
 
   /// Designated initialiser — accepts the keychain stores explicitly.
   /// Production constructs both stores against the iCloud-synced
@@ -59,13 +104,37 @@ final class CryptoTokenStore {
     cryptoPriceService: CryptoPriceService,
     conversionService: any InstrumentConversionService,
     apiKeyStore: KeychainStore,
-    alchemyKeyStore: KeychainStore
+    alchemyKeyStore: KeychainStore,
+    sharedStore: SharedRegistryStore? = nil
   ) {
     self.registry = registry
     self.cryptoPriceService = cryptoPriceService
     self.conversionService = conversionService
     self.apiKeyStore = apiKeyStore
     self.alchemyKeyStore = alchemyKeyStore
+    self.sharedStore = sharedStore
+
+    let stream = registry.observeChanges()
+    self.observationTask = Task { @MainActor [weak self] in
+      for await _ in stream {
+        self?.handleRegistryChangeTick()
+      }
+    }
+  }
+
+  deinit {
+    // Swift 6 nonisolated deinit; the task is owned by the per-
+    // session `CryptoTokenStore` instance, which `ProfileSession`
+    // (`@MainActor`) holds as a stored let property. The only
+    // deallocation path is when `ProfileSession` releases the last
+    // strong reference, and that release happens on the main actor
+    // (`SessionManager`'s teardown is `@MainActor`-isolated). The
+    // assumption therefore holds; a future refactor that introduces
+    // a non-`@MainActor` owner traps immediately instead of racing
+    // the observation infrastructure.
+    MainActor.assumeIsolated {
+      observationTask?.cancel()
+    }
   }
 
   /// Production convenience initialiser — wires both keychain stores
@@ -76,7 +145,8 @@ final class CryptoTokenStore {
   convenience init(
     registry: any InstrumentRegistryRepository,
     cryptoPriceService: CryptoPriceService,
-    conversionService: any InstrumentConversionService
+    conversionService: any InstrumentConversionService,
+    sharedStore: SharedRegistryStore? = nil
   ) {
     self.init(
       registry: registry,
@@ -85,8 +155,8 @@ final class CryptoTokenStore {
       apiKeyStore: KeychainStore(
         service: "com.moolah.api-keys", account: "coingecko", synchronizable: true),
       alchemyKeyStore: KeychainStore(
-        service: "com.moolah.api-keys", account: "alchemy", synchronizable: true)
-    )
+        service: "com.moolah.api-keys", account: "alchemy", synchronizable: true),
+      sharedStore: sharedStore)
   }
 
   // MARK: - Filtered registrations
@@ -119,11 +189,16 @@ final class CryptoTokenStore {
   func loadRegistrations() async {
     isLoading = true
     defer { isLoading = false }
+    if let sharedStore {
+      await sharedStore.loadRegistrations()
+      error = nil
+      return
+    }
     do {
       let loaded = try await registry.allCryptoRegistrations()
-      registrations = loaded
-      instruments = loaded.map(\.instrument)
-      providerMappings = Dictionary(
+      localRegistrations = loaded
+      localInstruments = loaded.map(\.instrument)
+      localProviderMappings = Dictionary(
         loaded.map { ($0.mapping.instrumentId, $0.mapping) },
         uniquingKeysWith: { _, last in last }
       )
@@ -137,13 +212,25 @@ final class CryptoTokenStore {
 
   func removeRegistration(_ registration: CryptoRegistration) async {
     do {
-      try await registry.remove(id: registration.id)
+      if let sharedStore {
+        try await sharedStore.removeRegistration(registration)
+      } else {
+        try await registry.remove(id: registration.id)
+        localRegistrations.removeAll { $0.id == registration.id }
+        localInstruments.removeAll { $0.id == registration.id }
+        localProviderMappings.removeValue(forKey: registration.id)
+        localRegistrationsVersion &+= 1
+      }
+      // Per-session side effect: purge this session's price cache
+      // for the removed instrument so a future conversion refetches
+      // rather than serving a now-orphan cached price.
       await cryptoPriceService.purgeCache(instrumentId: registration.id)
-      registrations.removeAll { $0.id == registration.id }
-      instruments.removeAll { $0.id == registration.id }
-      providerMappings.removeValue(forKey: registration.id)
-      registrationsVersion &+= 1
-      onRegistrationsChanged?()
+      error = nil
+      // `onRegistrationsChanged` is fired centrally by
+      // `handleRegistryChangeTick` on the next observation tick — the
+      // local mutation we just performed will trigger that tick via
+      // the registry's `notifySubscribers`. Firing it here too would
+      // double-invoke `InvestmentStore.revaluateLoadedPositions`.
     } catch {
       logger.error("Failed to remove registration: \(error, privacy: .public)")
       self.error = error.localizedDescription
@@ -157,16 +244,14 @@ final class CryptoTokenStore {
   }
 
   /// Persists a new `pricingStatus` for an existing registration and
-  /// synchronously invalidates any cached conversion derived from the
-  /// instrument so the next aggregation reads fresh data. Used by the
-  /// Discovered Tokens inbox + Spam tokens management UI to flip a
-  /// registration between `.priced` / `.unpriced` / `.spam`.
+  /// synchronously invalidates this session's cached conversion derived
+  /// from the instrument so the next aggregation reads fresh data. Used
+  /// by the Discovered Tokens inbox + Spam tokens management UI to flip
+  /// a registration between `.priced` / `.unpriced` / `.spam`.
   ///
-  /// On failure the local in-memory `registrations` list is left
-  /// untouched and `error` is set; the caller's view re-renders against
-  /// the previous state. Cache invalidation only runs after the registry
-  /// write succeeds — we never invalidate on behalf of a write that
-  /// didn't happen.
+  /// On failure the registry write rolls back and `error` is set.
+  /// Cache invalidation only runs after the registry write succeeds —
+  /// we never invalidate on behalf of a write that didn't happen.
   func setStatus(
     _ status: TokenPricingStatus,
     for registration: CryptoRegistration
@@ -174,18 +259,48 @@ final class CryptoTokenStore {
     var updated = registration
     updated.pricingStatus = status
     do {
-      try await registry.update(updated)
-      await conversionService.invalidateCache(for: registration.instrument)
-      if let index = registrations.firstIndex(where: { $0.id == registration.id }) {
-        registrations[index] = updated
+      if let sharedStore {
+        try await sharedStore.setStatus(status, for: registration)
+      } else {
+        try await registry.update(updated)
+        if let index = localRegistrations.firstIndex(where: { $0.id == registration.id }) {
+          localRegistrations[index] = updated
+        }
+        localRegistrationsVersion &+= 1
       }
+      // Per-session conversion-cache invalidation. Fires on every
+      // path so a mutation through the local fallback OR the shared
+      // store flushes this session's `FullConversionService` cache.
+      await conversionService.invalidateCache(for: registration.instrument)
       error = nil
-      registrationsVersion &+= 1
-      onRegistrationsChanged?()
+      // `onRegistrationsChanged` fires from `handleRegistryChangeTick`
+      // on the upcoming registry tick (triggered by the mutation
+      // above). Firing here too would double-invoke
+      // `InvestmentStore.revaluateLoadedPositions`.
     } catch {
       logger.error("Failed to set pricing status: \(error, privacy: .public)")
       self.error = error.localizedDescription
     }
+  }
+
+  // MARK: - Cross-session change tick
+
+  /// Fired by the `observeChanges()` subscription on every registry
+  /// mutation — local OR remote-arriving via CKSyncEngine. The shared
+  /// store reloads its data fields automatically; this hook fires
+  /// per-session side effects (cross-store revaluation, cache
+  /// invalidation) so a mutation through profile A ripples through
+  /// profile B's UI within one cycle.
+  ///
+  /// The hook intentionally does NOT invalidate per-instrument
+  /// conversion caches here — the cache is keyed by date pairs that
+  /// change every conversion call, so over-invalidating on every
+  /// remote tick would thrash. Conversion-cache invalidation lives
+  /// inside `setStatus(_:for:)` for the local-mutation path; the
+  /// next conversion call after a remote-arriving status change
+  /// re-reads the registry on cache miss.
+  private func handleRegistryChangeTick() {
+    onRegistrationsChanged?()
   }
 
   // MARK: - CoinGecko API Key
@@ -213,7 +328,7 @@ final class CryptoTokenStore {
 
   // MARK: - Alchemy API Key
   //
-  // The Alchemy key drives the wallet auto-import (Stage 9 onward).
+  // The Alchemy key drives the wallet auto-import.
   // `ProfileSession.resolveAlchemyApiKey()` reads from the same
   // `(service, account)` keychain entry, so a write here is picked up
   // by the next sync cycle without further plumbing. Privacy: never

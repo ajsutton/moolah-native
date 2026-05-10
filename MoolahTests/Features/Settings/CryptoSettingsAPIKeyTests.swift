@@ -5,8 +5,8 @@ import Testing
 
 @testable import Moolah
 
-/// Tests for the Stage 11 Alchemy API key UI surface on
-/// `CryptoTokenStore`. The store wraps a `KeychainStore` keyed on
+/// Tests for the Alchemy API key UI surface on `CryptoTokenStore`.
+/// The store wraps a `KeychainStore` keyed on
 /// (`com.moolah.api-keys`, `alchemy`) — the same entry
 /// `ProfileSession.resolveAlchemyApiKey()` reads on the sync side, so
 /// a write here must round-trip through the keychain to be picked up

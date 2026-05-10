@@ -13,9 +13,10 @@ import OSLog
 /// `registrationsVersion`) and the methods that mutate the shared
 /// registry (`setStatus`, `removeRegistration`, `loadRegistrations`).
 /// Per-session UI state — `isLoading`, `error`, `onRegistrationsChanged`
-/// — lives in the per-session `SettingsCryptoStore` (introduced
-/// alongside this type) and on existing per-session stores like
-/// `InvestmentStore`.
+/// — lives in the per-session `CryptoTokenStore` façade, which proxies
+/// data reads through this store and catches mutation errors locally
+/// so a transient failure in one session doesn't leak onto every
+/// Settings screen.
 ///
 /// The shared store does **not** carry an `error` field. Mutation
 /// methods throw to the caller; the per-session wrapper catches and
@@ -27,9 +28,6 @@ import OSLog
 /// observation `Task` is started in `init` and cancelled in `deinit`.
 /// `[weak self]` is required to break the retain cycle the stored
 /// task would otherwise hold.
-///
-/// See `plans/2026-05-09-shared-instrument-registry-design.md` and
-/// `plans/2026-05-09-shared-instrument-registry-plan.md` (Task 3).
 @MainActor
 @Observable
 final class SharedRegistryStore {
@@ -44,38 +42,22 @@ final class SharedRegistryStore {
   /// Issue #790.
   private(set) var registrationsVersion: Int = 0
 
-  /// Subset of `registrations` with `pricingStatus == .unpriced`.
-  /// Drives the Discovered Tokens inbox row count and the sidebar
-  /// badge.
-  var unpricedRegistrations: [CryptoRegistration] {
-    registrations.filter { $0.pricingStatus == .unpriced }
-  }
-
-  /// Convenience for the sidebar / preferences badge — number of
-  /// unresolved tokens awaiting user attention.
-  var unpricedCount: Int { unpricedRegistrations.count }
-
-  /// Subset of `registrations` with `pricingStatus == .spam`. Drives
-  /// the Spam tokens management list.
-  var spamRegistrations: [CryptoRegistration] {
-    registrations.filter { $0.pricingStatus == .spam }
-  }
+  // The `unpricedRegistrations` / `unpricedCount` /
+  // `spamRegistrations` filters live on the per-session
+  // `CryptoTokenStore` façade — every UI consumer goes through it,
+  // and the filters there already operate on `self.registrations`,
+  // which delegates to this store's `registrations` field. Hosting a
+  // duplicate computed property here added an unreachable surface.
 
   private let registry: any InstrumentRegistryRepository
-  private let cryptoPriceService: CryptoPriceService
-  private let conversionService: any InstrumentConversionService
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "SharedRegistryStore")
   private var observationTask: Task<Void, Never>?
 
   init(
-    registry: any InstrumentRegistryRepository,
-    cryptoPriceService: CryptoPriceService,
-    conversionService: any InstrumentConversionService
+    registry: any InstrumentRegistryRepository
   ) {
     self.registry = registry
-    self.cryptoPriceService = cryptoPriceService
-    self.conversionService = conversionService
 
     let stream = registry.observeChanges()
     self.observationTask = Task { @MainActor [weak self] in
@@ -88,8 +70,13 @@ final class SharedRegistryStore {
   deinit {
     // Swift 6 makes `deinit` nonisolated; reading the `@MainActor`-
     // isolated `observationTask` requires `MainActor.assumeIsolated`.
-    // The store is owned by main-actor code (the `SharedInstrumentScope`
-    // holder), so the assumption holds in practice.
+    // The store is owned by `SyncCoordinator.sharedRegistryStore`,
+    // which is `@MainActor`, so the only deallocation path is from
+    // the main actor (e.g., when the coordinator itself releases the
+    // last strong reference during sign-out / account-switch). The
+    // assumption therefore holds in practice; if a future refactor
+    // adds a non-`@MainActor` owner this trap fires immediately
+    // instead of silently racing the observation infrastructure.
     MainActor.assumeIsolated {
       observationTask?.cancel()
     }
@@ -103,8 +90,8 @@ final class SharedRegistryStore {
   /// force a refresh.
   ///
   /// Errors are logged via `os.Logger`; the previous data is left in
-  /// place. Per-session UI surfaces invoke this through
-  /// `SettingsCryptoStore` which converts thrown errors into UI
+  /// place. Per-session UI surfaces invoke this through the
+  /// `CryptoTokenStore` façade, which converts thrown errors into UI
   /// state — this method's call from the observation task has no UI
   /// caller and intentionally does not propagate.
   func loadRegistrations() async {
@@ -123,12 +110,12 @@ final class SharedRegistryStore {
 
   // MARK: - Mutations
 
-  /// Removes a registration and purges its cached price rows. Throws
-  /// on registry failure; callers in the per-session UI surface should
-  /// catch and present the error.
+  /// Removes a registration. Throws on registry failure. Per-session
+  /// side effects (price-cache purge, conversion-cache invalidation)
+  /// live in `CryptoTokenStore` so each session invalidates its own
+  /// caches against its own services.
   func removeRegistration(_ registration: CryptoRegistration) async throws {
     try await registry.remove(id: registration.id)
-    await cryptoPriceService.purgeCache(instrumentId: registration.id)
     registrations.removeAll { $0.id == registration.id }
     instruments.removeAll { $0.id == registration.id }
     providerMappings.removeValue(forKey: registration.id)
@@ -146,12 +133,11 @@ final class SharedRegistryStore {
     try await removeRegistration(registration)
   }
 
-  /// Persists a new `pricingStatus` for an existing registration and
-  /// invalidates any cached conversion derived from the instrument so
-  /// the next aggregation reads fresh data. Throws on registry
-  /// failure; the local in-memory `registrations` list is left
-  /// untouched on failure (the next observation tick will reload from
-  /// the registry).
+  /// Persists a new `pricingStatus` for an existing registration.
+  /// Throws on registry failure; the local in-memory `registrations`
+  /// list is left untouched on failure (the next observation tick
+  /// reloads from the registry). Per-session conversion-cache
+  /// invalidation lives in `CryptoTokenStore`.
   func setStatus(
     _ status: TokenPricingStatus,
     for registration: CryptoRegistration
@@ -159,7 +145,6 @@ final class SharedRegistryStore {
     var updated = registration
     updated.pricingStatus = status
     try await registry.update(updated)
-    await conversionService.invalidateCache(for: registration.instrument)
     if let index = registrations.firstIndex(where: { $0.id == registration.id }) {
       registrations[index] = updated
     }

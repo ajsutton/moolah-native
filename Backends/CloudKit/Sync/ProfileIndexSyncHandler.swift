@@ -17,13 +17,12 @@ import OSLog
 ///
 /// **Dispatch by record type.** The handler dispatches by
 /// `recordType` so that the profile-index zone can carry both
-/// `ProfileRow` and `InstrumentRow` records (the latter from
-/// "shared instrument registry" in
-/// `plans/2026-05-09-shared-instrument-registry-design.md`). When an
-/// `instrumentRepository` is supplied, instrument-shaped records are
-/// applied / built / system-field-managed via the dispatched paths;
-/// when nil, every instrument-shaped recordID is silently ignored
-/// (legacy callers who don't yet wire the registry to this zone).
+/// `ProfileRow` and `InstrumentRow` records (the latter from the
+/// shared instrument registry). When an `instrumentRepository` is
+/// supplied, instrument-shaped records are applied / built /
+/// system-field-managed via the dispatched paths; when nil, every
+/// instrument-shaped recordID is silently ignored (legacy callers who
+/// don't yet wire the registry to this zone).
 ///
 /// **Concurrency.** Nonisolated and `Sendable`. Every synchronous method
 /// calls into the repository's `*Sync(...)` helpers which block the

@@ -35,8 +35,8 @@ import OSLog
 /// every profile has been attempted. The caller awaits the runner from
 /// the app boot path before opening any session.
 ///
-/// See `plans/2026-05-09-shared-instrument-registry-design.md` (Step
-/// 2 of §Migration) and the implementation plan (Task 11).
+/// Run as a one-shot migration during app boot before any session
+/// opens; gated behind a `UserDefaults` flag so re-runs are no-ops.
 enum SharedRegistryUnionRunner {
   /// `UserDefaults` key gating the union. Once `true`, the runner is
   /// a no-op forever.
@@ -79,7 +79,19 @@ enum SharedRegistryUnionRunner {
       return
     }
 
-    let sortedIds = profileIds.sorted { $0.uuidString < $1.uuidString }
+    // Sort ascending by `profile.id` (BLOB UUID; SQLite `ORDER BY id`
+    // byte-order). The deterministic tie-breaker for conflicting
+    // non-null provider mappings depends on this exact order, so use
+    // the raw 16-byte representation rather than the canonical 36-char
+    // `uuidString` form (the two orderings can disagree once a hex
+    // digit crosses a half-byte boundary).
+    let sortedIds = profileIds.sorted { lhs, rhs in
+      withUnsafeBytes(of: lhs.uuid) { lhsBytes in
+        withUnsafeBytes(of: rhs.uuid) { rhsBytes in
+          lhsBytes.lexicographicallyPrecedes(rhsBytes)
+        }
+      }
+    }
     var successfulCount = 0
     var skippedCount = 0
     let registry = GRDBInstrumentRegistryRepository(database: sharedQueue)
@@ -128,6 +140,19 @@ enum SharedRegistryUnionRunner {
     // transaction; that's acceptable here because the per-profile
     // batches are independent and a mid-batch failure is logged + the
     // outer loop moves on to the next profile.
+    //
+    // **`encoded_system_fields` carryover.** `snapshot.instruments`
+    // includes whatever blob the per-profile row carries, copied
+    // verbatim and never decoded. Those blobs encode CKSyncEngine
+    // metadata for the **per-profile** zone; replaying them onto a
+    // shared-zone row means the first upload to the profile-index
+    // zone may receive a `.serverRecordChanged` and self-recover via
+    // `applyInstrumentServerRecordChangedMerge`. The blob stays opaque
+    // and never gets decoded across the zone boundary. NULL blobs
+    // (rows that were never sync-roundtripped on this device) flow
+    // through unchanged and produce a fresh CKRecord create on first
+    // upload — covered by
+    // `SharedRegistryUnionRunnerTests.unionPreservesNullEncodedSystemFields`.
     try registry.applyRemoteChangesSync(
       saved: snapshot.instruments, deleted: [])
 
@@ -215,40 +240,7 @@ enum SharedRegistryUnionRunner {
   }
 }
 
-/// Snapshot of one per-profile DB. `Database` handles never escape
-/// the read closure; the snapshot is a `Sendable` value type.
-struct PerProfileSnapshot: Sendable {
-  let profileId: UUID
-  let instruments: [InstrumentRow]
-  let cryptoPrices: [CryptoPriceRecord]
-  let stockPrices: [StockPriceRecord]
-  let exchangeRates: [ExchangeRateRecord]
-  let cryptoTokenMeta: [CryptoTokenMetaRecord]
-  let stockTickerMeta: [StockTickerMetaRecord]
-  let exchangeRateMeta: [ExchangeRateMetaRecord]
-
-  /// Reads every relevant table from the per-profile queue into Swift
-  /// value types so the snapshot can be passed to the shared-DB write
-  /// transaction without a live `Database` handle escaping.
-  init(profileId: UUID, queue: DatabaseQueue) async throws {
-    self.profileId = profileId
-    let snapshot = try await queue.read { database in
-      try (
-        InstrumentRow.fetchAll(database),
-        CryptoPriceRecord.fetchAll(database),
-        StockPriceRecord.fetchAll(database),
-        ExchangeRateRecord.fetchAll(database),
-        CryptoTokenMetaRecord.fetchAll(database),
-        StockTickerMetaRecord.fetchAll(database),
-        ExchangeRateMetaRecord.fetchAll(database)
-      )
-    }
-    self.instruments = snapshot.0
-    self.cryptoPrices = snapshot.1
-    self.stockPrices = snapshot.2
-    self.exchangeRates = snapshot.3
-    self.cryptoTokenMeta = snapshot.4
-    self.stockTickerMeta = snapshot.5
-    self.exchangeRateMeta = snapshot.6
-  }
-}
+// `PerProfileSnapshot` lives in
+// `Backends/GRDB/Migration/PerProfileSnapshot.swift` so the GRDB
+// record types it bundles never have to be named at the App layer
+// (CODE_GUIDE §3 — records never leave `Backends/GRDB/`).

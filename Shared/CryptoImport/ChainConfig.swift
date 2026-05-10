@@ -25,14 +25,14 @@ struct ChainConfig: Sendable, Hashable {
   /// design open question 3.
   let supportsInternalTransfers: Bool
 
-  /// Block-explorer base URL (no trailing slash). Used by `BlockExplorerLink`
-  /// in Stage 12.
+  /// Block-explorer base URL (no trailing slash). Used by
+  /// `BlockExplorerLink` to render outbound transaction links.
   let blockExplorerBaseURL: URL
 
   /// Human-readable name for the chain picker / settings UI.
   let displayName: String
 
-  /// All supported chains, indexed by `chainId` order. Stage 10's chain
+  /// All supported chains, indexed by `chainId` order. The chain
   /// picker renders this in declaration order; stable across launches.
   static let all: [ChainConfig] = [
     .ethereum, .optimism, .base, .polygon,
