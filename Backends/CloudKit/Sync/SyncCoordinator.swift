@@ -159,9 +159,9 @@ final class SyncCoordinator {
 
   /// The app-level shared `GRDBInstrumentRegistryRepository`. Exposed
   /// so `ProfileSession.makeCloudKitBackend` can hand the same instance
-  /// to every session's `CloudKitBackend`. Stage 12b migrates Settings
-  /// views, the search service, and the conversion service from
-  /// per-profile registries to this shared instance.
+  /// to every session's `CloudKitBackend`. Settings views, the search
+  /// service, and the conversion service all read from this shared
+  /// instance rather than per-profile registries.
   ///
   /// `nil` for legacy callers (e.g. tests) that don't pass a shared
   /// registry — those continue with the per-profile registry path.
@@ -169,11 +169,10 @@ final class SyncCoordinator {
 
   /// App-level shared `MarketDataServices` (exchange / stock / crypto
   /// price services + Yahoo client + CoinGecko key) pointed at the
-  /// profile-index DB. Stage 13: when wired, every profile session
-  /// reads through these instead of constructing per-profile copies,
-  /// so price-cache writes land in the same DB and feed the
-  /// `notifyRateCacheChange` observation. `nil` for tests that don't
-  /// pass shared services.
+  /// profile-index DB. When wired, every profile session reads through
+  /// these instead of constructing per-profile copies, so price-cache
+  /// writes land in the same DB and feed the `notifyRateCacheChange`
+  /// observation. `nil` for tests that don't pass shared services.
   nonisolated let sharedMarketData: ProfileSession.MarketDataServices?
 
   /// App-level shared `SharedRegistryStore` — owns the registry data

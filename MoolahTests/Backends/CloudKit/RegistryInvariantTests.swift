@@ -16,8 +16,6 @@ import Testing
 /// rely on this invariant — drift between the two columns would
 /// silently split a single instrument into two registry rows that
 /// could never reconcile.
-///
-/// Acceptance criterion #9 / spec line 348.
 @Suite("InstrumentRecord id == record_name invariant")
 struct RegistryInvariantTests {
 

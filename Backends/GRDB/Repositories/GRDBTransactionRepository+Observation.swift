@@ -14,9 +14,9 @@ import GRDB
 // `priorBalance` conversion is deliberately dropped from the observed
 // stream: the conversion call is async and non-deterministic from a
 // `ValueObservation` perspective, and the upstream fetch already runs the
-// rate fetch on the consumer's actor. Stage 11 (the store rewrite) is
-// where the snapshot meets the conversion service; this stage's job is
-// only to publish the on-disk projection.
+// rate fetch on the consumer's actor. The consuming `TransactionStore`
+// is where the snapshot meets the conversion service; this layer's
+// job is only to publish the on-disk projection.
 //
 // `observeAll(filter:)` mirrors `fetchAll(filter:)`. Both observation
 // methods capture their parameters into the GRDB tracking closure so
@@ -38,8 +38,8 @@ import GRDB
 // the tracked tables (`transaction`, `transaction_leg`, `instrument`,
 // `account` for the resolved-target lookup). A profile with many
 // transactions will pay the candidate-filter cost on every write. The
-// design's measure-first policy applies — flag for Stage 15 measurement
-// rather than pre-optimising here.
+// design's measure-first policy applies — measure under load before
+// pre-optimising here.
 extension GRDBTransactionRepository {
 
   /// Streams `TransactionPage` snapshots whenever `transaction`,
@@ -55,11 +55,11 @@ extension GRDBTransactionRepository {
   /// `priorBalance` is set to `nil` in the emitted page: the
   /// conversion-service hop is async and runs on the consumer's actor,
   /// so the observation stream itself only carries the on-disk part of
-  /// the snapshot. Stage 11's `TransactionStore` performs the
-  /// conversion after each emission, the same way the imperative path
-  /// does after `fetch(...)`. `targetInstrument`, `transactions`, and
-  /// `totalCount` come from `buildFetchSnapshot(...)` so the emitted
-  /// projection matches `fetch(...)` exactly outside that field.
+  /// the snapshot. `TransactionStore` performs the conversion after
+  /// each emission, the same way the imperative path does after
+  /// `fetch(...)`. `targetInstrument`, `transactions`, and `totalCount`
+  /// come from `buildFetchSnapshot(...)` so the emitted projection
+  /// matches `fetch(...)` exactly outside that field.
   func observe(
     filter: TransactionFilter, page: Int, pageSize: Int
   ) -> AsyncStream<TransactionPage> {

@@ -57,7 +57,7 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   /// is single-shot, so once `surfaceAndFinish(_:)` is called the
   /// channel terminates — subsequent observations from the same repo
   /// share that fate. This matches the design's "repository instance
-  /// owns the channel" rule (see Stage 1 of the reactive-sync plan).
+  /// owns the channel" rule.
   let errorChannel = ObservationErrorChannel()
 
   init(

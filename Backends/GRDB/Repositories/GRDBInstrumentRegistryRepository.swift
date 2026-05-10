@@ -260,13 +260,12 @@ final class GRDBInstrumentRegistryRepository:
   func applyRemoteChangesSync(saved rows: [InstrumentRow], deleted ids: [String]) throws {
     try database.write { database in
       for var row in rows {
-        // Per spec §"`CryptoRegistration.pricingStatus`" — apply the
-        // field-level merge rule for `pricingStatus` before upserting.
-        // CKSyncEngine's default "server wins" would let the daily
-        // auto-resolver on one device clobber a `.spam` classification a
-        // user made on another. The rule is centralised in
-        // `PricingStatusMerge.merge` and unit-tested against the full
-        // 3x3 truth table.
+        // Apply the field-level merge rule for `pricingStatus` before
+        // upserting. CKSyncEngine's default "server wins" would let
+        // the daily auto-resolver on one device clobber a `.spam`
+        // classification a user made on another. The rule is
+        // centralised in `PricingStatusMerge.merge` and unit-tested
+        // against the full 3x3 truth table.
         //
         // Unrecognised raw values (only possible from a future-version
         // device sending an enum case this build doesn't compile against,

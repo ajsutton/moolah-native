@@ -97,8 +97,7 @@ enum ProfileSchema {
     // Will drop the per-profile `instrument`, `crypto_token_meta`,
     // `stock_ticker_meta`, `crypto_price`, `stock_price`, `exchange_rate`,
     // and `exchange_rate_meta` tables once all devices have migrated to
-    // the shared profile-index registry. See
-    // `plans/2026-05-09-shared-instrument-registry-design.md`.
+    // the shared profile-index registry.
     // Do NOT use "v10_*" for any other migration.
 
     return migrator

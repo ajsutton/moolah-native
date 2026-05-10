@@ -17,8 +17,6 @@ import Testing
 /// `Task<CryptoRegistration, Error>`. This test makes that contract
 /// observable: cancel session A's coroutine while session B is still
 /// awaiting the same key, then verify session B completes normally.
-///
-/// Plan Step 17.2 / spec §"Discovery cancellation".
 @Suite("Discovery cancellation isolation across sessions")
 struct DiscoveryCancellationIsolationTests {
 

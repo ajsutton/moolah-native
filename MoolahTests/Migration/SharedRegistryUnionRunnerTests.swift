@@ -207,12 +207,12 @@ struct SharedRegistryUnionRunnerTests {
     #expect(fixture.defaults.bool(forKey: SharedRegistryUnionRunner.unionFlagKey))
   }
 
-  /// Spec §Migration step 2 (line 263): when the winning per-profile
-  /// row's `encoded_system_fields` is NULL — i.e. the row was never
-  /// sync-roundtripped on this device — the merged shared-registry
-  /// row must inherit NULL so the next upload to the profile-index
-  /// zone produces a fresh `CKRecord` create rather than chasing a
-  /// stale change-tag through `.serverRecordChanged` recovery.
+  /// When the winning per-profile row's `encoded_system_fields` is
+  /// NULL — i.e. the row was never sync-roundtripped on this device —
+  /// the merged shared-registry row must inherit NULL so the next
+  /// upload to the profile-index zone produces a fresh `CKRecord`
+  /// create rather than chasing a stale change-tag through
+  /// `.serverRecordChanged` recovery.
   @Test(
     "union preserves NULL encoded_system_fields so first upload is a fresh CKRecord create"
   )
@@ -247,7 +247,7 @@ struct SharedRegistryUnionRunnerTests {
 
     // The merged shared row must carry NULL system fields so the
     // first upload to the profile-index zone is a fresh CKRecord
-    // create, per spec §Migration step 2 line 263.
+    // create.
     let blob: Data?? = try await fixture.sharedQueue.read { database in
       try Data?.fetchOne(
         database,

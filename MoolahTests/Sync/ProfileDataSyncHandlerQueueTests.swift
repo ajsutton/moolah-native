@@ -59,8 +59,8 @@ struct ProfileDataSyncHandlerQueueTests {
 
     let recordIDs = handler.queueAllExistingRecords()
 
-    // Stage 14: instrument ids are queued by the shared registry on
-    // the profile-index zone (via
+    // Instrument ids are queued by the shared registry on the
+    // profile-index zone (via
     // `SyncCoordinator.queueUnsyncedSharedInstruments`), not by the
     // per-profile handler. The seeded `AUD` instrument is therefore
     // not part of the per-profile queue.
@@ -113,8 +113,8 @@ struct ProfileDataSyncHandlerQueueTests {
     let recordIDs = handler.queueUnsyncedRecords()
     let recordNames = Set(recordIDs.map(\.recordName))
 
-    // Stage 14: per-profile handler no longer enumerates instrument
-    // rows. The shared registry's
+    // The per-profile handler no longer enumerates instrument rows.
+    // The shared registry's
     // `SyncCoordinator.queueUnsyncedSharedInstruments` covers them.
     #expect(
       recordNames.contains("\(AccountRow.recordType)|\(unsyncedAccountId.uuidString)"))
@@ -183,8 +183,8 @@ struct ProfileDataSyncHandlerQueueTests {
     let recordIDs = handler.queueUnsyncedRecords()
     let recordNames = Set(recordIDs.map(\.recordName))
 
-    // Stage 14: per-profile handler no longer enumerates instrument
-    // rows; was 8, now 7.
+    // The per-profile handler no longer enumerates instrument rows
+    // (count would be 8 if it did; the shared registry covers them).
     #expect(recordNames.count == 7)
     #expect(!recordNames.contains(seed.instrumentId))
     #expect(recordNames.contains("\(AccountRow.recordType)|\(seed.accountId.uuidString)"))

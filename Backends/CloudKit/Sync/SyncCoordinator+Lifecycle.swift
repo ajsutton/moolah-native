@@ -196,12 +196,11 @@ extension SyncCoordinator {
       //
       // The previous per-profile-zone instrument backfill (which
       // queued auto-inserted stock/crypto rows for upload to each
-      // `profile-<UUID>` zone) is decommissioned: post-stage-12b every
-      // instrument upload routes through the shared registry to the
-      // profile-index zone. The DEBUG trap in
-      // `ProfileDataSyncHandler.recordToSave` now refuses any
-      // residual per-profile-zone `InstrumentRecord` upload, so the
-      // self-heal lives entirely on the shared side.
+      // `profile-<UUID>` zone) is decommissioned: every instrument
+      // upload routes through the shared registry to the profile-index
+      // zone. The DEBUG trap in `ProfileDataSyncHandler.recordToSave`
+      // now refuses any residual per-profile-zone `InstrumentRecord`
+      // upload, so the self-heal lives entirely on the shared side.
       _ = self.queueUnsyncedSharedInstruments()
       if self.hasPendingChanges {
         self.logger.info("Zones ready — sending pending changes")

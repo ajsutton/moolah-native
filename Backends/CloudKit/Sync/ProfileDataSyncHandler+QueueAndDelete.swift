@@ -67,8 +67,9 @@ extension ProfileDataSyncHandler {
   private func collectGRDBRecordIDs(source: GRDBIdSource) -> [CKRecord.ID] {
     var recordIDs: [CKRecord.ID] = []
     // Instrument ids are queued by the shared registry on the
-    // profile-index zone via SyncCoordinator.queueUnsyncedSharedInstruments.
-    // The per-profile path no longer enumerates them — stage 14.
+    // profile-index zone via
+    // `SyncCoordinator.queueUnsyncedSharedInstruments`; the per-profile
+    // path deliberately does not enumerate them.
     collectCategoryIds(source: source, into: &recordIDs)
     collectAccountIds(source: source, into: &recordIDs)
     collectEarmarkIds(source: source, into: &recordIDs)
@@ -208,9 +209,10 @@ extension ProfileDataSyncHandler {
     // to leaving local data in an inconsistent state.
     var clearedAll = true
     let wipes: [(String, () throws -> Void)] = [
-      // Per-profile `instrument` table is decommissioned (stage 12b)
-      // but the rows survive on disk until the v10 follow-up
-      // (`v10_drop_shared_instrument_legacy`) drops the table outright.
+      // The per-profile `instrument` table is decommissioned but its
+      // rows survive on disk until the
+      // `v10_drop_shared_instrument_legacy` migration drops the table
+      // outright.
       // Keep the wipe here — `deleteLocalData` runs on sign-out,
       // account-switch, and zone purge, where the entire per-profile
       // DB is meant to be cleared. Asymmetry with `clearOperations()`

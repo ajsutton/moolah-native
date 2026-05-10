@@ -134,14 +134,12 @@ extension ProfileDataSyncHandler {
       saveCount: saved.count,
       deleteCount: deleted.count)
     let changedTypes = Set(saved.map(\.recordType) + deleted.map(\.1))
-    // Note: pre-stage-14 this dispatched an `onInstrumentRemoteChange()`
-    // fan-out for `InstrumentRow.recordType` deliveries on the
-    // per-profile zone. After stages 12b/13 every `InstrumentRecord`
-    // flows through the shared registry on the profile-index zone, so
-    // any straggler delivery here from a not-yet-upgraded peer device
-    // is silently logged and skipped by
-    // `applyBatchSaveInstrument` / `applyGRDBBatchDeletion` — never
-    // applied to the per-profile `instrument` table that the
+    // No `onInstrumentRemoteChange()` fan-out from the per-profile
+    // path: every `InstrumentRecord` now flows through the shared
+    // registry on the profile-index zone. Any straggler delivery here
+    // from a not-yet-upgraded peer device is silently logged and
+    // skipped by `applyBatchSaveInstrument` / `applyGRDBBatchDeletion`
+    // — never applied to the per-profile `instrument` table that the
     // follow-up `v10_drop_shared_instrument_legacy` migration will
     // drop. No UI consumer reads from that table anymore.
     return .success(changedTypes: changedTypes)

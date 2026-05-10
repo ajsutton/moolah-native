@@ -28,9 +28,6 @@ import OSLog
 /// observation `Task` is started in `init` and cancelled in `deinit`.
 /// `[weak self]` is required to break the retain cycle the stored
 /// task would otherwise hold.
-///
-/// See `plans/2026-05-09-shared-instrument-registry-design.md` and
-/// `plans/2026-05-09-shared-instrument-registry-plan.md` (Task 3).
 @MainActor
 @Observable
 final class SharedRegistryStore {

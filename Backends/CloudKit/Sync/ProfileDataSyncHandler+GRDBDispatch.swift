@@ -139,13 +139,12 @@ extension ProfileDataSyncHandler {
   }
 
   /// Companion to `applyGRDBBatchDeletion(recordType:ids:)` for record
-  /// types keyed by string ID. After the shared-instrument-registry
-  /// rollout `InstrumentRecord` lives on the profile-index zone only,
-  /// so any per-profile-zone deletion is a straggler from a
-  /// pre-rollout peer device — we log and skip rather than apply
-  /// (spec §"Per-profile handler decommissioning"). The function
-  /// returns `true` to claim the dispatch slot so the engine doesn't
-  /// re-route the deletion through a fallback path.
+  /// types keyed by string ID. `InstrumentRecord` lives on the
+  /// profile-index zone only, so any per-profile-zone deletion is a
+  /// straggler from a pre-rollout peer device — we log and skip
+  /// rather than apply. The function returns `true` to claim the
+  /// dispatch slot so the engine doesn't re-route the deletion
+  /// through a fallback path.
   nonisolated func applyGRDBBatchDeletion(
     recordType: String, names: [String]
   ) throws -> Bool {

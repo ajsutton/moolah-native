@@ -35,8 +35,8 @@ import OSLog
 /// every profile has been attempted. The caller awaits the runner from
 /// the app boot path before opening any session.
 ///
-/// See `plans/2026-05-09-shared-instrument-registry-design.md` (Step
-/// 2 of §Migration) and the implementation plan (Task 11).
+/// Run as a one-shot migration during app boot before any session
+/// opens; gated behind a `UserDefaults` flag so re-runs are no-ops.
 enum SharedRegistryUnionRunner {
   /// `UserDefaults` key gating the union. Once `true`, the runner is
   /// a no-op forever.
@@ -79,12 +79,12 @@ enum SharedRegistryUnionRunner {
       return
     }
 
-    // Spec §Migration step 2 line 257 — sort ascending by `profile.id`
-    // (BLOB UUID; SQLite `ORDER BY id` byte-order). The deterministic
-    // tie-breaker for conflicting non-null provider mappings depends on
-    // this exact order, so use the raw 16-byte representation rather
-    // than the canonical 36-char `uuidString` form (the two orderings
-    // can disagree once a hex digit crosses a half-byte boundary).
+    // Sort ascending by `profile.id` (BLOB UUID; SQLite `ORDER BY id`
+    // byte-order). The deterministic tie-breaker for conflicting
+    // non-null provider mappings depends on this exact order, so use
+    // the raw 16-byte representation rather than the canonical 36-char
+    // `uuidString` form (the two orderings can disagree once a hex
+    // digit crosses a half-byte boundary).
     let sortedIds = profileIds.sorted { lhs, rhs in
       withUnsafeBytes(of: lhs.uuid) { lhsBytes in
         withUnsafeBytes(of: rhs.uuid) { rhsBytes in
@@ -143,16 +143,15 @@ enum SharedRegistryUnionRunner {
     //
     // **`encoded_system_fields` carryover.** `snapshot.instruments`
     // includes whatever blob the per-profile row carries, copied
-    // byte-for-byte (per spec §Migration step 2 line 263 — "copied
-    // verbatim, never decoded"). Those blobs encode CKSyncEngine
+    // verbatim and never decoded. Those blobs encode CKSyncEngine
     // metadata for the **per-profile** zone; replaying them onto a
     // shared-zone row means the first upload to the profile-index
     // zone may receive a `.serverRecordChanged` and self-recover via
-    // `applyInstrumentServerRecordChangedMerge`. Acceptable per the
-    // spec; the blob stays opaque and never gets decoded across the
-    // zone boundary. NULL blobs (rows that were never
-    // sync-roundtripped on this device) flow through unchanged and
-    // produce a fresh CKRecord create on first upload — covered by
+    // `applyInstrumentServerRecordChangedMerge`. The blob stays opaque
+    // and never gets decoded across the zone boundary. NULL blobs
+    // (rows that were never sync-roundtripped on this device) flow
+    // through unchanged and produce a fresh CKRecord create on first
+    // upload — covered by
     // `SharedRegistryUnionRunnerTests.unionPreservesNullEncodedSystemFields`.
     try registry.applyRemoteChangesSync(
       saved: snapshot.instruments, deleted: [])

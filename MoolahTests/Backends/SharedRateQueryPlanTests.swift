@@ -7,20 +7,18 @@ import Testing
 @testable import Moolah
 
 /// Mirrored plan-pinning tests for the rate-cache tables on the
-/// **shared** profile-index DB (added by Stage 1's
+/// **shared** profile-index DB (added by the
 /// `v3_shared_instrument_registry` migration). `loadCache`-shaped
 /// queries against the shared tables must use the same primary-key
 /// scan as the per-profile equivalents — the per-profile
 /// `RateQueryPlanTests` confirms the per-profile shape; this suite
 /// confirms the shared shape.
 ///
-/// Per `plans/2026-05-09-shared-instrument-registry-design.md`
-/// §"Local schema → Price-cache tables", the per-profile
-/// `exchange_rate_lookup` index on `(base, quote, date)` is
-/// intentionally **not** carried into the shared DB — `loadCache`
+/// The per-profile `exchange_rate_lookup` index on `(base, quote, date)`
+/// is intentionally **not** carried into the shared DB — `loadCache`
 /// fetches `WHERE base = ?` and resolves quote/date in-memory from
-/// the loaded `caches[base]` dictionary. This suite asserts the PK
-/// is the chosen access path and that no shared `exchange_rate_lookup`
+/// the loaded `caches[base]` dictionary. This suite asserts the PK is
+/// the chosen access path and that no shared `exchange_rate_lookup`
 /// index exists.
 @Suite("Shared rate cache loadCache query plans")
 struct SharedRateQueryPlanTests {

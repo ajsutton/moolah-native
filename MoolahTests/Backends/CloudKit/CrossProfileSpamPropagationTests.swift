@@ -6,21 +6,19 @@ import Testing
 
 @testable import Moolah
 
-/// Smoking-gun test for spec acceptance criterion #2 (line 341):
-/// marking a token spam in one profile is reflected in the other
-/// **within one CKSyncEngine cycle, verified via `for await` on
-/// `observeChanges()`**. The propagation path is:
+/// Smoking-gun test that marking a token spam in one profile is
+/// reflected in the other **within one CKSyncEngine cycle, verified
+/// via `for await` on `observeChanges()`**. The propagation path is:
 ///
 ///   Profile A's session → shared registry write → registry's
 ///   `notifySubscribers()` fan-out → every subscriber (including
 ///   Profile B's session) receives the `Void` tick → Profile B's
 ///   session re-fetches and renders the new state.
 ///
-/// Setup-order is load-bearing per spec §Testing line 309: the
-/// continuation must be installed **before** the mutation, otherwise
-/// the tick is missed. The bounded `for await … { break }` consumption
-/// pattern (no `Task.sleep`) lets the test fail fast if the propagation
-/// never arrives.
+/// Setup-order is load-bearing: the continuation must be installed
+/// **before** the mutation, otherwise the tick is missed. The bounded
+/// `for await … { break }` consumption pattern (no `Task.sleep`) lets
+/// the test fail fast if the propagation never arrives.
 @Suite("Cross-profile spam propagation through observeChanges()")
 @MainActor
 struct CrossProfileSpamPropagationTests {
@@ -81,10 +79,9 @@ struct CrossProfileSpamPropagationTests {
     // Bounded wait for the propagation tick. The waiter task either
     // completes (propagation fired) or stays blocked (regression). A
     // `ContinuousClock`-deadline race lets the test fail fast on
-    // regression without `Task.sleep` (spec §Testing line 309: "Never
-    // `Task.sleep`" — the propagation-detection path uses
-    // `iterator.next()` directly; this deadline race is the
-    // fail-fast backstop).
+    // regression without `Task.sleep`: the propagation-detection path
+    // uses `iterator.next()` directly, and this deadline race is the
+    // fail-fast backstop.
     try await withThrowingTaskGroup(of: Void.self) { group in
       group.addTask { await waiter.value }
       group.addTask {

@@ -11,12 +11,11 @@ import Testing
 /// non-fiat instruments routes through the **shared registry** and
 /// emits its `onRecordChanged` hook with a string-keyed recordName
 /// destined for the **profile-index zone** — never a `profile-<UUID>`
-/// zone. After stage 12b/13/14 the legacy per-profile-zone instrument
-/// upload path is decommissioned (DEBUG trap in
-/// `ProfileDataSyncHandler.recordToSave` catches regressions); this
-/// test pins the positive contract end-to-end so a future refactor
-/// that loses the shared-registry routing fails here before hitting
-/// the trap in CI.
+/// zone. The legacy per-profile-zone instrument upload path is
+/// decommissioned (DEBUG trap in `ProfileDataSyncHandler.recordToSave`
+/// catches regressions); this test pins the positive contract
+/// end-to-end so a future refactor that loses the shared-registry
+/// routing fails here before hitting the trap in CI.
 @Suite("Instrument auto-publish hook routes to the profile-index zone")
 @MainActor
 struct InstrumentChangedHookZoneRoutingTests {
@@ -117,7 +116,7 @@ struct InstrumentChangedHookZoneRoutingTests {
   /// project's preferred idiom but the registry's hook is a closure
   /// (not an `AsyncStream`), so a single `Task.yield()` followed by a
   /// short `ContinuousClock.sleep` deadline is the closest equivalent
-  /// — never `Task.sleep` (per spec §Testing line 309).
+  /// — never `Task.sleep`, which would race the hook hop.
   private func drainHookHops() async throws {
     // One yield is usually enough; the brief sleep covers the rare
     // case where the @MainActor hop hasn't been scheduled yet.

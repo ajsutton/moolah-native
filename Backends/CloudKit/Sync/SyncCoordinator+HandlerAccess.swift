@@ -54,9 +54,9 @@ extension SyncCoordinator {
     return bundle
   }
 
-  // The per-profile `instrumentRemoteChangeCallbacks` registry was
-  // dropped in stage 14 — the shared registry on the profile-index
-  // zone now drives every InstrumentRecord remote-change fan-out via
+  // No per-profile `instrumentRemoteChangeCallbacks` registry exists:
+  // the shared registry on the profile-index zone drives every
+  // InstrumentRecord remote-change fan-out via
   // `SyncCoordinator.makeInstrumentRemoteChangeFanOut`.
 
   /// Drops the cached handler and GRDB repository bundle for a profile

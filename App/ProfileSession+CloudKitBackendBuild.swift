@@ -52,11 +52,11 @@ extension ProfileSession {
     // service. See issue #102.
     //
     // `observeRates()` watches the rate-cache tables for change ticks.
-    // Stage 13 moved the shared price services onto the profile-index
-    // DB, so the observation must follow — watching the per-profile DB
-    // would silently miss every cache write. Fall back to the
-    // per-profile DB only for legacy callers that didn't pass a
-    // coordinator with shared services (preview / tests).
+    // The shared price services live on the profile-index DB, so the
+    // observation must follow — watching the per-profile DB would
+    // silently miss every cache write. Fall back to the per-profile DB
+    // only for legacy callers that didn't pass a coordinator with
+    // shared services (preview / tests).
     let rateObservationDatabase: any DatabaseWriter =
       syncCoordinator?.containerManager.profileIndexDatabase ?? database
     let conversionService = FullConversionService(
@@ -223,8 +223,8 @@ extension ProfileSession {
     )
   }
 
-  // `wireInstrumentRemoteChangeFanOut` was removed in stage 14 — the
-  // shared registry on the profile-index zone now drives every
+  // `wireInstrumentRemoteChangeFanOut` is intentionally absent here:
+  // the shared registry on the profile-index zone drives every
   // InstrumentRecord remote-change fan-out via
   // `SyncCoordinator.makeInstrumentRemoteChangeFanOut`.
 }

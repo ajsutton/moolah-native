@@ -75,11 +75,11 @@ final class CryptoTokenStore {
   private let apiKeyStore: KeychainStore
 
   /// Keychain entry for the Alchemy API key, used by the crypto-wallet
-  /// auto-import (Stage 9 onward). Service / account strings match
-  /// `plans/2026-05-05-crypto-wallet-import-design.md` §"API key
-  /// management" so reads from `ProfileSession+CryptoSync` pick up the
-  /// value the settings UI writes here. Production wires this to the
-  /// iCloud-synced keychain (`synchronizable: true`); tests inject a
+  /// auto-import. Service / account strings are pinned to the values
+  /// `ProfileSession+CryptoSync` reads on the sync side so reads pick
+  /// up whatever the settings UI writes here. Production wires this
+  /// to the iCloud-synced keychain (`synchronizable: true`); tests
+  /// inject a
   /// non-synced `KeychainStore` since the test runner cannot write to
   /// the synced keychain in CI.
   private let alchemyKeyStore: KeychainStore
@@ -319,7 +319,7 @@ final class CryptoTokenStore {
 
   // MARK: - Alchemy API Key
   //
-  // The Alchemy key drives the wallet auto-import (Stage 9 onward).
+  // The Alchemy key drives the wallet auto-import.
   // `ProfileSession.resolveAlchemyApiKey()` reads from the same
   // `(service, account)` keychain entry, so a write here is picked up
   // by the next sync cycle without further plumbing. Privacy: never

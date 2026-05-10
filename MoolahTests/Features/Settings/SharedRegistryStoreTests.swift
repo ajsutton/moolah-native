@@ -9,9 +9,6 @@ import Testing
 /// Confirms `SharedRegistryStore` reads, mutates, and observes the
 /// registry correctly. Errors propagate to the caller; the
 /// observation task auto-refreshes on every registry mutation.
-///
-/// See `plans/2026-05-09-shared-instrument-registry-design.md` and
-/// `plans/2026-05-09-shared-instrument-registry-plan.md` (Task 3).
 @MainActor
 @Suite("SharedRegistryStore")
 struct SharedRegistryStoreTests {
