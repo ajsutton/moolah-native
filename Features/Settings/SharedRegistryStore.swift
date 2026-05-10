@@ -62,20 +62,14 @@ final class SharedRegistryStore {
   }
 
   private let registry: any InstrumentRegistryRepository
-  private let cryptoPriceService: CryptoPriceService
-  private let conversionService: any InstrumentConversionService
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "SharedRegistryStore")
   private var observationTask: Task<Void, Never>?
 
   init(
-    registry: any InstrumentRegistryRepository,
-    cryptoPriceService: CryptoPriceService,
-    conversionService: any InstrumentConversionService
+    registry: any InstrumentRegistryRepository
   ) {
     self.registry = registry
-    self.cryptoPriceService = cryptoPriceService
-    self.conversionService = conversionService
 
     let stream = registry.observeChanges()
     self.observationTask = Task { @MainActor [weak self] in
@@ -123,12 +117,12 @@ final class SharedRegistryStore {
 
   // MARK: - Mutations
 
-  /// Removes a registration and purges its cached price rows. Throws
-  /// on registry failure; callers in the per-session UI surface should
-  /// catch and present the error.
+  /// Removes a registration. Throws on registry failure. Per-session
+  /// side effects (price-cache purge, conversion-cache invalidation)
+  /// live in `CryptoTokenStore` so each session invalidates its own
+  /// caches against its own services.
   func removeRegistration(_ registration: CryptoRegistration) async throws {
     try await registry.remove(id: registration.id)
-    await cryptoPriceService.purgeCache(instrumentId: registration.id)
     registrations.removeAll { $0.id == registration.id }
     instruments.removeAll { $0.id == registration.id }
     providerMappings.removeValue(forKey: registration.id)
@@ -146,12 +140,11 @@ final class SharedRegistryStore {
     try await removeRegistration(registration)
   }
 
-  /// Persists a new `pricingStatus` for an existing registration and
-  /// invalidates any cached conversion derived from the instrument so
-  /// the next aggregation reads fresh data. Throws on registry
-  /// failure; the local in-memory `registrations` list is left
-  /// untouched on failure (the next observation tick will reload from
-  /// the registry).
+  /// Persists a new `pricingStatus` for an existing registration.
+  /// Throws on registry failure; the local in-memory `registrations`
+  /// list is left untouched on failure (the next observation tick
+  /// reloads from the registry). Per-session conversion-cache
+  /// invalidation lives in `CryptoTokenStore`.
   func setStatus(
     _ status: TokenPricingStatus,
     for registration: CryptoRegistration
@@ -159,7 +152,6 @@ final class SharedRegistryStore {
     var updated = registration
     updated.pricingStatus = status
     try await registry.update(updated)
-    await conversionService.invalidateCache(for: registration.instrument)
     if let index = registrations.firstIndex(where: { $0.id == registration.id }) {
       registrations[index] = updated
     }

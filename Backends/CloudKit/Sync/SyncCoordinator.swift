@@ -176,6 +176,19 @@ final class SyncCoordinator {
   /// pass shared services.
   nonisolated let sharedMarketData: ProfileSession.MarketDataServices?
 
+  /// App-level shared `SharedRegistryStore` — owns the registry data
+  /// (`registrations`, `instruments`, `providerMappings`,
+  /// `registrationsVersion`) and subscribes to the registry's
+  /// `observeChanges()` so a mutation through any session (or a
+  /// remote-arriving CKSyncEngine apply) updates every session's
+  /// view on the next read. Per-session `CryptoTokenStore` instances
+  /// hold a reference and proxy data reads to this store; per-
+  /// session UI state (`error`, `isLoading`) stays on the per-session
+  /// store so a transient failure in one session doesn't leak onto
+  /// every Settings screen. `nil` for legacy callers (preview /
+  /// tests) that don't construct a shared store.
+  nonisolated let sharedRegistryStore: SharedRegistryStore?
+
   // Cross-file-access note: members below this MARK that sibling extension
   // files (Lifecycle / Zones / Backfill / RecordChanges / Delegate) touch are
   // `internal` rather than `private`. Swift does not treat extensions in
@@ -327,13 +340,15 @@ final class SyncCoordinator {
     userDefaults: UserDefaults = .standard,
     isCloudKitAvailable: Bool = CloudKitAuthProvider.isCloudKitAvailable,
     sharedInstrumentRegistry: GRDBInstrumentRegistryRepository? = nil,
-    sharedMarketData: ProfileSession.MarketDataServices? = nil
+    sharedMarketData: ProfileSession.MarketDataServices? = nil,
+    sharedRegistryStore: SharedRegistryStore? = nil
   ) {
     self.containerManager = containerManager
     self.userDefaults = userDefaults
     self.progress = SyncProgress(userDefaults: userDefaults)
     self.sharedInstrumentRegistry = sharedInstrumentRegistry
     self.sharedMarketData = sharedMarketData
+    self.sharedRegistryStore = sharedRegistryStore
     self.profileIndexHandler = ProfileIndexSyncHandler(
       repository: containerManager.profileIndexRepository,
       instrumentRepository: sharedInstrumentRegistry,

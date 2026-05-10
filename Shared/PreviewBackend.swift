@@ -19,7 +19,16 @@ import SwiftData
 /// backend layer, which is a worse coupling than the targeted
 /// preview-only import here.
 enum PreviewBackend {
-  static func create(instrument: Instrument = .AUD) -> (CloudKitBackend, ModelContainer) {
+  /// Builds a CloudKit-shaped backend for SwiftUI previews. The
+  /// optional `sharedRegistry` mirrors `TestBackend.create`'s
+  /// equivalent parameter — pass the same instance across multiple
+  /// preview backends to share one registry like production does.
+  /// Defaults to a fresh per-call registry against the per-call
+  /// in-memory `ProfileDatabase`.
+  static func create(
+    instrument: Instrument = .AUD,
+    sharedRegistry: GRDBInstrumentRegistryRepository? = nil
+  ) -> (CloudKitBackend, ModelContainer) {
     let schema = Schema([
       AccountRecord.self,
       TransactionRecord.self,
@@ -46,7 +55,9 @@ enum PreviewBackend {
     )
     let conversionService = FiatConversionService(
       exchangeRates: exchangeRates, database: database)
-    let registry = GRDBInstrumentRegistryRepository(database: database)
+    let registry =
+      sharedRegistry
+      ?? GRDBInstrumentRegistryRepository(database: database)
     let backend = CloudKitBackend(
       database: database,
       instrument: instrument,

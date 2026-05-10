@@ -170,7 +170,8 @@ final class ProfileSession: Identifiable {
       backend: backend,
       cryptoPriceService: services.cryptoPrice,
       yahooPriceFetcher: services.yahooPriceFetcher,
-      coinGeckoApiKey: services.coinGeckoApiKey
+      coinGeckoApiKey: services.coinGeckoApiKey,
+      sharedRegistryStore: syncCoordinator?.sharedRegistryStore
     )
     self.instrumentRegistry = registryWiring.registry
     self.cryptoTokenStore = registryWiring.cryptoTokenStore

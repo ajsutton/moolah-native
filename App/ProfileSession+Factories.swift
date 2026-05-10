@@ -143,7 +143,8 @@ extension ProfileSession {
     backend: BackendProvider,
     cryptoPriceService: CryptoPriceService,
     yahooPriceFetcher: any YahooFinancePriceFetcher,
-    coinGeckoApiKey: String?
+    coinGeckoApiKey: String?,
+    sharedRegistryStore: SharedRegistryStore? = nil
   ) -> RegistryWiring {
     guard let cloudBackend = backend as? CloudKitBackend else {
       fatalError("makeBackend only constructs CloudKitBackend")
@@ -164,10 +165,15 @@ extension ProfileSession {
       // the free public CoinGecko endpoint. See `makeCryptoPriceService`.
       resolutionClient = CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey ?? "")
     }
+    // Pass the shared registry store from the coordinator when
+    // wired so cross-session mutations are observed transparently
+    // through the proxy. Falls back to local storage when no
+    // coordinator is wired (preview / legacy tests).
     let store = CryptoTokenStore(
       registry: cloudBackend.instrumentRegistry,
       cryptoPriceService: cryptoPriceService,
-      conversionService: cloudBackend.conversionService)
+      conversionService: cloudBackend.conversionService,
+      sharedStore: sharedRegistryStore)
     let searchService = InstrumentSearchService(
       registry: cloudBackend.instrumentRegistry,
       catalog: catalog,

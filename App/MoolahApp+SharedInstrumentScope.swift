@@ -25,10 +25,20 @@ extension MoolahApp {
   static func bootstrapSyncCoordinator(setup: ContainerSetup) -> SyncBootstrap {
     let scope = makeSharedInstrumentScope(setup: setup)
     let migrationTask = runProfileIndexAndUnionMigrations(setup: setup)
+    // App-level store of the registry data — every per-session
+    // `CryptoTokenStore` proxies its `registrations` /
+    // `instruments` / `providerMappings` / `registrationsVersion`
+    // reads through this single instance so a mutation on one
+    // session's view is observed by every other session's UI
+    // without per-session re-load. The store subscribes to
+    // `registry.observeChanges()` for its lifetime so remote-
+    // arriving CKSyncEngine applies fan out automatically.
+    let registryStore = SharedRegistryStore(registry: scope.registry)
     let coordinator = SyncCoordinator(
       containerManager: setup.manager,
       sharedInstrumentRegistry: scope.registry,
-      sharedMarketData: scope.marketData)
+      sharedMarketData: scope.marketData,
+      sharedRegistryStore: registryStore)
     attachSharedInstrumentRegistrySyncHooks(
       registry: scope.registry, coordinator: coordinator)
     return SyncBootstrap(coordinator: coordinator, migrationTask: migrationTask)

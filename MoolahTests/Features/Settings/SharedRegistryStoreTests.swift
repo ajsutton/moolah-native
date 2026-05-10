@@ -112,12 +112,12 @@ struct SharedRegistryStoreTests {
     registry: any InstrumentRegistryRepository,
     database: any DatabaseWriter
   ) -> SharedRegistryStore {
-    SharedRegistryStore(
-      registry: registry,
-      cryptoPriceService: CryptoPriceService(
-        clients: [],
-        database: database,
-        resolutionClient: FixedTokenResolutionClient()),
-      conversionService: FixedConversionService())
+    // The shared store no longer owns price-cache or conversion-cache
+    // side effects — those moved to the per-session `CryptoTokenStore`
+    // wrapper so each session invalidates its own services. The
+    // `database` parameter is retained on the helper for test
+    // call-site stability; it's unused by the simpler initialiser.
+    _ = database
+    return SharedRegistryStore(registry: registry)
   }
 }

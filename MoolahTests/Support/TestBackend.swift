@@ -36,9 +36,18 @@ nonisolated private func writeOrTrap(
 enum TestBackend {
   /// Creates a CloudKitBackend backed by an in-memory GRDB database.
   /// Each call creates a fresh, isolated queue — no cross-test contamination.
+  ///
+  /// `sharedRegistry` lets a test pin the same shared
+  /// `GRDBInstrumentRegistryRepository` across multiple backends so
+  /// cross-profile sharing is observable in test (matches production's
+  /// `SyncCoordinator.sharedInstrumentRegistry`). When omitted, each
+  /// call constructs a fresh per-backend registry against the
+  /// per-backend `ProfileDatabase` — equivalent to the pre-shared-
+  /// registry behaviour.
   static func create(
     instrument: Instrument = .defaultTestInstrument,
-    exchangeRates: [String: [String: Decimal]] = [:]
+    exchangeRates: [String: [String: Decimal]] = [:],
+    sharedRegistry: GRDBInstrumentRegistryRepository? = nil
   ) throws -> (backend: CloudKitBackend, database: DatabaseQueue) {
     let rateClient = FixedRateClient(rates: exchangeRates)
     // One in-memory GRDB queue per backend covers every repository on
@@ -51,7 +60,9 @@ enum TestBackend {
     let conversionService = FiatConversionService(
       exchangeRates: exchangeRateService,
       database: database)
-    let registry = GRDBInstrumentRegistryRepository(database: database)
+    let registry =
+      sharedRegistry
+      ?? GRDBInstrumentRegistryRepository(database: database)
     let backend = CloudKitBackend(
       database: database,
       instrument: instrument,
@@ -60,6 +71,15 @@ enum TestBackend {
       instrumentRegistry: registry
     )
     return (backend, database)
+  }
+
+  /// Convenience: constructs a fresh in-memory shared registry that
+  /// can be passed to multiple `TestBackend.create` calls so they
+  /// observe each other's instrument writes — the test-time analogue
+  /// of `SyncCoordinator.sharedInstrumentRegistry`.
+  static func makeSharedRegistry() throws -> GRDBInstrumentRegistryRepository {
+    let queue = try ProfileIndexDatabase.openInMemory()
+    return GRDBInstrumentRegistryRepository(database: queue)
   }
 
   // MARK: - Data Seeding
