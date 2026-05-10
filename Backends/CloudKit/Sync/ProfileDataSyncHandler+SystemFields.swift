@@ -94,137 +94,154 @@ extension ProfileDataSyncHandler {
   }
 
   /// Writes each successfully-sent record's latest system fields back
-  /// onto the matching local row.
+  /// onto the matching local row, batching the writes by recordType so
+  /// that one CKSyncEngine batch produces one GRDB commit per
+  /// recordType (not one per record). Reduces the
+  /// `databaseDidCommit`-driven UI re-fetch cost during sync uploads.
+  /// See issue #865 for the follow-up that lifts the observation
+  /// region's dependency on the column itself.
   private func updateSystemFieldsForSaved(_ savedRecords: [CKRecord]) {
-    for saved in savedRecords {
-      applySystemFields(from: saved)
-    }
+    applySystemFieldsBatched(savedRecords)
     logger.info("Applied system fields for \(savedRecords.count) saved records")
   }
 
   /// Reconciles system fields after conflicts (adopt the server copy)
   /// and unknownItem failures (clear the stale cache so the record
-  /// re-uploads as a fresh create).
+  /// re-uploads as a fresh create). Both paths batch by recordType
+  /// for the same reason `updateSystemFieldsForSaved` does.
   private func updateSystemFieldsForFailures(
     conflicts: [(recordID: CKRecord.ID, serverRecord: CKRecord)],
     unknownItems: [(recordID: CKRecord.ID, recordType: String)]
   ) {
-    for (_, serverRecord) in conflicts {
-      applySystemFields(from: serverRecord)
+    if !conflicts.isEmpty {
+      applySystemFieldsBatched(conflicts.map(\.serverRecord))
     }
-    for (recordID, recordType) in unknownItems {
-      clearSystemFields(for: recordID, recordType: recordType)
-    }
-  }
-
-  private func applySystemFields(from ckRecord: CKRecord) {
-    let data = ckRecord.encodedSystemFields
-    if ckRecord.recordType == InstrumentRow.recordType {
-      // Decommissioned: every InstrumentRecord lives on the
-      // profile-index zone now. A per-profile-zone delivery is
-      // straggler state; skip without writing system fields back to
-      // the per-profile `instrument` table (which the v10 follow-up
-      // drops outright).
-      logger.warning(
-        """
-        Ignoring straggler InstrumentRecord system-fields apply for \
-        \(ckRecord.recordID.recordName, privacy: .public) on per-profile zone \
-        \(self.zoneID.zoneName, privacy: .public).
-        """
-      )
-      return
-    }
-    guard let uuid = ckRecord.recordID.uuid else {
-      logger.warning(
-        "applySystemFields: recordName \(ckRecord.recordID.recordName) has no UUID component for \(ckRecord.recordType)"
-      )
-      return
-    }
-    if !applyGRDBSystemFields(recordType: ckRecord.recordType, id: uuid, data: data) {
-      logger.warning(
-        "No GRDB dispatch for \(ckRecord.recordType, privacy: .public) \(uuid.uuidString, privacy: .public)"
-      )
+    if !unknownItems.isEmpty {
+      clearSystemFieldsBatched(unknownItems)
     }
   }
 
-  private func clearSystemFields(
-    for recordID: CKRecord.ID, recordType: String
-  ) {
-    if recordType == InstrumentRow.recordType {
-      // Decommissioned: see `applySystemFields(from:)` above. The
-      // per-profile `instrument` table is no longer the source of
-      // truth, so clearing its system fields in response to an
-      // unknown-item failure on a per-profile zone is unnecessary.
-      logger.warning(
-        """
-        Ignoring straggler InstrumentRecord system-fields clear for \
-        \(recordID.recordName, privacy: .public) on per-profile zone \
-        \(self.zoneID.zoneName, privacy: .public).
-        """
-      )
-      return
-    }
-    guard let uuid = recordID.uuid else {
-      logger.warning(
-        "clearSystemFields: recordName \(recordID.recordName) has no UUID component for \(recordType)"
-      )
-      return
-    }
-    if !applyGRDBSystemFields(recordType: recordType, id: uuid, data: nil) {
-      logger.warning(
-        "No GRDB dispatch for \(recordType, privacy: .public) \(uuid.uuidString, privacy: .public)"
-      )
-    }
-  }
-
-  /// Routes a single-row system-fields write through the GRDB repos.
-  /// Returns `true` when handled.
-  private func applyGRDBSystemFields(
-    recordType: String, id: UUID, data: Data?
-  ) -> Bool {
-    guard let setter = systemFieldsSetter(for: recordType) else { return false }
-    do {
-      let applied = try setter(id, data)
-      if !applied {
+  /// Groups `ckRecords` by recordType and runs one batch system-fields
+  /// write per type. `InstrumentRecord` deliveries on a per-profile
+  /// zone are straggler state from before the shared-registry rollout
+  /// and are logged-and-skipped (the per-profile `instrument` table is
+  /// decommissioned). Records with non-UUID recordNames are also
+  /// skipped — same shape as the pre-batching per-record path.
+  private func applySystemFieldsBatched(_ ckRecords: [CKRecord]) {
+    var updatesByType: [String: [(id: UUID, data: Data?)]] = [:]
+    for ckRecord in ckRecords {
+      if ckRecord.recordType == InstrumentRow.recordType {
         logger.warning(
-          "No GRDB row to cache system fields for \(recordType, privacy: .public) \(id, privacy: .public)"
+          """
+          Ignoring straggler InstrumentRecord system-fields apply for \
+          \(ckRecord.recordID.recordName, privacy: .public) on per-profile zone \
+          \(self.zoneID.zoneName, privacy: .public).
+          """)
+        continue
+      }
+      guard let uuid = ckRecord.recordID.uuid else {
+        logger.warning(
+          "applySystemFields: recordName \(ckRecord.recordID.recordName) has no UUID component for \(ckRecord.recordType)"
         )
+        continue
+      }
+      updatesByType[ckRecord.recordType, default: []]
+        .append((id: uuid, data: ckRecord.encodedSystemFields))
+    }
+    for (recordType, updates) in updatesByType {
+      runBatchedSystemFieldsUpdate(recordType: recordType, updates: updates)
+    }
+  }
+
+  /// Same shape as `applySystemFieldsBatched` but for unknownItem
+  /// failures: groups by recordType and runs one batch clear (data
+  /// = `nil`) per type.
+  private func clearSystemFieldsBatched(
+    _ unknownItems: [(recordID: CKRecord.ID, recordType: String)]
+  ) {
+    var updatesByType: [String: [(id: UUID, data: Data?)]] = [:]
+    for (recordID, recordType) in unknownItems {
+      if recordType == InstrumentRow.recordType {
+        logger.warning(
+          """
+          Ignoring straggler InstrumentRecord system-fields clear for \
+          \(recordID.recordName, privacy: .public) on per-profile zone \
+          \(self.zoneID.zoneName, privacy: .public).
+          """)
+        continue
+      }
+      guard let uuid = recordID.uuid else {
+        logger.warning(
+          "clearSystemFields: recordName \(recordID.recordName) has no UUID component for \(recordType)"
+        )
+        continue
+      }
+      updatesByType[recordType, default: []].append((id: uuid, data: nil))
+    }
+    for (recordType, updates) in updatesByType {
+      runBatchedSystemFieldsUpdate(recordType: recordType, updates: updates)
+    }
+  }
+
+  /// Dispatches one batch system-fields write through the GRDB repo
+  /// for `recordType`. A miss on the dispatch table or a thrown error
+  /// is logged at warning / error and the next type still runs.
+  private func runBatchedSystemFieldsUpdate(
+    recordType: String, updates: [(id: UUID, data: Data?)]
+  ) {
+    guard let setter = systemFieldsBatchSetter(for: recordType) else {
+      logger.warning(
+        "No GRDB dispatch for \(recordType, privacy: .public) batch system-fields update"
+      )
+      return
+    }
+    do {
+      let updatedCount = try setter(updates)
+      if updatedCount < updates.count {
+        logger.warning(
+          """
+          Batch system-fields update found \(updatedCount, privacy: .public) of \
+          \(updates.count, privacy: .public) rows for \
+          \(recordType, privacy: .public)
+          """)
       }
     } catch {
       logger.error(
         """
-        GRDB system-fields update failed for \(recordType, privacy: .public) \
-        \(id, privacy: .public): \(error.localizedDescription, privacy: .public)
+        GRDB batch system-fields update failed for \(recordType, privacy: .public): \
+        \(error.localizedDescription, privacy: .public)
         """)
     }
-    return true
   }
 
-  /// Returns the per-recordType single-row system-fields setter, or
-  /// `nil` for record types not handled by the GRDB layer.
-  private func systemFieldsSetter(
+  /// Returns the per-recordType batch system-fields setter, or `nil`
+  /// for record types not handled by the GRDB layer. Mirrors the
+  /// dispatch table that the per-row path used; replacing the per-
+  /// row setter with the batch shape is the whole point of the
+  /// refactor.
+  private func systemFieldsBatchSetter(
     for recordType: String
-  ) -> ((UUID, Data?) throws -> Bool)? {
+  ) -> (([(id: UUID, data: Data?)]) throws -> Int)? {
     let repos = grdbRepositories
     switch recordType {
     case CSVImportProfileRow.recordType:
-      return { try repos.csvImportProfiles.setEncodedSystemFieldsSync(id: $0, data: $1) }
+      return { try repos.csvImportProfiles.setEncodedSystemFieldsBatchSync($0) }
     case ImportRuleRow.recordType:
-      return { try repos.importRules.setEncodedSystemFieldsSync(id: $0, data: $1) }
+      return { try repos.importRules.setEncodedSystemFieldsBatchSync($0) }
     case CategoryRow.recordType:
-      return { try repos.categories.setEncodedSystemFieldsSync(id: $0, data: $1) }
+      return { try repos.categories.setEncodedSystemFieldsBatchSync($0) }
     case AccountRow.recordType:
-      return { try repos.accounts.setEncodedSystemFieldsSync(id: $0, data: $1) }
+      return { try repos.accounts.setEncodedSystemFieldsBatchSync($0) }
     case EarmarkRow.recordType:
-      return { try repos.earmarks.setEncodedSystemFieldsSync(id: $0, data: $1) }
+      return { try repos.earmarks.setEncodedSystemFieldsBatchSync($0) }
     case EarmarkBudgetItemRow.recordType:
-      return { try repos.earmarkBudgetItems.setEncodedSystemFieldsSync(id: $0, data: $1) }
+      return { try repos.earmarkBudgetItems.setEncodedSystemFieldsBatchSync($0) }
     case InvestmentValueRow.recordType:
-      return { try repos.investmentValues.setEncodedSystemFieldsSync(id: $0, data: $1) }
+      return { try repos.investmentValues.setEncodedSystemFieldsBatchSync($0) }
     case TransactionRow.recordType:
-      return { try repos.transactions.setEncodedSystemFieldsSync(id: $0, data: $1) }
+      return { try repos.transactions.setEncodedSystemFieldsBatchSync($0) }
     case TransactionLegRow.recordType:
-      return { try repos.transactionLegs.setEncodedSystemFieldsSync(id: $0, data: $1) }
+      return { try repos.transactionLegs.setEncodedSystemFieldsBatchSync($0) }
     default:
       return nil
     }

@@ -41,6 +41,34 @@ extension GRDBTransactionRepository {
     }
   }
 
+  /// Writes (or clears) the cached system-fields blob across many rows
+  /// in a single GRDB transaction so `databaseDidCommit` fires once,
+  /// not once per row. Used by the post-`sendChanges` write-back path
+  /// in `ProfileDataSyncHandler.updateSystemFieldsForSaved` to avoid
+  /// re-firing every UI `ValueObservation` (and the `TransactionStore`
+  /// reload + per-row currency conversion they retrigger) for every
+  /// successfully-uploaded row in a batch. Returns the number of rows
+  /// updated. The empty-input fast path skips the transaction entirely.
+  /// See issue #865 for the follow-up that narrows the observation
+  /// region so the column itself doesn't trigger UI re-fetches.
+  func setEncodedSystemFieldsBatchSync(
+    _ updates: [(id: UUID, data: Data?)]
+  ) throws -> Int {
+    guard !updates.isEmpty else { return 0 }
+    return try database.write { database in
+      var updatedCount = 0
+      for (id, data) in updates {
+        updatedCount +=
+          try TransactionRow
+          .filter(TransactionRow.Columns.id == id)
+          .updateAll(
+            database,
+            [TransactionRow.Columns.encodedSystemFields.set(to: data)])
+      }
+      return updatedCount
+    }
+  }
+
   /// Clears `encoded_system_fields` on every row. Used after an
   /// `encryptedDataReset`.
   func clearAllSystemFieldsSync() throws {
