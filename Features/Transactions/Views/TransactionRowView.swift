@@ -44,13 +44,11 @@ struct TransactionRowView: View {
 
   var body: some View {
     HStack(alignment: .firstTextBaseline) {
-      Image(systemName: iconName)
-        .foregroundStyle(iconColor)
-        .frame(width: UIConstants.IconSize.listIcon, height: UIConstants.IconSize.listIcon)
-        .accessibilityHidden(true)
+      typeIconWithSpamBadge
       infoColumn
       Spacer()
       amountColumn
+        .opacity(rowIsSpam ? 0.5 : 1.0)
       payAffordance
     }
     .padding(.vertical, verticalPadding)
@@ -59,11 +57,40 @@ struct TransactionRowView: View {
     .accessibilityLabel(accessibilityDescription)
   }
 
+  /// The row's leading type-icon (income/expense/transfer/swap arrow) at
+  /// its normal colour, dimmed to 50% when `rowIsSpam`, with a small yellow
+  /// `exclamationmark.octagon.fill` badge overlaid on its bottom-trailing
+  /// corner. The badge sits at full opacity so the spam signal stays vivid
+  /// against the muted icon.
+  private var typeIconWithSpamBadge: some View {
+    Image(systemName: iconName)
+      .foregroundStyle(iconColor)
+      .frame(width: UIConstants.IconSize.listIcon, height: UIConstants.IconSize.listIcon)
+      .opacity(rowIsSpam ? 0.5 : 1.0)
+      .overlay(alignment: .bottomTrailing) {
+        if rowIsSpam {
+          Image(systemName: "exclamationmark.octagon.fill")
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(.black, .yellow)
+            .imageScale(.small)
+            .accessibilityHidden(true)
+        }
+      }
+      .accessibilityHidden(true)
+  }
+
+  /// True when any leg's instrument is in the env-injected `spamInstruments`
+  /// set. Drives the row-level grey-out and the leading-icon substitution.
+  private var rowIsSpam: Bool {
+    transaction.legs.contains { spamInstruments.contains($0.instrument) }
+  }
+
   // MARK: - Title
 
   private var infoColumn: some View {
     VStack(alignment: .leading, spacing: 2) {
       titleRow
+        .opacity(rowIsSpam ? 0.5 : 1.0)
       metadataRow
     }
   }
@@ -82,15 +109,16 @@ struct TransactionRowView: View {
     }
   }
 
-  /// Composed title for the row. For trade transactions, builds a `Text`
-  /// concatenation that may include inline spam markers (red SF Symbol +
-  /// "Spam" substituted for the spam-flagged leg's instrument symbol). For
-  /// other transactions, returns the plain payee.
+  /// Composed title for the row. Trade transactions show the
+  /// "Bought 100 SCAM" / "Sold X" / "Swapped X for Y" sentence using the
+  /// instrument's normal display label — the spam-flagged-leg substitution
+  /// is intentionally disabled here; row-level treatment (grey-out + spam
+  /// leading icon) signals "this is spam" instead.
   private var titleTextValue: Text {
     let payee = displayPayee
     if let sentence = transaction.tradeTitleText(
       scopeReference: scopeReferenceInstrument,
-      spamInstruments: spamInstruments
+      spamInstruments: []
     ) {
       if payee.isEmpty {
         return sentence
@@ -101,9 +129,9 @@ struct TransactionRowView: View {
   }
 
   /// Plain-string equivalent of the title used by `accessibilityDescription`.
-  /// Reuses `tradeTitleSegments` and joins via `accessibilityString` so spam
-  /// magnitudes read as "<magnitude> spam token" instead of triggering the
-  /// glyph-as-punctuation announcement that `tradeTitleText` would emit.
+  /// Spam-flagged legs still read as "<magnitude> spam token" via
+  /// `accessibilityString` so VoiceOver users get an audible signal even
+  /// though the visual treatment relies on grey-out + leading icon.
   private var titleAccessibilityString: String {
     let payee = displayPayee
     let segments = transaction.tradeTitleSegments(
@@ -193,12 +221,12 @@ struct TransactionRowView: View {
       } else {
         TransactionAmountFlow(
           amounts: displayAmounts,
-          spamInstruments: spamInstruments)
+          spamInstruments: [])
       }
       if let balance {
         SpamAwareAmountView(
           amount: balance,
-          spamInstruments: spamInstruments,
+          spamInstruments: [],
           font: .caption)
       }
     }

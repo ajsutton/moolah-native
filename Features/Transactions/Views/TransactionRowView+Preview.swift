@@ -150,7 +150,7 @@ private func tradePreviewSpecs(data: PreviewData) -> [PreviewRowSpec] {
         TransactionLeg(
           accountId: data.sourceId, instrument: .AUD, quantity: -100, type: .trade),
         TransactionLeg(
-          accountId: data.savingsId, instrument: data.scam, quantity: 1_000_000, type: .trade),
+          accountId: data.sourceId, instrument: data.scam, quantity: 1_000_000, type: .trade),
       ],
       displayAmounts: [
         InstrumentAmount(quantity: -100, instrument: .AUD),

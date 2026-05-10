@@ -149,7 +149,14 @@ struct ContentView: View {
     // catch-up scan) if the user has picked one. The call is a
     // no-op when no folder is configured.
     async let folderWatch: Void = session.startFolderWatch()
-    _ = await (badgeRefresh, folderWatch)
+    // CryptoTokenStore is lazy: registrations stay empty until a Settings
+    // view kicks `loadRegistrations()`. The spam-row indicator reads
+    // `\.spamInstruments` from the environment at every visible row, so
+    // boot the load here to populate the set before the user navigates
+    // to a wallet — otherwise the indicator stays hidden until they happen
+    // to open Settings → Crypto.
+    async let cryptoRegistrations: Void = session.cryptoTokenStore?.loadRegistrations() ?? ()
+    _ = await (badgeRefresh, folderWatch, cryptoRegistrations)
   }
 
   private func onScenePhaseActive() {
