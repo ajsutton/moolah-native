@@ -8,15 +8,11 @@ import SwiftUI
 /// `ViewThatFits`.
 struct TransactionAmountFlow: View {
   let amounts: [InstrumentAmount]
-  let spamInstruments: Set<Instrument>
 
   var body: some View {
     WrappedHStack(spacing: 6) {
       ForEach(amounts, id: \.self) { amount in
-        SpamAwareAmountView(
-          amount: amount,
-          spamInstruments: spamInstruments,
-          font: .body)
+        InstrumentAmountView(amount: amount, font: .body)
       }
     }
     .multilineTextAlignment(.trailing)

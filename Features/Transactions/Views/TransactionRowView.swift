@@ -193,15 +193,10 @@ struct TransactionRowView: View {
           .foregroundStyle(.secondary)
           .monospacedDigit()
       } else {
-        TransactionAmountFlow(
-          amounts: displayAmounts,
-          spamInstruments: [])
+        TransactionAmountFlow(amounts: displayAmounts)
       }
       if let balance {
-        SpamAwareAmountView(
-          amount: balance,
-          spamInstruments: [],
-          font: .caption)
+        InstrumentAmountView(amount: balance, font: .caption)
       }
     }
   }
