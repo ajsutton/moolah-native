@@ -22,13 +22,11 @@ extension SyncCoordinator {
     }
     let container = try containerManager.container(for: profileId)
     let grdbRepositories = try resolveGRDBRepositories(for: profileId)
-    let onInstrumentRemoteChange = instrumentRemoteChangeCallbacks[profileId] ?? {}
     let handler = ProfileDataSyncHandler(
       profileId: profileId,
       zoneID: zoneID,
       modelContainer: container,
-      grdbRepositories: grdbRepositories,
-      onInstrumentRemoteChange: onInstrumentRemoteChange)
+      grdbRepositories: grdbRepositories)
     dataHandlers[profileId] = handler
     return handler
   }
@@ -56,37 +54,10 @@ extension SyncCoordinator {
     return bundle
   }
 
-  /// Registers the per-profile closure fired by the data handler whenever a
-  /// remote pull touches an `InstrumentRecord` row. The closure is captured
-  /// by `ProfileDataSyncHandler` at handler-construction time, so callers
-  /// MUST register it before the first sync session for the profile.
-  /// Re-registering for a profile whose handler is already cached is a no-op
-  /// — `dataHandlers` is not cleared by `stop()`, so the cached handler
-  /// retains its original `nonisolated let` closure for its full lifetime.
-  /// Pair with `removeInstrumentRemoteChangeCallback(profileId:)` on session
-  /// teardown so the dictionary doesn't accumulate stale entries.
-  func setInstrumentRemoteChangeCallback(
-    profileId: UUID,
-    _ callback: @escaping @Sendable () -> Void
-  ) {
-    if dataHandlers[profileId] != nil {
-      logger.warning(
-        """
-        instrument-change callback registered for profile \
-        \(profileId, privacy: .public) after handler was cached; \
-        the new closure will not be picked up until \
-        removeInstrumentRemoteChangeCallback() is called and the handler is rebuilt
-        """
-      )
-    }
-    instrumentRemoteChangeCallbacks[profileId] = callback
-  }
-
-  /// Removes the per-profile instrument-change callback (e.g. on session
-  /// teardown so the registry it captures can be released).
-  func removeInstrumentRemoteChangeCallback(profileId: UUID) {
-    instrumentRemoteChangeCallbacks.removeValue(forKey: profileId)
-  }
+  // The per-profile `instrumentRemoteChangeCallbacks` registry was
+  // dropped in stage 14 — the shared registry on the profile-index
+  // zone now drives every InstrumentRecord remote-change fan-out via
+  // `SyncCoordinator.makeInstrumentRemoteChangeFanOut`.
 
   /// Drops the cached handler and GRDB repository bundle for a profile
   /// being removed locally. The coordinator's caches retain

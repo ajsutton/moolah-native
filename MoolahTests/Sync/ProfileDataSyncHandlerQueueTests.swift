@@ -59,12 +59,17 @@ struct ProfileDataSyncHandlerQueueTests {
 
     let recordIDs = handler.queueAllExistingRecords()
 
-    #expect(recordIDs.count == 3)
+    // Stage 14: instrument ids are queued by the shared registry on
+    // the profile-index zone (via
+    // `SyncCoordinator.queueUnsyncedSharedInstruments`), not by the
+    // per-profile handler. The seeded `AUD` instrument is therefore
+    // not part of the per-profile queue.
+    #expect(recordIDs.count == 2)
 
     let recordNames = Set(recordIDs.map(\.recordName))
     #expect(recordNames.contains("\(AccountRow.recordType)|\(accountId.uuidString)"))
     #expect(recordNames.contains("\(TransactionRow.recordType)|\(txnId.uuidString)"))
-    #expect(recordNames.contains(instrumentId))
+    #expect(!recordNames.contains(instrumentId))
 
     for recordID in recordIDs {
       #expect(recordID.zoneID == handler.zoneID)
@@ -108,9 +113,12 @@ struct ProfileDataSyncHandlerQueueTests {
     let recordIDs = handler.queueUnsyncedRecords()
     let recordNames = Set(recordIDs.map(\.recordName))
 
+    // Stage 14: per-profile handler no longer enumerates instrument
+    // rows. The shared registry's
+    // `SyncCoordinator.queueUnsyncedSharedInstruments` covers them.
     #expect(
       recordNames.contains("\(AccountRow.recordType)|\(unsyncedAccountId.uuidString)"))
-    #expect(recordNames.contains(unsyncedInstrumentId))
+    #expect(!recordNames.contains(unsyncedInstrumentId))
     #expect(
       !recordNames.contains("\(AccountRow.recordType)|\(syncedAccountId.uuidString)"))
     #expect(!recordNames.contains(syncedInstrumentId))
@@ -175,8 +183,10 @@ struct ProfileDataSyncHandlerQueueTests {
     let recordIDs = handler.queueUnsyncedRecords()
     let recordNames = Set(recordIDs.map(\.recordName))
 
-    #expect(recordNames.count == 8)
-    #expect(recordNames.contains(seed.instrumentId))
+    // Stage 14: per-profile handler no longer enumerates instrument
+    // rows; was 8, now 7.
+    #expect(recordNames.count == 7)
+    #expect(!recordNames.contains(seed.instrumentId))
     #expect(recordNames.contains("\(AccountRow.recordType)|\(seed.accountId.uuidString)"))
     #expect(recordNames.contains("\(CategoryRow.recordType)|\(seed.categoryId.uuidString)"))
     #expect(recordNames.contains("\(EarmarkRow.recordType)|\(seed.earmarkId.uuidString)"))
