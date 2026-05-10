@@ -45,22 +45,12 @@ final class SharedRegistryStore {
   /// Issue #790.
   private(set) var registrationsVersion: Int = 0
 
-  /// Subset of `registrations` with `pricingStatus == .unpriced`.
-  /// Drives the Discovered Tokens inbox row count and the sidebar
-  /// badge.
-  var unpricedRegistrations: [CryptoRegistration] {
-    registrations.filter { $0.pricingStatus == .unpriced }
-  }
-
-  /// Convenience for the sidebar / preferences badge — number of
-  /// unresolved tokens awaiting user attention.
-  var unpricedCount: Int { unpricedRegistrations.count }
-
-  /// Subset of `registrations` with `pricingStatus == .spam`. Drives
-  /// the Spam tokens management list.
-  var spamRegistrations: [CryptoRegistration] {
-    registrations.filter { $0.pricingStatus == .spam }
-  }
+  // The `unpricedRegistrations` / `unpricedCount` /
+  // `spamRegistrations` filters live on the per-session
+  // `CryptoTokenStore` façade — every UI consumer goes through it,
+  // and the filters there already operate on `self.registrations`,
+  // which delegates to this store's `registrations` field. Hosting a
+  // duplicate computed property here added an unreachable surface.
 
   private let registry: any InstrumentRegistryRepository
   private let logger = Logger(

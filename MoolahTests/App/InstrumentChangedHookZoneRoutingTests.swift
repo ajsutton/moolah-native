@@ -108,6 +108,7 @@ struct InstrumentChangedHookZoneRoutingTests {
   @MainActor
   final class Capture {
     private(set) var recordNames: [String] = []
+
     func add(_ recordName: String) { recordNames.append(recordName) }
   }
 

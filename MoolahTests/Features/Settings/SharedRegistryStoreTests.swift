@@ -23,7 +23,7 @@ struct SharedRegistryStoreTests {
     // GRDBInstrumentRegistryRepository operates over that table.
     let queue = try ProfileIndexDatabase.openInMemory()
     let registry = GRDBInstrumentRegistryRepository(database: queue)
-    let store = makeStore(registry: registry, database: queue)
+    let store = makeStore(registry: registry)
 
     try await registry.registerCrypto(
       Instrument.crypto(
@@ -52,7 +52,7 @@ struct SharedRegistryStoreTests {
     // GRDBInstrumentRegistryRepository operates over that table.
     let queue = try ProfileIndexDatabase.openInMemory()
     let registry = GRDBInstrumentRegistryRepository(database: queue)
-    let store = makeStore(registry: registry, database: queue)
+    let store = makeStore(registry: registry)
 
     let registration = CryptoRegistration(
       instrument: Instrument.crypto(
@@ -79,7 +79,7 @@ struct SharedRegistryStoreTests {
     // GRDBInstrumentRegistryRepository operates over that table.
     let queue = try ProfileIndexDatabase.openInMemory()
     let registry = GRDBInstrumentRegistryRepository(database: queue)
-    let store = makeStore(registry: registry, database: queue)
+    let store = makeStore(registry: registry)
 
     try await registry.registerCrypto(
       Instrument.crypto(
@@ -109,15 +109,8 @@ struct SharedRegistryStoreTests {
 
   @MainActor
   private func makeStore(
-    registry: any InstrumentRegistryRepository,
-    database: any DatabaseWriter
+    registry: any InstrumentRegistryRepository
   ) -> SharedRegistryStore {
-    // The shared store no longer owns price-cache or conversion-cache
-    // side effects — those moved to the per-session `CryptoTokenStore`
-    // wrapper so each session invalidates its own services. The
-    // `database` parameter is retained on the helper for test
-    // call-site stability; it's unused by the simpler initialiser.
-    _ = database
-    return SharedRegistryStore(registry: registry)
+    SharedRegistryStore(registry: registry)
   }
 }
