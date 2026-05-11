@@ -22,6 +22,49 @@ actor FullConversionService: InstrumentConversionService {
   /// `ObservationErrorChannel` doc for the surface-then-finish contract.
   private let errorChannel: ObservationErrorChannel?
 
+  /// Per-(source, target, day) memo of the unit conversion factor.
+  /// `convert(quantity:)` applies it as `(quantity * multiplier) /
+  /// divisor` so that paths whose closed form is a division (fiat →
+  /// crypto, crypto → crypto) preserve `Decimal` precision — eagerly
+  /// computing `multiplier / divisor` would truncate at 38 digits and
+  /// produce `0.99999…` for inputs that should give exactly `1`.
+  ///
+  /// Collapses the cold-launch burst of N identical convert calls
+  /// (≈1400 in 1 s on a populated profile, issue #868) to one
+  /// underlying lookup per distinct triple, skipping both the actor
+  /// hop into the price services and the per-call `os_log` pair. Same
+  /// staleness model as the underlying services' in-memory caches —
+  /// cleared by `invalidateCache(for:)` for entries mentioning the
+  /// instrument.
+  private struct RateCacheKey: Hashable {
+    let fromId: String
+    let toId: String
+    let day: Date
+  }
+
+  private struct UnitFactor {
+    let multiplier: Decimal
+    let divisor: Decimal
+  }
+
+  private var rateCache: [RateCacheKey: UnitFactor] = [:]
+
+  /// UTC calendar — the underlying price services key their stored
+  /// rates by UTC day, so the memo bucket must agree to avoid
+  /// returning a stale rate across a UTC midnight boundary that's
+  /// still "the same day" in the user's local timezone.
+  private let calendar: Calendar = {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+    return calendar
+  }()
+
+  /// Number of distinct `(source, target, day)` triples currently
+  /// memoised. Exposed for the caching-invariant tests in
+  /// `FullConversionServiceCachingTests` so they can assert that
+  /// repeated identical calls collapse to a single cache entry.
+  var cachedRateCount: Int { rateCache.count }
+
   /// - Parameter cryptoRegistrations: Closure invoked on each crypto
   ///   conversion to obtain the current set of crypto registrations. Tokens
   ///   registered via `CryptoPriceService` after service construction become
@@ -64,46 +107,90 @@ actor FullConversionService: InstrumentConversionService {
     // we resolve against the latest available rate instead of throwing.
     // See guides/INSTRUMENT_CONVERSION_GUIDE.md Rule 7.
     let effectiveDate = min(date, Date())
+    let factor = try await unitFactor(from: source, to: target, on: effectiveDate)
+    return (quantity * factor.multiplier) / factor.divisor
+  }
 
-    logger.info(
-      "Converting \(quantity, privacy: .public) from \(source.id, privacy: .public) (\(String(describing: source.kind), privacy: .public)) to \(target.id, privacy: .public) (\(String(describing: target.kind), privacy: .public))"
+  /// Resolves the per-unit conversion factor for `source → target` on
+  /// `date`, caching the result keyed by `(source.id, target.id,
+  /// calendar-day)`. Cache misses log at `.debug`; cache hits are
+  /// silent. Logging at `.info` for every call (the historic shape)
+  /// cost ≈2800 `os_log` lines in <1 s during the cold-launch burst
+  /// documented in issue #868.
+  private func unitFactor(
+    from source: Instrument,
+    to target: Instrument,
+    on date: Date
+  ) async throws -> UnitFactor {
+    let key = RateCacheKey(
+      fromId: source.id,
+      toId: target.id,
+      day: calendar.startOfDay(for: date)
     )
-
-    let result: Decimal
-    switch (source.kind, target.kind) {
-    case (.fiatCurrency, .fiatCurrency):
-      let rate = try await exchangeRates.rate(from: source, to: target, on: effectiveDate)
-      result = quantity * rate
-
-    case (.stock, .fiatCurrency):
-      result = try await convertStockToFiat(
-        quantity, stock: source, fiat: target, on: effectiveDate)
-
-    case (.cryptoToken, .fiatCurrency):
-      result = try await convertCryptoToFiat(
-        quantity, crypto: source, fiat: target, on: effectiveDate)
-
-    case (.fiatCurrency, .cryptoToken):
-      let oneUnitInFiat = try await convertCryptoToFiat(
-        Decimal(1), crypto: target, fiat: source, on: effectiveDate)
-      result = quantity / oneUnitInFiat
-
-    case (.cryptoToken, .cryptoToken):
-      let sourceUsdPrice = try await cryptoUsdPrice(for: source, on: effectiveDate)
-      let targetUsdPrice = try await cryptoUsdPrice(for: target, on: effectiveDate)
-      result = (quantity * sourceUsdPrice) / targetUsdPrice
-
-    case (.stock, .cryptoToken), (.cryptoToken, .stock):
-      // Chain through USD as intermediate
-      let sourceUsd = try await toUsd(quantity, instrument: source, on: effectiveDate)
-      result = try await fromUsd(sourceUsd, instrument: target, on: effectiveDate)
-
-    case (.fiatCurrency, .stock), (.stock, .stock):
-      throw ConversionError.unsupportedConversion(from: source.id, to: target.id)
+    if let cached = rateCache[key] {
+      return cached
     }
 
-    logger.info("Conversion result: \(result, privacy: .public) \(target.id, privacy: .public)")
-    return result
+    logger.debug(
+      "Converting 1 from \(source.id, privacy: .public) (\(String(describing: source.kind), privacy: .public)) to \(target.id, privacy: .public) (\(String(describing: target.kind), privacy: .public))"
+    )
+
+    let factor = try await computeUnitFactor(from: source, to: target, on: date)
+
+    logger.debug(
+      "Conversion factor: ×\(factor.multiplier, privacy: .public) ÷\(factor.divisor, privacy: .public) for \(target.id, privacy: .public)"
+    )
+    rateCache[key] = factor
+    return factor
+  }
+
+  private func computeUnitFactor(
+    from source: Instrument,
+    to target: Instrument,
+    on date: Date
+  ) async throws -> UnitFactor {
+    switch (source.kind, target.kind) {
+    case (.fiatCurrency, .fiatCurrency):
+      let rate = try await exchangeRates.rate(from: source, to: target, on: date)
+      return UnitFactor(multiplier: rate, divisor: Decimal(1))
+
+    case (.stock, .fiatCurrency):
+      let perUnit = try await convertStockToFiat(
+        Decimal(1), stock: source, fiat: target, on: date)
+      return UnitFactor(multiplier: perUnit, divisor: Decimal(1))
+
+    case (.cryptoToken, .fiatCurrency):
+      let perUnit = try await convertCryptoToFiat(
+        Decimal(1), crypto: source, fiat: target, on: date)
+      return UnitFactor(multiplier: perUnit, divisor: Decimal(1))
+
+    case (.fiatCurrency, .cryptoToken):
+      // Defer division so `300_000 JPY → ETH` at `1 ETH = 300_000 JPY`
+      // yields exactly `Decimal(1)` instead of `0.999…`.
+      let oneUnitInFiat = try await convertCryptoToFiat(
+        Decimal(1), crypto: target, fiat: source, on: date)
+      return UnitFactor(multiplier: Decimal(1), divisor: oneUnitInFiat)
+
+    case (.cryptoToken, .cryptoToken):
+      // Same precision concern: keep numerator and denominator separate
+      // so `(quantity * sourceUsdPrice) / targetUsdPrice` matches the
+      // original closed form.
+      let sourceUsdPrice = try await cryptoUsdPrice(for: source, on: date)
+      let targetUsdPrice = try await cryptoUsdPrice(for: target, on: date)
+      return UnitFactor(multiplier: sourceUsdPrice, divisor: targetUsdPrice)
+
+    case (.stock, .cryptoToken):
+      // `result = quantity * stockUsdValueAt1 / cryptoUsdPrice(target)`.
+      let stockUsdValueAt1 = try await convertStockToFiat(
+        Decimal(1), stock: source, fiat: Instrument.USD, on: date)
+      let targetUsdPrice = try await cryptoUsdPrice(for: target, on: date)
+      return UnitFactor(multiplier: stockUsdValueAt1, divisor: targetUsdPrice)
+
+    case (.cryptoToken, .stock),
+      (.fiatCurrency, .stock),
+      (.stock, .stock):
+      throw ConversionError.unsupportedConversion(from: source.id, to: target.id)
+    }
   }
 
   func convertAmount(
@@ -152,13 +239,16 @@ actor FullConversionService: InstrumentConversionService {
     return .value(converted)
   }
 
-  /// Invalidate any cached state held about `instrument`. For crypto
-  /// instruments this clears the in-memory and on-disk price rows in
-  /// `CryptoPriceService` so the next conversion fetches fresh data —
-  /// required after any user mutation that changes
-  /// `pricingStatus` for the instrument's registration. No-op for
-  /// fiat / stock instruments and when no `CryptoPriceService` is wired.
+  /// Invalidate any cached state held about `instrument`. Drops every
+  /// memoised unit rate that mentions the instrument (either side), so
+  /// the next aggregation re-fetches under the new pricing. For crypto
+  /// instruments additionally clears the in-memory and on-disk price
+  /// rows in `CryptoPriceService` — required after any user mutation
+  /// that changes `pricingStatus` for the instrument's registration.
   func invalidateCache(for instrument: Instrument) async {
+    rateCache = rateCache.filter { key, _ in
+      key.fromId != instrument.id && key.toId != instrument.id
+    }
     guard instrument.kind == .cryptoToken, let cryptoPrices else { return }
     await cryptoPrices.purgeCache(instrumentId: instrument.id)
   }
@@ -236,36 +326,4 @@ actor FullConversionService: InstrumentConversionService {
       for: registration.instrument, mapping: registration.mapping, on: date)
   }
 
-  // MARK: - USD intermediary helpers
-
-  private func toUsd(
-    _ quantity: Decimal, instrument: Instrument, on date: Date
-  ) async throws -> Decimal {
-    switch instrument.kind {
-    case .fiatCurrency:
-      if instrument.id == "USD" { return quantity }
-      let rate = try await exchangeRates.rate(from: instrument, to: .USD, on: date)
-      return quantity * rate
-    case .cryptoToken:
-      return try await convertCryptoToFiat(quantity, crypto: instrument, fiat: .USD, on: date)
-    case .stock:
-      return try await convertStockToFiat(quantity, stock: instrument, fiat: .USD, on: date)
-    }
-  }
-
-  private func fromUsd(
-    _ usdValue: Decimal, instrument: Instrument, on date: Date
-  ) async throws -> Decimal {
-    switch instrument.kind {
-    case .fiatCurrency:
-      if instrument.id == "USD" { return usdValue }
-      let rate = try await exchangeRates.rate(from: .USD, to: instrument, on: date)
-      return usdValue * rate
-    case .cryptoToken:
-      let oneUnitInUsd = try await cryptoUsdPrice(for: instrument, on: date)
-      return usdValue / oneUnitInUsd
-    case .stock:
-      throw ConversionError.unsupportedConversion(from: "USD", to: instrument.id)
-    }
-  }
 }
