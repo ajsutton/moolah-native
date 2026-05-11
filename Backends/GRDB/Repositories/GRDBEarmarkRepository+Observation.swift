@@ -36,33 +36,41 @@ extension GRDBEarmarkRepository {
     let defaultInstrument = self.defaultInstrument
     return
       ValueObservation
-      // Region inference is empty-table-safe here: `EarmarkRow.fetchAll`,
-      // `InstrumentRow.fetchAll`, and the `transaction_leg` /
-      // `transaction` joins inside `computeEarmarkPositions` all access
-      // columns via the row decoders, so GRDB registers each table's
-      // region during the first fetch even on a fresh-install profile
-      // with zero rows. See `GRDBAccountRepository+Observation.swift`
-      // for the identical caveat applied to accounts.
+      // Explicit-region form: every joined table's `observableRegion`
+      // excludes the sync-bookkeeping `encoded_system_fields` blob, so
+      // CKSyncEngine's per-batch system-fields write does not re-fire
+      // this observation. See issue #865 and
+      // `Records/AccountRow+ObservableRegion.swift`. The regions are
+      // pre-declared, so they are also empty-table-safe on a
+      // fresh-install profile.
       //
       // Projection parity with `fetchAll()`: instruments + ordered rows +
       // computed positions, mapped to `Earmark` via `row.toDomain`.
-      .tracking { database in
-        let instruments = try Self.fetchInstrumentMap(database: database)
-        let positionsByEarmark = try Self.computeEarmarkPositions(
-          database: database, instruments: instruments)
-        let rows =
-          try EarmarkRow
-          .order(EarmarkRow.Columns.position.asc)
-          .fetchAll(database)
-        return rows.map { row in
-          let lists = positionsByEarmark[row.id] ?? EarmarkPositionLists.empty
-          return row.toDomain(
-            defaultInstrument: defaultInstrument,
-            positions: lists.positions,
-            savedPositions: lists.savedPositions,
-            spentPositions: lists.spentPositions)
+      .tracking(
+        regions: [
+          EarmarkRow.observableRegion,
+          InstrumentRow.observableRegion,
+          TransactionRow.observableRegion,
+          TransactionLegRow.observableRegion,
+        ],
+        fetch: { database in
+          let instruments = try Self.fetchInstrumentMap(database: database)
+          let positionsByEarmark = try Self.computeEarmarkPositions(
+            database: database, instruments: instruments)
+          let rows =
+            try EarmarkRow
+            .order(EarmarkRow.Columns.position.asc)
+            .fetchAll(database)
+          return rows.map { row in
+            let lists = positionsByEarmark[row.id] ?? EarmarkPositionLists.empty
+            return row.toDomain(
+              defaultInstrument: defaultInstrument,
+              positions: lists.positions,
+              savedPositions: lists.savedPositions,
+              spentPositions: lists.spentPositions)
+          }
         }
-      }
+      )
       .toRetryingAsyncStream(
         in: database,
         errorChannel: errorChannel,
@@ -79,28 +87,38 @@ extension GRDBEarmarkRepository {
     let defaultInstrument = self.defaultInstrument
     return
       ValueObservation
-      .tracking { database in
-        // Resolve the earmark's instrument first so budget items inherit
-        // the same instrument label — mirrors `fetchBudget(earmarkId:)`.
-        let earmarkInstrument: Instrument
-        if let earmarkRow =
-          try EarmarkRow
-          .filter(EarmarkRow.Columns.id == earmarkId)
-          .fetchOne(database)
-        {
-          earmarkInstrument =
-            earmarkRow.instrumentId.map { Instrument.fiat(code: $0) }
-            ?? defaultInstrument
-        } else {
-          earmarkInstrument = defaultInstrument
-        }
+      // Explicit-region form so the sync-bookkeeping
+      // `encoded_system_fields` writes on `earmark` and
+      // `earmark_budget_item` do not re-fire this observation. See
+      // issue #865.
+      .tracking(
+        regions: [
+          EarmarkRow.observableRegion,
+          EarmarkBudgetItemRow.observableRegion,
+        ],
+        fetch: { [earmarkId, defaultInstrument] database in
+          // Resolve the earmark's instrument first so budget items inherit
+          // the same instrument label — mirrors `fetchBudget(earmarkId:)`.
+          let earmarkInstrument: Instrument
+          if let earmarkRow =
+            try EarmarkRow
+            .filter(EarmarkRow.Columns.id == earmarkId)
+            .fetchOne(database)
+          {
+            earmarkInstrument =
+              earmarkRow.instrumentId.map { Instrument.fiat(code: $0) }
+              ?? defaultInstrument
+          } else {
+            earmarkInstrument = defaultInstrument
+          }
 
-        let rows =
-          try EarmarkBudgetItemRow
-          .filter(EarmarkBudgetItemRow.Columns.earmarkId == earmarkId)
-          .fetchAll(database)
-        return rows.map { $0.toDomain(earmarkInstrument: earmarkInstrument) }
-      }
+          let rows =
+            try EarmarkBudgetItemRow
+            .filter(EarmarkBudgetItemRow.Columns.earmarkId == earmarkId)
+            .fetchAll(database)
+          return rows.map { $0.toDomain(earmarkInstrument: earmarkInstrument) }
+        }
+      )
       .toRetryingAsyncStream(
         in: database,
         errorChannel: errorChannel,

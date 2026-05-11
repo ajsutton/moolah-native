@@ -41,18 +41,22 @@ extension GRDBImportRuleRepository {
   /// imperative path would.
   func observeAll() -> AsyncStream<[ImportRule]> {
     ValueObservation
-      // Region inference is empty-table-safe here: `ImportRuleRow.fetchAll`
-      // accesses columns via the row decoder, so GRDB registers the
-      // `import_rule` table's region during the first fetch even on a
-      // fresh-install profile with zero rows. See
-      // `GRDBAccountRepository+Observation.swift` for the identical
-      // caveat applied to accounts.
-      .tracking { database in
-        try ImportRuleRow
-          .order(ImportRuleRow.Columns.position.asc)
-          .fetchAll(database)
-          .map { try $0.toDomain() }
-      }
+      // Explicit-region form via `ImportRuleRow.observableRegion` so the
+      // sync-bookkeeping `encoded_system_fields` writes that land after
+      // every successful CKSyncEngine send do not re-fire this
+      // observation. See issue #865 and
+      // `Records/AccountRow+ObservableRegion.swift`. The region is
+      // pre-declared, so it is also empty-table-safe on a fresh-install
+      // profile.
+      .tracking(
+        regions: [ImportRuleRow.observableRegion],
+        fetch: { database in
+          try ImportRuleRow
+            .order(ImportRuleRow.Columns.position.asc)
+            .fetchAll(database)
+            .map { try $0.toDomain() }
+        }
+      )
       .toRetryingAsyncStream(
         in: database,
         errorChannel: errorChannel,

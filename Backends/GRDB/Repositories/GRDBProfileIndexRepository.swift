@@ -308,18 +308,34 @@ final class GRDBProfileIndexRepository {
   func deleteAllProfileIndexDataSync() throws {
     try database.write { database in
       _ = try ProfileRow.deleteAll(database)
+      // Typed `deleteAll` per record type avoids the `sql:` interpolation
+      // the loop form needed. `sqlite_master` is still consulted so a
+      // pre-v3 fixture without these tables passes through without
+      // throwing `SQLITE_ERROR: no such table`.
       let existingTables = try Set(
         String.fetchAll(
           database,
           sql: "SELECT name FROM sqlite_master WHERE type='table'"))
-      let candidates = [
-        "instrument",
-        "exchange_rate", "exchange_rate_meta",
-        "stock_price", "stock_ticker_meta",
-        "crypto_price", "crypto_token_meta",
-      ]
-      for table in candidates where existingTables.contains(table) {
-        try database.execute(sql: "DELETE FROM \(table)")
+      if existingTables.contains(InstrumentRow.databaseTableName) {
+        _ = try InstrumentRow.deleteAll(database)
+      }
+      if existingTables.contains(ExchangeRateRecord.databaseTableName) {
+        _ = try ExchangeRateRecord.deleteAll(database)
+      }
+      if existingTables.contains(ExchangeRateMetaRecord.databaseTableName) {
+        _ = try ExchangeRateMetaRecord.deleteAll(database)
+      }
+      if existingTables.contains(StockPriceRecord.databaseTableName) {
+        _ = try StockPriceRecord.deleteAll(database)
+      }
+      if existingTables.contains(StockTickerMetaRecord.databaseTableName) {
+        _ = try StockTickerMetaRecord.deleteAll(database)
+      }
+      if existingTables.contains(CryptoPriceRecord.databaseTableName) {
+        _ = try CryptoPriceRecord.deleteAll(database)
+      }
+      if existingTables.contains(CryptoTokenMetaRecord.databaseTableName) {
+        _ = try CryptoTokenMetaRecord.deleteAll(database)
       }
     }
   }
