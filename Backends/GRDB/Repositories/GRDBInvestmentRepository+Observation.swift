@@ -38,23 +38,23 @@ extension GRDBInvestmentRepository {
     accountId: UUID, page: Int, pageSize: Int
   ) -> AsyncStream<InvestmentValuePage> {
     ValueObservation
-      // Region inference is empty-table-safe here: `InvestmentValueRow`'s
-      // row decoder accesses every column it returns, so GRDB registers
-      // the `investment_value` table region during the first fetch even
-      // on a fresh-install profile with zero rows. See
-      // `GRDBAccountRepository+Observation.swift` for the identical
-      // caveat.
-      .tracking { [accountId, page, pageSize] database in
-        let rows =
-          try InvestmentValueRow
-          .filter(InvestmentValueRow.Columns.accountId == accountId)
-          .order(InvestmentValueRow.Columns.date.desc)
-          .limit(pageSize + 1, offset: page * pageSize)
-          .fetchAll(database)
-        let hasMore = rows.count > pageSize
-        let values = rows.prefix(pageSize).map { $0.toDomain() }
-        return InvestmentValuePage(values: Array(values), hasMore: hasMore)
-      }
+      // Explicit-region form via `InvestmentValueRow.observableRegion`
+      // so the sync-bookkeeping `encoded_system_fields` writes do not
+      // re-fire this observation. See issue #865.
+      .tracking(
+        regions: [InvestmentValueRow.observableRegion],
+        fetch: { [accountId, page, pageSize] database in
+          let rows =
+            try InvestmentValueRow
+            .filter(InvestmentValueRow.Columns.accountId == accountId)
+            .order(InvestmentValueRow.Columns.date.desc)
+            .limit(pageSize + 1, offset: page * pageSize)
+            .fetchAll(database)
+          let hasMore = rows.count > pageSize
+          let values = rows.prefix(pageSize).map { $0.toDomain() }
+          return InvestmentValuePage(values: Array(values), hasMore: hasMore)
+        }
+      )
       .toRetryingAsyncStream(
         in: database,
         errorChannel: errorChannel,
@@ -72,12 +72,23 @@ extension GRDBInvestmentRepository {
     let defaultInstrument = self.defaultInstrument
     return
       ValueObservation
-      .tracking { [accountId] database in
-        try DailyBalanceCompute.compute(
-          database: database,
-          accountId: accountId,
-          defaultInstrument: defaultInstrument)
-      }
+      // Explicit-region form so the sync-bookkeeping
+      // `encoded_system_fields` writes on the tables `DailyBalanceCompute`
+      // reads (transaction, transaction_leg, instrument) do not re-fire
+      // this observation. See issue #865.
+      .tracking(
+        regions: [
+          InstrumentRow.observableRegion,
+          TransactionRow.observableRegion,
+          TransactionLegRow.observableRegion,
+        ],
+        fetch: { [accountId, defaultInstrument] database in
+          try DailyBalanceCompute.compute(
+            database: database,
+            accountId: accountId,
+            defaultInstrument: defaultInstrument)
+        }
+      )
       .toRetryingAsyncStream(
         in: database,
         errorChannel: errorChannel,
@@ -95,8 +106,14 @@ extension GRDBInvestmentRepository {
   /// Mirrors the rate-tick stream's region-pre-declaration idiom — see
   /// `RateCacheTickStream.swift` for the rationale.
   func observeAllValues() -> AsyncStream<Void> {
+    // Region-pre-declared form via `InvestmentValueRow.observableRegion`
+    // — narrower than `Table("investment_value")` because it excludes
+    // the sync-bookkeeping `encoded_system_fields` column. `Void`-valued
+    // streams can't use `removeDuplicates`, so the region trim is the
+    // only defence against system-fields writes producing spurious
+    // ticks. See issue #865.
     let observation = ValueObservation.tracking(
-      regions: [Table("investment_value")],
+      regions: [InvestmentValueRow.observableRegion],
       fetch: { _ in () }
     )
     let database = self.database

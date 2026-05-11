@@ -31,18 +31,23 @@ extension GRDBCategoryRepository {
   /// the same domain value (e.g. a no-op write on an unrelated row).
   func observeAll() -> AsyncStream<[Moolah.Category]> {
     ValueObservation
-      // Region inference is empty-table-safe here: `CategoryRow.fetchAll`
-      // accesses columns via the row decoder, so GRDB registers the
-      // `category` table's region during the first fetch even on a
-      // fresh-install profile with zero rows. See
-      // `GRDBAccountRepository+Observation.swift` for the identical
-      // caveat applied to accounts.
-      .tracking { database in
-        try CategoryRow
-          .order(CategoryRow.Columns.name.asc)
-          .fetchAll(database)
-          .map { $0.toDomain() }
-      }
+      // Explicit-region form via `CategoryRow.observableRegion` so the
+      // sync-bookkeeping `encoded_system_fields` writes that land after
+      // every successful CKSyncEngine send do not re-fire this
+      // observation. See issue #865 and
+      // `Records/AccountRow+ObservableRegion.swift`. The region is
+      // pre-declared, so it is also empty-table-safe on a fresh-install
+      // profile — no need for the row-decoder workaround the inferred
+      // form depended on.
+      .tracking(
+        regions: [CategoryRow.observableRegion],
+        fetch: { database in
+          try CategoryRow
+            .order(CategoryRow.Columns.name.asc)
+            .fetchAll(database)
+            .map { $0.toDomain() }
+        }
+      )
       .toRetryingAsyncStream(
         in: database,
         errorChannel: errorChannel,

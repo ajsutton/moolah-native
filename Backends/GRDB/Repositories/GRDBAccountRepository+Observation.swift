@@ -30,34 +30,40 @@ extension GRDBAccountRepository {
   /// domain value (e.g. a no-op write on an unrelated row).
   func observeAll() -> AsyncStream<[Account]> {
     ValueObservation
-      // Region inference is empty-table-safe here: `AccountRow.fetchAll`,
-      // `InstrumentRow.fetchAll`, and the `transaction_leg`/`transaction`
-      // joins in `computePositions` all access columns via the row
-      // decoders, so GRDB registers each table's region during the first
-      // fetch even on a fresh-install profile with zero rows. Tick
-      // streams that emit `Void` over `SELECT 1 FROM … LIMIT 1` (e.g.
-      // `observeRates` in Stage 4) need the explicit-region form because
-      // those reads never touch a column. See `DATABASE_CODE_GUIDE.md`
-      // §2 convention 1 for the empty-table caveat.
+      // Explicit-region form: every joined table's `observableRegion`
+      // excludes the sync-bookkeeping `encoded_system_fields` blob, so
+      // CKSyncEngine's per-batch system-fields write does not re-fire
+      // this observation. See issue #865 and
+      // `Records/AccountRow+ObservableRegion.swift`. The regions are
+      // pre-declared, so they are also empty-table-safe on a
+      // fresh-install profile — no row-decoder workaround needed.
       //
       // Projection parity with `fetchAll()`: instruments + ordered rows +
-      // computed positions, mapped to `Account` via `row.toDomain`.
-      // The retry helper re-runs this closure on each restart attempt,
-      // so the projection always reads the freshest DB state.
-      .tracking { database in
-        let instruments = try Self.fetchInstrumentMap(database: database)
-        let rows =
-          try AccountRow
-          .order(AccountRow.Columns.position.asc)
-          .fetchAll(database)
-        let positionsByAccount = try Self.computePositions(
-          database: database, instruments: instruments)
-        return try rows.map { row in
-          try row.toDomain(
-            instruments: instruments,
-            positions: positionsByAccount[row.id] ?? [])
+      // computed positions, mapped to `Account` via `row.toDomain`. The
+      // retry helper re-runs this closure on each restart attempt, so
+      // the projection always reads the freshest DB state.
+      .tracking(
+        regions: [
+          AccountRow.observableRegion,
+          InstrumentRow.observableRegion,
+          TransactionRow.observableRegion,
+          TransactionLegRow.observableRegion,
+        ],
+        fetch: { database in
+          let instruments = try Self.fetchInstrumentMap(database: database)
+          let rows =
+            try AccountRow
+            .order(AccountRow.Columns.position.asc)
+            .fetchAll(database)
+          let positionsByAccount = try Self.computePositions(
+            database: database, instruments: instruments)
+          return try rows.map { row in
+            try row.toDomain(
+              instruments: instruments,
+              positions: positionsByAccount[row.id] ?? [])
+          }
         }
-      }
+      )
       .toRetryingAsyncStream(
         in: database,
         errorChannel: errorChannel,

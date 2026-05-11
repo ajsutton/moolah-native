@@ -66,27 +66,31 @@ extension GRDBTransactionRepository {
     let defaultInstrument = self.defaultInstrument
     return
       ValueObservation
-      // Region inference is empty-table-safe here: every fetch in the
-      // pipeline (`InstrumentRow.fetchAll`, `TransactionRow.fetchAll`,
-      // `TransactionLegRow.fetchAll`, the `account` lookup for the
-      // target instrument) accesses columns via the row decoders, so
-      // GRDB registers each table's region during the first fetch even
-      // on a fresh-install profile with zero rows. See
-      // `GRDBAccountRepository+Observation.swift` for the identical
-      // caveat.
-      .tracking { [filter, page, pageSize] database in
-        let snapshot = try Self.buildFetchSnapshot(
-          database: database,
-          filter: filter,
-          page: page,
-          pageSize: pageSize,
-          defaultInstrument: defaultInstrument)
-        return TransactionPage(
-          transactions: snapshot.pageTransactions,
-          targetInstrument: snapshot.resolvedTarget,
-          priorBalance: nil,
-          totalCount: snapshot.totalCount)
-      }
+      // Explicit-region form: every joined table's `observableRegion`
+      // excludes the sync-bookkeeping `encoded_system_fields` blob, so
+      // CKSyncEngine's per-batch system-fields write does not re-fire
+      // this observation. See issue #865.
+      .tracking(
+        regions: [
+          TransactionRow.observableRegion,
+          TransactionLegRow.observableRegion,
+          InstrumentRow.observableRegion,
+          AccountRow.observableRegion,
+        ],
+        fetch: { [filter, page, pageSize] database in
+          let snapshot = try Self.buildFetchSnapshot(
+            database: database,
+            filter: filter,
+            page: page,
+            pageSize: pageSize,
+            defaultInstrument: defaultInstrument)
+          return TransactionPage(
+            transactions: snapshot.pageTransactions,
+            targetInstrument: snapshot.resolvedTarget,
+            priorBalance: nil,
+            totalCount: snapshot.totalCount)
+        }
+      )
       .toRetryingAsyncStream(
         in: database,
         errorChannel: errorChannel,
@@ -101,20 +105,31 @@ extension GRDBTransactionRepository {
   /// cancelling the prior subscription.
   func observeAll(filter: TransactionFilter) -> AsyncStream<[Transaction]> {
     ValueObservation
-      .tracking { [filter] database in
-        let instruments = try Self.fetchInstrumentMap(database: database)
-        let candidateRows = try Self.candidateTransactionRows(
-          database: database, filter: filter)
-        let filteredRows = try Self.applyLegFilters(
-          rows: candidateRows, filter: filter, database: database)
-        let legsByTxnId = try Self.fetchLegs(
-          database: database,
-          transactionIds: filteredRows.map(\.id),
-          instruments: instruments)
-        return try filteredRows.map { row in
-          try row.toDomain(legs: legsByTxnId[row.id] ?? [])
+      // Explicit-region form: every joined table's `observableRegion`
+      // excludes the sync-bookkeeping `encoded_system_fields` blob, so
+      // CKSyncEngine's per-batch system-fields write does not re-fire
+      // this observation. See issue #865.
+      .tracking(
+        regions: [
+          TransactionRow.observableRegion,
+          TransactionLegRow.observableRegion,
+          InstrumentRow.observableRegion,
+        ],
+        fetch: { [filter] database in
+          let instruments = try Self.fetchInstrumentMap(database: database)
+          let candidateRows = try Self.candidateTransactionRows(
+            database: database, filter: filter)
+          let filteredRows = try Self.applyLegFilters(
+            rows: candidateRows, filter: filter, database: database)
+          let legsByTxnId = try Self.fetchLegs(
+            database: database,
+            transactionIds: filteredRows.map(\.id),
+            instruments: instruments)
+          return try filteredRows.map { row in
+            try row.toDomain(legs: legsByTxnId[row.id] ?? [])
+          }
         }
-      }
+      )
       .toRetryingAsyncStream(
         in: database,
         errorChannel: errorChannel,

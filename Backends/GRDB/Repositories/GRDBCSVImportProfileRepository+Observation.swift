@@ -32,18 +32,22 @@ extension GRDBCSVImportProfileRepository {
   /// no-op write on an unrelated row).
   func observeAll() -> AsyncStream<[CSVImportProfile]> {
     ValueObservation
-      // Region inference is empty-table-safe here:
-      // `CSVImportProfileRow.fetchAll` accesses columns via the row
-      // decoder, so GRDB registers the `csv_import_profile` table's
-      // region during the first fetch even on a fresh-install profile
-      // with zero rows. See `GRDBAccountRepository+Observation.swift`
-      // for the identical caveat applied to accounts.
-      .tracking { database in
-        try CSVImportProfileRow
-          .order(CSVImportProfileRow.Columns.createdAt.asc)
-          .fetchAll(database)
-          .map { $0.toDomain() }
-      }
+      // Explicit-region form via `CSVImportProfileRow.observableRegion`
+      // so the sync-bookkeeping `encoded_system_fields` writes that
+      // land after every successful CKSyncEngine send do not re-fire
+      // this observation. See issue #865 and
+      // `Records/AccountRow+ObservableRegion.swift`. The region is
+      // pre-declared, so it is also empty-table-safe on a fresh-install
+      // profile.
+      .tracking(
+        regions: [CSVImportProfileRow.observableRegion],
+        fetch: { database in
+          try CSVImportProfileRow
+            .order(CSVImportProfileRow.Columns.createdAt.asc)
+            .fetchAll(database)
+            .map { $0.toDomain() }
+        }
+      )
       .toRetryingAsyncStream(
         in: database,
         errorChannel: errorChannel,
