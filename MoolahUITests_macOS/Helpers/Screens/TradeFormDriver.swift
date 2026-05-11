@@ -178,6 +178,19 @@ struct TradeFormDriver {
 
   // MARK: - Private helpers
 
+  /// Polls `element.isHittable` until it returns `true` or `timeout` elapses.
+  /// Returns `true` on hittable, `false` on timeout. Use after
+  /// `waitForExistence` when the element may briefly exist in the AX tree
+  /// before becoming hittable (e.g. while an overlapping sheet animates out).
+  private func waitForHittable(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      if element.isHittable { return true }
+      RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+    return element.isHittable
+  }
+
   /// Clears any existing text in `identifier` and types `text`. Returns once
   /// the field's `value` contains `text`.
   private func setAmountField(_ identifier: String, to text: String) {
@@ -185,6 +198,16 @@ struct TradeFormDriver {
     if !field.waitForExistence(timeout: 3) {
       Trace.recordFailure("amount field '\(identifier)' did not appear")
       XCTFail("Amount field '\(identifier)' did not appear within 3s")
+      return
+    }
+    // `waitForExistence` only checks AX-tree presence; on macOS a field can
+    // exist but not yet be hittable while a just-dismissed sheet's animation
+    // finishes (`setInstrument` returns the moment `sheet.exists == false`,
+    // which precedes the animation completing). Without this wait, the next
+    // `click()` raises "Not hittable" synchronously and the test fails.
+    if !waitForHittable(field, timeout: 3) {
+      Trace.recordFailure("amount field '\(identifier)' was not hittable within 3s")
+      XCTFail("Amount field '\(identifier)' was not hittable within 3s")
       return
     }
     field.click()
@@ -249,6 +272,17 @@ struct TradeFormDriver {
       Trace.recordFailure("instrumentPicker.row.\(instrumentId) did not appear after search")
       XCTFail(
         "InstrumentPickerSheet row for '\(instrumentId)' did not appear within 5s of searching")
+      return
+    }
+    // The search input is debounced (250 ms in `InstrumentPickerStore`), so
+    // immediately after `typeText` returns the row list is still settling —
+    // existing rows may shift while filtered results animate in. Wait for
+    // the target row to become hittable before clicking, otherwise a click
+    // can land on a stale frame and the sheet never receives the tap.
+    if !waitForHittable(row, timeout: 3) {
+      Trace.recordFailure("instrumentPicker.row.\(instrumentId) was not hittable within 3s")
+      XCTFail(
+        "InstrumentPickerSheet row for '\(instrumentId)' was not hittable within 3s of appearing")
       return
     }
     row.click()
