@@ -11,13 +11,13 @@ extension UserDefaults {
   /// `Sendable` by Foundation but is documented as thread-safe. The
   /// instance is initialised once at first access and never reassigned,
   /// so concurrent access is sound.
-  nonisolated(unsafe) static let moolahShared: UserDefaults = sharedSuite(for: .resolved())
+  nonisolated(unsafe) static let moolahShared: UserDefaults = makeSharedSuite(for: .resolved())
 
-  /// Builder used by `moolahShared`. Exposed so tests can verify the
+  /// Factory used by `moolahShared`. Exposed so tests can verify the
   /// suite-name format for both environments without process-level
   /// Info.plist swapping. Mirrors the `CloudKitEnvironment.resolve(from:)`
   /// pattern that `CloudKitEnvironmentTests` uses.
-  static func sharedSuite(for env: CloudKitEnvironment) -> UserDefaults {
+  static func makeSharedSuite(for env: CloudKitEnvironment) -> UserDefaults {
     let suiteName = "rocks.moolah.app.\(env.storageSubdirectory.lowercased())"
     // `UserDefaults(suiteName:)` returns `nil` only for reserved suite
     // names (e.g. literal `"Apple Global Domain"`). Neither of our

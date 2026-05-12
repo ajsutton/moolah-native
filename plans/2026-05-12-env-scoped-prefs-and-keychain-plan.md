@@ -18,7 +18,7 @@
 
 | File | Responsibility |
 |---|---|
-| `Shared/UserDefaults+MoolahShared.swift` | Static `UserDefaults.moolahShared` returning a suite scoped to the resolved CloudKit env, plus `sharedSuite(for:)` so tests can verify both env cases without process-level Info.plist swapping. |
+| `Shared/UserDefaults+MoolahShared.swift` | Static `UserDefaults.moolahShared` returning a suite scoped to the resolved CloudKit env, plus `makeSharedSuite(for:)` factory so tests can verify both env cases without process-level Info.plist swapping. |
 | `Shared/KeychainServices.swift` | `enum KeychainServices` with `apiKeys` (env-scoped service string for the CoinGecko / Alchemy keychain rows) and `apiKeysService(for:)` for tests. |
 | `MoolahTests/Shared/UserDefaultsMoolahSharedTests.swift` | Verifies suite-name format (`rocks.moolah.app.development` / `rocks.moolah.app.production`) and that `moolahShared` is not `.standard`. |
 | `MoolahTests/Shared/KeychainServicesTests.swift` | Verifies service-string format for both env values. |
@@ -90,38 +90,46 @@ import Testing
 
 @Suite("UserDefaults+MoolahShared")
 struct UserDefaultsMoolahSharedTests {
-  @Test("sharedSuite(for: .development) uses dotted lowercase env suffix")
-  func testDevelopmentSuiteName() {
-    let suite = UserDefaults.sharedSuite(for: .development)
-    #expect(suite !== UserDefaults.standard)
+  @Test("makeSharedSuite(for: .development) is not UserDefaults.standard")
+  func testMakeSharedSuiteDevelopmentIsNotStandard() {
+    #expect(UserDefaults.makeSharedSuite(for: .development) !== UserDefaults.standard)
+  }
+
+  @Test("makeSharedSuite(for: .development) uses dotted lowercase env suffix")
+  func testMakeSharedSuiteDevelopmentSuiteName() {
+    let suite = UserDefaults.makeSharedSuite(for: .development)
     let key = "moolah.test.\(UUID().uuidString)"
-    suite.set("dev", forKey: key)
     defer { suite.removeObject(forKey: key) }
+    suite.set("dev", forKey: key)
     let mirror = UserDefaults(suiteName: "rocks.moolah.app.development")
     #expect(mirror?.string(forKey: key) == "dev")
   }
 
-  @Test("sharedSuite(for: .production) uses dotted lowercase env suffix")
-  func testProductionSuiteName() {
-    let suite = UserDefaults.sharedSuite(for: .production)
-    #expect(suite !== UserDefaults.standard)
+  @Test("makeSharedSuite(for: .production) is not UserDefaults.standard")
+  func testMakeSharedSuiteProductionIsNotStandard() {
+    #expect(UserDefaults.makeSharedSuite(for: .production) !== UserDefaults.standard)
+  }
+
+  @Test("makeSharedSuite(for: .production) uses dotted lowercase env suffix")
+  func testMakeSharedSuiteProductionSuiteName() {
+    let suite = UserDefaults.makeSharedSuite(for: .production)
     let key = "moolah.test.\(UUID().uuidString)"
-    suite.set("prod", forKey: key)
     defer { suite.removeObject(forKey: key) }
+    suite.set("prod", forKey: key)
     let mirror = UserDefaults(suiteName: "rocks.moolah.app.production")
     #expect(mirror?.string(forKey: key) == "prod")
   }
 
   @Test("dev and prod suites are isolated from each other")
   func testDevAndProdAreIsolated() {
-    let dev = UserDefaults.sharedSuite(for: .development)
-    let prod = UserDefaults.sharedSuite(for: .production)
+    let dev = UserDefaults.makeSharedSuite(for: .development)
+    let prod = UserDefaults.makeSharedSuite(for: .production)
     let key = "moolah.test.\(UUID().uuidString)"
-    dev.set("dev-value", forKey: key)
     defer {
       dev.removeObject(forKey: key)
       prod.removeObject(forKey: key)
     }
+    dev.set("dev-value", forKey: key)
     #expect(prod.string(forKey: key) == nil)
   }
 
@@ -132,13 +140,22 @@ struct UserDefaultsMoolahSharedTests {
 }
 ```
 
+The file contains 6 `@Test` methods total:
+
+1. `testMakeSharedSuiteDevelopmentIsNotStandard`
+2. `testMakeSharedSuiteDevelopmentSuiteName`
+3. `testMakeSharedSuiteProductionIsNotStandard`
+4. `testMakeSharedSuiteProductionSuiteName`
+5. `testDevAndProdAreIsolated`
+6. `testMoolahSharedIsNotStandard`
+
 - [ ] **Step 2: Run the test and confirm it fails**
 
 ```bash
 just test UserDefaultsMoolahSharedTests 2>&1 | tee .agent-tmp/test-output.txt
 ```
 
-Expected: build failure ("no member 'sharedSuite' / 'moolahShared'") or compile error referring to the missing extension.
+Expected: build failure ("no member 'makeSharedSuite' / 'moolahShared'") or compile error referring to the missing extension.
 
 - [ ] **Step 3: Implement the helper**
 
@@ -153,13 +170,18 @@ extension UserDefaults {
   /// build (and vice versa). Production code paths inject this in place
   /// of `.standard`. Tests continue to inject their own
   /// `UserDefaults(suiteName:)` for isolation.
-  static let moolahShared: UserDefaults = sharedSuite(for: .resolved())
+  ///
+  /// `nonisolated(unsafe)` because `UserDefaults` itself is not declared
+  /// `Sendable` by Foundation but is documented as thread-safe. The
+  /// instance is initialised once at first access and never reassigned,
+  /// so concurrent access is sound.
+  nonisolated(unsafe) static let moolahShared: UserDefaults = makeSharedSuite(for: .resolved())
 
-  /// Builder used by `moolahShared`. Exposed so tests can verify the
+  /// Factory used by `moolahShared`. Exposed so tests can verify the
   /// suite-name format for both environments without process-level
   /// Info.plist swapping. Mirrors the `CloudKitEnvironment.resolve(from:)`
   /// pattern that `CloudKitEnvironmentTests` uses.
-  static func sharedSuite(for env: CloudKitEnvironment) -> UserDefaults {
+  static func makeSharedSuite(for env: CloudKitEnvironment) -> UserDefaults {
     let suiteName = "rocks.moolah.app.\(env.storageSubdirectory.lowercased())"
     // `UserDefaults(suiteName:)` returns `nil` only for reserved suite
     // names (e.g. literal `"Apple Global Domain"`). Neither of our
@@ -177,7 +199,7 @@ just test UserDefaultsMoolahSharedTests 2>&1 | tee .agent-tmp/test-output.txt
 grep -E "Test Suite|passed|failed" .agent-tmp/test-output.txt | tail
 ```
 
-Expected: all four tests pass.
+Expected: all six tests pass.
 
 - [ ] **Step 5: Commit**
 
@@ -188,7 +210,7 @@ shared: add UserDefaults.moolahShared scoped to CloudKit env
 
 Suite name is `rocks.moolah.app.<env>` (lowercased) so Development and
 Production builds back to physically separate plists under
-~/Library/Preferences/. `sharedSuite(for:)` exposed for tests.
+~/Library/Preferences/. `makeSharedSuite(for:)` factory exposed for tests.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -701,4 +723,4 @@ After the PR opens, follow the project's merge-queue convention — add it to th
 
 **Placeholder scan:** No "TBD", "implement later", or unspecified test bodies — every code step has full code or a precise diff.
 
-**Type consistency:** `moolahShared` (let) and `sharedSuite(for:)` (func) match across all four references; `apiKeys` (var) and `apiKeysService(for:)` (func) match across all five references.
+**Type consistency:** `moolahShared` (let) and `makeSharedSuite(for:)` (func) match across all references; `apiKeys` (var) and `apiKeysService(for:)` (func) match across all five references. Factory methods use `make` per `guides/CODE_GUIDE.md` §4.
