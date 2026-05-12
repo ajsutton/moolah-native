@@ -156,6 +156,22 @@ final class MoolahApp {
     application.cells.matching(predicate).allElementsBoundByIndex
   }
 
+  /// First popover element in the application — used by drivers to wait
+  /// for an NSPopover's host NSWindow to finish its close animation.
+  /// On macOS a SwiftUI `.popover(...)` is hosted in a separate NSWindow
+  /// whose teardown lags behind the SwiftUI sheet view's accessibility
+  /// unmount: `application.popovers.firstMatch.exists` returns `false`
+  /// only once the host NSWindow has fully closed, which is the
+  /// deterministic signal that residual modal state can no longer
+  /// block hit-testing on the parent window. Routing the lookup
+  /// through here preserves the single-resolver invariant
+  /// (UI_TEST_GUIDE §3 #5).
+  ///
+  /// `firstMatch` is sufficient when at most one popover is open at a
+  /// time. A future flow that presents nested popovers should wait on
+  /// `application.popovers.count == 0` via a predicate instead.
+  var popover: XCUIElement { application.popovers.firstMatch }
+
   /// Keyboard shortcut entrypoint for drivers. Drivers must route keyboard
   /// events through this method rather than reaching into `application`
   /// directly — the single seam keeps `MoolahApp` as the only surface the

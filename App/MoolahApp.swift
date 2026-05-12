@@ -167,6 +167,12 @@ struct MoolahApp: App {
             }
           }
       }
+      // Opt out of NSWindow state restoration under `--ui-testing` so a
+      // stale window from a previous test (e.g. one that ended on the
+      // Analysis view with a CancellationError) cannot get restored into
+      // the next test's launch as a phantom second window. Production
+      // launches keep the default `.automatic` behaviour.
+      .restorationBehavior(isUITesting ? .disabled : .automatic)
       .onChange(of: scenePhase) { _, newPhase in
         handleScenePhaseChange(newPhase)
       }

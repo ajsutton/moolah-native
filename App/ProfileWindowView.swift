@@ -136,15 +136,39 @@
     }
 
     /// Stamps the hosting `NSWindow.identifier` with a per-profile identifier
-    /// so `ProfileWindowLocator` can find and focus the window when AppleScript
-    /// or an App Intent opens a profile that is already on screen.
+    /// so `ProfileWindowLocator` can find and focus the window when
+    /// AppleScript or an App Intent opens a profile that is already on
+    /// screen. Also maximises the window and opts out of per-window state
+    /// restoration under UI testing — see the inline comment for the
+    /// motivating layout race.
     @ViewBuilder private var tagHostingWindow: some View {
       if let profile = resolvedProfile {
         WindowAccessor { window in
           window.identifier = ProfileWindowLocator.identifier(for: profile.id)
+          // CI runs on a 1024×768 macos-26 display. The Brokerage-view
+          // inspector then renders ~217pt tall — not enough to fit the
+          // trade-mode form, so `Received` falls below the visible scroll
+          // viewport and stays non-hittable. Maximising the window on
+          // UI-test launches gives the inspector the ~450pt it needs.
+          // `isRestorable = false` blocks AppKit from overwriting the
+          // explicit frame with a remembered one from a prior session.
+          // Reading `CommandLine.arguments` here (rather than threading
+          // `MoolahApp.isUITesting` down) keeps the read local; if the
+          // `--ui-testing` argument grows a second consumer that disagrees
+          // with `MoolahApp.uiTestingSeed != nil`, this site will need to
+          // be revisited.
+          if Self.isUITestingLaunch, let screen = window.screen {
+            window.isRestorable = false
+            window.setFrame(screen.visibleFrame, display: true)
+          }
         }
       }
     }
+
+    /// `true` when the process was launched with `--ui-testing`. Process-
+    /// wide and immutable for the lifetime of the launch.
+    private static let isUITestingLaunch: Bool =
+      CommandLine.arguments.contains("--ui-testing")
 
   }
 

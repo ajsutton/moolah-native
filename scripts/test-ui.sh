@@ -40,10 +40,15 @@ for f in ${FILTERS[@]+"${FILTERS[@]}"}; do
 done
 
 echo "==> Running UI tests on native macOS…"
-# Use derived data outside the developer's Documents folder so xcodebuild
-# does not re-trigger the macOS TCC Documents-access prompt on every
-# binary re-sign. CI overrides via the DERIVED_DATA_PATH env var.
-DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-/tmp/moolah-derived-data-ui}"
+# Per-worktree derived data lives under the worktree's own `.agent-tmp/`
+# so two parallel agents running UI tests from sibling worktrees can't
+# collide on the same `Moolah.app` bundle. A shared path (the previous
+# `/tmp/moolah-derived-data-ui` default) silently let two `xcodebuild test`
+# invocations launch the SAME `rocks.moolah.app` bundle, after which one
+# test's seed would bleed into the other's accessibility tree. CI overrides
+# this via `DERIVED_DATA_PATH` and runs on fresh runners, so there is no
+# regression there.
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$REPO_ROOT/.agent-tmp/derived-data-ui}"
 mkdir -p "$DERIVED_DATA_PATH"
 
 # Capture xcodebuild output so we can both print it live and scan it for
