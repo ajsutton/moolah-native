@@ -152,12 +152,20 @@ final class GRDBInvestmentRepository: InvestmentRepository, @unchecked Sendable 
     saved rows: [InvestmentValueRow], deleted ids: [UUID]
   ) throws {
     try database.write { database in
-      for row in rows {
-        try row.upsert(database)
-      }
-      for id in ids {
-        _ = try InvestmentValueRow.deleteOne(database, id: id)
-      }
+      try applyRemoteChangesSync(saved: rows, deleted: ids, in: database)
+    }
+  }
+
+  /// In-transaction variant — see `GRDBCSVImportProfileRepository.applyRemoteChangesSync(...:in:)`
+  /// for the rationale (one commit per `applyRemoteChanges` batch, issue #872).
+  func applyRemoteChangesSync(
+    saved rows: [InvestmentValueRow], deleted ids: [UUID], in database: Database
+  ) throws {
+    for row in rows {
+      try row.upsert(database)
+    }
+    for id in ids {
+      _ = try InvestmentValueRow.deleteOne(database, id: id)
     }
   }
 

@@ -231,27 +231,35 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
 
   func applyRemoteChangesSync(saved rows: [AccountRow], deleted ids: [UUID]) throws {
     try database.write { database in
-      for row in rows {
-        try row.upsert(database)
-      }
-      for id in ids {
-        // Replicates the v3-era ON DELETE CASCADE on
-        // `investment_value.account_id` and ON DELETE SET NULL on
-        // `transaction_leg.account_id` after `v5_drop_foreign_keys`
-        // removed the FKs. Same write transaction so the cascade is
-        // atomic with the parent delete.
-        _ =
-          try InvestmentValueRow
-          .filter(InvestmentValueRow.Columns.accountId == id)
-          .deleteAll(database)
-        _ =
-          try TransactionLegRow
-          .filter(TransactionLegRow.Columns.accountId == id)
-          .updateAll(
-            database,
-            [TransactionLegRow.Columns.accountId.set(to: nil)])
-        _ = try AccountRow.deleteOne(database, id: id)
-      }
+      try applyRemoteChangesSync(saved: rows, deleted: ids, in: database)
+    }
+  }
+
+  /// In-transaction variant — see `GRDBCSVImportProfileRepository.applyRemoteChangesSync(...:in:)`
+  /// for the rationale (one commit per `applyRemoteChanges` batch, issue #872).
+  func applyRemoteChangesSync(
+    saved rows: [AccountRow], deleted ids: [UUID], in database: Database
+  ) throws {
+    for row in rows {
+      try row.upsert(database)
+    }
+    for id in ids {
+      // Replicates the v3-era ON DELETE CASCADE on
+      // `investment_value.account_id` and ON DELETE SET NULL on
+      // `transaction_leg.account_id` after `v5_drop_foreign_keys`
+      // removed the FKs. Same write transaction so the cascade is
+      // atomic with the parent delete.
+      _ =
+        try InvestmentValueRow
+        .filter(InvestmentValueRow.Columns.accountId == id)
+        .deleteAll(database)
+      _ =
+        try TransactionLegRow
+        .filter(TransactionLegRow.Columns.accountId == id)
+        .updateAll(
+          database,
+          [TransactionLegRow.Columns.accountId.set(to: nil)])
+      _ = try AccountRow.deleteOne(database, id: id)
     }
   }
 

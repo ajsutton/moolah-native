@@ -45,7 +45,8 @@ final class SyncDownloadBenchmarks: XCTestCase {
       earmarkBudgetItems: result.backend.grdbEarmarkBudgetItems,
       investmentValues: result.backend.grdbInvestments,
       transactions: result.backend.grdbTransactions,
-      transactionLegs: result.backend.grdbTransactionLegs)
+      transactionLegs: result.backend.grdbTransactionLegs,
+      database: result.database)
     _handler = MainActor.assumeIsolated {
       ProfileDataSyncHandler(
         profileId: profileId, zoneID: zoneID, modelContainer: container,

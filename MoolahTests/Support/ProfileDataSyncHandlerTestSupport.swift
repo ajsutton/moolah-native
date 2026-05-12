@@ -263,6 +263,7 @@ enum ProfileDataSyncHandlerTestSupport {
         database: database,
         defaultInstrument: instrument,
         conversionService: conversionService),
-      transactionLegs: GRDBTransactionLegRepository(database: database))
+      transactionLegs: GRDBTransactionLegRepository(database: database),
+      database: database)
   }
 }

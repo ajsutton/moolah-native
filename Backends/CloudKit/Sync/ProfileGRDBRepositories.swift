@@ -30,6 +30,14 @@ struct ProfileGRDBRepositories: Sendable {
   let investmentValues: GRDBInvestmentRepository
   let transactions: GRDBTransactionRepository
   let transactionLegs: GRDBTransactionLegRepository
+  /// Shared writer used by `ProfileDataSyncHandler.applyRemoteChanges` to
+  /// open one outer `database.write { ... }` for the whole fetched-changes
+  /// batch — saves + deletions across every per-record-type repo land in a
+  /// single commit, so `databaseDidCommit` (and the UI `ValueObservation`
+  /// re-fetches it drives) fires once. Every repository in this bundle
+  /// must already be backed by this same writer; the apply path relies on
+  /// that invariant to avoid nested or cross-queue writes. Issue #872.
+  let database: any GRDB.DatabaseWriter
 }
 
 extension ProfileGRDBRepositories {
@@ -60,7 +68,8 @@ extension ProfileGRDBRepositories {
         database: database,
         defaultInstrument: placeholderInstrument,
         conversionService: ApplyPathConversionService()),
-      transactionLegs: GRDBTransactionLegRepository(database: database))
+      transactionLegs: GRDBTransactionLegRepository(database: database),
+      database: database)
   }
 }
 

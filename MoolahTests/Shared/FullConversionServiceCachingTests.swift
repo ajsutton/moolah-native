@@ -73,7 +73,7 @@ struct FullConversionServiceCachingTests {
       #expect(result == dec("100") * dec("1.5385"))
     }
 
-    #expect(await bundle.service.cachedRateCount == 1)
+    #expect(await bundle.service.cachedRateCountForTesting == 1)
   }
 
   /// Different `(from, to)` pairs on the same day are separate entries.
@@ -87,7 +87,7 @@ struct FullConversionServiceCachingTests {
     _ = try await bundle.service.convert(dec("1"), from: usd, to: aud, on: day)
     _ = try await bundle.service.convert(dec("1"), from: usd, to: eur, on: day)
 
-    #expect(await bundle.service.cachedRateCount == 2)
+    #expect(await bundle.service.cachedRateCountForTesting == 2)
   }
 
   /// Same `(from, to)` on distinct calendar days are separate entries.
@@ -105,7 +105,7 @@ struct FullConversionServiceCachingTests {
     _ = try await bundle.service.convert(
       dec("1"), from: usd, to: aud, on: try date("2025-06-16"))
 
-    #expect(await bundle.service.cachedRateCount == 2)
+    #expect(await bundle.service.cachedRateCountForTesting == 2)
   }
 
   /// Different times within the same UTC calendar day collapse to one
@@ -132,7 +132,7 @@ struct FullConversionServiceCachingTests {
     _ = try await bundle.service.convert(dec("1"), from: usd, to: aud, on: morning)
     _ = try await bundle.service.convert(dec("1"), from: usd, to: aud, on: evening)
 
-    #expect(await bundle.service.cachedRateCount == 1)
+    #expect(await bundle.service.cachedRateCountForTesting == 1)
   }
 
   /// Same-instrument identity short-circuit must NOT populate the cache:
@@ -143,7 +143,7 @@ struct FullConversionServiceCachingTests {
     let result = try await bundle.service.convert(
       dec("100"), from: usd, to: usd, on: try date("2025-06-15"))
     #expect(result == dec("100"))
-    #expect(await bundle.service.cachedRateCount == 0)
+    #expect(await bundle.service.cachedRateCountForTesting == 0)
   }
 
   // MARK: - Future-date clamping interacts with the day bucket
@@ -177,7 +177,7 @@ struct FullConversionServiceCachingTests {
     _ = try await bundle.service.convert(dec("1"), from: usd, to: aud, on: future1)
     _ = try await bundle.service.convert(dec("1"), from: usd, to: aud, on: future2)
 
-    #expect(await bundle.service.cachedRateCount == 1)
+    #expect(await bundle.service.cachedRateCountForTesting == 1)
   }
 
   // MARK: - Invalidation
@@ -204,12 +204,12 @@ struct FullConversionServiceCachingTests {
 
     _ = try await bundle.service.convert(dec("1"), from: eth, to: usd, on: day)
     _ = try await bundle.service.convert(dec("1"), from: usd, to: aud, on: day)
-    #expect(await bundle.service.cachedRateCount == 2)
+    #expect(await bundle.service.cachedRateCountForTesting == 2)
 
     await bundle.service.invalidateCache(for: eth)
 
     // The ETH→USD entry is dropped; USD→AUD survives.
-    #expect(await bundle.service.cachedRateCount == 1)
+    #expect(await bundle.service.cachedRateCountForTesting == 1)
   }
 
   // MARK: - Crypto unit-rate caching
@@ -237,6 +237,6 @@ struct FullConversionServiceCachingTests {
       #expect(result == dec("2") * dec("1600") * dec("1.5385"))
     }
 
-    #expect(await bundle.service.cachedRateCount == 1)
+    #expect(await bundle.service.cachedRateCountForTesting == 1)
   }
 }
