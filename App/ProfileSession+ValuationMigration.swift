@@ -24,7 +24,7 @@ extension ProfileSession {
     let migration = ValuationModeMigration(
       profileId: profile.id,
       accountRepository: backend.accounts,
-      userDefaults: .standard)
+      userDefaults: .moolahShared)
     do {
       try await migration.run()
     } catch {

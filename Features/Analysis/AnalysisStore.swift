@@ -54,7 +54,7 @@ final class AnalysisStore {
 
   init(
     repository: AnalysisRepository,
-    defaults: UserDefaults = .standard,
+    defaults: UserDefaults = .moolahShared,
     monthEnd: Int = Calendar.current.component(.day, from: Date())
   ) {
     self.repository = repository

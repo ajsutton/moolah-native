@@ -44,7 +44,7 @@ extension MoolahApp {
       if let seed = uiTestingSeed {
         // Each `--ui-testing` launch starts from a fresh in-memory
         // `ProfileContainerManager` with a different seed, but
-        // `UserDefaults.standard` persists across xctest launches in
+        // `UserDefaults.moolahShared` persists across xctest launches in
         // the same runner. Without resetting the per-record-type
         // SwiftData → GRDB migration flags, the second launch's
         // migrator would skip and the seeded SwiftData rows would
@@ -55,10 +55,10 @@ extension MoolahApp {
         // second launch, but its key would persist and short-circuit
         // any newer profile that happens to reuse the same UUID
         // (rare) and — more importantly — leaves stale state visible
-        // to tests that read `UserDefaults.standard`. Production code
+        // to tests that read `UserDefaults.moolahShared`. Production code
         // paths never enter this branch.
         SwiftDataToGRDBMigrator.resetMigrationFlags()
-        ValuationModeMigration.resetGateFlags(in: .standard)
+        ValuationModeMigration.resetGateFlags(in: .moolahShared)
         let manager = try ProfileContainerManager.forTesting()
         let profile = try UITestSeedHydrator.hydrate(seed, into: manager)
         return ContainerSetup(manager: manager, uiTestingProfileId: profile?.id)
@@ -295,11 +295,11 @@ extension MoolahApp {
   /// once per install. Best-effort — failures are silent and the rate
   /// services repopulate from network on demand.
   ///
-  /// `defaults` is injected with a `.standard` default so production callers
+  /// `defaults` is injected with a `.moolahShared` default so production callers
   /// pass nothing while tests can supply an isolated suite — satisfies the
   /// `CODE_GUIDE.md` §17 "no direct singleton access" rule without
   /// inventing a wrapper type for a single call site.
-  static func cleanupLegacyRateCachesOnce(defaults: UserDefaults = .standard) {
+  static func cleanupLegacyRateCachesOnce(defaults: UserDefaults = .moolahShared) {
     let key = "v2.rates.cache.cleared"
     guard !defaults.bool(forKey: key) else { return }
     let logger = Logger(subsystem: "com.moolah.app", category: "LegacyCacheCleanup")
@@ -332,7 +332,7 @@ extension MoolahApp {
   /// empty and the next launch retries.
   static func runProfileIndexMigrationIfNeeded(
     setup: ContainerSetup,
-    defaults: UserDefaults = .standard
+    defaults: UserDefaults = .moolahShared
   ) async {
     do {
       try await SwiftDataToGRDBMigrator().migrateProfileIndexIfNeeded(

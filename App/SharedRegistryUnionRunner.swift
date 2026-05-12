@@ -69,7 +69,7 @@ enum SharedRegistryUnionRunner {
         .appendingPathComponent("data.sqlite")
     },
     fileManager: FileManager = .default,
-    defaults: UserDefaults = .standard
+    defaults: UserDefaults = .moolahShared
   ) async {
     let logger = Logger(
       subsystem: "com.moolah.app", category: "SharedRegistryUnion")

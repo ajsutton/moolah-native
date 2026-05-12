@@ -87,7 +87,7 @@ struct SwiftDataToGRDBMigrator {
   /// launches only: each UI test starts from a fresh in-memory profile
   /// container and must observe its own seeded rows in GRDB. No
   /// production code path should invoke this.
-  static func resetMigrationFlags(in defaults: UserDefaults = .standard) {
+  static func resetMigrationFlags(in defaults: UserDefaults = .moolahShared) {
     for key in allMigrationFlags {
       defaults.removeObject(forKey: key)
     }
@@ -99,7 +99,7 @@ struct SwiftDataToGRDBMigrator {
   /// Runs the one-shot migration for every record type. Each is gated
   /// independently; a previously-migrated record type is a no-op.
   ///
-  /// `defaults` is injected with a `.standard` default so production
+  /// `defaults` is injected with a `.moolahShared` default so production
   /// callers pass nothing while tests supply an isolated suite (avoids
   /// the `CODE_GUIDE.md` §17 "no direct singleton access" rule).
   ///
@@ -115,7 +115,7 @@ struct SwiftDataToGRDBMigrator {
   func migrateIfNeeded(
     modelContainer: ModelContainer,
     database: any DatabaseWriter,
-    defaults: UserDefaults = .standard
+    defaults: UserDefaults = .moolahShared
   ) async throws {
     let start = ContinuousClock.now
     defer {
