@@ -203,11 +203,14 @@ struct TradeFormDriver {
     // `waitForExistence` only checks AX-tree presence; on macOS a field can
     // exist but not yet be hittable while a just-dismissed sheet's animation
     // finishes (`setInstrument` returns the moment `sheet.exists == false`,
-    // which precedes the animation completing). Without this wait, the next
-    // `click()` raises "Not hittable" synchronously and the test fails.
-    if !waitForHittable(field, timeout: 3) {
-      Trace.recordFailure("amount field '\(identifier)' was not hittable within 3s")
-      XCTFail("Amount field '\(identifier)' was not hittable within 3s")
+    // which precedes the window teardown and SwiftUI re-layout completing).
+    // Without this wait, the next `click()` raises "Not hittable"
+    // synchronously and the test fails. The 10 s timeout absorbs CI-runner
+    // latency — observed CI runs have the field becoming hittable ~3.4 s
+    // after it appears in the AX tree.
+    if !waitForHittable(field, timeout: 10) {
+      Trace.recordFailure("amount field '\(identifier)' was not hittable within 10s")
+      XCTFail("Amount field '\(identifier)' was not hittable within 10s")
       return
     }
     field.click()
@@ -279,10 +282,10 @@ struct TradeFormDriver {
     // existing rows may shift while filtered results animate in. Wait for
     // the target row to become hittable before clicking, otherwise a click
     // can land on a stale frame and the sheet never receives the tap.
-    if !waitForHittable(row, timeout: 3) {
-      Trace.recordFailure("instrumentPicker.row.\(instrumentId) was not hittable within 3s")
+    if !waitForHittable(row, timeout: 10) {
+      Trace.recordFailure("instrumentPicker.row.\(instrumentId) was not hittable within 10s")
       XCTFail(
-        "InstrumentPickerSheet row for '\(instrumentId)' was not hittable within 3s of appearing")
+        "InstrumentPickerSheet row for '\(instrumentId)' was not hittable within 10s of appearing")
       return
     }
     row.click()
