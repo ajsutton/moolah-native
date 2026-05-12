@@ -14,8 +14,7 @@ struct ValuationModeMigration {
   let accountRepository: any AccountRepository
   let userDefaults: UserDefaults
 
-  /// Stable symbol exposed so the UI-test reset path
-  /// (`SwiftDataToGRDBMigrator.resetMigrationFlags`) can clear the
+  /// Stable symbol exposed so the UI-test reset path can clear the
   /// per-profile gate flag without duplicating the format string.
   static func gateKey(for profileId: UUID) -> String {
     "didMigrateValuationMode_\(profileId)"

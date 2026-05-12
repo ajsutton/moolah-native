@@ -19,12 +19,12 @@ extension MoolahApp {
   }
 
   /// Boot-time sync setup: shared registry + market-data services
-  /// pointed at the profile-index DB, the boot migration task
-  /// (SwiftData→GRDB + shared-registry union), and the constructed
-  /// `SyncCoordinator` with the registry's sync hooks rotated in.
+  /// pointed at the profile-index DB, the shared-registry union
+  /// migration task, and the constructed `SyncCoordinator` with the
+  /// registry's sync hooks rotated in.
   static func bootstrapSyncCoordinator(setup: ContainerSetup) -> SyncBootstrap {
     let scope = makeSharedInstrumentScope(setup: setup)
-    let migrationTask = runProfileIndexAndUnionMigrations(setup: setup)
+    let migrationTask = runUnionMigration(setup: setup)
     // App-level store of the registry data — every per-session
     // `CryptoTokenStore` proxies its `registrations` /
     // `instruments` / `providerMappings` / `registrationsVersion`

@@ -25,8 +25,8 @@ protocol IdentifiableRecord {
   var id: UUID { get }
 }
 
-extension ProfileRecord: IdentifiableRecord {}
 // `InstrumentRow` is string-keyed; no `IdentifiableRecord` conformance.
+extension ProfileRow: IdentifiableRecord {}
 extension AccountRow: IdentifiableRecord {}
 extension TransactionRow: IdentifiableRecord {}
 extension TransactionLegRow: IdentifiableRecord {}
@@ -37,37 +37,18 @@ extension InvestmentValueRow: IdentifiableRecord {}
 extension CSVImportProfileRow: IdentifiableRecord {}
 extension ImportRuleRow: IdentifiableRecord {}
 
-/// Protocol for records that can store CKRecord system fields.
-///
-/// Constrained to `AnyObject` because the `ProfileRecord` write path
-/// mutates a fetched `@Model` row in place via
-/// `record.encodedSystemFields = data`. GRDB row structs deliberately
-/// do not conform — system-fields writes for those record types route
-/// through the repository's `setEncodedSystemFieldsSync(id:data:)` SQL
-/// UPDATE instead.
-protocol SystemFieldsCacheable: AnyObject {
-  var encodedSystemFields: Data? { get set }
-}
-
-extension ProfileRecord: SystemFieldsCacheable {}
-
-/// Value-type sibling of `SystemFieldsCacheable` for GRDB row structs.
-///
-/// `SystemFieldsCacheable` is `AnyObject`-constrained because the
-/// SwiftData write path mutates a fetched `@Model` in place. GRDB row
-/// structs cannot conform to it, but they still expose the cached
-/// CKRecord change-tag blob through `var encodedSystemFields: Data?`.
-/// `ValueTypeSystemFieldsReadable` lets the upload-side
-/// `mapBuiltRows(_:)` path read that blob through a single typed
-/// constraint instead of a dynamic-type cast chain.
-///
-/// This protocol is read-only because the GRDB write path uses
-/// `setEncodedSystemFieldsSync(id:data:)` SQL UPDATEs rather than
-/// mutating the in-memory row.
+/// Protocol exposing the cached CKRecord change-tag blob from a GRDB
+/// row struct. All record types (including `ProfileRow`) write system
+/// fields back through the repository's
+/// `setEncodedSystemFieldsSync(id:data:)` SQL UPDATE rather than mutating
+/// the in-memory row, so this protocol is read-only. It lets the
+/// upload-side `mapBuiltRows(_:)` path read the blob through a single
+/// typed constraint instead of a dynamic-type cast chain.
 protocol ValueTypeSystemFieldsReadable {
   var encodedSystemFields: Data? { get }
 }
 
+extension ProfileRow: ValueTypeSystemFieldsReadable {}
 extension CSVImportProfileRow: ValueTypeSystemFieldsReadable {}
 extension ImportRuleRow: ValueTypeSystemFieldsReadable {}
 extension InstrumentRow: ValueTypeSystemFieldsReadable {}
@@ -105,13 +86,10 @@ extension CKRecord {
 /// Maps CKRecord.recordType strings to the corresponding record types for dispatching.
 enum RecordTypeRegistry: Sendable {
   nonisolated(unsafe) static let allTypes: [String: any CloudKitRecordConvertible.Type] = [
-    // Every record type now dispatches to its GRDB row type. The
-    // CloudKit wire `recordType` strings are frozen contracts and
-    // remain byte-identical to the original SwiftData @Model class
-    // names; only the local Swift type bound to each key changes.
-    // The legacy `ProfileRecord` SwiftData class remains in the build
-    // only as the one-shot migrator's source. A follow-up release
-    // deletes the class entirely.
+    // Every record type dispatches to its GRDB row type. The CloudKit
+    // wire `recordType` strings are frozen contracts that the schema
+    // depends on; do not rename them when refactoring the local Swift
+    // types bound to each key.
     ProfileRow.recordType: ProfileRow.self,
     InstrumentRow.recordType: InstrumentRow.self,
     AccountRow.recordType: AccountRow.self,

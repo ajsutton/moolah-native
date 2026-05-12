@@ -5,49 +5,18 @@ import Testing
 @testable import Moolah
 
 /// Verifies the CloudKit wire-format round-trip for every
-/// `CloudKitRecordConvertible` row + the surviving `ProfileRecord`. Each
-/// `toCKRecord(in:)` write must be losslessly recoverable through
-/// `fieldValues(from:)` so a remote pull rebuilds the local row with the
-/// same field values it produced. Wire `recordType` strings are pinned to
-/// their string-literal CloudKit identifiers because existing iCloud
-/// zones reference those exact names regardless of any local Swift type
-/// rename.
+/// `CloudKitRecordConvertible` row. Each `toCKRecord(in:)` write must be
+/// losslessly recoverable through `fieldValues(from:)` so a remote pull
+/// rebuilds the local row with the same field values it produced. Wire
+/// `recordType` strings are pinned to their string-literal CloudKit
+/// identifiers because existing iCloud zones reference those exact names
+/// regardless of any local Swift type rename. The `ProfileRow` round-trip
+/// (sharing the `"ProfileRecord"` wire `recordType`) lives in the
+/// sibling `ProfileRowMappingTests` suite below.
 @Suite("RecordMapping")
 struct RecordMappingTests {
 
   let zoneID = CKRecordZone.ID(zoneName: "profile-test", ownerName: CKCurrentUserDefaultName)
-
-  // MARK: - ProfileRecord (still owned by the SwiftData layer)
-
-  @Test
-  func profileRecordRoundTrip() throws {
-    let profile = ProfileRecord(
-      id: UUID(),
-      label: "My Budget",
-      currencyCode: "AUD",
-      financialYearStartMonth: 7,
-      createdAt: Date(timeIntervalSince1970: 1_700_000_000)
-    )
-
-    let ckRecord = profile.toCKRecord(in: zoneID)
-
-    #expect(ckRecord.recordType == "ProfileRecord")
-    #expect(
-      ckRecord.recordID.recordName
-        == "\(ProfileRecord.recordType)|\(profile.id.uuidString)")
-    #expect(ckRecord.recordID.zoneID == zoneID)
-    #expect(ckRecord["label"] as? String == "My Budget")
-    #expect(ckRecord["currencyCode"] as? String == "AUD")
-    #expect(ckRecord["financialYearStartMonth"] as? Int == 7)
-    #expect(ckRecord["createdAt"] as? Date == profile.createdAt)
-
-    let restored = try #require(ProfileRecord.fieldValues(from: ckRecord))
-    #expect(restored.id == profile.id)
-    #expect(restored.label == "My Budget")
-    #expect(restored.currencyCode == "AUD")
-    #expect(restored.financialYearStartMonth == 7)
-    #expect(restored.createdAt == profile.createdAt)
-  }
 
   // MARK: - AccountRow
 
@@ -263,13 +232,6 @@ struct RecordMappingTests {
       recordType: InvestmentValueRow.recordType, recordID: malformedID)
     #expect(InvestmentValueRow.fieldValues(from: investmentRecord) == nil)
 
-    let profileRecord = CKRecord(recordType: ProfileRecord.recordType, recordID: malformedID)
-    #expect(ProfileRecord.fieldValues(from: profileRecord) == nil)
-
-    // ProfileRow shares the wire `recordType` with `ProfileRecord` but is a
-    // distinct local type; until `RecordTypeRegistry` flips its mapping
-    // there is no registry entry covering it, so assert the malformed
-    // guard explicitly.
     let profileRowRecord = CKRecord(recordType: ProfileRow.recordType, recordID: malformedID)
     #expect(ProfileRow.fieldValues(from: profileRowRecord) == nil)
 

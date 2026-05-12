@@ -1,6 +1,6 @@
 import CloudKit
 import Foundation
-import SwiftData
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -18,6 +18,28 @@ struct SyncCoordinatorBackfillFlagTests {
     try #require(UserDefaults(suiteName: "sync-coordinator-test-\(UUID().uuidString)"))
   }
 
+  /// Registers a profile in the GRDB index and seeds one unsynced
+  /// `AccountRow` into its per-profile data DB so a follow-up backfill
+  /// scan has something to queue.
+  private func seedUnsyncedAccount(
+    in manager: ProfileContainerManager,
+    profileId: UUID
+  ) async throws -> UUID {
+    try await manager.profileIndexRepository.upsert(
+      Profile(
+        id: profileId, label: "A", currencyCode: "AUD",
+        financialYearStartMonth: 7, createdAt: Date()))
+
+    let accountId = UUID()
+    let database = try manager.database(for: profileId)
+    try await database.write { database in
+      try ProfileDataSyncHandlerTestSupport.accountRow(
+        id: accountId, name: "A1"
+      ).upsert(database)
+    }
+    return accountId
+  }
+
   @Test(
     "Sign-out clears all backfill-scan flags so the next sign-in can rescan"
   )
@@ -29,23 +51,7 @@ struct SyncCoordinatorBackfillFlagTests {
       userDefaults: defaults)
 
     let profileId = UUID()
-    let indexContext = ModelContext(manager.indexContainer)
-    indexContext.insert(
-      ProfileRecord(
-        id: profileId, label: "A", currencyCode: "AUD",
-        financialYearStartMonth: 7, createdAt: Date()))
-    try indexContext.save()
-
-    // Seed an unsynced record and scan so the flag is set.
-    let accountId = UUID()
-    let container = try manager.container(for: profileId)
-    let context = ModelContext(container)
-    context.insert(
-      AccountRecord(id: accountId, name: "A1", type: "bank", position: 0, isHidden: false))
-    try context.save()
-    let database = try manager.database(for: profileId)
-    try ProfileDataSyncHandlerTestSupport.mirrorContainerToDatabase(
-      container: container, database: database)
+    _ = try await seedUnsyncedAccount(in: manager, profileId: profileId)
     _ = await coordinator.queueUnsyncedRecordsForAllProfiles()
 
     // Simulate the sign-out handler firing.
@@ -69,22 +75,7 @@ struct SyncCoordinatorBackfillFlagTests {
       userDefaults: defaults)
 
     let profileId = UUID()
-    let indexContext = ModelContext(manager.indexContainer)
-    indexContext.insert(
-      ProfileRecord(
-        id: profileId, label: "A", currencyCode: "AUD",
-        financialYearStartMonth: 7, createdAt: Date()))
-    try indexContext.save()
-
-    let accountId = UUID()
-    let container = try manager.container(for: profileId)
-    let context = ModelContext(container)
-    context.insert(
-      AccountRecord(id: accountId, name: "A1", type: "bank", position: 0, isHidden: false))
-    try context.save()
-    let database = try manager.database(for: profileId)
-    try ProfileDataSyncHandlerTestSupport.mirrorContainerToDatabase(
-      container: container, database: database)
+    _ = try await seedUnsyncedAccount(in: manager, profileId: profileId)
     _ = await coordinator.queueUnsyncedRecordsForAllProfiles()
 
     let zoneID = CKRecordZone.ID(
@@ -107,21 +98,7 @@ struct SyncCoordinatorBackfillFlagTests {
       userDefaults: defaults)
 
     let profileId = UUID()
-    let indexContext = ModelContext(manager.indexContainer)
-    indexContext.insert(
-      ProfileRecord(
-        id: profileId, label: "A", currencyCode: "AUD",
-        financialYearStartMonth: 7, createdAt: Date()))
-    try indexContext.save()
-
-    let container = try manager.container(for: profileId)
-    let context = ModelContext(container)
-    context.insert(
-      AccountRecord(id: UUID(), name: "A1", type: "bank", position: 0, isHidden: false))
-    try context.save()
-    let database = try manager.database(for: profileId)
-    try ProfileDataSyncHandlerTestSupport.mirrorContainerToDatabase(
-      container: container, database: database)
+    _ = try await seedUnsyncedAccount(in: manager, profileId: profileId)
     _ = await coordinator.queueUnsyncedRecordsForAllProfiles()
 
     let zoneID = CKRecordZone.ID(

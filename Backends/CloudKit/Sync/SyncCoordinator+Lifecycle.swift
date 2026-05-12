@@ -1,7 +1,6 @@
 @preconcurrency import CloudKit
 import Foundation
 import OSLog
-import SwiftData
 import os
 
 // MARK: - Re-Fetch Backoff Constants
@@ -12,8 +11,8 @@ import os
 
 extension SyncCoordinator {
   /// Maximum number of consecutive re-fetch attempts before giving up on the short-retry
-  /// chain and falling back to the long-retry timer. A persistent `context.save()` failure
-  /// (e.g. SwiftData schema corruption, disk full) would otherwise produce an infinite
+  /// chain and falling back to the long-retry timer. A persistent local-save failure
+  /// (e.g. database corruption, disk full) would otherwise produce an infinite
   /// 5-second retry loop. See issue #77.
   nonisolated static let maxRefetchAttempts = 5
 
@@ -42,18 +41,17 @@ extension SyncCoordinator {
 
   // MARK: - Lifecycle
 
-  /// Spawns and tracks a launch task that waits for the
-  /// SwiftData → GRDB profile-index migration (if any) and then
-  /// invokes `start` (defaults to `self.start()` — production
-  /// callers omit the parameter). Production wiring (see
-  /// `MoolahApp.configureSyncCoordinator`) routes the launch-time
-  /// migration `Task` through here so CKSyncEngine cannot deliver
-  /// fetched profile-data zone changes before the local profile
-  /// index is hydrated. Without the gate, the index reads
-  /// `ProfileStore` performs at launch can return zero profiles, no
-  /// `ProfileSession` gets constructed for the unknown profile id,
-  /// and `handlerForProfileZone(profileId:zoneID:)` traps via
-  /// `preconditionFailure`.
+  /// Spawns and tracks a launch task that waits for any pending
+  /// profile-index migration and then invokes `start` (defaults to
+  /// `self.start()` — production callers omit the parameter).
+  /// Production wiring (see `MoolahApp.configureSyncCoordinator`)
+  /// routes the launch-time migration `Task` through here so
+  /// CKSyncEngine cannot deliver fetched profile-data zone changes
+  /// before the local profile index is hydrated. Without the gate,
+  /// the index reads `ProfileStore` performs at launch can return
+  /// zero profiles, no `ProfileSession` gets constructed for the
+  /// unknown profile id, and `handlerForProfileZone(profileId:zoneID:)`
+  /// traps via `preconditionFailure`.
   ///
   /// The spawned task is stored on `launchTask` so `stop()` can
   /// cancel it if the coordinator is torn down before the migration
@@ -191,7 +189,7 @@ extension SyncCoordinator {
       }
       // After zones are confirmed, backfill any records that never got queued for upload
       // (e.g. data imported by migration on a build that predated the migration→sync fix,
-      // or a previous run that crashed between the SwiftData write and the sync-engine
+      // or a previous run that crashed between the local write and the sync-engine
       // queue). Skipped on first launch because `queueAllExistingRecordsForAllZones`
       // has already queued everything.
       if shouldBackfillUnsynced {
@@ -286,7 +284,7 @@ extension SyncCoordinator {
   /// persisted by a build that predated the `<recordType>|<UUID>` prefix
   /// (issue #416). Post-prefix they collide with their prefixed counterparts
   /// during batch build — both pass the `Set<CKRecord.ID>` dedup (different
-  /// recordNames) but resolve to the same UUID and the same SwiftData row,
+  /// recordNames) but resolve to the same UUID and the same local row,
   /// so the same `CKRecord` instance gets appended to `recordsToSave` twice
   /// and CloudKit rejects the entire batch with `.invalidArguments`
   /// ("You can't save the same record twice").

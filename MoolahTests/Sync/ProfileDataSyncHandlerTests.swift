@@ -1,7 +1,6 @@
 import CloudKit
 import Foundation
 import GRDB
-import SwiftData
 import Testing
 
 @testable import Moolah
@@ -130,7 +129,7 @@ struct ProfileDataSyncHandlerTests {
   @Test
   @MainActor
   func buildCKRecordProducesCorrectRecord() throws {
-    let (handler, _) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+    let handler = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase().handler
 
     let id = UUID()
     let row = AccountRow(
@@ -157,7 +156,7 @@ struct ProfileDataSyncHandlerTests {
   @Test("buildCKRecord drops cached system fields when they point to a different zone")
   @MainActor
   func buildCKRecordDropsCachedFieldsOnZoneMismatch() throws {
-    let (handler, _) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+    let handler = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase().handler
 
     // Simulate legacy corruption: a local AccountRow whose cached
     // encodedSystemFields blob references a DIFFERENT profile's zone.
@@ -205,7 +204,7 @@ struct ProfileDataSyncHandlerTests {
   @Test
   @MainActor
   func buildCKRecordPreservesCachedSystemFields() throws {
-    let (handler, _) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+    let handler = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase().handler
 
     let accountId = UUID()
     // Create a CKRecord to extract its encoded system fields. We capture

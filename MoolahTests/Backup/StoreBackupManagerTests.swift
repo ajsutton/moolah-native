@@ -1,6 +1,6 @@
 #if os(macOS)
   import Foundation
-  import SwiftData
+  import GRDB
   import Testing
 
   @testable import Moolah
@@ -35,7 +35,7 @@
       let formatter = DateFormatter()
       formatter.dateFormat = "yyyy-MM-dd"
       let today = formatter.string(from: Date())
-      let backupURL = profileDir.appending(path: "\(today).store")
+      let backupURL = profileDir.appending(path: "\(today).sqlite")
       FileManager.default.createFile(atPath: backupURL.path(), contents: Data("test".utf8))
 
       #expect(manager.hasBackupForToday(profileId: profileId))
@@ -49,9 +49,9 @@
       let profileDir = tempDir.appending(path: profileId.uuidString)
       try FileManager.default.createDirectory(at: profileDir, withIntermediateDirectories: true)
 
-      // Create 10 date-stamped .store files
+      // Create 10 date-stamped .sqlite files
       for day in 1...10 {
-        let filename = "2026-04-\(String(format: "%02d", day)).store"
+        let filename = "2026-04-\(String(format: "%02d", day)).sqlite"
         let fileURL = profileDir.appending(path: filename)
         FileManager.default.createFile(atPath: fileURL.path(), contents: Data("test".utf8))
       }
@@ -59,11 +59,11 @@
       manager.pruneBackups(profileId: profileId)
 
       let remaining = try FileManager.default.contentsOfDirectory(atPath: profileDir.path())
-        .filter { $0.hasSuffix(".store") }
+        .filter { $0.hasSuffix(".sqlite") }
       #expect(remaining.count == 7)
 
       // Should keep the 7 most recent (sorted reverse, dropFirst(7) removes oldest 3)
-      let expectedRemoved = ["2026-04-01.store", "2026-04-02.store", "2026-04-03.store"]
+      let expectedRemoved = ["2026-04-01.sqlite", "2026-04-02.sqlite", "2026-04-03.sqlite"]
       for filename in expectedRemoved {
         #expect(
           !FileManager.default.fileExists(atPath: profileDir.appending(path: filename).path()))
@@ -77,7 +77,7 @@
       try FileManager.default.createDirectory(at: profileDir, withIntermediateDirectories: true)
 
       for day in 1...3 {
-        let filename = "2026-04-\(String(format: "%02d", day)).store"
+        let filename = "2026-04-\(String(format: "%02d", day)).sqlite"
         let fileURL = profileDir.appending(path: filename)
         FileManager.default.createFile(atPath: fileURL.path(), contents: Data("test".utf8))
       }
@@ -85,14 +85,14 @@
       manager.pruneBackups(profileId: profileId)
 
       let remaining = try FileManager.default.contentsOfDirectory(atPath: profileDir.path())
-        .filter { $0.hasSuffix(".store") }
+        .filter { $0.hasSuffix(".sqlite") }
       #expect(remaining.count == 3)
     }
 
     // MARK: - backupStore
 
     @Test("backupStore skips if today's backup already exists")
-    func backupStoreSkipsIfAlreadyBackedUp() throws {
+    func backupStoreSkipsIfAlreadyBackedUp() async throws {
       let profileId = UUID()
       let profileDir = tempDir.appending(path: profileId.uuidString)
       try FileManager.default.createDirectory(at: profileDir, withIntermediateDirectories: true)
@@ -100,47 +100,38 @@
       let formatter = DateFormatter()
       formatter.dateFormat = "yyyy-MM-dd"
       let today = formatter.string(from: Date())
-      let backupURL = profileDir.appending(path: "\(today).store")
+      let backupURL = profileDir.appending(path: "\(today).sqlite")
       let originalData = Data("original".utf8)
       FileManager.default.createFile(atPath: backupURL.path(), contents: originalData)
 
-      // Create a dummy source file — backupStore should skip before even trying to copy
-      let sourceURL = tempDir.appending(path: "source.store")
-      FileManager.default.createFile(atPath: sourceURL.path(), contents: Data("new".utf8))
-
-      try manager.backupStore(at: sourceURL, profileId: profileId)
+      // Use an in-memory GRDB queue as the source — backupStore should
+      // short-circuit before issuing VACUUM INTO when today's backup
+      // exists, so the sentinel `originalData` must survive untouched.
+      let database = try ProfileDatabase.openInMemory()
+      try await manager.backupStore(from: database, profileId: profileId)
 
       // Original file should be unchanged (backup was skipped)
       let data = try Data(contentsOf: backupURL)
       #expect(data == originalData)
     }
 
-    @Test("backupStore creates profile directory on first backup")
-    func backupStoreCreatesProfileDirectory() throws {
+    @Test("backupStore creates profile directory and writes today's backup")
+    func backupStoreCreatesProfileDirectory() async throws {
       let profileId = UUID()
       let profileDir = tempDir.appending(path: profileId.uuidString)
 
       // Profile directory should not exist yet
       #expect(!FileManager.default.fileExists(atPath: profileDir.path()))
 
-      // Create a real SQLite file to back up using SwiftData
+      // Use an on-disk source DB so VACUUM INTO has a real source to
+      // copy from. `:memory:` would also work, but on-disk mirrors
+      // production more closely.
       let sourceDir = tempDir.appending(path: "source-\(UUID().uuidString)")
       try FileManager.default.createDirectory(at: sourceDir, withIntermediateDirectories: true)
-      let sourceURL = sourceDir.appending(path: "test.store")
+      let sourceURL = sourceDir.appending(path: "data.sqlite")
+      let database = try ProfileDatabase.open(at: sourceURL)
 
-      // Create a minimal SQLite database via SwiftData
-      let schema = Schema([
-        AccountRecord.self, TransactionRecord.self, TransactionLegRecord.self,
-        InstrumentRecord.self, CategoryRecord.self,
-        EarmarkRecord.self, EarmarkBudgetItemRecord.self,
-        InvestmentValueRecord.self,
-        CSVImportProfileRecord.self,
-        ImportRuleRecord.self,
-      ])
-      let config = ModelConfiguration(url: sourceURL)
-      _ = try ModelContainer(for: schema, configurations: [config])
-
-      try manager.backupStore(at: sourceURL, profileId: profileId)
+      try await manager.backupStore(from: database, profileId: profileId)
 
       // Profile directory should now exist
       #expect(FileManager.default.fileExists(atPath: profileDir.path()))

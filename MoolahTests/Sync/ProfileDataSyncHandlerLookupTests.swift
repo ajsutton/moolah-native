@@ -1,6 +1,6 @@
 import CloudKit
 import Foundation
-import SwiftData
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -10,18 +10,44 @@ import Testing
 struct ProfileDataSyncHandlerLookupTests {
 
   @Test
-  func buildBatchRecordLookupFindsRecordsByUUID() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+  func buildBatchRecordLookupFindsRecordsByUUID() async throws {
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    let handler = harness.handler
 
     let accountId = UUID()
     let txnId = UUID()
 
-    let context = ModelContext(container)
-    context.insert(
-      AccountRecord(id: accountId, name: "Acc", type: "bank", position: 0, isHidden: false))
-    context.insert(
-      TransactionRecord(id: txnId, date: Date(), payee: "Test"))
-    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
+    try await ProfileDataSyncHandlerTestSupport.seed(into: harness.database) { database in
+      try AccountRow(
+        id: accountId,
+        recordName: AccountRow.recordName(for: accountId),
+        name: "Acc",
+        type: "bank",
+        instrumentId: Instrument.defaultTestInstrument.id,
+        position: 0,
+        isHidden: false,
+        encodedSystemFields: nil,
+        valuationMode: ValuationMode.recordedValue.rawValue
+      ).upsert(database)
+      try TransactionRow(
+        id: txnId,
+        recordName: TransactionRow.recordName(for: txnId),
+        date: Date(),
+        payee: "Test",
+        notes: nil,
+        recurPeriod: nil,
+        recurEvery: nil,
+        importOriginRawDescription: nil,
+        importOriginBankReference: nil,
+        importOriginRawAmount: nil,
+        importOriginRawBalance: nil,
+        importOriginImportedAt: nil,
+        importOriginImportSessionId: nil,
+        importOriginSourceFilename: nil,
+        importOriginParserIdentifier: nil,
+        encodedSystemFields: nil
+      ).upsert(database)
+    }
 
     let lookup = handler.buildBatchRecordLookup(byRecordType: [
       AccountRow.recordType: [accountId],
@@ -33,14 +59,24 @@ struct ProfileDataSyncHandlerLookupTests {
   }
 
   @Test
-  func recordToSaveFindsAccountByUUID() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+  func recordToSaveFindsAccountByUUID() async throws {
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    let handler = harness.handler
 
     let accountId = UUID()
-    let context = ModelContext(container)
-    context.insert(
-      AccountRecord(id: accountId, name: "Found", type: "bank", position: 0, isHidden: false))
-    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
+    try await ProfileDataSyncHandlerTestSupport.seed(into: harness.database) { database in
+      try AccountRow(
+        id: accountId,
+        recordName: AccountRow.recordName(for: accountId),
+        name: "Found",
+        type: "bank",
+        instrumentId: Instrument.defaultTestInstrument.id,
+        position: 0,
+        isHidden: false,
+        encodedSystemFields: nil,
+        valuationMode: ValuationMode.recordedValue.rawValue
+      ).upsert(database)
+    }
 
     let recordID = CKRecord.ID(
       recordType: AccountRow.recordType, uuid: accountId, zoneID: handler.zoneID)
@@ -60,8 +96,9 @@ struct ProfileDataSyncHandlerLookupTests {
   // `ProfileIndexInstrumentDispatchTests`.
 
   @Test
-  func recordToSaveReturnsNilForMissingRecord() throws {
-    let (handler, _) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+  func recordToSaveReturnsNilForMissingRecord() async throws {
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    let handler = harness.handler
 
     let recordID = CKRecord.ID(
       recordType: AccountRow.recordType, uuid: UUID(), zoneID: handler.zoneID)

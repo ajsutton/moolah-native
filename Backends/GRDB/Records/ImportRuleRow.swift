@@ -3,20 +3,13 @@
 import Foundation
 import GRDB
 
-/// One row in the `import_rule` table — the GRDB-backed counterpart to
-/// the SwiftData `@Model` `ImportRuleRecord`.
-///
-/// Naming follows the convention documented on `CSVImportProfileRow`:
-/// `*Row` is the GRDB type, `*Record` is the SwiftData (`@Model`) type
-/// kept around so the one-shot SwiftData → GRDB migrator can read existing
-/// rows on first launch.
+/// One row in the `import_rule` table.
 ///
 /// `conditions_json` and `actions_json` are stored as `BLOB` containing
 /// the JSON encodings of `[RuleCondition]` and `[RuleAction]`. The
-/// encoder used must match the SwiftData layer byte-for-byte (default
-/// `JSONEncoder()` with no `outputFormatting` /
-/// `keyEncodingStrategy` / `dateEncodingStrategy` overrides) so the
-/// CKRecord wire bytes stay stable across the migration — see
+/// encoder uses default `JSONEncoder()` settings (no `outputFormatting`
+/// / `keyEncodingStrategy` / `dateEncodingStrategy` overrides) so the
+/// CKRecord wire bytes stay stable — see
 /// `Backends/GRDB/Records/ImportRuleRow+Mapping.swift`.
 struct ImportRuleRow {
   static let databaseTableName = "import_rule"

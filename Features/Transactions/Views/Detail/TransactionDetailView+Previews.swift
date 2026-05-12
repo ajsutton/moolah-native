@@ -9,7 +9,7 @@ import SwiftUI
 
 @MainActor
 private func previewStore() -> TransactionStore {
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   return TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,

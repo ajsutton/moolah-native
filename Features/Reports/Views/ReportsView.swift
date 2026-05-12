@@ -192,7 +192,7 @@ private func seedReportsPreview(
 }
 
 #Preview {
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   let transactionStore = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,

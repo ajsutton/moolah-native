@@ -1,7 +1,6 @@
 @preconcurrency import CloudKit
 import Foundation
 import OSLog
-import SwiftData
 
 // Bulk record queueing for `SyncCoordinator`: initial migration / first-launch
 // queues, unsynced-record backfill scans, per-profile scan-completion flags,
@@ -13,8 +12,8 @@ extension SyncCoordinator {
   // MARK: - Queue All Existing Records
 
   /// Ensures the given profile's zone exists on CloudKit, then queues every record in
-  /// that profile's local SwiftData store for upload. Called by `ExportCoordinator`
-  /// after a file import, which writes records directly to SwiftData and so
+  /// that profile's local GRDB store for upload. Called by `ExportCoordinator`
+  /// after a file import, which writes records directly to the database and so
   /// bypasses the repository `onRecordChanged` hooks that normally feed the sync engine.
   ///
   /// The zone is created first so the initial send does not have to round-trip through
@@ -49,7 +48,7 @@ extension SyncCoordinator {
     }
     // Mark the profile as backfill-scanned: we've just queued every record, which is
     // a strict superset of what the startup backfill scan would do. Prevents the next
-    // launch from re-scanning this profile's SwiftData store for nothing.
+    // launch from re-scanning this profile's local store for nothing.
     markBackfillScanComplete(for: profileId)
     return recordIDs
   }
@@ -71,7 +70,7 @@ extension SyncCoordinator {
     for profileId in allProfiles {
       // Skip profiles whose backfill scan has already run — the only work left for
       // those is normal sync traffic. This keeps the startup scan O(1) on the happy
-      // path: after the first run per profile we never touch its SwiftData store again.
+      // path: after the first run per profile we never touch its local store again.
       if hasCompletedBackfillScan(for: profileId) {
         skippedProfiles += 1
         continue

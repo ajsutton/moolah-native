@@ -3,16 +3,14 @@
 import Foundation
 import GRDB
 
-/// One row in the `earmark` table — the GRDB-backed counterpart to the
-/// SwiftData `@Model` `EarmarkRecord`.
+/// One row in the `earmark` table.
 ///
-/// **Legacy `savingsTargetInstrumentId`.** The SwiftData model carried a
+/// **Legacy `savingsTargetInstrumentId`.** Earlier builds carried a
 /// `savingsTargetInstrumentId` column for backwards compatibility with
-/// older records that stored the savings goal in a different instrument
-/// than the earmark itself. The GRDB row preserves the column so a
-/// migrator round-trip is byte-identical, but `toDomain()` always
-/// labels the goal in the earmark's own `instrumentId` (matches the
-/// existing `EarmarkRecord.toDomain` policy at lines 53–56).
+/// records that stored the savings goal in a different instrument than
+/// the earmark itself. The row preserves the column so existing
+/// records round-trip byte-identically, but `toDomain()` always labels
+/// the goal in the earmark's own `instrumentId`.
 struct EarmarkRow {
   static let databaseTableName = "earmark"
 
@@ -49,14 +47,13 @@ struct EarmarkRow {
   var name: String
   var position: Int
   var isHidden: Bool
-  /// Optional to match SwiftData's nullable column. Domain
-  /// reconstruction defaults to `defaultInstrument` when nil.
+  /// Nullable column; domain reconstruction defaults to
+  /// `defaultInstrument` when nil.
   var instrumentId: String?
-  /// `Decimal × 10^8` storage form (the existing SwiftData convention).
+  /// `Decimal × 10^8` storage form.
   var savingsTarget: Int64?
   /// Legacy column. `toDomain` ignores this and always labels the goal
-  /// in the earmark's own `instrumentId` (mirrors `EarmarkRecord` at
-  /// lines 53–56).
+  /// in the earmark's own `instrumentId`.
   var savingsTargetInstrumentId: String?
   var savingsStartDate: Date?
   var savingsEndDate: Date?

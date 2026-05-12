@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 import Testing
 
 @testable import Moolah
@@ -96,15 +95,10 @@ struct ExportCoordinatorImportNewProfileTests {
     #expect(registeredProfile.currencyCode == instrument.id)
     #expect(registeredProfile.financialYearStartMonth == 7)
 
-    // Data was imported into the SwiftData container; migrate it into a
-    // fresh GRDB queue so the verification backend reads through the
-    // production code path.
-    let container = try containerManager.container(for: newProfileId)
-    let freshDatabase = try ProfileDatabase.openInMemory()
-    let migratorDefaults = try #require(
-      UserDefaults(suiteName: "export-import-test-\(UUID().uuidString)"))
-    try await SwiftDataToGRDBMigrator().migrateIfNeeded(
-      modelContainer: container, database: freshDatabase, defaults: migratorDefaults)
+    // Data was imported into the per-profile GRDB queue; build a verification
+    // backend against the same queue so it reads through the production
+    // code path.
+    let freshDatabase = try containerManager.database(for: newProfileId)
     let freshBackend = CloudKitBackend(
       database: freshDatabase,
       instrument: instrument,
@@ -155,11 +149,8 @@ struct ExportCoordinatorImportNewProfileTests {
     let containerManager = try ProfileContainerManager.forTesting()
     let profileStore = try makeProfileStore(containerManager: containerManager)
 
-    // Intercept the profile ID that was registered mid-flight so we can verify
-    // the container cache is also cleared after rollback.
-    var capturedProfileId: UUID?
-    profileStore.onProfileChanged = { id in capturedProfileId = id }
-
+    // Test simplified after Phase B teardown; the queueSave hook is now
+    // exercised by ProfileIndexSyncHandlerTests.
     let coordinator = ExportCoordinator()
     await #expect(throws: ExportError.self) {
       _ = try await coordinator.importNewProfileFromFile(
@@ -172,9 +163,5 @@ struct ExportCoordinatorImportNewProfileTests {
 
     // Profile must have been removed from profileStore (rollback succeeded)
     #expect(profileStore.profiles.isEmpty)
-
-    // Container cache must also have been cleared (no double-deleteStore bug)
-    let profileId = try #require(capturedProfileId)
-    #expect(!containerManager.hasContainer(for: profileId))
   }
 }

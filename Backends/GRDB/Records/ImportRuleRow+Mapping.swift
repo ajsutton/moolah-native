@@ -21,9 +21,8 @@ extension ImportRuleRow {
   }
 
   /// Builds a row from a domain object. Encoding failures surface as
-  /// empty `Data()` blobs and a logged error, matching the behaviour of
-  /// the original SwiftData `ImportRuleRecord` initialiser so the
-  /// migration is observationally equivalent.
+  /// empty `Data()` blobs and a logged error so a single malformed
+  /// condition/action set doesn't take the whole rule offline.
   init(domain rule: ImportRule) {
     self.id = rule.id
     self.recordName = Self.recordName(for: rule.id)
@@ -39,8 +38,8 @@ extension ImportRuleRow {
 
   /// Decodes back to the domain shape. JSON-blob decoding failures
   /// surface as the "empty match / no-op" sentinel and a logged warning
-  /// — same behaviour as `ImportRuleRecord.toDomain()` so a corrupted
-  /// blob degrades gracefully rather than failing the fetch.
+  /// so a corrupted blob degrades gracefully rather than failing the
+  /// fetch.
   ///
   /// Throws `BackendError.dataCorrupted` when `matchMode` carries a raw
   /// value the compiled `MatchMode` enum doesn't recognise — that's a
@@ -63,10 +62,9 @@ extension ImportRuleRow {
   //
   // The encoders/decoders are built with default settings (no
   // `outputFormatting`, `keyEncodingStrategy`, or `dateEncodingStrategy`
-  // overrides). They MUST match the encoder used by
-  // `Backends/CloudKit/Models/ImportRuleRecord.init(...)` byte-for-byte;
-  // any divergence would change the CKRecord wire bytes and trip a
-  // `.serverRecordChanged` cycle on the next sync.
+  // overrides). Any divergence from the on-the-wire JSON shape would
+  // change the CKRecord wire bytes and trip a `.serverRecordChanged`
+  // cycle on the next sync.
 
   static func encodeConditions(_ conditions: [RuleCondition], ruleId: UUID) -> Data {
     do {

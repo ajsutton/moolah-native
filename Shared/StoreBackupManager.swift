@@ -1,8 +1,20 @@
 #if os(macOS)
-  import CoreData
   import Foundation
+  import GRDB
   import OSLog
 
+  /// Daily backup of each profile's `data.sqlite` to a date-stamped
+  /// snapshot using SQLite's `VACUUM INTO`. Mac-only (matches the
+  /// platform that ships the backup UX).
+  ///
+  /// **`import GRDB` in `Shared/` is justified.** `DATABASE_CODE_GUIDE.md`
+  /// scopes `import GRDB` to `Backends/GRDB/` (and implicitly `App/`),
+  /// but `StoreBackupManager` is the canonical backup helper — peered
+  /// with `TestBackend` / `PreviewBackend` as the third `Shared/` site
+  /// that legitimately reaches for `DatabaseWriter`. The alternative
+  /// (moving it under `Backends/GRDB/`) would force `App/MoolahApp.swift`
+  /// to import the backend layer just to schedule a daily timer, which
+  /// is a worse coupling than the targeted backup-only import here.
   @MainActor
   final class StoreBackupManager {
     private let backupDirectory: URL
@@ -27,8 +39,16 @@
       self.fileManager = fileManager
     }
 
-    /// Backs up a store file if today's backup doesn't already exist.
-    func backupStore(at storeURL: URL, profileId: UUID) throws {
+    /// Backs up a profile's GRDB database to a date-stamped `.sqlite`
+    /// file if today's backup doesn't already exist.
+    ///
+    /// Uses SQLite's `VACUUM INTO`, which produces an atomic,
+    /// defragmented single-file copy (no `-wal`/`-shm` sidecars). The
+    /// statement runs through GRDB's writer queue, so it serialises
+    /// with any concurrent CKSyncEngine writes — VACUUM INTO sees a
+    /// consistent snapshot and pending writes simply queue behind it
+    /// until the copy finishes.
+    func backupStore(from sourceDb: any DatabaseWriter, profileId: UUID) async throws {
       guard !hasBackupForToday(profileId: profileId) else {
         logger.debug("Backup already exists for today, skipping \(profileId)")
         return
@@ -38,21 +58,18 @@
       try fileManager.createDirectory(at: profileDir, withIntermediateDirectories: true)
 
       let today = Self.dateFormatter.string(from: Date())
-      let backupURL = profileDir.appending(path: "\(today).store")
+      let backupURL = profileDir.appending(path: "\(today).sqlite")
 
-      let coordinator = NSPersistentStoreCoordinator(managedObjectModel: NSManagedObjectModel())
-      try coordinator.replacePersistentStore(
-        at: backupURL,
-        withPersistentStoreFrom: storeURL,
-        type: .sqlite
-      )
+      try await sourceDb.writeWithoutTransaction { database in
+        try database.execute(literal: "VACUUM INTO \(backupURL.path)")
+      }
       logger.info("Backed up profile \(profileId) to \(backupURL.lastPathComponent)")
     }
 
     func hasBackupForToday(profileId: UUID) -> Bool {
       let profileDir = backupDirectory.appending(path: profileId.uuidString)
       let today = Self.dateFormatter.string(from: Date())
-      let backupURL = profileDir.appending(path: "\(today).store")
+      let backupURL = profileDir.appending(path: "\(today).sqlite")
       return fileManager.fileExists(atPath: backupURL.path())
     }
 
@@ -62,29 +79,25 @@
         return
       }
 
-      // Only count .store files (not -shm or -wal) for retention
-      let storeFiles = files.filter { $0.hasSuffix(".store") }
+      // VACUUM INTO produces a single `.sqlite` file with no
+      // `-wal`/`-shm` sidecars, so retention only enumerates `.sqlite`.
+      let backupFiles = files.filter { $0.hasSuffix(".sqlite") }
         .sorted().reversed()
-      let toDelete = Array(storeFiles.dropFirst(retentionDays))
+      let toDelete = Array(backupFiles.dropFirst(retentionDays))
       for filename in toDelete {
-        // Remove the .store file and its WAL companions
-        for suffix in ["", "-shm", "-wal"] {
-          let fileURL = profileDir.appending(path: filename + suffix)
-          try? fileManager.removeItem(at: fileURL)
-        }
+        let fileURL = profileDir.appending(path: filename)
+        try? fileManager.removeItem(at: fileURL)
         logger.debug("Pruned old backup: \(filename)")
       }
     }
 
-    func performDailyBackup(profiles: [Profile], containerManager: ProfileContainerManager) {
+    func performDailyBackup(
+      profiles: [Profile], containerManager: ProfileContainerManager
+    ) async {
       for profile in profiles {
         do {
-          let container = try containerManager.container(for: profile.id)
-          guard let storeURL = container.configurations.first?.url else {
-            logger.warning("No store URL for profile \(profile.id)")
-            continue
-          }
-          try backupStore(at: storeURL, profileId: profile.id)
+          let database = try containerManager.database(for: profile.id)
+          try await backupStore(from: database, profileId: profile.id)
           pruneBackups(profileId: profile.id)
         } catch {
           logger.error("Backup failed for profile \(profile.id): \(error.localizedDescription)")

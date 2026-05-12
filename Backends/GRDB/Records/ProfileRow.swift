@@ -3,14 +3,9 @@
 import Foundation
 import GRDB
 
-/// One row in the `profile` table — the GRDB-backed counterpart to the
-/// SwiftData `@Model` `ProfileRecord`. Lives in `profile-index.sqlite`
+/// One row in the `profile` table. Lives in `profile-index.sqlite`
 /// (an app-scoped DB shared across all profiles), not in any
 /// per-profile `data.sqlite`.
-///
-/// **Naming.** "Row" is the GRDB convention. The SwiftData
-/// `ProfileRecord` retains its name until a follow-up release deletes
-/// the `@Model` class entirely.
 ///
 /// **Sync metadata.** `recordName` is the canonical CloudKit recordName
 /// (`"ProfileRecord|<uuid>"`, see

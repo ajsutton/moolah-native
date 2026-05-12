@@ -15,7 +15,7 @@ struct EarmarkRowView: View {
 }
 
 #Preview {
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   let earmarkStore = EarmarkStore(
     repository: backend.earmarks,
     conversionService: backend.conversionService,

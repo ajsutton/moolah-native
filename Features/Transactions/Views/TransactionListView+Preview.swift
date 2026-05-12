@@ -46,7 +46,7 @@ private func seedTransactionListPreview(
       id: savingsId, name: "Savings", type: .bank, instrument: .AUD,
       positions: [Position(instrument: .AUD, quantity: 5000)]),
   ])
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   let store = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,

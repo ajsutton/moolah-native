@@ -20,7 +20,7 @@ private func seedSidebarPreview(backend: any BackendProvider) async {
 }
 
 #Preview {
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   let accountStore = AccountStore(
     repository: backend.accounts,
     conversionService: backend.conversionService,
@@ -48,7 +48,7 @@ private func seedSidebarPreview(backend: any BackendProvider) async {
 }
 
 #Preview("Empty earmarks") {
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   let accountStore = AccountStore(
     repository: backend.accounts,
     conversionService: backend.conversionService,

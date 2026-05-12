@@ -1,4 +1,3 @@
-import SwiftData
 import Testing
 
 @testable import Moolah

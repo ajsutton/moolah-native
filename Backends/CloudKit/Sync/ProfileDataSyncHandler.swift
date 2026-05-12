@@ -1,7 +1,6 @@
 @preconcurrency import CloudKit
 import Foundation
 import OSLog
-import SwiftData
 import os
 
 /// Result of applying remote changes from CKSyncEngine.
@@ -27,13 +26,11 @@ enum ApplyResult: Sendable {
 final class ProfileDataSyncHandler {
   nonisolated let profileId: UUID
   nonisolated let zoneID: CKRecordZone.ID
-  nonisolated let modelContainer: ModelContainer
-  /// GRDB-backed repos for the record types whose persistence lives in
-  /// SQLite rather than SwiftData. Used by the dispatch tables in
-  /// `+ApplyRemoteChanges`, `+QueueAndDelete`, `+RecordLookup`, and
-  /// `+SystemFields` so each per-type save/delete handler can address
-  /// the right repository without leaking GRDB types into the sync
-  /// engine's wire layer.
+  /// GRDB-backed repos for the eight per-profile record types. Used by
+  /// the dispatch tables in `+ApplyRemoteChanges`, `+QueueAndDelete`,
+  /// `+RecordLookup`, and `+SystemFields` so each per-type save/delete
+  /// handler can address the right repository without leaking GRDB
+  /// types into the sync engine's wire layer.
   nonisolated let grdbRepositories: ProfileGRDBRepositories
 
   nonisolated let logger = Logger(
@@ -46,12 +43,10 @@ final class ProfileDataSyncHandler {
   init(
     profileId: UUID,
     zoneID: CKRecordZone.ID,
-    modelContainer: ModelContainer,
     grdbRepositories: ProfileGRDBRepositories
   ) {
     self.profileId = profileId
     self.zoneID = zoneID
-    self.modelContainer = modelContainer
     self.grdbRepositories = grdbRepositories
   }
 

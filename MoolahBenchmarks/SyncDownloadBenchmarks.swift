@@ -1,17 +1,15 @@
 @preconcurrency import CloudKit
 import GRDB
-import SwiftData
 import XCTest
 
 @testable import Moolah
 
 /// Benchmarks for the sync download path — `applyRemoteChanges` inserts and deletions.
 ///
-/// These measure the cost of applying remote CKRecord changes to the local SwiftData store,
+/// These measure the cost of applying remote CKRecord changes to the local GRDB store,
 /// which is the hot path when syncing a large transaction history from another device.
 final class SyncDownloadBenchmarks: XCTestCase {
 
-  nonisolated(unsafe) private static var _container: ModelContainer?
   nonisolated(unsafe) private static var _database: DatabaseQueue?
   nonisolated(unsafe) private static var _handler: ProfileDataSyncHandler?
   nonisolated(unsafe) private static var _zoneID: CKRecordZone.ID?
@@ -27,10 +25,6 @@ final class SyncDownloadBenchmarks: XCTestCase {
     }
     _database = result.database
     BenchmarkFixtures.seed(scale: .twoX, in: result.database)
-    let container = expecting("benchmark sync-handler container") {
-      try TestModelContainer.create()
-    }
-    _container = container
     let profileId = UUID()
     let zoneID = CKRecordZone.ID(
       zoneName: "profile-\(profileId.uuidString)",
@@ -49,7 +43,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
       database: result.database)
     _handler = MainActor.assumeIsolated {
       ProfileDataSyncHandler(
-        profileId: profileId, zoneID: zoneID, modelContainer: container,
+        profileId: profileId, zoneID: zoneID,
         grdbRepositories: bundle)
     }
     _zoneID = zoneID
@@ -58,16 +52,15 @@ final class SyncDownloadBenchmarks: XCTestCase {
   override static func tearDown() {
     _handler = nil
     _zoneID = nil
-    _container = nil
     _database = nil
     super.tearDown()
   }
 
-  private var container: ModelContainer {
-    guard let container = Self._container else {
-      fatalError("setUp must initialise _container before tests run")
+  private var database: DatabaseQueue {
+    guard let database = Self._database else {
+      fatalError("setUp must initialise _database before tests run")
     }
-    return container
+    return database
   }
   private var handler: ProfileDataSyncHandler {
     guard let handler = Self._handler else {
@@ -142,11 +135,11 @@ final class SyncDownloadBenchmarks: XCTestCase {
 
   /// Applies 400 deletion events into a 37k dataset.
   ///
-  /// Re-seeds 400 transaction records before each measured iteration so the
+  /// Re-seeds 400 transaction rows into GRDB before each measured iteration so the
   /// deletions always find live records to remove.
   func testApplyRemoteChanges_400deletions() {
     let handler = handler
-    let container = self.container
+    let database = self.database
     let zone = zoneID
 
     let clockOptions = XCTMeasureOptions()
@@ -155,23 +148,8 @@ final class SyncDownloadBenchmarks: XCTestCase {
 
     measure(metrics: [XCTClockMetric()], options: clockOptions) {
       // --- Setup (excluded from measurement) ---
-      let deletionTargets: [(CKRecord.ID, String)] = awaitSyncExpecting { @MainActor in
-        let context = ModelContext(container)
-        var targets: [(CKRecord.ID, String)] = []
-        targets.reserveCapacity(400)
-        for _ in 0..<400 {
-          let id = UUID()
-          let record = TransactionRecord(
-            id: id,
-            date: Date(),
-            payee: "Delete Target"
-          )
-          context.insert(record)
-          let ckRecordID = CKRecord.ID(recordName: id.uuidString, zoneID: zone)
-          targets.append((ckRecordID, TransactionRow.recordType))
-        }
-        try context.save()
-        return targets
+      let deletionTargets: [(CKRecord.ID, String)] = expecting("seed deletion targets") {
+        try Self.seedDeletionTargets(into: database, zone: zone, count: 400)
       }
 
       // --- Measurement ---
@@ -180,6 +158,43 @@ final class SyncDownloadBenchmarks: XCTestCase {
         _ = handler.applyRemoteChanges(saved: [], deleted: deletionTargets)
       }
       self.stopMeasuring()
+    }
+  }
+
+  /// Seeds `count` transaction rows in `database` and returns the matching
+  /// `(CKRecord.ID, recordType)` tuples so the deletion-benchmark loop can
+  /// hand them to `applyRemoteChanges`. Extracted from the `measure` body
+  /// to keep the closure under SwiftLint's `closure_body_length` ceiling.
+  private static func seedDeletionTargets(
+    into database: DatabaseWriter, zone: CKRecordZone.ID, count: Int
+  ) throws -> [(CKRecord.ID, String)] {
+    try database.write { database in
+      var targets: [(CKRecord.ID, String)] = []
+      targets.reserveCapacity(count)
+      for _ in 0..<count {
+        let id = UUID()
+        let row = TransactionRow(
+          id: id,
+          recordName: TransactionRow.recordName(for: id),
+          date: Date(),
+          payee: "Delete Target",
+          notes: nil,
+          recurPeriod: nil,
+          recurEvery: nil,
+          importOriginRawDescription: nil,
+          importOriginBankReference: nil,
+          importOriginRawAmount: nil,
+          importOriginRawBalance: nil,
+          importOriginImportedAt: nil,
+          importOriginImportSessionId: nil,
+          importOriginSourceFilename: nil,
+          importOriginParserIdentifier: nil,
+          encodedSystemFields: nil)
+        try row.insert(database)
+        let ckRecordID = CKRecord.ID(recordName: id.uuidString, zoneID: zone)
+        targets.append((ckRecordID, TransactionRow.recordType))
+      }
+      return targets
     }
   }
 }

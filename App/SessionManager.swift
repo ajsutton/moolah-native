@@ -1,6 +1,5 @@
 import Foundation
 import OSLog
-import SwiftData
 
 /// Owns the mapping from `Profile.ID` to `ProfileSession`.
 /// Multiple macOS windows share session instances through this manager.

@@ -6,7 +6,6 @@ import CloudKit
 import Foundation
 import GRDB
 import OSLog
-import SwiftData
 import SwiftUI
 
 // Launch-time container/sync/automation configuration extracted from the main
@@ -45,47 +44,17 @@ extension MoolahApp {
         // Each `--ui-testing` launch starts from a fresh in-memory
         // `ProfileContainerManager` with a different seed, but
         // `UserDefaults.moolahShared` persists across xctest launches in
-        // the same runner. Without resetting the per-record-type
-        // SwiftData → GRDB migration flags, the second launch's
-        // migrator would skip and the seeded SwiftData rows would
-        // never reach GRDB — sidebar / accounts queries return empty
-        // and downstream UI assertions time out. The same reasoning
-        // applies to `ValuationModeMigration`'s per-profile gate
-        // flags: the first launch's profile UUID is dead by the
-        // second launch, but its key would persist and short-circuit
-        // any newer profile that happens to reuse the same UUID
-        // (rare) and — more importantly — leaves stale state visible
-        // to tests that read `UserDefaults.moolahShared`. Production code
-        // paths never enter this branch.
-        SwiftDataToGRDBMigrator.resetMigrationFlags()
+        // the same runner. `ValuationModeMigration`'s per-profile gate
+        // flags would otherwise short-circuit any newer profile that
+        // happens to reuse a dead UUID (rare) and — more importantly —
+        // leave stale state visible to tests that read
+        // `UserDefaults.moolahShared`. Production code paths never enter
+        // this branch.
         ValuationModeMigration.resetGateFlags(in: .moolahShared)
         let manager = try ProfileContainerManager.forTesting()
         let profile = try UITestSeedHydrator.hydrate(seed, into: manager)
         return ContainerSetup(manager: manager, uiTestingProfileId: profile?.id)
       }
-
-      let profileSchema = Schema([ProfileRecord.self])
-      let profileStoreURL = URL.moolahScopedApplicationSupport
-        .appending(path: "Moolah-v2.store")
-      let profileConfig = ModelConfiguration(
-        url: profileStoreURL,
-        cloudKitDatabase: .none
-      )
-      let indexContainer = try ModelContainer(
-        for: profileSchema, configurations: [profileConfig])
-
-      let dataSchema = Schema([
-        AccountRecord.self,
-        TransactionRecord.self,
-        TransactionLegRecord.self,
-        InstrumentRecord.self,
-        CategoryRecord.self,
-        EarmarkRecord.self,
-        EarmarkBudgetItemRecord.self,
-        InvestmentValueRecord.self,
-        CSVImportProfileRecord.self,
-        ImportRuleRecord.self,
-      ])
 
       let profileIndexURL = URL.moolahScopedApplicationSupport
         .appending(path: "Moolah", directoryHint: .isDirectory)
@@ -93,13 +62,11 @@ extension MoolahApp {
       let profileIndexDatabase = try ProfileIndexDatabase.open(at: profileIndexURL)
 
       let manager = ProfileContainerManager(
-        indexContainer: indexContainer,
-        profileIndexDatabase: profileIndexDatabase,
-        dataSchema: dataSchema
+        profileIndexDatabase: profileIndexDatabase
       )
       return ContainerSetup(manager: manager, uiTestingProfileId: nil)
     } catch {
-      fatalError("Failed to initialize ModelContainer: \(error)")
+      fatalError("Failed to initialize ProfileContainerManager: \(error)")
     }
   }
 
@@ -138,24 +105,6 @@ extension MoolahApp {
     logger.info("CloudKit available — starting sync coordinator")
     _ = coordinator.addIndexObserver { [weak store] in
       store?.loadCloudProfiles()
-    }
-    // `GRDBProfileIndexRepository.attachSyncHooks` (wired from
-    // `SyncCoordinator.init`) already queues these saves / deletions on
-    // every repo mutation. The store-side callbacks below stay as a
-    // belt-and-braces transition until a follow-up release deletes
-    // them. Double-firing is benign — `queueSave` / `queueDeletion`
-    // are idempotent on `(recordType, id, zoneID)`.
-    store.onProfileChanged = { [weak coordinator] id in
-      let zoneID = CKRecordZone.ID(
-        zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
-      coordinator?.queueSave(
-        recordType: ProfileRow.recordType, id: id, zoneID: zoneID)
-    }
-    store.onProfileDeleted = { [weak coordinator] id in
-      let zoneID = CKRecordZone.ID(
-        zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
-      coordinator?.queueDeletion(
-        recordType: ProfileRow.recordType, id: id, zoneID: zoneID)
     }
     // Defer the engine `start()` until the SwiftData → GRDB profile-index
     // migration commits, otherwise CKSyncEngine can deliver fetched
@@ -223,15 +172,12 @@ extension MoolahApp {
   /// hook closure captures the manager and coordinator weakly so a
   /// cleanup hop after profile deletion doesn't keep them alive past
   /// the app's lifetime.
-  /// Runs the SwiftData→GRDB profile-index migration and then the
-  /// shared-registry union runner, in that order, in a single
-  /// detached `Task`. Returned for tests that need to `await` first-
-  /// launch completion.
-  static func runProfileIndexAndUnionMigrations(
+  /// Spawns the shared-registry union runner in a detached `Task`.
+  /// Returned for tests that need to `await` first-launch completion.
+  static func runUnionMigration(
     setup: ContainerSetup
   ) -> Task<Void, Never> {
     Task { [containerManager = setup.manager] in
-      await Self.runProfileIndexMigrationIfNeeded(setup: setup)
       let profileIds = await containerManager.allProfileIds()
       await SharedRegistryUnionRunner.run(
         sharedQueue: containerManager.profileIndexDatabase,
@@ -327,21 +273,60 @@ extension MoolahApp {
     defaults.set(true, forKey: key)
   }
 
-  /// Migrates the SwiftData profile index to GRDB once per install.
-  /// Logs and swallows errors — a failure leaves the GRDB database
-  /// empty and the next launch retries.
-  static func runProfileIndexMigrationIfNeeded(
-    setup: ContainerSetup,
-    defaults: UserDefaults = .moolahShared
-  ) async {
+  /// One-shot cleanup: removes the legacy SwiftData profile-index and
+  /// per-profile data stores left behind after Phase A migrated every
+  /// record type to GRDB. Gated by the `v4.swiftDataStores.cleared`
+  /// `UserDefaults` flag so it runs at most once per install. Best
+  /// effort — a missing file is silent; other failures log at
+  /// `.warning` and the flag is still set so we don't retry forever.
+  ///
+  /// `defaults` is injected with a `.moolahShared` default and
+  /// `fileManager` with a `.default` default so production callers pass
+  /// nothing while tests can supply isolated stand-ins.
+  static func cleanupLegacySwiftDataStoresOnce(
+    defaults: UserDefaults = .moolahShared,
+    fileManager: FileManager = .default
+  ) {
+    let key = "v4.swiftDataStores.cleared"
+    guard !defaults.bool(forKey: key) else { return }
+    let logger = Logger(subsystem: "com.moolah.app", category: "LegacySwiftDataCleanup")
+    let appSupport = URL.moolahScopedApplicationSupport
+    // Profile-index store ("Moolah-v2.store" + sidecars).
+    for suffix in ["", "-shm", "-wal"] {
+      let url = appSupport.appending(path: "Moolah-v2.store\(suffix)")
+      removeLegacySwiftDataStoreFile(url, fileManager: fileManager, logger: logger)
+    }
+    // Per-profile data stores ("Moolah-<UUID>.store{,-shm,-wal}").
+    if let contents = try? fileManager.contentsOfDirectory(
+      at: appSupport, includingPropertiesForKeys: nil)
+    {
+      for url in contents
+      where url.lastPathComponent.hasPrefix("Moolah-")
+        && !url.lastPathComponent.hasPrefix("Moolah-v2")
+        && (url.lastPathComponent.hasSuffix(".store")
+          || url.lastPathComponent.hasSuffix(".store-shm")
+          || url.lastPathComponent.hasSuffix(".store-wal"))
+      {
+        removeLegacySwiftDataStoreFile(url, fileManager: fileManager, logger: logger)
+      }
+    }
+    defaults.set(true, forKey: key)
+  }
+
+  private static func removeLegacySwiftDataStoreFile(
+    _ url: URL, fileManager: FileManager, logger: Logger
+  ) {
     do {
-      try await SwiftDataToGRDBMigrator().migrateProfileIndexIfNeeded(
-        indexContainer: setup.manager.indexContainer,
-        profileIndexDatabase: setup.manager.profileIndexDatabase,
-        defaults: defaults)
+      try fileManager.removeItem(at: url)
+    } catch let error as NSError
+      where error.domain == NSCocoaErrorDomain
+      && error.code == NSFileNoSuchFileError
+    {
+      // Already absent — fine.
     } catch {
-      Logger(subsystem: "com.moolah.app", category: "Setup")
-        .error("ProfileRecord migration failed: \(error, privacy: .public)")
+      logger.warning(
+        "Failed to delete legacy SwiftData store \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)"
+      )
     }
   }
 }

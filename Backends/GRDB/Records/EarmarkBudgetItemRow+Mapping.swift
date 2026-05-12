@@ -13,8 +13,7 @@ extension EarmarkBudgetItemRow {
 
   /// Builds a row from a domain `EarmarkBudgetItem`. The earmark id is
   /// supplied by the caller because `EarmarkBudgetItem` does not carry
-  /// it (mirrors `EarmarkBudgetItemRecord` which takes a separate
-  /// `earmarkId:` initializer parameter).
+  /// it.
   init(domain: EarmarkBudgetItem, earmarkId: UUID) {
     self.id = domain.id
     self.recordName = Self.recordName(for: domain.id)
@@ -25,10 +24,10 @@ extension EarmarkBudgetItemRow {
     self.encodedSystemFields = nil
   }
 
-  /// Domain projection. Mirrors `EarmarkBudgetItemRecord.toDomain` —
-  /// when `earmarkInstrument` is supplied (the typical path through
-  /// `EarmarkRepository.fetchBudget`), the amount is labelled in that
-  /// instrument; otherwise falls back to the row's own `instrumentId`.
+  /// Domain projection. When `earmarkInstrument` is supplied (the
+  /// typical path through `EarmarkRepository.fetchBudget`), the amount
+  /// is labelled in that instrument; otherwise falls back to the row's
+  /// own `instrumentId`.
   func toDomain(earmarkInstrument: Instrument? = nil) -> EarmarkBudgetItem {
     let instrument = earmarkInstrument ?? Instrument.fiat(code: instrumentId)
     return EarmarkBudgetItem(

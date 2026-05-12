@@ -53,7 +53,7 @@ extension AccountRow: CloudKitRecordConvertible {
   }
 
   /// Maps an unrecognised `type` raw value to `"asset"` so that an older
-  /// build receiving an `AccountRecord` from a newer device (e.g. with
+  /// build receiving an account row from a newer device (e.g. with
   /// `type = "crypto"` before this build added the case, or any future
   /// type after) doesn't fail the GRDB CHECK constraint and block sync
   /// for the entire zone. Logs a single warning per unknown value so the
@@ -63,7 +63,7 @@ extension AccountRow: CloudKitRecordConvertible {
     if known.contains(raw) { return raw }
     accountRowSyncLogger.warning(
       """
-      Unknown AccountRecord.type "\(raw, privacy: .public)" from CloudKit — \
+      Unknown account row type "\(raw, privacy: .public)" from CloudKit — \
       falling back to "asset" so sync isn't blocked. Update the app to a \
       build that recognises this type.
       """)

@@ -6,7 +6,6 @@ import CloudKit
 import Foundation
 import GRDB
 import OSLog
-import SwiftData
 
 extension ProfileSession {
   // MARK: - Market Data Services

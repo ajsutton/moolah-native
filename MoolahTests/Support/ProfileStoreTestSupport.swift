@@ -8,8 +8,7 @@ import Testing
 /// `addProfile` / `updateProfile` / `removeProfile` schedule the GRDB
 /// write off-actor, and `loadCloudProfiles` schedules the read
 /// off-actor too. Awaiting these tasks gives a deterministic point
-/// where the GRDB row is on disk and any `onProfileChanged` /
-/// `onProfileDeleted` callbacks have fired.
+/// where the GRDB row is on disk.
 @MainActor
 func drainPendingMutations(_ store: ProfileStore) async {
   while let task = store.pendingMutationTasks.first {

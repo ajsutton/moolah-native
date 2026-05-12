@@ -3,8 +3,7 @@
 import Foundation
 import GRDB
 
-/// One row in the `category` table — the GRDB-backed counterpart to the
-/// SwiftData `@Model` `CategoryRecord`. Self-referential via `parentId`.
+/// One row in the `category` table. Self-referential via `parentId`.
 struct CategoryRow {
   static let databaseTableName = "category"
 

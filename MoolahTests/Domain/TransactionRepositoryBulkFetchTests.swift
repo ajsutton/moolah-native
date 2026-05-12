@@ -1,12 +1,11 @@
 import Foundation
 import GRDB
-import SwiftData
 import Testing
 
 @testable import Moolah
 
 /// Correctness tests for the per-page bulk leg fetch introduced by issue #353.
-/// The old implementation issued one `FetchDescriptor<TransactionLegRecord>` per
+/// The old implementation issued one per-transaction leg fetch per
 /// transaction in the page; the new implementation issues one `IN`-query and
 /// groups legs in-memory by `transactionId`, preserving `sortOrder`.
 @Suite("TransactionRepository bulk leg fetch")

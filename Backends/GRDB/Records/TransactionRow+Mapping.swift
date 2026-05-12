@@ -13,7 +13,7 @@ extension TransactionRow {
 
   /// Builds a row from a domain `Transaction`. The legs are NOT
   /// included; the repository persists them separately into the
-  /// `transaction_leg` table. Mirrors `TransactionRecord.from(_:)`.
+  /// `transaction_leg` table.
   init(domain: Transaction) {
     self.id = domain.id
     self.recordName = Self.recordName(for: domain.id)
@@ -22,8 +22,9 @@ extension TransactionRow {
     self.notes = domain.notes
     self.recurPeriod = domain.recurPeriod?.rawValue
     self.recurEvery = domain.recurEvery
-    // ImportOrigin denormalisation — mirror the setter at
-    // `TransactionRecord.swift:78–89` exactly.
+    // ImportOrigin denormalisation: every required field flips through
+    // its own column so the optional struct rebuilds cleanly in the
+    // computed `importOrigin` accessor below.
     self.importOriginRawDescription = domain.importOrigin?.rawDescription
     self.importOriginBankReference = domain.importOrigin?.bankReference
     self.importOriginRawAmount = domain.importOrigin.map {
@@ -40,11 +41,10 @@ extension TransactionRow {
   }
 
   /// Reconstructs `ImportOrigin?` from the eight denormalised columns
-  /// iff every required field is present (mirrors the computed
-  /// property at `TransactionRecord.swift:57–77`). One missing
-  /// required field yields nil — the row was created without an
-  /// origin. This avoids surfacing a half-formed origin if a future
-  /// write partially clears the columns.
+  /// iff every required field is present. One missing required field
+  /// yields nil — the row was created without an origin. This avoids
+  /// surfacing a half-formed origin if a future write partially clears
+  /// the columns.
   var importOrigin: ImportOrigin? {
     guard let rawDescription = importOriginRawDescription,
       let rawAmountStr = importOriginRawAmount,

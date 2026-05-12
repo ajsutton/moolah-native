@@ -7,9 +7,8 @@ import GRDB
 // double-insert records.
 //
 // Per-profile data (accounts, transactions, categories, instruments) and
-// the profile index itself both live in GRDB. The legacy SwiftData
-// `ProfileRecord` class survives in the build only as the one-shot
-// migrator's source — nothing in the test hydration path touches it.
+// the profile index itself both live in GRDB. All upserts route through
+// the GRDB row types.
 extension UITestSeedHydrator {
   // MARK: - Specs
   //

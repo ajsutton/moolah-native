@@ -248,7 +248,7 @@ struct EditAccountView: View {
 
 @MainActor
 private func makePreviewView(account: Account) -> some View {
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   let accountStore = AccountStore(
     repository: backend.accounts,
     conversionService: backend.conversionService,

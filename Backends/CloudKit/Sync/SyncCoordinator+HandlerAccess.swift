@@ -20,12 +20,10 @@ extension SyncCoordinator {
     if let existing = dataHandlers[profileId] {
       return existing
     }
-    let container = try containerManager.container(for: profileId)
     let grdbRepositories = try resolveGRDBRepositories(for: profileId)
     let handler = ProfileDataSyncHandler(
       profileId: profileId,
       zoneID: zoneID,
-      modelContainer: container,
       grdbRepositories: grdbRepositories)
     dataHandlers[profileId] = handler
     return handler
@@ -38,12 +36,11 @@ extension SyncCoordinator {
   /// un-sessionized profiles — see issue #619.
   ///
   /// **Main-actor I/O.** First-access resolution opens the per-profile
-  /// `DatabaseQueue` synchronously on `@MainActor`. This matches the
-  /// pre-existing pattern of `containerManager.container(for:)` two
-  /// lines above. The work is bounded (queue init + idempotent schema
-  /// migration) and only happens once per profile per process. Moving
-  /// it off-actor would require `ProfileContainerManager` to expose
-  /// async open methods — a separate refactor.
+  /// `DatabaseQueue` synchronously on `@MainActor`. The work is bounded
+  /// (queue init + idempotent schema migration) and only happens once
+  /// per profile per process. Moving it off-actor would require
+  /// `ProfileContainerManager` to expose async open methods — a
+  /// separate refactor.
   private func resolveGRDBRepositories(for profileId: UUID) throws -> ProfileGRDBRepositories {
     if let cached = cachedGRDBRepositories[profileId] {
       return cached

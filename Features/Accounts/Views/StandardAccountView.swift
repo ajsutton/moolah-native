@@ -100,7 +100,7 @@ private func seedStandardAccountPreview(
   let account = Account(
     id: accountId, name: "Checking", type: .bank, instrument: .AUD,
     positions: [Position(instrument: .AUD, quantity: 3449.77)])
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   let store = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,

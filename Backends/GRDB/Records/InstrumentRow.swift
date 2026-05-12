@@ -3,8 +3,7 @@
 import Foundation
 import GRDB
 
-/// One row in the `instrument` table — the GRDB-backed counterpart to the
-/// SwiftData `@Model` `InstrumentRecord`.
+/// One row in the `instrument` table.
 ///
 /// **String primary key.** `Instrument` is the only synced row that
 /// uses an arbitrary string ID (e.g. `"AUD"`, `"ASX:BHP"`,

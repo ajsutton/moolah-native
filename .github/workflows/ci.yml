@@ -28,6 +28,9 @@ jobs:
       - name: Format check
         run: just format-check
 
+      - name: Verify no SwiftData imports
+        run: just no-swiftdata
+
       # Fork PRs: format-only (no network, no token). Keeps the TODO
       # convention enforced while never exposing GITHUB_TOKEN to untrusted
       # code from forks.

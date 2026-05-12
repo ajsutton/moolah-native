@@ -19,19 +19,17 @@ extension EarmarkRow {
     self.isHidden = domain.isHidden
     self.instrumentId = domain.instrument.id
     self.savingsTarget = domain.savingsGoal?.storageValue
-    // Legacy column — populated from the goal's instrument when present
-    // (matches `EarmarkRecord.from(_:)` at lines 78–79). The reader
-    // ignores this; preserving the bytes keeps the wire format identical
-    // for migrator byte-equality tests.
+    // Legacy column — populated from the goal's instrument when present.
+    // The reader ignores this; preserving the bytes keeps the wire
+    // format identical for migrator byte-equality tests.
     self.savingsTargetInstrumentId = domain.savingsGoal?.instrument.id
     self.savingsStartDate = domain.savingsStartDate
     self.savingsEndDate = domain.savingsEndDate
     self.encodedSystemFields = nil
   }
 
-  /// Domain projection. Mirrors `EarmarkRecord.toDomain(...)` line-for-line.
-  /// The savings goal is always labelled in the earmark's own `instrument`
-  /// — see `EarmarkRecord.toDomain` at lines 53–56 for the policy.
+  /// Domain projection. The savings goal is always labelled in the
+  /// earmark's own `instrument`.
   func toDomain(
     defaultInstrument: Instrument,
     positions: [Position] = [],

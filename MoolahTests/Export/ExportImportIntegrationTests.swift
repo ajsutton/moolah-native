@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -67,25 +67,13 @@ struct ExportImportIntegrationTests {
       .appendingPathComponent("moolah-test-\(UUID().uuidString).json")
   }
 
-  /// Builds a `CloudKitBackend` over an existing `ModelContainer` for the
-  /// post-import verification step. Centralised so each test isn't repeating
-  /// the constructor boilerplate. Imports go through SwiftData first; this
-  /// helper migrates the SwiftData rows into a fresh in-memory GRDB queue
-  /// and returns a backend that reads through the production code path.
+  /// Builds a `CloudKitBackend` over an existing GRDB `DatabaseQueue`
+  /// for the post-import verification step. Centralised so each test
+  /// isn't repeating the constructor boilerplate.
   private func makeCloudBackend(
-    container: ModelContainer, label: String = "Test Profile"
-  ) async throws -> CloudKitBackend {
-    let database = try ProfileDatabase.openInMemory()
-    let suiteName = "export-import-test-\(UUID().uuidString)"
-    guard let defaults = UserDefaults(suiteName: suiteName) else {
-      throw NSError(
-        domain: "ExportImportIntegrationTests",
-        code: -1,
-        userInfo: [NSLocalizedDescriptionKey: "could not allocate UserDefaults suite"])
-    }
-    try await SwiftDataToGRDBMigrator().migrateIfNeeded(
-      modelContainer: container, database: database, defaults: defaults)
-    return CloudKitBackend(
+    database: DatabaseQueue, label: String = "Test Profile"
+  ) -> CloudKitBackend {
+    CloudKitBackend(
       database: database,
       instrument: instrument,
       profileLabel: label,
@@ -155,11 +143,11 @@ struct ExportImportIntegrationTests {
       profile: profile
     )
 
-    // Import into fresh container
-    let freshContainer = try TestModelContainer.create()
+    // Import into fresh database
+    let freshDatabase = try ProfileDatabase.openInMemory()
     let result = try await coordinator.importFromFile(
       url: tempURL,
-      modelContainer: freshContainer
+      database: freshDatabase
     )
 
     #expect(result.accountCount == 1)
@@ -170,7 +158,7 @@ struct ExportImportIntegrationTests {
     #expect(result.budgetItemCount == 1)
 
     // Verify data is readable through CloudKit repositories
-    let cloudBackend = try await makeCloudBackend(container: freshContainer)
+    let cloudBackend = makeCloudBackend(database: freshDatabase)
 
     let accounts = try await cloudBackend.accounts.fetchAll()
     #expect(accounts.count == 1)

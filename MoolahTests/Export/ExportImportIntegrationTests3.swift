@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 import Testing
 
 @testable import Moolah
@@ -70,11 +69,11 @@ struct ExportImportIntegrationTests3 {
   func rejectsNonexistentFile() async throws {
     let fakeURL = FileManager.default.temporaryDirectory.appending(
       path: "nonexistent-\(UUID().uuidString).json")
-    let container = try TestModelContainer.create()
+    let database = try ProfileDatabase.openInMemory()
     let coordinator = ExportCoordinator()
 
     await #expect(throws: ExportError.self) {
-      _ = try await coordinator.importFromFile(url: fakeURL, modelContainer: container)
+      _ = try await coordinator.importFromFile(url: fakeURL, database: database)
     }
   }
 }
