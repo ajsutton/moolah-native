@@ -19,7 +19,7 @@
 | File | Responsibility |
 |---|---|
 | `Shared/UserDefaults+MoolahShared.swift` | Static `UserDefaults.moolahShared` returning a suite scoped to the resolved CloudKit env, plus `makeSharedSuite(for:)` factory so tests can verify both env cases without process-level Info.plist swapping. |
-| `Shared/KeychainServices.swift` | `enum KeychainServices` with `apiKeys` (env-scoped service string for the CoinGecko / Alchemy keychain rows) and `apiKeysService(for:)` for tests. |
+| `Shared/KeychainServices.swift` | `enum KeychainServices` with `apiKeys` (env-scoped service string for the CoinGecko / Alchemy keychain rows) and `makeApiKeysService(for:)` for tests. |
 | `MoolahTests/Shared/UserDefaultsMoolahSharedTests.swift` | Verifies suite-name format (`rocks.moolah.app.development` / `rocks.moolah.app.production`) and that `moolahShared` is not `.standard`. |
 | `MoolahTests/Shared/KeychainServicesTests.swift` | Verifies service-string format for both env values. |
 
@@ -237,17 +237,17 @@ import Testing
 
 @Suite("KeychainServices")
 struct KeychainServicesTests {
-  @Test("apiKeysService(for: .development) returns dotted lowercase env suffix")
+  @Test("makeApiKeysService(for: .development) returns dotted lowercase env suffix")
   func testDevelopmentApiKeysService() {
     #expect(
-      KeychainServices.apiKeysService(for: .development)
+      KeychainServices.makeApiKeysService(for: .development)
         == "com.moolah.api-keys.development")
   }
 
-  @Test("apiKeysService(for: .production) returns dotted lowercase env suffix")
+  @Test("makeApiKeysService(for: .production) returns dotted lowercase env suffix")
   func testProductionApiKeysService() {
     #expect(
-      KeychainServices.apiKeysService(for: .production)
+      KeychainServices.makeApiKeysService(for: .production)
         == "com.moolah.api-keys.production")
   }
 
@@ -256,7 +256,7 @@ struct KeychainServicesTests {
     let resolved = CloudKitEnvironment.resolved()
     #expect(
       KeychainServices.apiKeys
-        == KeychainServices.apiKeysService(for: resolved))
+        == KeychainServices.makeApiKeysService(for: resolved))
   }
 }
 ```
@@ -285,12 +285,13 @@ enum KeychainServices {
   /// Service string for API-key keychain rows (CoinGecko, Alchemy)
   /// scoped to the resolved CloudKit environment. Production code uses
   /// this in place of the previous `"com.moolah.api-keys"` literal.
-  static var apiKeys: String { apiKeysService(for: .resolved()) }
+  static var apiKeys: String { makeApiKeysService(for: .resolved()) }
 
-  /// Builder used by `apiKeys`. Exposed so tests can verify the
+  /// Factory used by `apiKeys`. Exposed so tests can verify the
   /// service-string format for both environments without process-level
-  /// Info.plist swapping. Mirrors `CloudKitEnvironment.resolve(from:)`.
-  static func apiKeysService(for env: CloudKitEnvironment) -> String {
+  /// Info.plist swapping. Mirrors `CloudKitEnvironment.resolve(from:)`
+  /// and the `makeSharedSuite(for:)` factory on `UserDefaults`.
+  static func makeApiKeysService(for env: CloudKitEnvironment) -> String {
     "com.moolah.api-keys.\(env.storageSubdirectory.lowercased())"
   }
 }
@@ -723,4 +724,4 @@ After the PR opens, follow the project's merge-queue convention — add it to th
 
 **Placeholder scan:** No "TBD", "implement later", or unspecified test bodies — every code step has full code or a precise diff.
 
-**Type consistency:** `moolahShared` (let) and `makeSharedSuite(for:)` (func) match across all references; `apiKeys` (var) and `apiKeysService(for:)` (func) match across all five references. Factory methods use `make` per `guides/CODE_GUIDE.md` §4.
+**Type consistency:** `moolahShared` (let) and `makeSharedSuite(for:)` (func) match across all references; `apiKeys` (var) and `makeApiKeysService(for:)` (func) match across all five references. Factory methods use `make` per `guides/CODE_GUIDE.md` §4.
