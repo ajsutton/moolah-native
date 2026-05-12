@@ -23,7 +23,7 @@ import SwiftUI
   ///   - minTopHeight: Minimum height of the top pane when dragging.
   ///   - minBottomHeight: Minimum height of the bottom pane.
   ///   - defaults: `UserDefaults` instance probed for an existing
-  ///     autosaved divider position. Defaults to `.standard`; tests can
+  ///     autosaved divider position. Defaults to `.moolahShared`; tests can
   ///     inject an isolated suite to avoid leaking saved frames between
   ///     runs.
   ///   - top: The top pane content.

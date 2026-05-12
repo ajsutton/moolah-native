@@ -103,7 +103,7 @@ struct MoolahApp: App {
       storeDefaults = UserDefaults(suiteName: suiteName) ?? .standard
       storeDefaults.removePersistentDomain(forName: suiteName)
     } else {
-      storeDefaults = .standard
+      storeDefaults = .moolahShared
     }
     let store = ProfileStore(
       defaults: storeDefaults,

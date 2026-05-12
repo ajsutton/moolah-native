@@ -356,6 +356,7 @@ No commit — this is a read-only sign-off.
 ## Task 4: Defaults Swap (production callers)
 
 **Files:**
+- Modify: `App/MoolahApp.swift` — production branch of `MoolahApp.init` previously assigned `storeDefaults = .standard` explicitly; flip to `.moolahShared`. (Caught by the sharpened Task 6 grep, not the parameter-default form.)
 - Modify: `App/MoolahApp+Setup.swift`
 - Modify: `App/SharedRegistryUnionRunner.swift`
 - Modify: `Backends/CloudKit/Sync/SyncCoordinator.swift`
@@ -676,10 +677,17 @@ EOF
 - [ ] **Step 1: Confirm no `.standard` defaults survive in production code**
 
 ```bash
-grep -rn "UserDefaults = .standard\|UserDefaults\s*=\s*.standard" --include="*.swift" App Backends Features Shared
+# Catches both parameter-default form (`defaults: UserDefaults = .standard`)
+# and the assignment form (`storeDefaults = .standard`). The original review
+# round of this plan only had the first pattern, which silently missed
+# `App/MoolahApp.swift`'s explicit `storeDefaults = .standard` assignment in
+# the production branch of `MoolahApp.init` — re-introducing that exact bug
+# would slip past Step 1 if we kept the original pattern.
+grep -rn '= \.standard\|= UserDefaults\.standard' --include="*.swift" App Backends Features Shared \
+  | grep -v 'UserDefaults(suiteName: suiteName) ?? .standard'
 ```
 
-Expected: zero hits. Hits inside `MoolahTests/`, `MoolahUITests_macOS/`, `UITestSupport/` are fine. Hits inside `MoolahApp.swift`'s UI-testing branch (which uses `UserDefaults(suiteName: "moolah.uitests.<UUID>")`) are also fine — that branch never reads `.standard` as a fallback for production state.
+Expected: zero hits. The allow-listed pattern (`UserDefaults(suiteName: suiteName) ?? .standard`) is the unreachable fallback inside `MoolahApp.swift`'s UI-testing branch and inside `Shared/UserDefaults+MoolahShared.swift` itself — both are intentional. Hits inside `MoolahTests/`, `MoolahUITests_macOS/`, `UITestSupport/` are fine.
 
 - [ ] **Step 2: Confirm no remaining `com.moolah.api-keys` literal**
 

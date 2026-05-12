@@ -64,7 +64,7 @@ struct SwiftDataToGRDBMigrator {
   /// All `UserDefaults` keys that gate this migrator. Used by
   /// `resetMigrationFlags(in:)` to reset state between UI test launches —
   /// each test launches a fresh in-memory `ProfileContainerManager` with
-  /// new seed data, but `UserDefaults.standard` persists across xctest
+  /// new seed data, but `UserDefaults.moolahShared` persists across xctest
   /// launches in the same runner. Without resetting, the second test's
   /// migrator would skip and the seeded SwiftData rows would never reach
   /// GRDB. Production launches never call this reset.
