@@ -9,7 +9,7 @@ enum KeychainServices {
   /// Service string for API-key keychain rows (CoinGecko, Alchemy)
   /// scoped to the resolved CloudKit environment. Production code uses
   /// this in place of the previous `"com.moolah.api-keys"` literal.
-  static var apiKeys: String { makeApiKeysService(for: .resolved()) }
+  static let apiKeys: String = makeApiKeysService(for: .resolved())
 
   /// Factory used by `apiKeys`. Exposed so tests can verify the
   /// service-string format for both environments without process-level

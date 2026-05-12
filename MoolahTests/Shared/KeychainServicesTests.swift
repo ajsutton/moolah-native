@@ -6,14 +6,14 @@ import Testing
 @Suite("KeychainServices")
 struct KeychainServicesTests {
   @Test("makeApiKeysService(for: .development) returns dotted lowercase env suffix")
-  func testMakeApiKeysServiceForDevelopment() {
+  func testDevelopmentServiceStringFormat() {
     #expect(
       KeychainServices.makeApiKeysService(for: .development)
         == "com.moolah.api-keys.development")
   }
 
   @Test("makeApiKeysService(for: .production) returns dotted lowercase env suffix")
-  func testMakeApiKeysServiceForProduction() {
+  func testProductionServiceStringFormat() {
     #expect(
       KeychainServices.makeApiKeysService(for: .production)
         == "com.moolah.api-keys.production")
