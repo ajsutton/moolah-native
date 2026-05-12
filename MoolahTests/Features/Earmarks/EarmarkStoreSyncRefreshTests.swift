@@ -53,6 +53,13 @@ struct EarmarkStoreSyncRefreshTests {
     // ticks that arrive AFTER the backend write.
     await store.drainPendingEmissions()
     store.stopObserving()
+    // `stopObserving()` returns the moment `Task.cancel()` is issued;
+    // the observation task's `for await` loops only notice cancellation
+    // on the next stream check, so an in-flight emission triggered by
+    // the following `create(...)` can race the cancel under CI load
+    // and a 200 ms `didEmitWithin` window then flakes. Awaiting
+    // termination makes the cancel deterministic.
+    await store.awaitObservationTermination()
 
     _ = try await backend.earmarks.create(
       Earmark(name: "After cancel", instrument: .defaultTestInstrument)

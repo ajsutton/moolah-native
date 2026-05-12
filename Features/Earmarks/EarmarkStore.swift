@@ -159,12 +159,29 @@ final class EarmarkStore {
   /// `ProfileSession.cleanupSync(coordinator:)` AFTER any
   /// `deleteAllLocalData()` call so the empty-state transition is
   /// emitted to subscribed views before cancellation.
+  ///
+  /// Returns the moment `Task.cancel()` is issued — the underlying
+  /// `for await` loops in `observe()` only notice cancellation on the
+  /// next stream check, so an in-flight emission can race the cancel.
+  /// Tests asserting "no emission after stop" must call
+  /// `awaitObservationTermination()` between this method and the
+  /// assertion. Production callers (`cleanupSync`) don't need
+  /// determinism — no backend writes happen after teardown.
   func stopObserving() {
     observationTask?.cancel()
-    observationTask = nil
     conversionTask?.cancel()
-    conversionTask = nil
     showHiddenTask?.cancel()
+  }
+
+  /// Test-only. Awaits the observation task chain to fully terminate
+  /// after `stopObserving()`, then nils the references. See
+  /// `stopObserving()` for the race this exists to close.
+  func awaitObservationTermination() async {
+    await observationTask?.value
+    observationTask = nil
+    await conversionTask?.value
+    conversionTask = nil
+    await showHiddenTask?.value
     showHiddenTask = nil
   }
 

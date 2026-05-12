@@ -211,16 +211,28 @@ final class TransactionStore {
   /// `ProfileSession.cleanupSync(coordinator:)` AFTER any
   /// `deleteAllLocalData()` call so the empty-state transition is
   /// emitted to subscribed views before cancellation.
+  ///
+  /// Returns the moment `Task.cancel()` is issued — the underlying
+  /// `for await` loops only notice cancellation on the next stream
+  /// check. Tests asserting "no emission after stop" must call
+  /// `awaitObservationTermination()` before the assertion.
   func stopObserving() {
     rateObservationTask?.cancel()
-    rateObservationTask = nil
     subscriptionTask?.cancel()
-    subscriptionTask = nil
     subscriptionRestartContinuation?.finish()
     subscriptionRestartContinuation = nil
     // Wake any `load(filter:)` callers blocked on a first emission so
     // they don't hang past tear-down.
     wakePendingLoadAwaiters()
+  }
+
+  /// Test-only. Awaits the observation tasks to fully terminate after
+  /// `stopObserving()`, then nils the references.
+  func awaitObservationTermination() async {
+    await rateObservationTask?.value
+    rateObservationTask = nil
+    await subscriptionTask?.value
+    subscriptionTask = nil
   }
 
   /// Subscribes to `conversionService.observeRates()` /

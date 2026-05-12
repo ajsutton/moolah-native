@@ -106,8 +106,19 @@ final class CategoryStore {
   /// `ProfileSession.cleanupSync(coordinator:)` AFTER any
   /// `deleteAllLocalData()` call so the empty-state transition is
   /// emitted to subscribed views before cancellation.
+  ///
+  /// Returns the moment `Task.cancel()` is issued — the underlying
+  /// `for await` loops only notice cancellation on the next stream
+  /// check. Tests asserting "no emission after stop" must call
+  /// `awaitObservationTermination()` before the assertion.
   func stopObserving() {
     observationTask?.cancel()
+  }
+
+  /// Test-only. Awaits the observation task to fully terminate after
+  /// `stopObserving()`, then nils the reference.
+  func awaitObservationTermination() async {
+    await observationTask?.value
     observationTask = nil
   }
 

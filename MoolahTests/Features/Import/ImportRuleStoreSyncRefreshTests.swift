@@ -52,6 +52,11 @@ struct ImportRuleStoreSyncRefreshTests {
     // ticks that arrive AFTER the backend write.
     await store.drainPendingEmissions()
     store.stopObserving()
+    // See `EarmarkStoreSyncRefreshTests` for why we await termination —
+    // `stopObserving()` only issues `Task.cancel()`; an in-flight
+    // emission triggered by the following `create(...)` can race the
+    // cancel under CI load.
+    await store.awaitObservationTermination()
 
     _ = try await backend.importRules.create(rule(name: "After cancel", position: 0))
     let didEmit = await store.didEmitWithin(timeout: .milliseconds(200))
