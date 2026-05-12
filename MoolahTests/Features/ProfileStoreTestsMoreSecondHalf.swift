@@ -17,47 +17,6 @@ struct ProfileStoreTestsMoreSecondHalf {
     Profile(label: label)
   }
 
-  @Test("updateProfile calls onProfileChanged for CloudKit profiles")
-  func updateCloudProfileCallsOnProfileChanged() async throws {
-    let defaults = makeDefaults()
-    let containerManager = try ProfileContainerManager.forTesting()
-    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
-    await drainPendingMutations(store)
-
-    var profile = makeProfile(label: "Cloud")
-    store.addProfile(profile)
-    await drainPendingMutations(store)
-
-    var changedIDs: [UUID] = []
-    store.onProfileChanged = { id in changedIDs.append(id) }
-
-    profile.label = "Updated"
-    store.updateProfile(profile)
-    await drainPendingMutations(store)
-
-    #expect(changedIDs == [profile.id])
-  }
-
-  @Test("removeProfile calls onProfileDeleted for CloudKit profiles")
-  func removeCloudProfileCallsOnProfileDeleted() async throws {
-    let defaults = makeDefaults()
-    let containerManager = try ProfileContainerManager.forTesting()
-    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
-    await drainPendingMutations(store)
-
-    let profile = makeProfile(label: "Cloud")
-    store.addProfile(profile)
-    await drainPendingMutations(store)
-
-    var deletedIDs: [UUID] = []
-    store.onProfileDeleted = { id in deletedIDs.append(id) }
-
-    store.removeProfile(profile.id)
-    await drainPendingMutations(store)
-
-    #expect(deletedIDs == [profile.id])
-  }
-
   @Test("loadCloudProfiles does not clean up profiles on initial load")
   func initialLoadDoesNotCleanUp() async throws {
     let defaults = makeDefaults()

@@ -1,6 +1,5 @@
 // swiftlint:disable multiline_arguments
 
-import SwiftData
 import SwiftUI
 
 struct UpcomingView: View {
@@ -114,7 +113,7 @@ private func previewSeedTransactions(
   let categories = Categories(from: [
     Category(id: categoryId, name: "Rent", parentId: nil)
   ])
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   let store = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,

@@ -3,7 +3,6 @@ import Foundation
 import GRDB
 import OSLog
 import Observation
-import SwiftData
 
 /// **`Shared/` location is justified.** `DATABASE_CODE_GUIDE.md` §2 scopes
 /// `DatabaseQueue` ownership to `Backends/GRDB/`, `ProfileSession`, and
@@ -19,14 +18,10 @@ import SwiftData
 @Observable
 @MainActor
 final class ProfileContainerManager {
-  let indexContainer: ModelContainer
-  private let dataSchema: Schema
   /// `true` when the manager was created via `.forTesting()` — every
-  /// SwiftData container is in-memory and so must the per-profile GRDB
-  /// queue be (otherwise UI tests would write `data.sqlite` files to the
-  /// host's Application Support).
+  /// per-profile GRDB queue is in-memory (otherwise UI tests would
+  /// write `data.sqlite` files to the host's Application Support).
   let inMemory: Bool
-  private var containers: [UUID: ModelContainer] = [:]
   /// Per-profile GRDB queue cache. Required so `ProfileSession.init` and
   /// the import path see the same queue when the manager is in-memory
   /// (`ProfileDatabase.openInMemory()` returns a fresh queue every
@@ -41,49 +36,19 @@ final class ProfileContainerManager {
   /// profile-index handler) already reaches for the manager.
   let profileIndexRepository: GRDBProfileIndexRepository
 
-  /// Underlying GRDB queue for `profile-index.sqlite`. Retained so the
-  /// one-shot SwiftData → GRDB profile-index migrator can write through
-  /// the same queue without re-opening the database (which would run
-  /// the schema migrator twice). Kept off the repository's public
-  /// surface so app-side callers go through the typed
-  /// `profileIndexRepository` instead of the raw queue.
+  /// Underlying GRDB queue for `profile-index.sqlite`. Kept off the
+  /// repository's public surface so app-side callers go through the
+  /// typed `profileIndexRepository` instead of the raw queue.
   let profileIndexDatabase: DatabaseQueue
 
   init(
-    indexContainer: ModelContainer,
     profileIndexDatabase: DatabaseQueue,
-    dataSchema: Schema,
     inMemory: Bool = false
   ) {
-    self.indexContainer = indexContainer
-    self.dataSchema = dataSchema
     self.inMemory = inMemory
     self.profileIndexDatabase = profileIndexDatabase
     self.profileIndexRepository = GRDBProfileIndexRepository(
       database: profileIndexDatabase)
-  }
-
-  func container(for profileId: UUID) throws -> ModelContainer {
-    if let existing = containers[profileId] {
-      return existing
-    }
-    let config: ModelConfiguration
-    if inMemory {
-      config = ModelConfiguration(isStoredInMemoryOnly: true)
-    } else {
-      let storeName = "Moolah-\(profileId.uuidString)"
-      let url = URL.moolahScopedApplicationSupport
-        .appending(path: "Moolah-\(profileId.uuidString).store")
-      config = ModelConfiguration(storeName, url: url, cloudKitDatabase: .none)
-    }
-    let container = try ModelContainer(for: dataSchema, configurations: [config])
-    containers[profileId] = container
-    return container
-  }
-
-  /// Returns whether a cached container exists for the given profile.
-  func hasContainer(for profileId: UUID) -> Bool {
-    containers[profileId] != nil
   }
 
   /// Opens (and caches) the per-profile GRDB queue. In-memory managers
@@ -137,14 +102,13 @@ final class ProfileContainerManager {
     }
   }
 
-  /// Evicts the in-memory `ModelContainer` and per-profile `DatabaseQueue`
-  /// cache entries for a profile without touching any on-disk state.
-  /// Idempotent — callers that may run before `deleteStore` (e.g. an
-  /// import-rollback path that wants the synchronous eviction without
-  /// the disk teardown) call this first; `deleteStore` invokes it
-  /// internally so a single eviction holds across both paths.
+  /// Evicts the per-profile `DatabaseQueue` cache entry for a profile
+  /// without touching any on-disk state. Idempotent — callers that may
+  /// run before `deleteStore` (e.g. an import-rollback path that wants
+  /// the synchronous eviction without the disk teardown) call this
+  /// first; `deleteStore` invokes it internally so a single eviction
+  /// holds across both paths.
   func evictCachedStore(for profileId: UUID) {
-    containers.removeValue(forKey: profileId)
     databases.removeValue(forKey: profileId)
   }
 
@@ -153,14 +117,7 @@ final class ProfileContainerManager {
 
     guard !inMemory else { return }
 
-    let basePath = "Moolah-\(profileId.uuidString).store"
-    let baseURL = URL.moolahScopedApplicationSupport.appending(path: basePath)
     let fileManager = FileManager.default
-    for suffix in ["", "-shm", "-wal"] {
-      let url = baseURL.deletingLastPathComponent()
-        .appending(path: baseURL.lastPathComponent + suffix)
-      removeIfPresent(url, fileManager: fileManager, label: "SwiftData store file")
-    }
 
     // Delete the sync state file
     let syncStateURL = URL.moolahScopedApplicationSupport
@@ -168,8 +125,8 @@ final class ProfileContainerManager {
     removeIfPresent(syncStateURL, fileManager: fileManager, label: "sync state file")
 
     // Delete the per-profile GRDB directory (data.sqlite + -wal/-shm
-    // sidecars) added in the rate-storage-grdb refactor. Removing the
-    // directory cleans up sidecars without enumerating each suffix.
+    // sidecars). Removing the directory cleans up sidecars without
+    // enumerating each suffix.
     let dbDirectory = ProfileSession.profileDatabaseDirectory(for: profileId)
     removeIfPresent(dbDirectory, fileManager: fileManager, label: "GRDB profile directory")
 
@@ -249,31 +206,11 @@ final class ProfileContainerManager {
     }
   #endif
 
-  /// Creates a test-only manager with in-memory stores.
+  /// Creates a test-only manager with an in-memory profile-index DB.
   static func forTesting() throws -> ProfileContainerManager {
-    let indexSchema = Schema([ProfileRecord.self])
-    let indexConfig = ModelConfiguration(isStoredInMemoryOnly: true)
-    let indexContainer = try ModelContainer(for: indexSchema, configurations: [indexConfig])
-
-    let dataSchema = Schema([
-      AccountRecord.self,
-      TransactionRecord.self,
-      TransactionLegRecord.self,
-      InstrumentRecord.self,
-      CategoryRecord.self,
-      EarmarkRecord.self,
-      EarmarkBudgetItemRecord.self,
-      InvestmentValueRecord.self,
-      CSVImportProfileRecord.self,
-      ImportRuleRecord.self,
-    ])
-
     let profileIndexDatabase = try ProfileIndexDatabase.openInMemory()
-
     return ProfileContainerManager(
-      indexContainer: indexContainer,
       profileIndexDatabase: profileIndexDatabase,
-      dataSchema: dataSchema,
       inMemory: true
     )
   }

@@ -29,14 +29,13 @@ extension InstrumentRow {
 
   /// Builds the canonical CloudKit `recordName` for an instrument id.
   /// Instruments are string-keyed; the recordName is the bare id with no
-  /// `recordType|` prefix (mirrors `InstrumentRecord+CloudKit.swift`).
+  /// `recordType|` prefix.
   static func recordName(for id: String) -> String { id }
 
   /// Builds a row from a domain `Instrument`. The provider-mapping fields
   /// are left nil here — they are only populated via
   /// `GRDBInstrumentRegistryRepository.registerCrypto(_:mapping:)` /
-  /// `registerStock(_:)` (mirroring `InstrumentRecord.from(_:)` which
-  /// also omits them).
+  /// `registerStock(_:)`.
   init(domain: Instrument) {
     self.id = domain.id
     self.recordName = Self.recordName(for: domain.id)

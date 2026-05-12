@@ -1,4 +1,3 @@
-import SwiftData
 import SwiftUI
 
 struct CategoriesView: View {
@@ -352,7 +351,7 @@ private struct CreateCategorySheet: View {
 }
 
 #Preview("Categories List") {
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   let store = CategoryStore(repository: backend.categories)
 
   NavigationStack {

@@ -127,13 +127,18 @@ struct CustomTradeCSVParser: CSVParser, Sendable {
   ) -> [ParsedLeg] {
     var legs: [ParsedLeg] = []
 
+    // Single-sided rows (deposits, dividends, withdrawals) aren't trades —
+    // type them as income or expense so downstream icons, category rules,
+    // and reporting treat them correctly.
+    let isTrade = sellAmount != 0 && buyAmount != 0
+
     if sellAmount != 0 {
       legs.append(
         ParsedLeg(
           accountId: nil,
           instrument: instrument(for: sellUnit),
           quantity: -sellAmount,
-          type: .trade,
+          type: isTrade ? .trade : .expense,
           isInstrumentPlaceholder: sellUnit == "AUD"
         ))
     }
@@ -144,7 +149,7 @@ struct CustomTradeCSVParser: CSVParser, Sendable {
           accountId: nil,
           instrument: instrument(for: buyUnit),
           quantity: buyAmount,
-          type: .trade,
+          type: isTrade ? .trade : .income,
           isInstrumentPlaceholder: buyUnit == "AUD"
         ))
     }

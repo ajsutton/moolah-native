@@ -3,7 +3,6 @@ import Foundation
 import GRDB
 import OSLog
 import Observation
-import SwiftData
 
 /// Coordinates exporting a profile to a JSON file and importing one back.
 /// The coordinator is observable so the UI can reflect progress.
@@ -76,16 +75,14 @@ final class ExportCoordinator {
     state = .idle
   }
 
-  /// Imports data from a JSON file into the per-profile SwiftData
-  /// container and GRDB queue.
+  /// Imports data from a JSON file into the per-profile GRDB queue.
   ///
   /// - Parameters:
   ///   - url: The file URL to read the exported JSON from
-  ///   - modelContainer: The target SwiftData container to import data into
   ///   - database: The target GRDB queue to import data into. The runtime
-  ///     stores read exclusively from GRDB, so the import must mirror
-  ///     every record type into `data.sqlite` for the imported profile to
-  ///     be visible to its session.
+  ///     stores read exclusively from GRDB, so the import writes every
+  ///     record type into `data.sqlite` for the imported profile to be
+  ///     visible to its session.
   ///   - profileId: The UUID of the new profile that owns the stores. Required
   ///     when `syncCoordinator` is non-nil so imported records can be queued for upload.
   ///   - syncCoordinator: Optional sync coordinator. When provided, all imported records
@@ -93,8 +90,7 @@ final class ExportCoordinator {
   /// - Returns: The import result with counts of imported records
   func importFromFile(
     url: URL,
-    modelContainer: ModelContainer,
-    database: (any DatabaseWriter)? = nil,
+    database: any DatabaseWriter,
     profileId: UUID? = nil,
     syncCoordinator: SyncCoordinator? = nil
   ) async throws -> ImportResult {
@@ -115,15 +111,9 @@ final class ExportCoordinator {
       throw ExportError.importFailed(underlying: error)
     }
 
-    // Tests that don't pin a queue (legacy SwiftData-only flow) get a
-    // throwaway in-memory GRDB queue so the importer can still write
-    // through both halves of the dual mirror without surfacing as a
-    // signature break in their code.
-    let resolvedDatabase = try database ?? ProfileDatabase.openInMemory()
     return try await importFromData(
       exported,
-      into: modelContainer,
-      database: resolvedDatabase,
+      database: database,
       profileId: profileId,
       syncCoordinator: syncCoordinator
     )
@@ -135,7 +125,6 @@ final class ExportCoordinator {
   /// avoid reading and decoding the file a second time.
   private func importFromData(
     _ exported: ExportedData,
-    into modelContainer: ModelContainer,
     database: any DatabaseWriter,
     profileId: UUID?,
     syncCoordinator: SyncCoordinator?
@@ -147,7 +136,6 @@ final class ExportCoordinator {
     state = .importing(step: "saving", progress: 0.3)
 
     let importer = CloudKitDataImporter(
-      modelContainer: modelContainer,
       database: database,
       currencyCode: exported.currencyCode
     )
@@ -163,7 +151,7 @@ final class ExportCoordinator {
     let verifier = ImportVerifier()
     let verification: ImportVerificationResult = try await verifier.verify(
       exported: exported,
-      modelContainer: modelContainer
+      database: database
     )
 
     if !verification.countMatch {
@@ -190,8 +178,8 @@ final class ExportCoordinator {
   ///
   /// Reads the file, constructs a fresh `Profile` from the embedded label,
   /// registers it via `profileStore`, runs the import, and rolls back
-  /// (removes the profile, which also deletes the SwiftData store) if the
-  /// import throws. Returns the new profile's `id` on success.
+  /// (removes the profile, which also deletes the per-profile GRDB store)
+  /// if the import throws. Returns the new profile's `id` on success.
   func importNewProfileFromFile(
     url: URL,
     profileStore: ProfileStore,
@@ -223,11 +211,9 @@ final class ExportCoordinator {
     profileStore.addProfile(newProfile)
 
     do {
-      let container = try containerManager.container(for: newProfile.id)
       let database = try containerManager.database(for: newProfile.id)
       _ = try await importFromData(
         exported,
-        into: container,
         database: database,
         profileId: newProfile.id,
         syncCoordinator: syncCoordinator

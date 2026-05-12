@@ -2,7 +2,6 @@ import CloudKit
 import Foundation
 import GRDB
 import OSLog
-import SwiftData
 
 /// Holds the backend and all stores for a single profile.
 /// Each profile gets its own isolated URLSession, cookie storage, and keychain entry.
@@ -107,29 +106,22 @@ final class ProfileSession: Identifiable {
   /// `ProfileSession+SyncCleanup.swift` can drain the list on teardown.
   var crossStoreUpdateTasks: [Task<Void, Never>] = []
 
-  /// Stashed reference to the container manager so `setUp()` can open the
-  /// per-profile SwiftData container and run the SwiftData → GRDB
-  /// migration after init returns. `nil` for tests / previews that pass
-  /// `containerManager: nil` (those have nothing to migrate from).
-  private let containerManagerForMigration: ProfileContainerManager?
-
   /// Tracks the in-flight (or completed) `setUp()` call so callers can
-  /// `await session.setUp()` without re-running the migration. Set by
-  /// `setUp()` on its first invocation; subsequent calls return the
-  /// same task. `nil` until the first call. Tracked here (rather than
-  /// in `SessionManager`) so any caller with the session reference can
-  /// await migration completion. Module-internal so
+  /// `await session.setUp()` without re-running it. Set by `setUp()` on
+  /// its first invocation; subsequent calls return the same task. `nil`
+  /// until the first call. Tracked here (rather than in
+  /// `SessionManager`) so any caller with the session reference can
+  /// await bootstrap completion. Module-internal so
   /// `ProfileSession+SyncCleanup.swift` can cancel a pending bootstrap
   /// during teardown.
   var setUpTask: Task<Void, any Error>?
 
   /// Synchronous initialiser — opens the per-profile GRDB queue and
-  /// builds every store / service the session exposes. Does **not** run
-  /// the SwiftData → GRDB migration; that lives in `setUp()` so the
-  /// GRDB writes happen off `@MainActor` (issue #575). Callers must
-  /// invoke `try await session.setUp()` before any code path expects
-  /// the migrated rows to be visible — `SessionManager.session(for:)`
-  /// schedules this automatically when it creates the session.
+  /// builds every store / service the session exposes. Callers must
+  /// invoke `try await session.setUp()` before any code path that
+  /// expects post-bootstrap state (e.g. `ValuationModeMigration`
+  /// effects) to be visible — `SessionManager.session(for:)` schedules
+  /// this automatically when it creates the session.
   init(
     profile: Profile,
     containerManager: ProfileContainerManager? = nil,
@@ -138,7 +130,6 @@ final class ProfileSession: Identifiable {
   ) throws {
     self.profile = profile
     self.profileID = profile.id
-    self.containerManagerForMigration = containerManager
 
     let resolvedDatabase = try Self.resolveDatabase(
       override: database, profile: profile, containerManager: containerManager)
@@ -294,62 +285,20 @@ final class ProfileSession: Identifiable {
     await folderScanner.scanForNewFiles()
   }
 
-  /// Drives the one-shot SwiftData → GRDB migration for the given
-  /// profile's SwiftData container and GRDB queue. Skipped when no
-  /// `containerManager` is supplied (tests / previews build a fresh
-  /// in-memory GRDB queue and have nothing to migrate from).
-  ///
-  /// MUST run before stores read from `data.sqlite` so CKSyncEngine
-  /// and the GRDB repositories read a fully populated database on
-  /// first launch.
-  ///
-  /// `async throws` so each per-type migrator can hand off the heavy
-  /// GRDB upserts to GRDB's writer queue via `await database.write`
-  /// rather than holding `@MainActor` for the duration (issue #575).
-  /// The bounded SwiftData fetches stay on `@MainActor` because that's
-  /// where the SwiftData `mainContext` requires them.
-  static func runSwiftDataToGRDBMigrationIfNeeded(
-    profileId: UUID,
-    containerManager: ProfileContainerManager?,
-    database: DatabaseQueue
-  ) async throws {
-    guard let containerManager else { return }
-    let modelContainer = try containerManager.container(for: profileId)
-    try await SwiftDataToGRDBMigrator().migrateIfNeeded(
-      modelContainer: modelContainer, database: database)
-  }
-
   /// Runs the bootstrap migrations off `@MainActor` and reloads the
   /// affected stores. Idempotent: subsequent calls return the same
   /// task so callers can `await session.setUp()` from multiple sites
   /// (UI test seed setup, `SessionManager.session(for:)`, etc.) without
   /// re-running anything.
   ///
-  /// Phase 1 — SwiftData → GRDB migration.
-  /// Throws whatever the migrator throws (the caller, typically
-  /// `SessionManager`, surfaces the error to the user). A throw leaves
-  /// the migration's `UserDefaults` flags unset so the next launch
-  /// retries.
-  ///
-  /// Phase 2 — `ValuationModeMigration`.
-  /// Runs after Phase 1 commits so the GRDB-backed repositories see
-  /// every account / `InvestmentValue` row. Non-fatal: errors are
-  /// logged but do not propagate, because read sites still auto-detect
-  /// at this rollout stage and the next launch will retry. Both phases
-  /// share the same `setUpTask` so the per-session idempotency guard
-  /// covers the whole bootstrap, not just Phase 1.
+  /// `ValuationModeMigration` is non-fatal: errors are logged but do
+  /// not propagate, because read sites still auto-detect at this
+  /// rollout stage and the next launch will retry.
   func setUp() async throws {
     if let existing = setUpTask {
       return try await existing.value
     }
-    let profileId = profile.id
-    let containerManager = containerManagerForMigration
-    let database = database
     let task = Task<Void, any Error> {
-      try await Self.runSwiftDataToGRDBMigrationIfNeeded(
-        profileId: profileId,
-        containerManager: containerManager,
-        database: database)
       await self.runValuationModeMigration()
     }
     setUpTask = task

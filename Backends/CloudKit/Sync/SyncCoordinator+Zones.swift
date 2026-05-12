@@ -1,7 +1,6 @@
 @preconcurrency import CloudKit
 import Foundation
 import OSLog
-import SwiftData
 
 // Zone-level handling for `SyncCoordinator`: proactive zone creation, remote
 // zone-deletion responses, and iCloud account-change handling.

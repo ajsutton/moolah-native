@@ -3,10 +3,9 @@
 import Foundation
 import GRDB
 
-/// One row in the `transaction_leg` table — the GRDB-backed counterpart
-/// to the SwiftData `@Model` `TransactionLegRecord`. The leg's
-/// `instrument` resolves to a full `Instrument` value at the boundary
-/// of `+Mapping.swift` because `TransactionLeg` carries the resolved
+/// One row in the `transaction_leg` table. The leg's `instrument`
+/// resolves to a full `Instrument` value at the boundary of
+/// `+Mapping.swift` because `TransactionLeg` carries the resolved
 /// instrument but the storage column is just the id.
 struct TransactionLegRow {
   static let databaseTableName = "transaction_leg"

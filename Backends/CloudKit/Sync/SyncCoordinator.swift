@@ -1,7 +1,6 @@
 @preconcurrency import CloudKit
 import Foundation
 import OSLog
-import SwiftData
 import os
 
 /// Unified sync coordinator that owns a single `CKSyncEngine` for the entire app.
@@ -306,9 +305,9 @@ final class SyncCoordinator {
   var startTask: Task<Void, Never>?
 
   /// Task spawned by `startAfter(profileIndexMigration:)` that waits for
-  /// the launch-time SwiftData → GRDB profile-index migration to commit
-  /// before invoking `start()`. Held so `stop()` can cancel it if the
-  /// app tears the coordinator down before the migration finishes.
+  /// any launch-time profile-index migration to commit before invoking
+  /// `start()`. Held so `stop()` can cancel it if the app tears the
+  /// coordinator down before the migration finishes.
   var launchTask: Task<Void, Never>?
 
   /// Task for coalescing re-fetch requests after save failures.
@@ -342,7 +341,7 @@ final class SyncCoordinator {
 
   init(
     containerManager: ProfileContainerManager,
-    userDefaults: UserDefaults = .standard,
+    userDefaults: UserDefaults = .moolahShared,
     isCloudKitAvailable: Bool = CloudKitAuthProvider.isCloudKitAvailable,
     sharedInstrumentRegistry: GRDBInstrumentRegistryRepository? = nil,
     sharedMarketData: ProfileSession.MarketDataServices? = nil,

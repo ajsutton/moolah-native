@@ -1,7 +1,6 @@
 import CloudKit
 import Foundation
 import GRDB
-import SwiftData
 import Testing
 
 @testable import Moolah
@@ -13,21 +12,19 @@ struct RecordNameCollisionTests {
   // MARK: - 1. UUID collision between types (regression test)
 
   @Test("Account and Transaction sharing a UUID both upload as distinct CKRecords")
-  func collidingUUIDsYieldDistinctPrefixedRecordNames() throws {
-    let (handler, container) =
-      try ProfileDataSyncHandlerTestSupport
-      .makeHandler()
+  func collidingUUIDsYieldDistinctPrefixedRecordNames() async throws {
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    let handler = harness.handler
 
     let sharedId = UUID()
-    let context = ModelContext(container)
-    context.insert(
-      AccountRecord(
-        id: sharedId, name: "Shares", type: "bank", position: 0,
-        isHidden: false))
-    context.insert(
-      TransactionRecord(
-        id: sharedId, date: Date(), payee: "Opening balance"))
-    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
+    try await ProfileDataSyncHandlerTestSupport.seed(into: harness.database) { database in
+      try ProfileDataSyncHandlerTestSupport.accountRow(
+        id: sharedId, name: "Shares"
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.transactionRow(
+        id: sharedId, payee: "Opening balance"
+      ).upsert(database)
+    }
 
     // The lookup is keyed by recordType and then by UUID, so two record
     // types sharing a UUID produce two independent entries — preventing
@@ -48,21 +45,19 @@ struct RecordNameCollisionTests {
   }
 
   @Test("queueUnsyncedRecords produces prefixed recordNames per type")
-  func queueUnsyncedProducesPrefixedRecordNamesPerType() throws {
-    let (handler, container) =
-      try ProfileDataSyncHandlerTestSupport
-      .makeHandler()
+  func queueUnsyncedProducesPrefixedRecordNamesPerType() async throws {
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    let handler = harness.handler
 
     let sharedId = UUID()
-    let context = ModelContext(container)
-    context.insert(
-      AccountRecord(
-        id: sharedId, name: "Shares", type: "bank", position: 0,
-        isHidden: false))
-    context.insert(
-      TransactionRecord(
-        id: sharedId, date: Date(), payee: "Opening balance"))
-    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
+    try await ProfileDataSyncHandlerTestSupport.seed(into: harness.database) { database in
+      try ProfileDataSyncHandlerTestSupport.accountRow(
+        id: sharedId, name: "Shares"
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.transactionRow(
+        id: sharedId, payee: "Opening balance"
+      ).upsert(database)
+    }
 
     let recordIDs = handler.queueUnsyncedRecords()
     let names = Set(recordIDs.map(\.recordName))
@@ -76,10 +71,9 @@ struct RecordNameCollisionTests {
   // MARK: - 2. Uplink uses prefixed name for new records
 
   @Test("buildCKRecord for a brand-new AccountRow emits a prefixed recordName")
-  func buildCKRecordEmitsPrefixedRecordNameForNewRecords() throws {
-    let (handler, _) =
-      try ProfileDataSyncHandlerTestSupport
-      .makeHandler()
+  func buildCKRecordEmitsPrefixedRecordNameForNewRecords() async throws {
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    let handler = harness.handler
 
     let accountId = UUID()
     let row = AccountRow(
@@ -102,10 +96,9 @@ struct RecordNameCollisionTests {
   // MARK: - 3. Uplink ignores stale bare-UUID cached system fields
 
   @Test("buildCKRecord ignores legacy bare-UUID recordName in cached system fields")
-  func buildCKRecordIgnoresLegacyBareUUIDCachedSystemFields() throws {
-    let (handler, _) =
-      try ProfileDataSyncHandlerTestSupport
-      .makeHandler()
+  func buildCKRecordIgnoresLegacyBareUUIDCachedSystemFields() async throws {
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    let handler = harness.handler
 
     let accountId = UUID()
     // Seed an encodedSystemFields blob whose recordID uses the legacy
@@ -140,7 +133,7 @@ struct RecordNameCollisionTests {
   // MARK: - 4. Downlink rejects bare-UUID CKRecords
 
   @Test("applyRemoteChanges drops bare-UUID CKRecords and ingests prefixed ones")
-  func applyRemoteChangesRejectsBareUUIDAcceptsPrefixed() throws {
+  func applyRemoteChangesRejectsBareUUIDAcceptsPrefixed() async throws {
     let harness =
       try ProfileDataSyncHandlerTestSupport
       .makeHandlerAndDatabase()
@@ -170,7 +163,7 @@ struct RecordNameCollisionTests {
 
     _ = handler.applyRemoteChanges(saved: [legacyCK, newCK], deleted: [])
 
-    let rows = try harness.database.read { database in
+    let rows = try await harness.database.read { database in
       try AccountRow.fetchAll(database)
     }
     let byId = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
@@ -182,7 +175,7 @@ struct RecordNameCollisionTests {
   // MARK: - 5. System-fields round-trip for prefixed records
 
   @Test("handleSentRecordZoneChanges writes system fields back using recordType")
-  func handleSentRecordZoneChangesAppliesSystemFieldsForPrefixedRecords() throws {
+  func handleSentRecordZoneChangesAppliesSystemFieldsForPrefixedRecords() async throws {
     let harness =
       try ProfileDataSyncHandlerTestSupport
       .makeHandlerAndDatabase()
@@ -192,7 +185,7 @@ struct RecordNameCollisionTests {
     let stub = Account(
       id: accountId, name: "Test", type: .bank,
       instrument: .defaultTestInstrument, position: 0, isHidden: false)
-    try harness.database.write { database in
+    try await harness.database.write { database in
       try AccountRow(domain: stub).insert(database)
     }
 
@@ -209,7 +202,7 @@ struct RecordNameCollisionTests {
     _ = handler.handleSentRecordZoneChanges(
       savedRecords: [savedCK], failedSaves: [], failedDeletes: [])
 
-    let reloaded = try harness.database.read { database in
+    let reloaded = try await harness.database.read { database in
       try AccountRow.filter(AccountRow.Columns.id == accountId).fetchOne(database)
     }
     #expect(reloaded?.encodedSystemFields != nil)
@@ -227,7 +220,7 @@ struct RecordNameCollisionTests {
   }
 
   @Test("ProfileIndexSyncHandler.recordToSave accepts prefixed recordID")
-  func profileIndexRecordToSaveAcceptsPrefixedRecordID() throws {
+  func profileIndexRecordToSaveAcceptsPrefixedRecordID() async throws {
     let (handler, repository) = try makeProfileIndexHandler()
 
     let profileId = UUID()
@@ -250,7 +243,7 @@ struct RecordNameCollisionTests {
   }
 
   @Test("ProfileIndexSyncHandler.applyRemoteChanges accepts prefixed ProfileRecord")
-  func profileIndexApplyRemoteChangesAcceptsPrefixedProfileRecord() throws {
+  func profileIndexApplyRemoteChangesAcceptsPrefixedProfileRecord() async throws {
     let (handler, repository) = try makeProfileIndexHandler()
 
     let profileId = UUID()
@@ -275,7 +268,7 @@ struct RecordNameCollisionTests {
   @Test(
     "ProfileIndexSyncHandler.handleSentRecordZoneChanges caches system fields for prefixed records"
   )
-  func profileIndexHandleSentCachesSystemFieldsForPrefixedRecord() throws {
+  func profileIndexHandleSentCachesSystemFieldsForPrefixedRecord() async throws {
     let (handler, repository) = try makeProfileIndexHandler()
 
     let profileId = UUID()

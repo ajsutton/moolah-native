@@ -10,10 +10,10 @@ import OSLog
 /// to this handler. Methods return results (record IDs, failures) instead of
 /// directly interacting with CKSyncEngine state.
 ///
-/// Backed by `GRDBProfileIndexRepository`. The legacy SwiftData
-/// `ProfileRecord` class is no longer touched by the runtime — it stays
-/// in the build only as the one-shot migrator's source, copying any
-/// existing rows into `profile-index.sqlite` on first launch.
+/// Backed by `GRDBProfileIndexRepository`. Profile data is read and
+/// written through the `ProfileRow` GRDB type; the CloudKit wire
+/// `recordType` ("ProfileRecord") is a frozen contract that existing
+/// iCloud zones reference verbatim.
 ///
 /// **Dispatch by record type.** The handler dispatches by
 /// `recordType` so that the profile-index zone can carry both

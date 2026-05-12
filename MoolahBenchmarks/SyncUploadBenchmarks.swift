@@ -1,6 +1,5 @@
 @preconcurrency import CloudKit
 import GRDB
-import SwiftData
 import XCTest
 
 @testable import Moolah
@@ -12,7 +11,6 @@ import XCTest
 /// of local changes to CloudKit.
 final class SyncUploadBenchmarks: XCTestCase {
 
-  nonisolated(unsafe) private static var _container: ModelContainer?
   nonisolated(unsafe) private static var _database: DatabaseQueue?
   nonisolated(unsafe) private static var _handler: ProfileDataSyncHandler?
   nonisolated(unsafe) private static var _transactionUUIDs400: Set<UUID> = []
@@ -28,10 +26,6 @@ final class SyncUploadBenchmarks: XCTestCase {
     }
     _database = result.database
     BenchmarkFixtures.seed(scale: .twoX, in: result.database)
-    let container = expecting("benchmark sync-handler container") {
-      try TestModelContainer.create()
-    }
-    _container = container
     let profileId = UUID()
     let zoneID = CKRecordZone.ID(
       zoneName: "profile-\(profileId.uuidString)",
@@ -50,7 +44,7 @@ final class SyncUploadBenchmarks: XCTestCase {
       database: result.database)
     _handler = MainActor.assumeIsolated {
       ProfileDataSyncHandler(
-        profileId: profileId, zoneID: zoneID, modelContainer: container,
+        profileId: profileId, zoneID: zoneID,
         grdbRepositories: bundle)
     }
     let ids = expecting("benchmark fetch existing ids failed") {
@@ -66,7 +60,6 @@ final class SyncUploadBenchmarks: XCTestCase {
 
   override static func tearDown() {
     _handler = nil
-    _container = nil
     _database = nil
     _transactionUUIDs400 = []
     super.tearDown()

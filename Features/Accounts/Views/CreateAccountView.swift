@@ -195,7 +195,7 @@ struct CreateAccountView: View {
 }
 
 #Preview {
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   let accountStore = AccountStore(
     repository: backend.accounts,
     conversionService: backend.conversionService,

@@ -59,14 +59,6 @@ final class ProfileStore {
   /// Used by SessionManager to tear down the corresponding ProfileSession.
   var onProfileRemoved: ((UUID) -> Void)?
 
-  /// Called after a CloudKit profile is created or updated locally.
-  /// Used by SyncCoordinator to queue the profile for upload.
-  var onProfileChanged: ((UUID) -> Void)?
-
-  /// Called after a CloudKit profile is deleted locally.
-  /// Used by SyncCoordinator to queue the profile for deletion.
-  var onProfileDeleted: ((UUID) -> Void)?
-
   // internal (was private) so the `+Cloud` extension can reach the injected
   // dependencies and logger.
   let defaults: UserDefaults
@@ -90,7 +82,7 @@ final class ProfileStore {
   }
 
   init(
-    defaults: UserDefaults = .standard,
+    defaults: UserDefaults = .moolahShared,
     containerManager: ProfileContainerManager? = nil,
     syncCoordinator: SyncCoordinator? = nil
   ) {
@@ -181,13 +173,6 @@ final class ProfileStore {
       }
     }
     trackMutation(task)
-    // Fire the legacy store-side change callback synchronously to
-    // preserve the pre-Phase-A behaviour for callers that observe it
-    // (e.g. `ExportCoordinator.importNewProfileFromFile`'s rollback
-    // path captures the id mid-flight). The GRDB-side
-    // `onRecordChanged` hook from `attachSyncHooks` fires when the
-    // async write commits; both queue idempotent CKSyncEngine state.
-    onProfileChanged?(profile.id)
 
     if isFirstProfile {
       activeProfileID = profile.id
@@ -213,12 +198,10 @@ final class ProfileStore {
     }
 
     if let containerManager {
-      // Evict the in-memory container / GRDB-queue caches immediately
-      // so synchronous observers (e.g. `ExportCoordinator`'s import
-      // rollback path that asserts `hasContainer == false` after the
-      // `removeProfile` call returns) see a consistent view. The
-      // on-disk teardown stays inside the Task and is gated on the
-      // GRDB index-row delete succeeding.
+      // Evict the in-memory GRDB-queue cache immediately so synchronous
+      // observers (e.g. `ExportCoordinator`'s import rollback path)
+      // see a consistent view. The on-disk teardown stays inside the
+      // Task and is gated on the GRDB index-row delete succeeding.
       containerManager.evictCachedStore(for: id)
       // Delete order matters. The GRDB profile-index row is deleted
       // FIRST: a remote sync that observes only the index row delete
@@ -234,15 +217,14 @@ final class ProfileStore {
         do {
           _ = try await containerManager.profileIndexRepository.delete(id: id)
           // Index row is gone on disk — now wipe per-profile files
-          // (SwiftData store, GRDB queue, sync state, CloudKit zone).
+          // (GRDB queue, sync state, CloudKit zone).
           containerManager.deleteStore(for: id)
         } catch {
           // Roll back: re-insert the profile at its original position
           // and restore the active id. The per-profile files were not
           // touched, so no file-system rollback is needed. The cache
           // entries we evicted above are recoverable lazily — the next
-          // `container(for:)` / `database(for:)` call will repopulate
-          // them.
+          // `database(for:)` call will repopulate them.
           if let self {
             let insertIndex = min(previousIndex, self.profiles.count)
             self.profiles.insert(previousProfile, at: insertIndex)
@@ -260,7 +242,6 @@ final class ProfileStore {
       // No container manager (test/preview path). Optimistic in-memory
       // removal stands; nothing to roll back.
     }
-    onProfileDeleted?(id)
     onProfileRemoved?(id)
     logger.debug("Removed profile: \(id)")
   }
@@ -296,10 +277,6 @@ final class ProfileStore {
       }
     }
     trackMutation(task)
-    // See `addProfile` for the rationale: fire the legacy callback
-    // synchronously so observers see the change at the same point as
-    // the in-place state mutation.
-    onProfileChanged?(profile.id)
     logger.debug("Updated profile: \(profile.label)")
   }
 

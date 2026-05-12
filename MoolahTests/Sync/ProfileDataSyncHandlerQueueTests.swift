@@ -1,7 +1,6 @@
 import CloudKit
 import Foundation
 import GRDB
-import SwiftData
 import Testing
 
 @testable import Moolah
@@ -11,25 +10,28 @@ import Testing
 struct ProfileDataSyncHandlerQueueTests {
 
   @Test
-  func deleteLocalDataRemovesAllRecordTypes() throws {
+  func deleteLocalDataRemovesAllRecordTypes() async throws {
     let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerAndDatabase()
     let handler = harness.handler
 
-    let context = ModelContext(harness.container)
-    context.insert(
-      AccountRecord(id: UUID(), name: "Acc", type: "bank", position: 0, isHidden: false))
-    context.insert(
-      TransactionRecord(id: UUID(), date: Date(), payee: "Test"))
-    context.insert(
-      CategoryRecord(id: UUID(), name: "Cat", parentId: nil))
-    context.insert(
-      InstrumentRecord(
-        id: "AUD", kind: "fiatCurrency", name: "Australian Dollar", decimals: 2))
-    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
+    try await ProfileDataSyncHandlerTestSupport.seed(into: harness.database) { database in
+      try ProfileDataSyncHandlerTestSupport.accountRow(
+        id: UUID(), name: "Acc"
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.transactionRow(
+        id: UUID(), payee: "Test"
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.categoryRow(
+        id: UUID(), name: "Cat"
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.instrumentRow(
+        id: "AUD", kind: "fiatCurrency", name: "Australian Dollar", decimals: 2
+      ).upsert(database)
+    }
 
     let changedTypes = handler.deleteLocalData()
 
-    let counts = try harness.database.read { database -> DeleteLocalDataCounts in
+    let counts = try await harness.database.read { database -> DeleteLocalDataCounts in
       try DeleteLocalDataCounts.fetch(from: database)
     }
     #expect(counts.accounts == 0)
@@ -40,22 +42,26 @@ struct ProfileDataSyncHandlerQueueTests {
   }
 
   @Test
-  func queueAllExistingRecordsReturnsAllRecordIDs() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+  func queueAllExistingRecordsReturnsAllRecordIDs() async throws {
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    let handler = harness.handler
 
     let accountId = UUID()
     let txnId = UUID()
     let instrumentId = "AUD"
 
-    let context = ModelContext(container)
-    context.insert(
-      AccountRecord(id: accountId, name: "Acc", type: "bank", position: 0, isHidden: false))
-    context.insert(
-      TransactionRecord(id: txnId, date: Date(), payee: "Test"))
-    context.insert(
-      InstrumentRecord(
-        id: instrumentId, kind: "fiatCurrency", name: "Australian Dollar", decimals: 2))
-    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
+    try await ProfileDataSyncHandlerTestSupport.seed(into: harness.database) { database in
+      try ProfileDataSyncHandlerTestSupport.accountRow(
+        id: accountId, name: "Acc"
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.transactionRow(
+        id: txnId, payee: "Test"
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.instrumentRow(
+        id: instrumentId, kind: "fiatCurrency",
+        name: "Australian Dollar", decimals: 2
+      ).upsert(database)
+    }
 
     let recordIDs = handler.queueAllExistingRecords()
 
@@ -77,38 +83,33 @@ struct ProfileDataSyncHandlerQueueTests {
   }
 
   @Test
-  func queueUnsyncedRecordsReturnsRecordsWithNilSystemFields() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+  func queueUnsyncedRecordsReturnsRecordsWithNilSystemFields() async throws {
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    let handler = harness.handler
 
     let unsyncedAccountId = UUID()
     let syncedAccountId = UUID()
     let unsyncedInstrumentId = "AUD"
     let syncedInstrumentId = "USD"
 
-    let context = ModelContext(container)
-
-    context.insert(
-      AccountRecord(
-        id: unsyncedAccountId, name: "Unsynced", type: "bank", position: 0,
-        isHidden: false))
-
-    let synced = AccountRecord(
-      id: syncedAccountId, name: "Synced", type: "bank", position: 1,
-      isHidden: false)
-    synced.encodedSystemFields = Data([0x01, 0x02, 0x03])
-    context.insert(synced)
-
-    context.insert(
-      InstrumentRecord(
+    try await ProfileDataSyncHandlerTestSupport.seed(into: harness.database) { database in
+      try ProfileDataSyncHandlerTestSupport.accountRow(
+        id: unsyncedAccountId, name: "Unsynced"
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.accountRow(
+        id: syncedAccountId, name: "Synced", position: 1,
+        encodedSystemFields: Data([0x01, 0x02, 0x03])
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.instrumentRow(
         id: unsyncedInstrumentId, kind: "fiatCurrency",
-        name: "Australian Dollar", decimals: 2))
-    let syncedInstrument = InstrumentRecord(
-      id: syncedInstrumentId, kind: "fiatCurrency",
-      name: "US Dollar", decimals: 2)
-    syncedInstrument.encodedSystemFields = Data([0x04, 0x05])
-    context.insert(syncedInstrument)
-
-    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
+        name: "Australian Dollar", decimals: 2
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.instrumentRow(
+        id: syncedInstrumentId, kind: "fiatCurrency",
+        name: "US Dollar", decimals: 2,
+        encodedSystemFields: Data([0x04, 0x05])
+      ).upsert(database)
+    }
 
     let recordIDs = handler.queueUnsyncedRecords()
     let recordNames = Set(recordIDs.map(\.recordName))
@@ -125,15 +126,16 @@ struct ProfileDataSyncHandlerQueueTests {
   }
 
   @Test
-  func queueUnsyncedRecordsReturnsEmptyWhenAllSynced() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+  func queueUnsyncedRecordsReturnsEmptyWhenAllSynced() async throws {
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    let handler = harness.handler
 
-    let context = ModelContext(container)
-    let account = AccountRecord(
-      id: UUID(), name: "Acc", type: "bank", position: 0, isHidden: false)
-    account.encodedSystemFields = Data([0x01])
-    context.insert(account)
-    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
+    try await ProfileDataSyncHandlerTestSupport.seed(into: harness.database) { database in
+      try ProfileDataSyncHandlerTestSupport.accountRow(
+        id: UUID(), name: "Acc",
+        encodedSystemFields: Data([0x01])
+      ).upsert(database)
+    }
 
     let recordIDs = handler.queueUnsyncedRecords()
     #expect(recordIDs.isEmpty)
@@ -149,36 +151,45 @@ struct ProfileDataSyncHandlerQueueTests {
     let investmentValueId = UUID()
     let instrumentId = "AUD"
 
-    @MainActor
-    func insert(into context: ModelContext) throws {
-      context.insert(
-        InstrumentRecord(id: instrumentId, kind: "fiatCurrency", name: "AUD Dollar", decimals: 2))
-      context.insert(
-        AccountRecord(id: accountId, name: "Acc", type: "bank", position: 0, isHidden: false))
-      context.insert(CategoryRecord(id: categoryId, name: "Food", parentId: nil))
-      context.insert(EarmarkRecord(id: earmarkId, name: "Holiday", instrumentId: instrumentId))
-      context.insert(
-        EarmarkBudgetItemRecord(
-          id: budgetItemId, earmarkId: earmarkId, categoryId: categoryId,
-          amount: 0, instrumentId: instrumentId))
-      context.insert(
-        InvestmentValueRecord(
-          id: investmentValueId, accountId: accountId, date: Date(),
-          value: 0, instrumentId: instrumentId))
-      context.insert(TransactionRecord(id: txnId, date: Date(), payee: "Test"))
-      context.insert(
-        TransactionLegRecord(
-          id: legId, transactionId: txnId, accountId: accountId,
-          instrumentId: instrumentId, quantity: 0, type: "income", sortOrder: 0))
-      try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
+    func insert(into database: Database) throws {
+      try ProfileDataSyncHandlerTestSupport.instrumentRow(
+        id: instrumentId, kind: "fiatCurrency", name: "AUD Dollar", decimals: 2
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.accountRow(
+        id: accountId, name: "Acc", instrumentId: instrumentId
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.categoryRow(
+        id: categoryId, name: "Food"
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.earmarkRow(
+        id: earmarkId, name: "Holiday", instrumentId: instrumentId
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.earmarkBudgetItemRow(
+        id: budgetItemId, earmarkId: earmarkId, categoryId: categoryId,
+        instrumentId: instrumentId
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.investmentValueRow(
+        id: investmentValueId, accountId: accountId,
+        instrumentId: instrumentId
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.transactionRow(
+        id: txnId, payee: "Test"
+      ).upsert(database)
+      try ProfileDataSyncHandlerTestSupport.transactionLegRow(
+        id: legId, transactionId: txnId, accountId: accountId,
+        instrumentId: instrumentId
+      ).upsert(database)
     }
   }
 
   @Test
-  func queueUnsyncedRecordsReturnsAllWhenNoneSynced() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+  func queueUnsyncedRecordsReturnsAllWhenNoneSynced() async throws {
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    let handler = harness.handler
     let seed = AllRecordSeed()
-    try seed.insert(into: ModelContext(container))
+    try await ProfileDataSyncHandlerTestSupport.seed(into: harness.database) { database in
+      try seed.insert(into: database)
+    }
 
     let recordIDs = handler.queueUnsyncedRecords()
     let recordNames = Set(recordIDs.map(\.recordName))
@@ -204,7 +215,7 @@ struct ProfileDataSyncHandlerQueueTests {
   }
 
   @Test
-  func clearAllSystemFieldsClearsAllRecordTypes() throws {
+  func clearAllSystemFieldsClearsAllRecordTypes() async throws {
     let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerAndDatabase()
     let handler = harness.handler
     let database = harness.database
@@ -222,14 +233,14 @@ struct ProfileDataSyncHandlerQueueTests {
 
     _ = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
-    let preRow = try database.read { database in
+    let preRow = try await database.read { database in
       try AccountRow.filter(AccountRow.Columns.id == accountId).fetchOne(database)
     }
     #expect(preRow?.encodedSystemFields != nil)
 
     handler.clearAllSystemFields()
 
-    let postRow = try database.read { database in
+    let postRow = try await database.read { database in
       try AccountRow.filter(AccountRow.Columns.id == accountId).fetchOne(database)
     }
     #expect(postRow?.encodedSystemFields == nil)

@@ -5,12 +5,6 @@ import Foundation
 
 // MARK: - ProfileRow + CloudKitRecordConvertible
 //
-// Replaces `Backends/CloudKit/Sync/ProfileRecord+CloudKit.swift` once
-// `RecordTypeRegistry.allTypes` maps `ProfileRecord.recordType` to
-// `ProfileRow.self`. Until then the runtime still dispatches to the
-// SwiftData `ProfileRecord` class; this conformance compiles and is
-// available but unused.
-//
 // The CloudKit wire `recordType` ("ProfileRecord") is a frozen contract
 // — existing iCloud zones reference this exact string — so it stays
 // unchanged regardless of the local Swift type's name.
@@ -45,8 +39,7 @@ extension ProfileRow: CloudKitRecordConvertible {
       label: fields.label ?? "",
       currencyCode: fields.currencyCode ?? "",
       financialYearStartMonth: month,
-      // Wire-parity with the legacy ProfileRecord conformance which also
-      // falls back to `Date()` when the field is absent. A stricter
+      // Falls back to `Date()` when the field is absent. A stricter
       // "discard malformed record" policy is reasonable but must be
       // applied consistently across every CloudKit row type, not just
       // here — out of scope for the current change.

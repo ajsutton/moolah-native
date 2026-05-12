@@ -31,8 +31,8 @@ extension AccountRow {
 
   /// Domain projection. `instruments` is the registry lookup
   /// table (`[String: Instrument]`); falls back to ambient fiat for
-  /// unknown ids — mirrors `AccountRecord.toDomain`. `positions` are
-  /// computed by the analysis layer and passed through here.
+  /// unknown ids. `positions` are computed by the analysis layer and
+  /// passed through here.
   ///
   /// Throws `BackendError.dataCorrupted` when `type` carries a raw value
   /// the compiled `AccountType` enum doesn't recognise — see

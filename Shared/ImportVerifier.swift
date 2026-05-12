@@ -1,5 +1,15 @@
 import Foundation
-import SwiftData
+// import GRDB justification: ImportVerifier counts rows in the GRDB
+// profile database to confirm that `CloudKitDataImporter` wrote every
+// record from the export file. The verification has to read the live
+// database (not a repository view) so it can catch mid-flight failures
+// before the new profile is activated, and `DatabaseReader` is the
+// minimal surface that exposes that read. `DATABASE_CODE_GUIDE.md`
+// scopes `import GRDB` to `Backends/GRDB/`; this file is a peer to
+// `PreviewBackend` and `ExportCoordinator` in `Shared/` — a thin glue
+// layer that bridges the export pipeline to the persistence layer
+// rather than feature business logic.
+import GRDB
 
 struct ImportEntityCounts: Sendable {
   let accounts: Int
@@ -15,7 +25,7 @@ struct ImportVerificationResult: Sendable {
   let actualCounts: ImportEntityCounts
 }
 
-/// Confirms that row counts in the SwiftData container match the source
+/// Confirms that row counts in the GRDB profile database match the source
 /// export file after `CloudKitDataImporter` completes. A count mismatch
 /// indicates a partial import (e.g. mid-flight crash or constraint violation)
 /// and prevents the coordinator from activating the new profile.
@@ -23,10 +33,17 @@ struct ImportVerifier {
 
   func verify(
     exported: ExportedData,
-    modelContainer: ModelContainer
+    database: any DatabaseReader
   ) async throws -> ImportVerificationResult {
-    let context = ModelContext(modelContainer)
-    let actualCounts = try fetchActualCounts(context: context)
+    let actualCounts = try await database.read { database in
+      try ImportEntityCounts(
+        accounts: AccountRow.fetchCount(database),
+        categories: CategoryRow.fetchCount(database),
+        earmarks: EarmarkRow.fetchCount(database),
+        transactions: TransactionRow.fetchCount(database),
+        investmentValues: InvestmentValueRow.fetchCount(database)
+      )
+    }
 
     let expectedInvestmentValueCount = exported.investmentValues.values.reduce(0) { $0 + $1.count }
     let expectedCounts = ImportEntityCounts(
@@ -47,19 +64,6 @@ struct ImportVerifier {
       countMatch: countMatch,
       expectedCounts: expectedCounts,
       actualCounts: actualCounts
-    )
-  }
-
-  /// Record counts (store is profile-scoped, no predicate needed).
-  private func fetchActualCounts(
-    context: ModelContext
-  ) throws -> ImportEntityCounts {
-    ImportEntityCounts(
-      accounts: try context.fetchCount(FetchDescriptor<AccountRecord>()),
-      categories: try context.fetchCount(FetchDescriptor<CategoryRecord>()),
-      earmarks: try context.fetchCount(FetchDescriptor<EarmarkRecord>()),
-      transactions: try context.fetchCount(FetchDescriptor<TransactionRecord>()),
-      investmentValues: try context.fetchCount(FetchDescriptor<InvestmentValueRecord>())
     )
   }
 }

@@ -13,8 +13,7 @@ extension InvestmentValueRow {
 
   /// Builds a row from a domain `InvestmentValue`. `InvestmentValue`
   /// does not carry an `accountId`, `id`, or `instrumentId` — the
-  /// repository supplies them. Mirrors `InvestmentValueRecord(...)`
-  /// in `Backends/CloudKit/Models/InvestmentValueRecord.swift`.
+  /// repository supplies them.
   init(
     id: UUID = UUID(),
     domain value: InvestmentValue,
@@ -29,13 +28,11 @@ extension InvestmentValueRow {
     self.encodedSystemFields = nil
   }
 
-  /// Domain projection. Mirrors `InvestmentValueRecord.toDomain()` —
-  /// reconstructs the amount in the row's recorded `instrumentId`,
-  /// falling back to ambient fiat when no synced `instrument` row
-  /// exists. Repositories that need a precise `Instrument` (e.g. for
-  /// stock display) reconstruct it via `InstrumentRegistryRepository`
-  /// before showing the result; this mirrors the SwiftData
-  /// status-quo conversion-on-read behaviour.
+  /// Domain projection. Reconstructs the amount in the row's recorded
+  /// `instrumentId`, falling back to ambient fiat when no synced
+  /// `instrument` row exists. Repositories that need a precise
+  /// `Instrument` (e.g. for stock display) reconstruct it via
+  /// `InstrumentRegistryRepository` before showing the result.
   func toDomain() -> InvestmentValue {
     let instrument = Instrument.fiat(code: instrumentId)
     return InvestmentValue(

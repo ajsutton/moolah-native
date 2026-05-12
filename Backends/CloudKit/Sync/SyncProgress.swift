@@ -39,7 +39,7 @@ final class SyncProgress {
 
   private static let lastSettledAtKey = "com.moolah.sync.lastSettledAt"
 
-  init(userDefaults: UserDefaults = .standard) {
+  init(userDefaults: UserDefaults = .moolahShared) {
     self.userDefaults = userDefaults
     if let stored = userDefaults.object(forKey: Self.lastSettledAtKey) as? Date {
       self.lastSettledAt = stored

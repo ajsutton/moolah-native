@@ -3,8 +3,7 @@
 import Foundation
 import GRDB
 
-/// One row in the `account` table — the GRDB-backed counterpart to the
-/// SwiftData `@Model` `AccountRecord`.
+/// One row in the `account` table.
 ///
 /// **Instrument resolution.** The row stores `instrumentId: String`,
 /// not a full `Instrument`. The repository reconstructs the `Instrument`

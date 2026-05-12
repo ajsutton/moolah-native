@@ -118,8 +118,8 @@ struct ProfileStoreTestsMore {
     store.addProfile(cloudProfile)
     await drainPendingMutations(store)
 
-    // Force creation of the per-profile container (simulates normal app usage)
-    _ = try containerManager.container(for: cloudProfile.id)
+    // Force creation of the per-profile database (simulates normal app usage)
+    let firstQueue = try containerManager.database(for: cloudProfile.id)
 
     // Delete the cloud profile from GRDB (simulates remote deletion)
     _ = try await containerManager.profileIndexRepository.delete(id: cloudProfile.id)
@@ -127,27 +127,12 @@ struct ProfileStoreTestsMore {
     store.loadCloudProfiles(isInitialLoad: false)
     await drainPendingMutations(store)
 
-    // The container cache should have been evicted
-    // Creating a new container should give a different instance
-    #expect(!containerManager.hasContainer(for: cloudProfile.id))
+    // The per-profile DatabaseQueue cache should have been evicted by
+    // the store's cleanup path. Reopening yields a fresh in-memory queue
+    // (`ProfileDatabase.openInMemory()` returns a new instance every
+    // time the cache is empty), so the identity differs.
+    let reopenedQueue = try containerManager.database(for: cloudProfile.id)
+    #expect(firstQueue !== reopenedQueue)
   }
 
-  // MARK: - Sync change tracking
-
-  @Test("addProfile calls onProfileChanged for CloudKit profiles")
-  func addCloudProfileCallsOnProfileChanged() async throws {
-    let defaults = makeDefaults()
-    let containerManager = try ProfileContainerManager.forTesting()
-    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
-    await drainPendingMutations(store)
-
-    var changedIDs: [UUID] = []
-    store.onProfileChanged = { id in changedIDs.append(id) }
-
-    let profile = makeProfile(label: "Cloud")
-    store.addProfile(profile)
-    await drainPendingMutations(store)
-
-    #expect(changedIDs == [profile.id])
-  }
 }

@@ -5,7 +5,6 @@
 @preconcurrency import CloudKit
 import Foundation
 import OSLog
-import SwiftData
 import os
 
 // Fetched-change application (off-main, hops to `@MainActor` for observer
@@ -15,7 +14,7 @@ extension SyncCoordinator {
 
   // MARK: - Fetched Record Zone Changes
 
-  /// Processes fetched record zone changes with heavy SwiftData work off the main actor.
+  /// Processes fetched record zone changes with heavy database work off the main actor.
   /// Resolves handlers and manages state on @MainActor; upsert/delete/save runs off-main.
   nonisolated func handleFetchedRecordZoneChangesAsync(
     _ changes: CKSyncEngine.Event.FetchedRecordZoneChanges
@@ -141,10 +140,10 @@ extension SyncCoordinator {
     // Resolve handler on main (accesses @MainActor-isolated state).
     //
     // The catch-and-skip path covers genuinely transient errors from
-    // `containerManager.container(for:)` / `containerManager.database(for:)`
-    // (e.g. disk pressure or a migration in flight). These are recoverable:
-    // CKSyncEngine retries on the next launch and the records remain in
-    // iCloud. No invariant violations can reach this point — the coordinator
+    // `containerManager.database(for:)` (e.g. disk pressure or a
+    // migration in flight). These are recoverable: CKSyncEngine
+    // retries on the next launch and the records remain in iCloud.
+    // No invariant violations can reach this point — the coordinator
     // constructs its own handler bundle, so `profileNotRegistered` is
     // unreachable on the apply path.
     let handler: ProfileDataSyncHandler? = await MainActor.run {

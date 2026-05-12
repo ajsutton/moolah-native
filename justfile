@@ -48,6 +48,19 @@ format-check:
     echo "All Swift files are correctly formatted."
     swiftlint lint --baseline .swiftlint-baseline.yml --strict --quiet
 
+# Verify production code contains no `import SwiftData`. Phase B of the
+# GRDB migration removed every SwiftData dependency from production
+# sources; this guard keeps it that way. CI runs this alongside
+# `format-check`.
+no-swiftdata:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if grep -rln "import SwiftData" App/ Backends/ Features/ Shared/ MoolahBenchmarks/ ; then
+        echo "Production code must not import SwiftData — phase B is in effect."
+        exit 1
+    fi
+    echo "No SwiftData imports in production."
+
 # FILTERS restrict the run to specific tests: each is a class (e.g.
 # TransactionStoreTests) or class/method (e.g. TransactionStoreTests/testFoo);
 # the platform's test target prefix (MoolahTests_iOS or MoolahTests_macOS) is

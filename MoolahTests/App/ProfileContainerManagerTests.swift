@@ -1,120 +1,85 @@
 import Foundation
 import GRDB
-import SwiftData
 import Testing
 
 @testable import Moolah
 
-// Serialised because testContainerUsesScopedStoreURL mutates
-// `URL.moolahApplicationSupportOverride`, a `nonisolated(unsafe)` static.
-// The other tests in this suite use the in-memory forTesting() path and
-// would be safe to parallelise, but the suite is small enough that
-// serialisation is a cheap way to eliminate the override-leak hazard.
+// Serialised because some tests in this suite touch process-wide overrides
+// (`URL.moolahApplicationSupportOverride`) and the in-memory queue cache.
 @Suite("ProfileContainerManager", .serialized)
 struct ProfileContainerManagerTests {
-  @Test("creates index container with ProfileRecord schema only")
+  @Test("forTesting() yields a working in-memory manager")
   @MainActor
-  func testIndexContainerSchema() throws {
+  func testForTesting() throws {
     let manager = try ProfileContainerManager.forTesting()
-    let context = ModelContext(manager.indexContainer)
-    let descriptor = FetchDescriptor<ProfileRecord>()
-    let profiles = try context.fetch(descriptor)
-    #expect(profiles.isEmpty)
+    #expect(manager.inMemory == true)
+    // Profile-index repository must round-trip an empty fetch on a
+    // fresh manager.
+    let queue = manager.profileIndexDatabase
+    let rows = try queue.read { database in
+      try ProfileRow.fetchAll(database)
+    }
+    #expect(rows.isEmpty)
   }
 
-  @Test("creates per-profile container with data schema only")
+  @Test("opens a per-profile data database that is empty by default")
   @MainActor
-  func testProfileContainerSchema() throws {
+  func testPerProfileDatabaseEmpty() throws {
     let manager = try ProfileContainerManager.forTesting()
     let profileId = UUID()
-    let container = try manager.container(for: profileId)
-    let context = ModelContext(container)
-    let accounts = try context.fetch(FetchDescriptor<AccountRecord>())
-    #expect(accounts.isEmpty)
-    let transactions = try context.fetch(FetchDescriptor<TransactionRecord>())
-    #expect(transactions.isEmpty)
+    let queue = try manager.database(for: profileId)
+    let accountCount = try queue.read { database in
+      try AccountRow.fetchCount(database)
+    }
+    let transactionCount = try queue.read { database in
+      try TransactionRow.fetchCount(database)
+    }
+    #expect(accountCount == 0)
+    #expect(transactionCount == 0)
   }
 
-  @Test("returns same container for same profile ID")
+  @Test("returns the same DatabaseQueue for the same profile id (cache hit)")
   @MainActor
-  func testContainerCaching() throws {
+  func testDatabaseCaching() throws {
     let manager = try ProfileContainerManager.forTesting()
     let profileId = UUID()
-    let container1 = try manager.container(for: profileId)
-    let container2 = try manager.container(for: profileId)
-    #expect(container1 === container2)
+    let queue1 = try manager.database(for: profileId)
+    let queue2 = try manager.database(for: profileId)
+    #expect(queue1 === queue2)
   }
 
-  @Test("returns different containers for different profiles")
+  @Test("returns different DatabaseQueues for different profile ids")
   @MainActor
-  func testContainerIsolation() throws {
+  func testDatabaseIsolation() throws {
     let manager = try ProfileContainerManager.forTesting()
-    let container1 = try manager.container(for: UUID())
-    let container2 = try manager.container(for: UUID())
-    #expect(container1 !== container2)
+    let queue1 = try manager.database(for: UUID())
+    let queue2 = try manager.database(for: UUID())
+    #expect(queue1 !== queue2)
   }
 
-  @Test("deleteStore removes container from cache")
+  @Test("evictCachedStore drops the cached DatabaseQueue so the next open yields a fresh queue")
   @MainActor
-  func testDeleteStore() throws {
+  func testEvictCachedStore() throws {
     let manager = try ProfileContainerManager.forTesting()
     let profileId = UUID()
-    let container1 = try manager.container(for: profileId)
+    let queue1 = try manager.database(for: profileId)
+    manager.evictCachedStore(for: profileId)
+    let queue2 = try manager.database(for: profileId)
+    // In-memory manager re-opens a fresh queue every time the cache is
+    // empty (`ProfileDatabase.openInMemory()` returns a new instance).
+    #expect(queue1 !== queue2)
+  }
+
+  @Test("deleteStore is a no-op on an in-memory manager and evicts the cache")
+  @MainActor
+  func testDeleteStoreInMemory() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let profileId = UUID()
+    let queue1 = try manager.database(for: profileId)
+    // Should not throw and should evict the cache entry.
     manager.deleteStore(for: profileId)
-    let container2 = try manager.container(for: profileId)
-    #expect(container1 !== container2)
-  }
-
-  @Test("configures per-profile store URL under the scoped Application Support root")
-  @MainActor
-  func testContainerUsesScopedStoreURL() throws {
-    let root = FileManager.default.temporaryDirectory
-      .appending(path: UUID().uuidString)
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: root) }
-
-    URL.moolahApplicationSupportOverride = root
-    defer { URL.moolahApplicationSupportOverride = nil }
-
-    let indexSchema = Schema([ProfileRecord.self])
-    let indexConfig = ModelConfiguration(isStoredInMemoryOnly: true)
-    let indexContainer = try ModelContainer(for: indexSchema, configurations: [indexConfig])
-    let dataSchema = Schema([
-      AccountRecord.self,
-      TransactionRecord.self,
-      TransactionLegRecord.self,
-      InstrumentRecord.self,
-      CategoryRecord.self,
-      EarmarkRecord.self,
-      EarmarkBudgetItemRecord.self,
-      InvestmentValueRecord.self,
-      CSVImportProfileRecord.self,
-      ImportRuleRecord.self,
-    ])
-
-    let profileIndexDatabase = try ProfileIndexDatabase.openInMemory()
-
-    let manager = ProfileContainerManager(
-      indexContainer: indexContainer,
-      profileIndexDatabase: profileIndexDatabase,
-      dataSchema: dataSchema,
-      inMemory: false
-    )
-
-    let profileId = UUID()
-    let container = try manager.container(for: profileId)
-
-    let envSubdir = CloudKitEnvironment.resolved().storageSubdirectory
-    let expectedStore =
-      root
-      .appending(path: envSubdir)
-      .appending(path: "Moolah-\(profileId.uuidString).store")
-    let actualURL = container.configurations.first?.url
-    #expect(actualURL?.standardizedFileURL == expectedStore.standardizedFileURL)
-
-    // Env subdir must have been created on demand by the scoped helper.
-    let envDir = root.appending(path: envSubdir)
-    #expect(FileManager.default.fileExists(atPath: envDir.path()))
+    let queue2 = try manager.database(for: profileId)
+    #expect(queue1 !== queue2)
   }
 
   @Test("exposes a working GRDB profile-index repository wired to its database")

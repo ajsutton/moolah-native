@@ -3,10 +3,8 @@
 import Foundation
 import GRDB
 
-/// One row in the `earmark_budget_item` table — the GRDB-backed counterpart
-/// to the SwiftData `@Model` `EarmarkBudgetItemRecord`. Owned by an
-/// `EarmarkRow` via `earmarkId` and references a `CategoryRow` via
-/// `categoryId`.
+/// One row in the `earmark_budget_item` table. Owned by an `EarmarkRow`
+/// via `earmarkId` and references a `CategoryRow` via `categoryId`.
 struct EarmarkBudgetItemRow {
   static let databaseTableName = "earmark_budget_item"
 
@@ -36,9 +34,8 @@ struct EarmarkBudgetItemRow {
   var categoryId: UUID
   /// `Decimal × 10^8` storage form (matches `InstrumentAmount.storageValue`).
   var amount: Int64
-  /// Legacy column — `toDomain` prefers the owning earmark's instrument when
-  /// available (matches `EarmarkBudgetItemRecord.toDomain` policy at
-  /// lines 39–43).
+  /// Legacy column — `toDomain` prefers the owning earmark's instrument
+  /// when available.
   var instrumentId: String
   var encodedSystemFields: Data?
 }

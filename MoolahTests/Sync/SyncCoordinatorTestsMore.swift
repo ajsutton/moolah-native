@@ -1,6 +1,6 @@
 import CloudKit
 import Foundation
-import SwiftData
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -30,14 +30,12 @@ struct SyncCoordinatorTestsMore {
 
     // Simulate what CloudKitDataImporter produces: records with nil system fields.
     let accountId = UUID()
-    let container = try manager.container(for: profileId)
-    let context = ModelContext(container)
-    context.insert(
-      AccountRecord(id: accountId, name: "Migrated", type: "bank", position: 0, isHidden: false))
-    try context.save()
     let database = try manager.database(for: profileId)
-    try ProfileDataSyncHandlerTestSupport.mirrorContainerToDatabase(
-      container: container, database: database)
+    try await database.write { database in
+      try ProfileDataSyncHandlerTestSupport.accountRow(
+        id: accountId, name: "Migrated"
+      ).upsert(database)
+    }
 
     // Migration queues all records up front.
     let queued = await coordinator.queueAllRecordsAfterImport(for: profileId)
@@ -45,7 +43,7 @@ struct SyncCoordinatorTestsMore {
       queued.map(\.recordName) == ["\(AccountRow.recordType)|\(accountId.uuidString)"])
 
     // A subsequent startup scan must skip this profile — migration has already done
-    // the equivalent work, and re-scanning would just do a pointless SwiftData pass.
+    // the equivalent work, and re-scanning would just do a pointless rescan.
     let rescan = await coordinator.queueUnsyncedRecordsForAllProfiles()
     #expect(rescan.isEmpty)
   }
@@ -78,7 +76,7 @@ struct SyncCoordinatorTestsMore {
   // MARK: - Handler Access
 
   @Test
-  func profileIndexHandlerUsesIndexContainer() throws {
+  func profileIndexHandlerUsesProfileIndexZone() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let handler = coordinator.profileIndexHandler

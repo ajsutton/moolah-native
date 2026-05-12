@@ -6,16 +6,16 @@
 import Foundation
 import GRDB
 import OSLog
-import SwiftData
 import os
 
 extension ProfileDataSyncHandler {
   // MARK: - Applying Remote Changes
 
   /// Applies remote changes (inserts/updates/deletions) to the local
-  /// stores. The eight migrated record types route through the GRDB
-  /// dispatch tables in `+GRDBDispatch`; the `ProfileRecord` type
-  /// remains on the SwiftData side and uses a fresh `ModelContext`.
+  /// stores. The eight per-profile record types route through the GRDB
+  /// dispatch tables in `+GRDBDispatch`; `ProfileRecord` is handled by
+  /// `ProfileIndexSyncHandler` on the profile-index zone and is logged
+  /// and skipped if it reaches this path.
   /// Returns the set of changed record type strings.
   nonisolated func applyRemoteChanges(
     saved: [CKRecord],
@@ -174,8 +174,8 @@ extension ProfileDataSyncHandler {
       {
         continue
       }
-      if recordType != ProfileRecord.recordType {
-        // ProfileRecord is handled by ProfileIndexSyncHandler.
+      if recordType != ProfileRow.recordType {
+        // The profile record type is handled by ProfileIndexSyncHandler.
         Self.batchLogger.warning(
           "applyBatchSaves: unknown record type '\(recordType)' — skipping")
       }
@@ -207,7 +207,7 @@ extension ProfileDataSyncHandler {
       if try applyGRDBBatchDeletion(recordType: recordType, ids: ids, in: database) {
         continue
       }
-      if recordType != ProfileRecord.recordType {
+      if recordType != ProfileRow.recordType {
         Self.batchLogger.warning(
           "applyBatchDeletions: unknown record type '\(recordType)' — skipping")
       }

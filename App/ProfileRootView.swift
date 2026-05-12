@@ -1,5 +1,4 @@
 #if os(iOS)
-  import SwiftData
   import SwiftUI
   import UIKit
 
@@ -60,7 +59,7 @@
         rebuildSessionIfNeeded()
       }
       .onChange(of: profileStore.profiles) { _, _ in
-        // Cloud profiles may arrive late (SwiftData/CloudKit not ready at startup).
+        // Cloud profiles may arrive late (CloudKit not ready at startup).
         // Retry session creation once they appear.
         if activeSession == nil, let id = profileStore.activeProfileID {
           updateSession(for: id)

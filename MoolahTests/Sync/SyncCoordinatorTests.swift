@@ -1,6 +1,5 @@
 import CloudKit
 import Foundation
-import SwiftData
 import Testing
 
 @testable import Moolah

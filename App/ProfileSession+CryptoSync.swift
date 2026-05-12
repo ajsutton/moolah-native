@@ -16,7 +16,7 @@ extension ProfileSession {
   /// extension inherits.
   nonisolated static func resolveAlchemyApiKey() -> String? {
     let store = KeychainStore(
-      service: "com.moolah.api-keys", account: "alchemy", synchronizable: true)
+      service: KeychainServices.apiKeys, account: "alchemy", synchronizable: true)
     return try? store.restoreString()
   }
 

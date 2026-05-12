@@ -236,7 +236,7 @@ private struct SimpleTransactionRow: View {
 }
 
 #Preview {
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   let store = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,
