@@ -90,7 +90,7 @@ final class ProfileStore {
   }
 
   init(
-    defaults: UserDefaults = .standard,
+    defaults: UserDefaults = .moolahShared,
     containerManager: ProfileContainerManager? = nil,
     syncCoordinator: SyncCoordinator? = nil
   ) {

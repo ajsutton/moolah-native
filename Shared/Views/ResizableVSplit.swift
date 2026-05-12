@@ -42,7 +42,7 @@ import SwiftUI
       initialTopHeight: CGFloat,
       minTopHeight: CGFloat = 80,
       minBottomHeight: CGFloat = 200,
-      defaults: UserDefaults = .standard,
+      defaults: UserDefaults = .moolahShared,
       @ViewBuilder top: @escaping () -> Top,
       @ViewBuilder bottom: @escaping () -> Bottom
     ) {

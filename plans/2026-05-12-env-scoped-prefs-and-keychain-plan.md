@@ -41,6 +41,9 @@ Defaults swap (`= .standard` → `= .moolahShared`):
 | `Backends/GRDB/Migration/SwiftDataToGRDBMigrator+Transactions.swift` | Same. |
 | `Backends/GRDB/Migration/SwiftDataToGRDBMigrator+ProfileIndex.swift` | Same. |
 | `Features/Analysis/AnalysisStore.swift` | `init(...defaults:)` parameter. |
+| `Features/Import/FolderScanService.swift` | `init(...defaults:)` parameter. |
+| `Features/Profiles/ProfileStore.swift` | `init(...defaults:)` parameter — persists `activeProfileID`. |
+| `Shared/Views/ResizableVSplit.swift` | `init(...defaults:)` parameter (UI split-pane proportion). |
 
 Keychain swap (`service: "com.moolah.api-keys"` → `service: KeychainServices.apiKeys`):
 
@@ -467,6 +470,45 @@ to enumerate exact lines, then edit each one. Some files use `defaults: UserDefa
 +    defaults: UserDefaults = .moolahShared,
      monthEnd: Int = Calendar.current.component(.day, from: Date())
    ) {
+```
+
+`Features/Import/FolderScanService.swift` (around line 27):
+
+```diff
+   init(
+     profileId: UUID,
+     importStore: ImportStore,
+     preferences: ImportPreferences,
+-    defaults: UserDefaults = .standard,
++    defaults: UserDefaults = .moolahShared,
+     fileManager: FileManager = .default
+   ) {
+```
+
+`Features/Profiles/ProfileStore.swift` (around line 92):
+
+```diff
+   init(
+-    defaults: UserDefaults = .standard,
++    defaults: UserDefaults = .moolahShared,
+     containerManager: ProfileContainerManager? = nil,
+     syncCoordinator: SyncCoordinator? = nil
+   ) {
+```
+
+`Shared/Views/ResizableVSplit.swift` (around line 45):
+
+```diff
+     init(
+       autosaveName: String,
+       initialTopHeight: CGFloat,
+       minTopHeight: CGFloat = 80,
+       minBottomHeight: CGFloat = 200,
+-      defaults: UserDefaults = .standard,
++      defaults: UserDefaults = .moolahShared,
+       @ViewBuilder top: @escaping () -> Top,
+       @ViewBuilder bottom: @escaping () -> Bottom
+     ) {
 ```
 
 - [ ] **Step 3: Wire `ValuationModeMigration.userDefaults` from `.moolahShared`**
