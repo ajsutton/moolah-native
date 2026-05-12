@@ -205,9 +205,7 @@ struct TradeFormDriver {
     // finishes (`setInstrument` returns the moment `sheet.exists == false`,
     // which precedes the window teardown and SwiftUI re-layout completing).
     // Without this wait, the next `click()` raises "Not hittable"
-    // synchronously and the test fails. The 10 s timeout absorbs CI-runner
-    // latency — observed CI runs have the field becoming hittable ~3.4 s
-    // after it appears in the AX tree.
+    // synchronously and the test fails.
     if !waitForHittable(field, timeout: 10) {
       Trace.recordFailure("amount field '\(identifier)' was not hittable within 10s")
       XCTFail("Amount field '\(identifier)' was not hittable within 10s")
