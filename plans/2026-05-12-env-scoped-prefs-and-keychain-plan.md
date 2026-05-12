@@ -65,8 +65,9 @@ The clean break means each migration-gate UserDefaults flag resets to absent on 
 | `SharedRegistryUnionRunner.run` | Body-row inserts use `INSERT OR IGNORE`; meta-row inserts use `ON CONFLICT(pk) DO UPDATE SET earliest_date = MIN(...), latest_date = MAX(...)` — both idempotent under repeated application of the same source rows. The instrument-apply path delegates to `GRDBInstrumentRegistryRepository.applyRemoteChangesSync`, which is the production sync apply path and is idempotent by construction. |
 | `ValuationModeMigration.run` | Calls `accountRepository.backfillValuationModeForUnsnapshotInvestmentAccounts()`, which only writes to investment accounts where `valuationMode` is unset; already-migrated accounts are untouched. |
 | `SyncProgress.lastSettledAt` | A purely cosmetic timestamp surfaced in the sidebar footer; missing → empty footer until next round-trip. No correctness impact. |
-| `SyncCoordinator` engine state | Missing `CKSyncEngine` state token causes the engine to reinitialise and re-fetch change tags. One-time fetch storm; no data loss. |
 | `AnalysisStore` last-used filters | Cosmetic (drop-down defaults). No correctness impact. |
+
+**Note on `SyncCoordinator` engine state.** The CKSyncEngine state token is persisted to a JSON file under `URL.moolahScopedApplicationSupport`, not to UserDefaults (see `SyncCoordinator.swift:151`, `SyncCoordinator+Lifecycle.swift:120–122`, `SyncCoordinator+StatePersistence.swift:19`). Because `URL.moolahScopedApplicationSupport` is already env-scoped, the Task 4 UserDefaults swap has no effect on engine state — Development and Production builds already write to separate state files.
 
 If the implementer finds any runner that does not match this analysis (e.g. file evolved since this plan was written), stop and update the plan / design before swapping.
 
