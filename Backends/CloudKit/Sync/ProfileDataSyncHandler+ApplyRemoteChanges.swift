@@ -4,6 +4,7 @@
 
 @preconcurrency import CloudKit
 import Foundation
+import GRDB
 import OSLog
 import SwiftData
 import os
@@ -37,19 +38,25 @@ extension ProfileDataSyncHandler {
 
     // GRDB-routed batches throw on write failure so CKSyncEngine refetches
     // instead of advancing past a dropped record (silent data loss).
+    //
+    // Saves and deletions run inside a single outer `database.write` so
+    // `databaseDidCommit` (and the UI `ValueObservation` re-fetches it
+    // drives) fires once for the whole fetched-changes batch. Before
+    // issue #872 each per-record-type group opened its own write, and a
+    // single fetched batch that swapped a leg (save L_new + delete L_old)
+    // surfaced an intermediate state in which both legs coexisted —
+    // doubling the displayed amount in the row and the sidebar balance
+    // until the next observation tick landed.
     let upsertStart = ContinuousClock.now
-    if let failure = runBatchSavesPhase(
-      saved: saved, systemFields: systemFields, signpostID: signpostID)
+    if let failure = runBatchApplyPhase(
+      saved: saved,
+      systemFields: systemFields,
+      deleted: deleted,
+      signpostID: signpostID)
     {
       return failure
     }
     let upsertDuration = ContinuousClock.now - upsertStart
-
-    if let failure = runBatchDeletionsPhase(
-      deleted: deleted, signpostID: signpostID)
-    {
-      return failure
-    }
 
     return reportSuccess(
       saved: saved,
@@ -66,52 +73,49 @@ extension ProfileDataSyncHandler {
     let upsertDuration: Duration
   }
 
-  /// Wraps `applyBatchSaves` in its signpost + signpost-on-throw cleanup
-  /// and converts a thrown error into a `.saveFailed(...)` result.
-  /// Returns `nil` on success so the caller falls through to the next
-  /// phase. Extracted from `applyRemoteChanges` to keep that function
-  /// inside the SwiftLint body-length budget.
-  nonisolated private func runBatchSavesPhase(
+  /// Runs `applyBatchSaves` and `applyBatchDeletions` inside a single
+  /// outer `database.write { ... }` (issue #872), wraps each in its
+  /// signpost interval for Instruments traces, and converts a thrown
+  /// error into a `.saveFailed(...)` result so CKSyncEngine refetches
+  /// rather than dropping a record silently. Returns `nil` on success.
+  nonisolated private func runBatchApplyPhase(
     saved: [CKRecord],
     systemFields: [String: Data],
-    signpostID: OSSignpostID
-  ) -> ApplyResult? {
-    os_signpost(
-      .begin, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID,
-      "%{public}d records", saved.count)
-    do {
-      try applyBatchSaves(saved, systemFields: systemFields)
-      os_signpost(.end, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID)
-      return nil
-    } catch {
-      os_signpost(.end, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID)
-      logger.error(
-        """
-        GRDB write failed during applyBatchSaves for profile \
-        \(self.profileId, privacy: .public): \
-        \(error.localizedDescription, privacy: .public)
-        """)
-      return .saveFailed(error.localizedDescription)
-    }
-  }
-
-  /// Companion to `runBatchSavesPhase` for the deletions branch.
-  nonisolated private func runBatchDeletionsPhase(
     deleted: [(CKRecord.ID, String)],
     signpostID: OSSignpostID
   ) -> ApplyResult? {
-    os_signpost(
-      .begin, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID,
-      "%{public}d records", deleted.count)
     do {
-      try applyBatchDeletions(deleted)
-      os_signpost(.end, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID)
+      try grdbRepositories.database.write { database in
+        os_signpost(
+          .begin, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID,
+          "%{public}d records", saved.count)
+        do {
+          try applyBatchSaves(saved, systemFields: systemFields, in: database)
+        } catch {
+          os_signpost(
+            .end, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID)
+          throw error
+        }
+        os_signpost(.end, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID)
+
+        os_signpost(
+          .begin, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID,
+          "%{public}d records", deleted.count)
+        do {
+          try applyBatchDeletions(deleted, in: database)
+        } catch {
+          os_signpost(
+            .end, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID)
+          throw error
+        }
+        os_signpost(
+          .end, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID)
+      }
       return nil
     } catch {
-      os_signpost(.end, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID)
       logger.error(
         """
-        GRDB write failed during applyBatchDeletions for profile \
+        GRDB write failed during applyRemoteChanges for profile \
         \(self.profileId, privacy: .public): \
         \(error.localizedDescription, privacy: .public)
         """)
@@ -150,18 +154,23 @@ extension ProfileDataSyncHandler {
   /// Groups saved records by type and routes each group through the
   /// GRDB dispatch table. Unknown record types are logged and skipped
   /// (`ProfileRecord` is handled by `ProfileIndexSyncHandler`, not this
-  /// type).
+  /// type). `database` is the active write transaction supplied by the
+  /// caller — every per-record-type group runs against it directly so
+  /// the whole batch lands in one commit (issue #872).
   ///
   /// Throws when a GRDB-routed batch fails to write so the caller can
   /// return `.saveFailed(...)` and CKSyncEngine refetches instead of
   /// advancing past the dropped record (silent data loss).
   nonisolated func applyBatchSaves(
-    _ records: [CKRecord], systemFields: [String: Data]
+    _ records: [CKRecord], systemFields: [String: Data], in database: Database
   ) throws {
     let grouped = Dictionary(grouping: records, by: \.recordType)
     for (recordType, ckRecords) in grouped {
       if try applyGRDBBatchSave(
-        recordType: recordType, ckRecords: ckRecords, systemFields: systemFields)
+        recordType: recordType,
+        ckRecords: ckRecords,
+        systemFields: systemFields,
+        in: database)
       {
         continue
       }
@@ -174,13 +183,14 @@ extension ProfileDataSyncHandler {
   }
 
   /// Handles batch deletions. Groups by record type then routes through
-  /// the GRDB dispatch tables.
+  /// the GRDB dispatch tables. `database` is the active write
+  /// transaction supplied by the caller (see `applyBatchSaves`).
   ///
   /// Throws when a GRDB-routed deletion batch fails. See `applyBatchSaves`
   /// for the rationale: propagating the failure ensures CKSyncEngine
   /// refetches rather than dropping the deletion record silently.
   nonisolated func applyBatchDeletions(
-    _ deletions: [(CKRecord.ID, String)]
+    _ deletions: [(CKRecord.ID, String)], in database: Database
   ) throws {
     var uuidGrouped: [String: [UUID]] = [:]
     var stringGrouped: [String: [String]] = [:]
@@ -194,7 +204,7 @@ extension ProfileDataSyncHandler {
     }
 
     for (recordType, ids) in uuidGrouped {
-      if try applyGRDBBatchDeletion(recordType: recordType, ids: ids) {
+      if try applyGRDBBatchDeletion(recordType: recordType, ids: ids, in: database) {
         continue
       }
       if recordType != ProfileRecord.recordType {
@@ -203,6 +213,11 @@ extension ProfileDataSyncHandler {
       }
     }
     for (recordType, names) in stringGrouped {
+      // String-keyed deletions are write-free in the current dispatch
+      // (only `InstrumentRow` is string-keyed, and the per-profile zone
+      // drops the deletion with a warning). No `Database` argument is
+      // needed; if a future record type starts writing here it should
+      // accept the active `database` and stay inside this write.
       if try applyGRDBBatchDeletion(recordType: recordType, names: names) {
         continue
       }

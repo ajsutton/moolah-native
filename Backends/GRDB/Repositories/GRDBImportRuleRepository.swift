@@ -141,16 +141,24 @@ final class GRDBImportRuleRepository: ImportRuleRepository, @unchecked Sendable 
 
   func applyRemoteChangesSync(saved rows: [ImportRuleRow], deleted ids: [UUID]) throws {
     try database.write { database in
-      for row in rows {
-        // `upsert` matches on the PK conflict (`id`). Because
-        // `recordName(for: id)` is total over `id`, the implied UNIQUE
-        // conflict on `record_name` is satisfied by the same row, so a
-        // single conflict target suffices.
-        try row.upsert(database)
-      }
-      for id in ids {
-        _ = try ImportRuleRow.deleteOne(database, id: id)
-      }
+      try applyRemoteChangesSync(saved: rows, deleted: ids, in: database)
+    }
+  }
+
+  /// In-transaction variant — see `GRDBCSVImportProfileRepository.applyRemoteChangesSync(...:in:)`
+  /// for the rationale (one commit per `applyRemoteChanges` batch, issue #872).
+  func applyRemoteChangesSync(
+    saved rows: [ImportRuleRow], deleted ids: [UUID], in database: Database
+  ) throws {
+    for row in rows {
+      // `upsert` matches on the PK conflict (`id`). Because
+      // `recordName(for: id)` is total over `id`, the implied UNIQUE
+      // conflict on `record_name` is satisfied by the same row, so a
+      // single conflict target suffices.
+      try row.upsert(database)
+    }
+    for id in ids {
+      _ = try ImportRuleRow.deleteOne(database, id: id)
     }
   }
 

@@ -60,10 +60,12 @@ actor FullConversionService: InstrumentConversionService {
   }()
 
   /// Number of distinct `(source, target, day)` triples currently
-  /// memoised. Exposed for the caching-invariant tests in
+  /// memoised. Test-only accessor — kept with the `ForTesting` suffix
+  /// per `guides/DATABASE_CODE_GUIDE.md` §7 so the production API
+  /// surface stays clean. Exposed for the caching-invariant tests in
   /// `FullConversionServiceCachingTests` so they can assert that
   /// repeated identical calls collapse to a single cache entry.
-  var cachedRateCount: Int { rateCache.count }
+  var cachedRateCountForTesting: Int { rateCache.count }
 
   /// - Parameter cryptoRegistrations: Closure invoked on each crypto
   ///   conversion to obtain the current set of crypto registrations. Tokens

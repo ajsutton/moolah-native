@@ -1,5 +1,6 @@
 @preconcurrency import CloudKit
 import Foundation
+import GRDB
 
 extension ProfileDataSyncHandler {
   // MARK: - Per-Record-Type Save Helpers
@@ -16,7 +17,7 @@ extension ProfileDataSyncHandler {
   }
 
   nonisolated func applyBatchSaveCSVImportProfile(
-    ckRecords: [CKRecord], systemFields: [String: Data]
+    ckRecords: [CKRecord], systemFields: [String: Data], in database: Database
   ) throws {
     let context = GRDBBatchSaveContext(
       ckRecords: ckRecords,
@@ -28,12 +29,13 @@ extension ProfileDataSyncHandler {
       idKey: { $0.id.uuidString },
       stamp: stampSystemFields)
     try writeRemote(site: context.site) {
-      try grdbRepositories.csvImportProfiles.applyRemoteChangesSync(saved: rows, deleted: [])
+      try grdbRepositories.csvImportProfiles.applyRemoteChangesSync(
+        saved: rows, deleted: [], in: database)
     }
   }
 
   nonisolated func applyBatchSaveImportRule(
-    ckRecords: [CKRecord], systemFields: [String: Data]
+    ckRecords: [CKRecord], systemFields: [String: Data], in database: Database
   ) throws {
     let context = GRDBBatchSaveContext(
       ckRecords: ckRecords,
@@ -45,7 +47,8 @@ extension ProfileDataSyncHandler {
       idKey: { $0.id.uuidString },
       stamp: stampSystemFields)
     try writeRemote(site: context.site) {
-      try grdbRepositories.importRules.applyRemoteChangesSync(saved: rows, deleted: [])
+      try grdbRepositories.importRules.applyRemoteChangesSync(
+        saved: rows, deleted: [], in: database)
     }
   }
 
@@ -59,7 +62,7 @@ extension ProfileDataSyncHandler {
   /// §"Per-profile handler decommissioning" requires we silently log
   /// and skip — never apply.
   nonisolated func applyBatchSaveInstrument(
-    ckRecords: [CKRecord], systemFields: [String: Data]
+    ckRecords: [CKRecord], systemFields: [String: Data], in database: Database
   ) throws {
     guard !ckRecords.isEmpty else { return }
     logger.warning(
@@ -73,7 +76,7 @@ extension ProfileDataSyncHandler {
   }
 
   nonisolated func applyBatchSaveAccount(
-    ckRecords: [CKRecord], systemFields: [String: Data]
+    ckRecords: [CKRecord], systemFields: [String: Data], in database: Database
   ) throws {
     let context = GRDBBatchSaveContext(
       ckRecords: ckRecords,
@@ -85,12 +88,13 @@ extension ProfileDataSyncHandler {
       idKey: { $0.id.uuidString },
       stamp: stampSystemFields)
     try writeRemote(site: context.site) {
-      try grdbRepositories.accounts.applyRemoteChangesSync(saved: rows, deleted: [])
+      try grdbRepositories.accounts.applyRemoteChangesSync(
+        saved: rows, deleted: [], in: database)
     }
   }
 
   nonisolated func applyBatchSaveCategory(
-    ckRecords: [CKRecord], systemFields: [String: Data]
+    ckRecords: [CKRecord], systemFields: [String: Data], in database: Database
   ) throws {
     let context = GRDBBatchSaveContext(
       ckRecords: ckRecords,
@@ -102,12 +106,13 @@ extension ProfileDataSyncHandler {
       idKey: { $0.id.uuidString },
       stamp: stampSystemFields)
     try writeRemote(site: context.site) {
-      try grdbRepositories.categories.applyRemoteChangesSync(saved: rows, deleted: [])
+      try grdbRepositories.categories.applyRemoteChangesSync(
+        saved: rows, deleted: [], in: database)
     }
   }
 
   nonisolated func applyBatchSaveEarmark(
-    ckRecords: [CKRecord], systemFields: [String: Data]
+    ckRecords: [CKRecord], systemFields: [String: Data], in database: Database
   ) throws {
     let context = GRDBBatchSaveContext(
       ckRecords: ckRecords,
@@ -119,12 +124,13 @@ extension ProfileDataSyncHandler {
       idKey: { $0.id.uuidString },
       stamp: stampSystemFields)
     try writeRemote(site: context.site) {
-      try grdbRepositories.earmarks.applyRemoteChangesSync(saved: rows, deleted: [])
+      try grdbRepositories.earmarks.applyRemoteChangesSync(
+        saved: rows, deleted: [], in: database)
     }
   }
 
   nonisolated func applyBatchSaveEarmarkBudgetItem(
-    ckRecords: [CKRecord], systemFields: [String: Data]
+    ckRecords: [CKRecord], systemFields: [String: Data], in database: Database
   ) throws {
     let context = GRDBBatchSaveContext(
       ckRecords: ckRecords,
@@ -136,12 +142,13 @@ extension ProfileDataSyncHandler {
       idKey: { $0.id.uuidString },
       stamp: stampSystemFields)
     try writeRemote(site: context.site) {
-      try grdbRepositories.earmarkBudgetItems.applyRemoteChangesSync(saved: rows, deleted: [])
+      try grdbRepositories.earmarkBudgetItems.applyRemoteChangesSync(
+        saved: rows, deleted: [], in: database)
     }
   }
 
   nonisolated func applyBatchSaveInvestmentValue(
-    ckRecords: [CKRecord], systemFields: [String: Data]
+    ckRecords: [CKRecord], systemFields: [String: Data], in database: Database
   ) throws {
     let context = GRDBBatchSaveContext(
       ckRecords: ckRecords,
@@ -153,12 +160,13 @@ extension ProfileDataSyncHandler {
       idKey: { $0.id.uuidString },
       stamp: stampSystemFields)
     try writeRemote(site: context.site) {
-      try grdbRepositories.investmentValues.applyRemoteChangesSync(saved: rows, deleted: [])
+      try grdbRepositories.investmentValues.applyRemoteChangesSync(
+        saved: rows, deleted: [], in: database)
     }
   }
 
   nonisolated func applyBatchSaveTransaction(
-    ckRecords: [CKRecord], systemFields: [String: Data]
+    ckRecords: [CKRecord], systemFields: [String: Data], in database: Database
   ) throws {
     let context = GRDBBatchSaveContext(
       ckRecords: ckRecords,
@@ -170,12 +178,13 @@ extension ProfileDataSyncHandler {
       idKey: { $0.id.uuidString },
       stamp: stampSystemFields)
     try writeRemote(site: context.site) {
-      try grdbRepositories.transactions.applyRemoteChangesSync(saved: rows, deleted: [])
+      try grdbRepositories.transactions.applyRemoteChangesSync(
+        saved: rows, deleted: [], in: database)
     }
   }
 
   nonisolated func applyBatchSaveTransactionLeg(
-    ckRecords: [CKRecord], systemFields: [String: Data]
+    ckRecords: [CKRecord], systemFields: [String: Data], in database: Database
   ) throws {
     let context = GRDBBatchSaveContext(
       ckRecords: ckRecords,
@@ -187,7 +196,8 @@ extension ProfileDataSyncHandler {
       idKey: { $0.id.uuidString },
       stamp: stampSystemFields)
     try writeRemote(site: context.site) {
-      try grdbRepositories.transactionLegs.applyRemoteChangesSync(saved: rows, deleted: [])
+      try grdbRepositories.transactionLegs.applyRemoteChangesSync(
+        saved: rows, deleted: [], in: database)
     }
   }
 

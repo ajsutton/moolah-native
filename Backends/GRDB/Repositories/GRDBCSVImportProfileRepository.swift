@@ -126,16 +126,27 @@ final class GRDBCSVImportProfileRepository: CSVImportProfileRepository, @uncheck
 
   func applyRemoteChangesSync(saved rows: [CSVImportProfileRow], deleted ids: [UUID]) throws {
     try database.write { database in
-      for row in rows {
-        // `upsert` matches on the PK conflict (`id`). Because
-        // `recordName(for: id)` is total over `id`, the implied UNIQUE
-        // conflict on `record_name` is satisfied by the same row, so a
-        // single conflict target suffices.
-        try row.upsert(database)
-      }
-      for id in ids {
-        _ = try CSVImportProfileRow.deleteOne(database, id: id)
-      }
+      try applyRemoteChangesSync(saved: rows, deleted: ids, in: database)
+    }
+  }
+
+  /// In-transaction variant used by `ProfileDataSyncHandler.applyRemoteChanges`
+  /// to batch every per-record-type apply into one outer `database.write`
+  /// — so `databaseDidCommit` (and the UI `ValueObservation` re-fetches
+  /// it triggers) fires once per fetched-changes batch rather than once
+  /// per record type. See issue #872 / `ApplyRemoteChangesAtomicityTests`.
+  func applyRemoteChangesSync(
+    saved rows: [CSVImportProfileRow], deleted ids: [UUID], in database: Database
+  ) throws {
+    for row in rows {
+      // `upsert` matches on the PK conflict (`id`). Because
+      // `recordName(for: id)` is total over `id`, the implied UNIQUE
+      // conflict on `record_name` is satisfied by the same row, so a
+      // single conflict target suffices.
+      try row.upsert(database)
+    }
+    for id in ids {
+      _ = try CSVImportProfileRow.deleteOne(database, id: id)
     }
   }
 
