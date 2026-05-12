@@ -32,7 +32,7 @@ private func seedPositionValuations(backend: any BackendProvider, account: Accou
 }
 
 #Preview {
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   let investmentStore = InvestmentStore(
     repository: backend.investments,
     transactionRepository: backend.transactions,
@@ -62,7 +62,7 @@ private func seedPositionValuations(backend: any BackendProvider, account: Accou
 }
 
 #Preview("Position-tracked") {
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   let investmentStore = InvestmentStore(
     repository: backend.investments,
     transactionRepository: backend.transactions,

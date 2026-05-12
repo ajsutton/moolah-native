@@ -1,7 +1,6 @@
 import CloudKit
 import Foundation
 import GRDB
-import SwiftData
 import Testing
 
 @testable import Moolah

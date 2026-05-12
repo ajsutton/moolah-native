@@ -10,7 +10,7 @@ protocol InstrumentRegistryRepository: Sendable {
   /// database, merged with the ambient fiat ISO list from
   /// `Locale.Currency.isoCurrencies`. De-duplicated by `Instrument.id`
   /// (stored row wins on collision with an ambient fiat entry).
-  /// Throws on a backing-store failure (e.g. `ModelContainer` unavailable).
+  /// Throws on a backing-store failure (e.g. database unavailable).
   func all() async throws -> [Instrument]
 
   /// All registered crypto instruments paired with their provider mappings.

@@ -1,6 +1,5 @@
 // swiftlint:disable multiline_arguments
 
-import SwiftData
 import SwiftUI
 
 struct EarmarkDetailView: View {
@@ -237,7 +236,7 @@ private func previewEarmark() -> Earmark {
 
 #Preview {
   let earmark = previewEarmark()
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   let earmarkStore = EarmarkStore(
     repository: backend.earmarks,
     conversionService: backend.conversionService,

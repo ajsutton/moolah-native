@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 import Testing
 
 @testable import Moolah
@@ -52,13 +51,8 @@ struct ExportImportIntegrationTests4 {
     let exportedInstrumentIds = Set(decoded.instruments.map(\.id))
     #expect(exportedInstrumentIds == [aud.id, usd.id, bhp.id, eth.id])
 
-    let freshContainer = try TestModelContainer.create()
-    _ = try await coordinator.importFromFile(url: tempURL, modelContainer: freshContainer)
     let freshDatabase = try ProfileDatabase.openInMemory()
-    let migratorDefaults = try #require(
-      UserDefaults(suiteName: "export-import-test-\(UUID().uuidString)"))
-    try await SwiftDataToGRDBMigrator().migrateIfNeeded(
-      modelContainer: freshContainer, database: freshDatabase, defaults: migratorDefaults)
+    _ = try await coordinator.importFromFile(url: tempURL, database: freshDatabase)
     let freshBackend = CloudKitBackend(
       database: freshDatabase,
       instrument: aud,

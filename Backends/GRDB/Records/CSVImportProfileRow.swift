@@ -3,16 +3,7 @@
 import Foundation
 import GRDB
 
-/// One row in the `csv_import_profile` table — the GRDB-backed
-/// counterpart to the SwiftData `@Model` `CSVImportProfileRecord`.
-///
-/// **Naming.** The "Row" suffix is the GRDB convention; the SwiftData
-/// `CSVImportProfileRecord` retains its name until the `@Model` class
-/// is removed entirely. Two types with the same fully-qualified name
-/// in one module is a hard compile error, so both names ship visible
-/// during the migration — the `*Row` form is the new (canonical)
-/// shape, and the `*Record` form is kept only so the one-shot
-/// SwiftData → GRDB migrator can read existing rows on first launch.
+/// One row in the `csv_import_profile` table.
 ///
 /// **Sync metadata.** `recordName` is the canonical CloudKit recordName
 /// (`"CSVImportProfileRecord|<uuid>"`, see
@@ -58,10 +49,8 @@ struct CSVImportProfileRow {
   var accountId: UUID
   var parserIdentifier: String
   /// Normalised CSV headers joined by the ASCII unit-separator (U+001F).
-  /// Mirrors the joined form persisted by `CSVImportProfileRecord` so the
-  /// CKRecord wire format stays identical — see
-  /// `Backends/GRDB/Records/CSVImportProfileRow+Mapping.swift` for the
-  /// (de)serialisation helpers.
+  /// See `Backends/GRDB/Records/CSVImportProfileRow+Mapping.swift` for
+  /// the (de)serialisation helpers.
   var headerSignature: String
   var filenamePattern: String?
   var deleteAfterImport: Bool

@@ -42,9 +42,8 @@ extension TransactionLegRow {
     self.counterpartyAddress = leg.counterpartyAddress
   }
 
-  /// Domain projection. Mirrors `TransactionLegRecord.toDomain(instrument:)`.
-  /// `instrument` must be supplied by the repository via the registry
-  /// lookup; the row itself only stores the id.
+  /// Domain projection. `instrument` must be supplied by the repository
+  /// via the registry lookup; the row itself only stores the id.
   ///
   /// Throws `BackendError.dataCorrupted` when `type` carries a raw value
   /// the compiled `TransactionType` enum doesn't recognise — see

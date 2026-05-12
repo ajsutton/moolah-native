@@ -146,7 +146,7 @@ private func multiInstrumentSplitPreviewContent(
   positions: [Position],
   title: String
 ) -> some View {
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   return Text("Transactions list goes here")
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .multiInstrumentPositionsSplit(

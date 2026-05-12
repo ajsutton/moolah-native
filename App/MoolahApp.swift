@@ -4,7 +4,6 @@
 
 import CloudKit
 import OSLog
-import SwiftData
 import SwiftUI
 
 // Command-menu definitions live in `MoolahDomainCommands.swift`.
@@ -76,6 +75,7 @@ struct MoolahApp: App {
     // user's account and we must not mutate it.
     if uiTestingSeed == nil {
       Self.cleanupLegacyRateCachesOnce()
+      Self.cleanupLegacySwiftDataStoresOnce()
     }
     let setup = Self.makeContainerSetup(uiTestingSeed: uiTestingSeed)
 
@@ -149,7 +149,7 @@ struct MoolahApp: App {
             // testing the fixture container is ephemeral, so there is
             // nothing meaningful to back up.
             guard uiTestingProfileId == nil else { return }
-            backupManager.performDailyBackup(
+            await backupManager.performDailyBackup(
               profiles: profileStore.profiles,
               containerManager: containerManager
             )
@@ -160,14 +160,13 @@ struct MoolahApp: App {
             while !Task.isCancelled {
               try? await Task.sleep(for: .seconds(86400))
               guard !Task.isCancelled else { break }
-              backupManager.performDailyBackup(
+              await backupManager.performDailyBackup(
                 profiles: profileStore.profiles,
                 containerManager: containerManager
               )
             }
           }
       }
-      .modelContainer(containerManager.indexContainer)
       .onChange(of: scenePhase) { _, newPhase in
         handleScenePhaseChange(newPhase)
       }
@@ -203,7 +202,6 @@ struct MoolahApp: App {
           .environment(sessionManager)
           .environment(containerManager)
           .environment(syncCoordinator)
-          .modelContainer(containerManager.indexContainer)
       }
       .windowResizability(.contentMinSize)
 
@@ -230,7 +228,6 @@ struct MoolahApp: App {
           .environment(\.pendingNavigation, $pendingNavigation)
           .onOpenURL { url in handleURL(url) }
       }
-      .modelContainer(containerManager.indexContainer)
       .onChange(of: scenePhase) { _, newPhase in
         handleScenePhaseChange(newPhase)
       }

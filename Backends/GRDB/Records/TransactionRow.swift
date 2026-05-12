@@ -3,12 +3,10 @@
 import Foundation
 import GRDB
 
-/// One row in the `"transaction"` table — the GRDB-backed counterpart
-/// to the SwiftData `@Model` `TransactionRecord`. Mirrors the SwiftData
-/// shape field-for-field including the eight denormalised
-/// `import_origin_*` columns. Using one column per `ImportOrigin`
-/// field (rather than a single JSON blob) keeps the CKRecord wire
-/// format byte-identical.
+/// One row in the `"transaction"` table. Carries the eight denormalised
+/// `import_origin_*` columns directly — one column per `ImportOrigin`
+/// field rather than a single JSON blob — so the CKRecord wire format
+/// stays stable across the codebase.
 struct TransactionRow {
   static let databaseTableName = "transaction"
 
@@ -58,10 +56,9 @@ struct TransactionRow {
   /// Raw value of `RecurPeriod`. Pinned by a CHECK constraint.
   var recurPeriod: String?
   var recurEvery: Int?
-  // ImportOrigin denormalised — preserve nullability per
-  // `TransactionRecord.swift:53–90`. Decimals stored as String to
-  // preserve precision across the SwiftData ↔ CloudKit ↔ Domain
-  // round-trip; mirror that here.
+  // ImportOrigin denormalised — each field is nullable to match the
+  // domain `ImportOrigin` shape. Decimals stored as String to preserve
+  // precision across the database ↔ CloudKit ↔ Domain round-trip.
   var importOriginRawDescription: String?
   var importOriginBankReference: String?
   var importOriginRawAmount: String?

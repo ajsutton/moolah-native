@@ -9,8 +9,7 @@ extension CSVImportProfileRow {
   static let recordType = "CSVImportProfileRecord"
 
   /// Unit-separator (U+001F). Chosen because the CSV tokenizer never
-  /// produces it, so joined-string round trips are loss-free. Mirrors the
-  /// `CSVImportProfileRecord.separator` value the SwiftData model used.
+  /// produces it, so joined-string round trips are loss-free.
   static let separator = "\u{1F}"
 
   /// Builds the canonical CloudKit `recordName` for a given UUID. The

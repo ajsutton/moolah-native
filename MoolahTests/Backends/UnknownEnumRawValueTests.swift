@@ -131,38 +131,4 @@ struct UnknownEnumRawValueTests {
       _ = try row.toDomain(legs: [])
     }
   }
-
-  // MARK: - CloudKit (SwiftData) record mappers
-
-  @Test
-  @MainActor
-  func cloudkitAccountRecordThrowsOnUnknownType() async throws {
-    let record = AccountRecord(
-      name: "Future Account",
-      type: "future_account_type",
-      instrumentId: "AUD")
-
-    #expect(
-      throws: BackendError.dataCorrupted("Unknown AccountType raw value: future_account_type")
-    ) {
-      _ = try record.toDomain()
-    }
-  }
-
-  @Test
-  @MainActor
-  func cloudkitTransactionLegRecordThrowsOnUnknownType() async throws {
-    let record = TransactionLegRecord(
-      transactionId: UUID(),
-      accountId: nil,
-      instrumentId: "AUD",
-      quantity: 1_000,
-      type: "future_leg_type")
-
-    #expect(
-      throws: BackendError.dataCorrupted("Unknown TransactionType raw value: future_leg_type")
-    ) {
-      _ = try record.toDomain(instrument: .AUD)
-    }
-  }
 }

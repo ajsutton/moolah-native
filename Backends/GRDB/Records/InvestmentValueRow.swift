@@ -3,13 +3,12 @@
 import Foundation
 import GRDB
 
-/// One row in the `investment_value` table — the GRDB-backed
-/// counterpart to the SwiftData `@Model` `InvestmentValueRecord`.
+/// One row in the `investment_value` table.
 ///
 /// Composite uniqueness on `(account_id, date)` is enforced at the
-/// repository layer (matching the SwiftData status quo), not as a SQL
-/// UNIQUE constraint — `setValue(accountId:date:value:)` does an
-/// explicit `SELECT … LIMIT 1; UPDATE / INSERT`.
+/// repository layer, not as a SQL UNIQUE constraint —
+/// `setValue(accountId:date:value:)` does an explicit
+/// `SELECT … LIMIT 1; UPDATE / INSERT`.
 struct InvestmentValueRow {
   static let databaseTableName = "investment_value"
 

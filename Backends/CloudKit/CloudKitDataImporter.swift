@@ -1,7 +1,6 @@
 import Foundation
 import GRDB
 import OSLog
-import SwiftData
 
 struct ImportResult: Sendable {
   let accountCount: Int
@@ -17,28 +16,19 @@ struct ImportResult: Sendable {
   }
 }
 
-/// Imports exported data into a profile's stores. Writes the synced
-/// record types to the GRDB-backed `data.sqlite` (the canonical store
-/// that the runtime reads from) and mirrors them to the SwiftData
-/// container so legacy verifiers and any straggling SwiftData callers
-/// see consistent counts.
-///
-/// Runs on the MainActor because the SwiftData mirror writes use the
-/// container's `mainContext`. The GRDB writes themselves are
-/// queue-serialised and don't require main-actor isolation.
-@MainActor
+/// Imports exported data into a profile's GRDB-backed `data.sqlite`,
+/// which is the canonical store the runtime reads from. The GRDB writes
+/// are queue-serialised inside `database.write`, so the importer itself
+/// does not need any actor isolation.
 struct CloudKitDataImporter {
-  private let modelContainer: ModelContainer
   private let database: any DatabaseWriter
   private let currencyCode: String
   private let logger = Logger(subsystem: "com.moolah.app", category: "Import")
 
   init(
-    modelContainer: ModelContainer,
     database: any DatabaseWriter,
     currencyCode: String
   ) {
-    self.modelContainer = modelContainer
     self.database = database
     self.currencyCode = currencyCode
   }
@@ -48,57 +38,19 @@ struct CloudKitDataImporter {
     _ data: ExportedData,
     progress: ((String, Double) -> Void)? = nil
   ) async throws -> ImportResult {
-    let context = modelContainer.mainContext
-    let totalSteps = 7.0
-    var step = 0.0
-
-    // 0. Instruments (must exist before records that reference them)
-    for instrument in data.instruments {
-      context.insert(InstrumentRecord.from(instrument))
-    }
-
-    progress?("categories", step / totalSteps)
-    insertCategories(data.categories, into: context)
-    step += 1
+    // The GRDB write is a single transaction, so per-stage progress is
+    // approximate: fire "saving" before the transaction so the call site
+    // can render a spinner, yield once so the progress callback can be
+    // observed, then write everything, then fire "done".
+    progress?("saving", 0.0)
     await Task.yield()
 
-    progress?("accounts", step / totalSteps)
-    insertAccounts(data.accounts, into: context)
-    step += 1
-    await Task.yield()
-
-    progress?("earmarks", step / totalSteps)
-    for earmark in data.earmarks {
-      context.insert(EarmarkRecord.from(earmark))
-    }
-    step += 1
-    await Task.yield()
-
-    progress?("budget items", step / totalSteps)
-    let budgetItemCount = insertBudgetItems(data.earmarkBudgets, into: context)
-    step += 1
-    await Task.yield()
-
-    progress?("transactions", step / totalSteps)
-    insertTransactions(data.transactions, into: context)
-    step += 1
-    await Task.yield()
-
-    progress?("investment values", step / totalSteps)
-    let investmentValueCount = insertInvestmentValues(data.investmentValues, into: context)
-    step += 1
-    await Task.yield()
-
-    progress?("saving", step / totalSteps)
-    try context.save()
-
-    // Mirror everything to GRDB so the runtime stores (which read
-    // exclusively from `data.sqlite`) see the imported data. Order:
-    // parents before children to satisfy enforced FKs. The async
-    // `database.write` overload runs the GRDB transaction on GRDB's
-    // own writer queue rather than blocking `@MainActor` for every
-    // imported row.
     try await writeGRDB(data: data)
+
+    progress?("done", 1.0)
+
+    let budgetItemCount = data.earmarkBudgets.values.reduce(0) { $0 + $1.count }
+    let investmentValueCount = data.investmentValues.values.reduce(0) { $0 + $1.count }
 
     logger.info(
       "Import complete: \(data.accounts.count) accounts, \(data.transactions.count) transactions, \(investmentValueCount) investment values"
@@ -114,90 +66,13 @@ struct CloudKitDataImporter {
     )
   }
 
-  private func insertCategories(_ categories: [Category], into context: ModelContext) {
-    for category in categories {
-      context.insert(
-        CategoryRecord(
-          id: category.id,
-          name: category.name,
-          parentId: category.parentId))
-    }
-  }
-
-  private func insertAccounts(_ accounts: [Account], into context: ModelContext) {
-    for account in accounts {
-      context.insert(
-        AccountRecord(
-          id: account.id,
-          name: account.name,
-          type: account.type.rawValue,
-          instrumentId: account.instrument.id,
-          position: account.position,
-          isHidden: account.isHidden))
-    }
-  }
-
-  private func insertBudgetItems(
-    _ budgets: [UUID: [EarmarkBudgetItem]], into context: ModelContext
-  ) -> Int {
-    var budgetItemCount = 0
-    for (earmarkId, items) in budgets {
-      for item in items {
-        context.insert(
-          EarmarkBudgetItemRecord(
-            id: item.id,
-            earmarkId: earmarkId,
-            categoryId: item.categoryId,
-            amount: item.amount.storageValue,
-            instrumentId: item.amount.instrument.id))
-        budgetItemCount += 1
-      }
-    }
-    return budgetItemCount
-  }
-
-  private func insertTransactions(_ transactions: [Transaction], into context: ModelContext) {
-    for txn in transactions {
-      let record = TransactionRecord.from(txn)
-      context.insert(record)
-      for (index, leg) in txn.legs.enumerated() {
-        let legRecord = TransactionLegRecord.from(leg, transactionId: txn.id, sortOrder: index)
-        context.insert(legRecord)
-      }
-    }
-  }
-
-  private func insertInvestmentValues(
-    _ values: [UUID: [InvestmentValue]], into context: ModelContext
-  ) -> Int {
-    var investmentValueCount = 0
-    for (accountId, values) in values {
-      for value in values {
-        context.insert(
-          InvestmentValueRecord(
-            id: UUID(),
-            accountId: accountId,
-            date: value.date,
-            value: value.value.storageValue,
-            instrumentId: value.value.instrument.id))
-        investmentValueCount += 1
-      }
-    }
-    return investmentValueCount
-  }
-
-  // MARK: - GRDB mirror
+  // MARK: - GRDB writes
 
   /// Writes every record type from `data` into the per-profile GRDB
   /// database. Parents go first so FK references resolve as the single
   /// `database.write` transaction commits; non-fiat instruments are
   /// upserted up-front so accounts and legs that reference them by id
   /// can resolve their full domain `Instrument` on read.
-  ///
-  /// `async throws` so the GRDB transaction runs on GRDB's writer
-  /// queue rather than holding `@MainActor` for the duration of the
-  /// import. The body is otherwise unchanged from the previous
-  /// synchronous version.
   private func writeGRDB(data: ExportedData) async throws {
     try await database.write { database in
       try Self.writeInstrumentsAndCategories(data: data, database: database)

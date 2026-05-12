@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 import Testing
 
 @testable import Moolah
@@ -88,11 +87,11 @@ struct ExportImportIntegrationTestsMore {
     let data = try JSONEncoder.exportEncoder.encode(exported)
     try data.write(to: tempURL)
 
-    let container = try TestModelContainer.create()
+    let database = try ProfileDatabase.openInMemory()
     let coordinator = ExportCoordinator()
 
     await #expect(throws: ExportError.self) {
-      _ = try await coordinator.importFromFile(url: tempURL, modelContainer: container)
+      _ = try await coordinator.importFromFile(url: tempURL, database: database)
     }
   }
 }

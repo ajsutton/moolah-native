@@ -76,7 +76,7 @@ struct AddInvestmentValueView: View {
 }
 
 #Preview {
-  let (backend, _) = PreviewBackend.create()
+  let backend = PreviewBackend.create()
   let store = InvestmentStore(
     repository: backend.investments,
     transactionRepository: backend.transactions,
