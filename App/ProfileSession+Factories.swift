@@ -30,7 +30,7 @@ extension ProfileSession {
   static func makeMarketDataServices(database: any DatabaseWriter) -> MarketDataServices {
     let yahooClient = YahooFinanceClient()
     let apiKeyStore = KeychainStore(
-      service: "com.moolah.api-keys", account: "coingecko", synchronizable: true
+      service: KeychainServices.apiKeys, account: "coingecko", synchronizable: true
     )
     let coinGeckoApiKey = try? apiKeyStore.restoreString()
     return MarketDataServices(
