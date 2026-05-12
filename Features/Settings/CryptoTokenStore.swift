@@ -153,9 +153,9 @@ final class CryptoTokenStore {
       cryptoPriceService: cryptoPriceService,
       conversionService: conversionService,
       apiKeyStore: KeychainStore(
-        service: "com.moolah.api-keys", account: "coingecko", synchronizable: true),
+        service: KeychainServices.apiKeys, account: "coingecko", synchronizable: true),
       alchemyKeyStore: KeychainStore(
-        service: "com.moolah.api-keys", account: "alchemy", synchronizable: true),
+        service: KeychainServices.apiKeys, account: "alchemy", synchronizable: true),
       sharedStore: sharedStore)
   }
 

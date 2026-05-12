@@ -24,7 +24,7 @@ final class FolderScanService {
     profileId: UUID,
     importStore: ImportStore,
     preferences: ImportPreferences,
-    defaults: UserDefaults = .standard,
+    defaults: UserDefaults = .moolahShared,
     fileManager: FileManager = .default
   ) {
     self.profileId = profileId

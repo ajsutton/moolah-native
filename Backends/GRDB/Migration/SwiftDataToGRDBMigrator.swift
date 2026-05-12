@@ -64,7 +64,7 @@ struct SwiftDataToGRDBMigrator {
   /// All `UserDefaults` keys that gate this migrator. Used by
   /// `resetMigrationFlags(in:)` to reset state between UI test launches —
   /// each test launches a fresh in-memory `ProfileContainerManager` with
-  /// new seed data, but `UserDefaults.standard` persists across xctest
+  /// new seed data, but `UserDefaults.moolahShared` persists across xctest
   /// launches in the same runner. Without resetting, the second test's
   /// migrator would skip and the seeded SwiftData rows would never reach
   /// GRDB. Production launches never call this reset.
@@ -87,7 +87,7 @@ struct SwiftDataToGRDBMigrator {
   /// launches only: each UI test starts from a fresh in-memory profile
   /// container and must observe its own seeded rows in GRDB. No
   /// production code path should invoke this.
-  static func resetMigrationFlags(in defaults: UserDefaults = .standard) {
+  static func resetMigrationFlags(in defaults: UserDefaults = .moolahShared) {
     for key in allMigrationFlags {
       defaults.removeObject(forKey: key)
     }
@@ -99,7 +99,7 @@ struct SwiftDataToGRDBMigrator {
   /// Runs the one-shot migration for every record type. Each is gated
   /// independently; a previously-migrated record type is a no-op.
   ///
-  /// `defaults` is injected with a `.standard` default so production
+  /// `defaults` is injected with a `.moolahShared` default so production
   /// callers pass nothing while tests supply an isolated suite (avoids
   /// the `CODE_GUIDE.md` §17 "no direct singleton access" rule).
   ///
@@ -115,7 +115,7 @@ struct SwiftDataToGRDBMigrator {
   func migrateIfNeeded(
     modelContainer: ModelContainer,
     database: any DatabaseWriter,
-    defaults: UserDefaults = .standard
+    defaults: UserDefaults = .moolahShared
   ) async throws {
     let start = ContinuousClock.now
     defer {

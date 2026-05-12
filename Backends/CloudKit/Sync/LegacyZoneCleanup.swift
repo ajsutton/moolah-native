@@ -21,7 +21,7 @@ enum LegacyZoneCleanup {
   ///   "cleanup done" flag. Tests can pass an isolated suite to avoid
   ///   touching the user's standard defaults.
   @MainActor
-  static func performIfNeeded(defaults: UserDefaults = .standard) {
+  static func performIfNeeded(defaults: UserDefaults = .moolahShared) {
     guard !defaults.bool(forKey: cleanupKey) else { return }
     Task { @MainActor in
       await deleteLegacyZone(defaults: defaults)

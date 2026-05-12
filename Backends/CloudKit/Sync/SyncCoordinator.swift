@@ -342,7 +342,7 @@ final class SyncCoordinator {
 
   init(
     containerManager: ProfileContainerManager,
-    userDefaults: UserDefaults = .standard,
+    userDefaults: UserDefaults = .moolahShared,
     isCloudKitAvailable: Bool = CloudKitAuthProvider.isCloudKitAvailable,
     sharedInstrumentRegistry: GRDBInstrumentRegistryRepository? = nil,
     sharedMarketData: ProfileSession.MarketDataServices? = nil,
