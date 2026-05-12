@@ -178,6 +178,19 @@ struct TradeFormDriver {
 
   // MARK: - Private helpers
 
+  /// Polls `element.isHittable` until it returns `true` or `timeout` elapses.
+  /// Returns `true` on hittable, `false` on timeout. Use after
+  /// `waitForExistence` when the element may briefly exist in the AX tree
+  /// before becoming hittable (e.g. while an overlapping sheet animates out).
+  private func waitForHittable(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      if element.isHittable { return true }
+      RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+    return element.isHittable
+  }
+
   /// Clears any existing text in `identifier` and types `text`. Returns once
   /// the field's `value` contains `text`.
   private func setAmountField(_ identifier: String, to text: String) {
@@ -185,6 +198,17 @@ struct TradeFormDriver {
     if !field.waitForExistence(timeout: 3) {
       Trace.recordFailure("amount field '\(identifier)' did not appear")
       XCTFail("Amount field '\(identifier)' did not appear within 3s")
+      return
+    }
+    // `waitForExistence` only checks AX-tree presence; on macOS a field can
+    // exist but not yet be hittable while a just-dismissed sheet's animation
+    // finishes (`setInstrument` returns the moment `sheet.exists == false`,
+    // which precedes the window teardown and SwiftUI re-layout completing).
+    // Without this wait, the next `click()` raises "Not hittable"
+    // synchronously and the test fails.
+    if !waitForHittable(field, timeout: 10) {
+      Trace.recordFailure("amount field '\(identifier)' was not hittable within 10s")
+      XCTFail("Amount field '\(identifier)' was not hittable within 10s")
       return
     }
     field.click()
@@ -251,9 +275,50 @@ struct TradeFormDriver {
         "InstrumentPickerSheet row for '\(instrumentId)' did not appear within 5s of searching")
       return
     }
+    // The search input is debounced (250 ms in `InstrumentPickerStore`), so
+    // immediately after `typeText` returns the row list is still settling —
+    // existing rows may shift while filtered results animate in. Wait for
+    // the target row to become hittable before clicking, otherwise a click
+    // can land on a stale frame and the sheet never receives the tap.
+    if !waitForHittable(row, timeout: 10) {
+      Trace.recordFailure("instrumentPicker.row.\(instrumentId) was not hittable within 10s")
+      XCTFail(
+        "InstrumentPickerSheet row for '\(instrumentId)' was not hittable within 10s of appearing")
+      return
+    }
     row.click()
+    awaitPickerDismissal(
+      sheet: sheet,
+      containerIdentifier: containerIdentifier,
+      instrumentId: instrumentId)
+  }
 
-    // Post-condition: sheet must dismiss.
+  /// Awaits the picker's full teardown after a row has been committed.
+  /// Two post-conditions:
+  ///
+  /// 1. The sheet element leaves the AX tree (SwiftUI content unmounts).
+  /// 2. The picker's anchor in the parent window is hittable again.
+  ///
+  /// (2) is non-obvious. On macOS, the picker is presented as a
+  /// `.popover` — a separate `NSWindow`. AX reports `sheet.exists ==
+  /// false` the moment the SwiftUI content unmounts, but the popover's
+  /// NSWindow can still be in its close animation, and its residual
+  /// modal state blocks hit-testing on the parent window. Subsequent
+  /// clicks on form fields then report "Not hittable" even though those
+  /// fields are present in AX (observed reliably on GitHub macos-26
+  /// runners). Waiting for the anchor to be hittable is the
+  /// deterministic signal the popover NSWindow is fully closed.
+  ///
+  /// The anchor is the same element `setInstrument` clicked to open the
+  /// sheet — either the caller's `containerIdentifier` (paid/received
+  /// wrap a `CompactInstrumentPickerButton` which has no inner
+  /// `instrumentPicker.field.<id>` identifier), or the fallback inner
+  /// `instrumentPicker.field.<id>` button (fee path).
+  private func awaitPickerDismissal(
+    sheet: XCUIElement,
+    containerIdentifier: String?,
+    instrumentId: String
+  ) {
     let deadline = Date().addingTimeInterval(3)
     while Date() < deadline {
       if !sheet.exists { break }
@@ -262,6 +327,18 @@ struct TradeFormDriver {
     if sheet.exists {
       Trace.recordFailure("instrumentPicker.sheet did not dismiss after picking '\(instrumentId)'")
       XCTFail("InstrumentPickerSheet did not dismiss within 3s of picking '\(instrumentId)'")
+      return
+    }
+
+    let anchorIdentifier =
+      containerIdentifier ?? UITestIdentifiers.InstrumentPicker.field(instrumentId)
+    let anchor = app.element(for: anchorIdentifier)
+    if !waitForHittable(anchor, timeout: 10) {
+      Trace.recordFailure(
+        "picker anchor '\(anchorIdentifier)' was not hittable within 10s of pick")
+      XCTFail(
+        "Picker anchor '\(anchorIdentifier)' was not hittable within 10s "
+          + "of dismissing the sheet")
     }
   }
 }

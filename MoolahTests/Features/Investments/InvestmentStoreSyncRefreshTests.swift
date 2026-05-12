@@ -56,6 +56,11 @@ struct InvestmentStoreSyncRefreshTests {
     try await store.waitForFirstEmission()
     await store.drainPendingEmissions()
     store.stopObserving()
+    // See `EarmarkStoreSyncRefreshTests` for why we await termination —
+    // `stopObserving()` only issues `Task.cancel()`; an in-flight
+    // emission triggered by the following `setValue(...)` can race the
+    // cancel under CI load.
+    await store.awaitObservationTermination()
 
     let amount = InstrumentAmount(quantity: dec("99.00"), instrument: .defaultTestInstrument)
     try await backend.investments.setValue(

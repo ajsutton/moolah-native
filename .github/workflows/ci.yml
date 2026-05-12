@@ -71,6 +71,10 @@ jobs:
           path: .agent-tmp/ui-fail-*
           if-no-files-found: ignore
           retention-days: 7
+          # `.agent-tmp` starts with a dot, so it's treated as hidden by
+          # `actions/upload-artifact`. Without this flag every UI-test
+          # failure runs the mirror step but uploads zero files.
+          include-hidden-files: true
 
   schema-check:
     name: CloudKit schema additivity

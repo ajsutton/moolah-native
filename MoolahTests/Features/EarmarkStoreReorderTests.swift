@@ -23,9 +23,20 @@ struct EarmarkStoreReorderTests {
 
     await store.reorderEarmarks(from: IndexSet(integer: 2), to: 0)
 
+    // `reorderEarmarks` issues one `update` per row, so each commit
+    // triggers its own observation emission. A names-only predicate can
+    // match an intermediate state where positions are not yet all
+    // rewritten (two rows briefly share the same position, and the
+    // sort-by-position tie-break happens to produce the expected name
+    // order). Pin both names AND positions so the predicate only
+    // matches the final, fully-settled emission.
     try await store.waitForNextEmission(
-      matching: { $0.visibleEarmarks.map(\.name) == ["Third", "First", "Second"] },
-      description: "reorder propagates via observation"
+      matching: { store in
+        let visible = store.visibleEarmarks
+        return visible.map(\.name) == ["Third", "First", "Second"]
+          && visible.map(\.position) == [0, 1, 2]
+      },
+      description: "reorder propagates via observation with final positions"
     )
     #expect(store.visibleEarmarks[0].position == 0)
     #expect(store.visibleEarmarks[1].position == 1)
@@ -50,9 +61,16 @@ struct EarmarkStoreReorderTests {
 
     await store.reorderEarmarks(from: IndexSet(integer: 1), to: 0)
 
+    // Pin both names AND positions so the predicate doesn't match an
+    // intermediate emission where two visible rows briefly share a
+    // position (see `testReorderEarmarksUpdatesPositions`).
     try await store.waitForNextEmission(
-      matching: { $0.visibleEarmarks.map(\.name) == ["Visible2", "Visible1"] },
-      description: "reorder propagates via observation"
+      matching: { store in
+        let visible = store.visibleEarmarks
+        return visible.map(\.name) == ["Visible2", "Visible1"]
+          && visible.map(\.position) == [0, 1]
+      },
+      description: "reorder propagates via observation with final positions"
     )
     let hiddenAfter = store.earmarks.ordered.first { $0.isHidden }
     #expect(hiddenAfter?.position == 1)
