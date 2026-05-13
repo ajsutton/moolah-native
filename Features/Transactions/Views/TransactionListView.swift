@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct TransactionListView<TopAccessory: View>: View {
+  // MARK: - Configuration
+
   /// Grouping for the rendered list. Default `.flat` keeps existing
   /// callers unchanged. `.scheduledStatus` bundles a `pendingPayId`
   /// binding that the row's Pay action writes into; the binding is
@@ -13,6 +15,8 @@ struct TransactionListView<TopAccessory: View>: View {
     case flat
     case scheduledStatus(today: Date, pendingPayId: Binding<Transaction.ID?>)
   }
+
+  // MARK: - Properties
 
   let title: String
   let baseFilter: TransactionFilter
@@ -75,6 +79,13 @@ struct TransactionListView<TopAccessory: View>: View {
 
   private var handlesOwnInspector: Bool { _externalSelection == nil }
 
+  // MARK: - Initializers
+
+  /// Standalone init — `TransactionListView` owns its own selection
+  /// state and presents its own inspector. The default
+  /// `TopAccessory == EmptyView` convenience overload in the extension
+  /// below is the common call site; pass `topAccessory:` directly here
+  /// when the caller needs a non-empty header.
   init(
     title: String,
     filter: TransactionFilter,
@@ -130,6 +141,8 @@ struct TransactionListView<TopAccessory: View>: View {
   @FocusState private var searchFieldFocused: Bool
   @State var transactionPendingDelete: Transaction.ID?
   @State var createRuleFromTransaction: Transaction?
+
+  // MARK: - Body
 
   var body: some View {
     transactionsList
@@ -226,6 +239,8 @@ struct TransactionListView<TopAccessory: View>: View {
           ingestDroppedURLs: ingestDroppedURLs))
   }
 
+  // MARK: - Helpers
+
   /// Mirror of `RecentlyAddedView.ingestDroppedURLs` but with a forced
   /// account. Kept here so the view can hand off to `ImportStore`
   /// directly; logic is intentionally minimal (security-scope → read
@@ -260,6 +275,8 @@ struct TransactionListView<TopAccessory: View>: View {
     }
   }
 }
+
+// MARK: - Convenience Inits (TopAccessory == EmptyView)
 
 // Convenience initialisers for the common case where no top accessory
 // is provided. Swift 6 rejects the simpler form

@@ -56,8 +56,13 @@ public enum UITestIdentifiers {
     public static let container = "transactionlist.container"
 
     /// Container of the scrolling header (top accessory) on detail-view
-    /// transaction lists. The leading `Section { topAccessory … }` row
-    /// in `TransactionListView+List.swift` carries this identifier
+    /// transaction lists. Corresponds to the `topAccessory` storage on
+    /// `TransactionListView` — the Swift property is named for the
+    /// SwiftUI slot ("top accessory" in the spec's vocabulary) while
+    /// this identifier keeps the more conventional "header" term so
+    /// test drivers read naturally. The leading
+    /// `Section { topAccessory … }` row in
+    /// `TransactionListView+List.swift` carries this identifier
     /// unconditionally — even when the accessory is `EmptyView`, since
     /// the row contributes zero visible pixels but the identifier still
     /// resolves. UI tests should treat resolution as "the scroll
