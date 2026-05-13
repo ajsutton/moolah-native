@@ -48,7 +48,7 @@ struct InvestmentValuationsPanel: View {
   @ViewBuilder private var bodyContent: some View {
     if store.values.isEmpty && !store.isLoading {
       ContentUnavailableView(
-        "No Values",
+        "No recorded valuations yet",
         systemImage: "chart.line.uptrend.xyaxis",
         description: Text(
           PlatformActionVerb.emptyStatePrompt(
@@ -82,5 +82,48 @@ struct InvestmentValuationsPanel: View {
     Task {
       await store.removeValue(accountId: accountId, date: value.date)
     }
+  }
+}
+
+#Preview("Empty state") {
+  let backend = PreviewBackend.create()
+  let store = InvestmentStore(
+    repository: backend.investments,
+    transactionRepository: backend.transactions,
+    conversionService: backend.conversionService)
+  return InvestmentValuationsPanel(
+    store: store,
+    accountId: UUID(),
+    showingAddValue: .constant(false)
+  )
+  .frame(width: 240, height: 320)
+}
+
+#Preview("With values") {
+  let backend = PreviewBackend.create()
+  let store = InvestmentStore(
+    repository: backend.investments,
+    transactionRepository: backend.transactions,
+    conversionService: backend.conversionService)
+  let account = Account(name: "Brokerage", type: .investment, instrument: .AUD)
+  return InvestmentValuationsPanel(
+    store: store,
+    accountId: account.id,
+    showingAddValue: .constant(false)
+  )
+  .frame(width: 240, height: 480)
+  .task {
+    _ = try? await backend.accounts.create(
+      account, openingBalance: InstrumentAmount(quantity: 10_000, instrument: .AUD))
+    let calendar = Calendar.current
+    for monthsAgo in (0..<6).reversed() {
+      let date = calendar.date(byAdding: .month, value: -monthsAgo, to: Date()) ?? Date()
+      let quantity: Decimal = 9_500 + Decimal(6 - monthsAgo) * 400
+      await store.setValue(
+        accountId: account.id,
+        date: date,
+        value: InstrumentAmount(quantity: quantity, instrument: .AUD))
+    }
+    await store.loadValues(accountId: account.id)
   }
 }

@@ -7,10 +7,8 @@ import SwiftUI
   /// `file_length` / `type_body_length` thresholds; the `@State`
   /// properties driving this code path stay on the main type (Swift
   /// disallows stored properties in extensions).
-  ///
-  /// Spec: `plans/2026-05-13-scrolling-detail-headers-redesign.md` §1.
   extension PositionsTable {
-    // MARK: - macOS Grid (spec §1)
+    // MARK: - macOS Grid
 
     @ViewBuilder var macOSGridLayout: some View {
       let sortedRows = sort.sorted(groups.flatMap(\.rows))
@@ -114,7 +112,11 @@ import SwiftUI
         sortHeader("Unit Price", column: .unitPrice, alignment: .trailing)
         sortHeader("Cost", column: .costBasis, alignment: .trailing)
         sortHeader("Value", column: .value, alignment: .trailing)
+        // Floor the Gain column at the same width as the body cell so
+        // wide values like "+$1,200.00 +11.9%" don't truncate when
+        // Grid distributes its natural-content widths.
         sortHeader("Gain", column: .gain, alignment: .trailing)
+          .frame(minWidth: 140, alignment: .trailing)
       }
       .padding(.vertical, 4)
       .padding(.horizontal, 8)
@@ -132,7 +134,7 @@ import SwiftUI
           Text(title)
           if sort.column == column {
             // Active-column chevron renders to the right of the title
-            // per spec §1 — matches Finder/Mail/Calendar convention.
+            // — matches Finder/Mail/Calendar convention.
             Image(systemName: sort.direction == .ascending ? "chevron.up" : "chevron.down")
               .imageScale(.small)
               .accessibilityHidden(true)
@@ -218,11 +220,11 @@ import SwiftUI
 
     // MARK: - Accessibility cell text
 
+    /// Delegates to `instrumentLabel(for:)` on the main type so the
+    /// macOS accessibility-Table representation reads "BHP, Stock, ASX"
+    /// — identical to the iOS Table path — keeping one source of truth.
     private func accessibilityInstrumentText(for row: ValuedPosition) -> String {
-      if let exchange = row.instrument.exchange {
-        return "\(row.instrument.name), \(exchange)"
-      }
-      return row.instrument.name
+      instrumentLabel(for: row)
     }
 
     /// Delegates to `gainAccessibilityLabel(gain:percent:)` on the main

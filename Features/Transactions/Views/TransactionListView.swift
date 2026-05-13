@@ -31,7 +31,8 @@ struct TransactionListView<TopAccessory: View>: View {
   /// of the embedded `List`. Defaults to `EmptyView` via the
   /// convenience inits below — the leading `Section` is emitted
   /// unconditionally and an `EmptyView` row contributes zero visible
-  /// pixels (spec §2). When non-empty, the row carries
+  /// pixels, letting the host scroll the accessory away with the list.
+  /// When non-empty, the row carries
   /// `UITestIdentifiers.TransactionList.headerContainer` and is
   /// `.selectionDisabled()` so it stays out of the selection model
   /// and arrow-key navigation.

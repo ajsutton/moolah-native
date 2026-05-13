@@ -8,16 +8,15 @@ import SwiftUI
   /// so the selection background swaps between
   /// `selectedContentBackgroundColor` and
   /// `unemphasizedSelectedContentBackgroundColor` when the window loses
-  /// key state (spec §1.2 — native `NSTableView` swaps these automatically
-  /// but SwiftUI's `Color(nsColor:)` is static, so the swap is driven
-  /// here).
+  /// key state — native `NSTableView` swaps these automatically but
+  /// SwiftUI's `Color(nsColor:)` is static, so the swap is driven here.
   ///
   /// Accessibility shape: this view carries **no** per-cell or per-row
   /// accessibility config — the parent's
-  /// `.accessibilityRepresentation { Table(...) }` (Task 5) replaces
-  /// the Grid's entire accessibility tree with a native `Table`, which
-  /// advertises the "Table" trait, column headers, and row navigation
-  /// to VoiceOver out of the box.
+  /// `.accessibilityRepresentation { Table(...) }` replaces the Grid's
+  /// entire accessibility tree with a native `Table`, which advertises
+  /// the "Table" trait, column headers, and row navigation to VoiceOver
+  /// out of the box.
   struct PositionsTableRow: View {
     let row: ValuedPosition
     let isSelected: Bool
@@ -42,6 +41,7 @@ import SwiftUI
           .gridColumnAlignment(.trailing)
         gainCell
           .gridColumnAlignment(.trailing)
+          .frame(minWidth: 140, alignment: .trailing)
       }
       .padding(.vertical, 6)
       .padding(.horizontal, 8)
@@ -49,7 +49,7 @@ import SwiftUI
         Self.rowBackground(
           isSelected: isSelected,
           isHovered: isHovered,
-          isFocused: controlActiveState == .key,
+          isWindowKey: controlActiveState == .key,
           isAlternateRow: isAlternateRow)
       )
       .overlay(focusRing)
@@ -111,25 +111,29 @@ import SwiftUI
       }
     }
 
-    // MARK: - Background (spec §1.2)
+    // MARK: - Background
 
     /// Resolves the row background from AppKit semantic tokens —
     /// `selectedContentBackgroundColor` (key window), the
     /// `unemphasizedSelected…` variant (window not key),
-    /// `controlAccentColor.opacity(0.10)` (hover —
-    /// the one place opacity is permitted per spec §1.2 because AppKit
-    /// has no single "row hover" semantic colour and 10% is the
-    /// published `NSTableRowView` convention), and
-    /// `alternatingContentBackgroundColors[0|1]` (zebra striping —
-    /// system-resolved so Increase Contrast disables striping for free).
-    static func rowBackground(
+    /// `controlAccentColor.opacity(0.10)` (hover — the published
+    /// `NSTableRowView` convention since AppKit has no single "row
+    /// hover" semantic colour), and `alternatingContentBackgroundColors[0|1]`
+    /// (zebra striping — system-resolved so Increase Contrast disables
+    /// striping for free).
+    ///
+    /// `isWindowKey` is whether the host window currently owns key
+    /// status (`controlActiveState == .key`) — distinct from
+    /// `PositionsTableRow.isFocused`, which is the keyboard cursor
+    /// position inside the panel.
+    private static func rowBackground(
       isSelected: Bool,
       isHovered: Bool,
-      isFocused: Bool,
+      isWindowKey: Bool,
       isAlternateRow: Bool
     ) -> Color {
       if isSelected {
-        return isFocused
+        return isWindowKey
           ? Color(nsColor: .selectedContentBackgroundColor)
           : Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
       }
@@ -138,6 +142,84 @@ import SwiftUI
       }
       return Color(nsColor: NSColor.alternatingContentBackgroundColors[isAlternateRow ? 1 : 0])
     }
+  }
+
+  private enum PositionsTableRowPreviewData {
+    static func make() -> [ValuedPosition] {
+      let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+      let cba = Instrument.stock(ticker: "CBA.AX", exchange: "ASX", name: "CBA")
+      let eth = Instrument.crypto(
+        chainId: 1,
+        contractAddress: nil,
+        symbol: "ETH",
+        name: "Ethereum",
+        decimals: 18)
+      let aud = Instrument.AUD
+      return [
+        ValuedPosition(
+          instrument: bhp,
+          quantity: 250,
+          unitPrice: InstrumentAmount(quantity: 45.30, instrument: aud),
+          costBasis: InstrumentAmount(quantity: 10_125, instrument: aud),
+          value: InstrumentAmount(quantity: 11_325, instrument: aud)),
+        ValuedPosition(
+          instrument: cba,
+          quantity: 80,
+          unitPrice: InstrumentAmount(quantity: 120, instrument: aud),
+          costBasis: InstrumentAmount(quantity: 9_000, instrument: aud),
+          value: InstrumentAmount(quantity: 9_600, instrument: aud)),
+        ValuedPosition(
+          instrument: eth,
+          quantity: 2.45,
+          unitPrice: InstrumentAmount(quantity: 4_000, instrument: aud),
+          costBasis: InstrumentAmount(quantity: 7_500, instrument: aud),
+          value: InstrumentAmount(quantity: 9_800, instrument: aud)),
+        ValuedPosition(
+          instrument: aud,
+          quantity: 2_480,
+          unitPrice: nil,
+          costBasis: nil,
+          value: InstrumentAmount(quantity: 2_480, instrument: aud)),
+      ]
+    }
+
+    /// State variants surfaced in the preview, paired with the row index
+    /// in `make()`. Listed here so the preview body stays inside
+    /// SwiftLint's `closure_body_length` threshold.
+    struct Variant: Identifiable {
+      let id: Int
+      let rowIndex: Int
+      let isSelected: Bool
+      let isFocused: Bool
+      let isAlternateRow: Bool
+    }
+
+    static let variants: [Variant] = [
+      .init(id: 0, rowIndex: 0, isSelected: false, isFocused: false, isAlternateRow: false),
+      .init(id: 1, rowIndex: 1, isSelected: false, isFocused: false, isAlternateRow: true),
+      .init(id: 2, rowIndex: 2, isSelected: true, isFocused: false, isAlternateRow: false),
+      .init(id: 3, rowIndex: 3, isSelected: false, isFocused: true, isAlternateRow: true),
+    ]
+  }
+
+  #Preview("PositionsTableRow - states") {
+    let rows = PositionsTableRowPreviewData.make()
+    return Grid(
+      alignment: .leadingFirstTextBaseline,
+      horizontalSpacing: 16,
+      verticalSpacing: 0
+    ) {
+      ForEach(PositionsTableRowPreviewData.variants) { variant in
+        PositionsTableRow(
+          row: rows[variant.rowIndex],
+          isSelected: variant.isSelected,
+          isFocused: variant.isFocused,
+          isAlternateRow: variant.isAlternateRow,
+          toggleSelection: {})
+      }
+    }
+    .padding(.horizontal, 12)
+    .frame(width: 720)
   }
 
 #endif

@@ -22,7 +22,7 @@ struct InstrumentGroup: Identifiable {
     }
   }
 
-  static func from(_ rows: [ValuedPosition]) -> [InstrumentGroup] {
+  static func make(from rows: [ValuedPosition]) -> [InstrumentGroup] {
     let stocks = rows.filter { $0.instrument.kind == .stock }
     let crypto = rows.filter { $0.instrument.kind == .cryptoToken }
     let cash = rows.filter { $0.instrument.kind == .fiatCurrency }

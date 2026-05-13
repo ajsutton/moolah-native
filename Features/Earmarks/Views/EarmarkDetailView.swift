@@ -61,6 +61,7 @@ extension EarmarkDetailView {
         }
       }
       .pickerStyle(.segmented)
+      .accessibilityLabel("Earmark view")
       .padding(.horizontal)
       .padding(.vertical, 8)
     }

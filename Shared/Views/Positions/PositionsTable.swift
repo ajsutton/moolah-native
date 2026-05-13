@@ -18,10 +18,10 @@ struct PositionsTable: View {
     .init(\.valueQuantity, order: .reverse)
   ]
 
-  /// macOS-only Grid sort state (spec §1.3). Lives alongside `sortOrder`
-  /// (the iOS Table's `KeyPathComparator` array) — the two states never
-  /// both drive layout because the `#if os(macOS)` branch in `body`
-  /// chooses one or the other.
+  /// macOS-only Grid sort state. Lives alongside `sortOrder` (the iOS
+  /// Table's `KeyPathComparator` array) — the two states never both
+  /// drive layout because the `#if os(macOS)` branch in `body` chooses
+  /// one or the other.
   ///
   /// The macOS Grid state below uses `internal` access (not `private`)
   /// because the rendering helpers live in
@@ -64,10 +64,10 @@ struct PositionsTable: View {
   /// Internal (not private) so the macOS Grid extension in
   /// `PositionsTable+GridLayout.swift` can read it.
   var groups: [InstrumentGroup] {
-    InstrumentGroup.from(input.positions)
+    InstrumentGroup.make(from: input.positions)
   }
 
-  // MARK: - macOS Grid (spec §1)
+  // MARK: - macOS Grid
   //
   // The macOS Grid rendering path (`macOSGridLayout`, `headerRow`,
   // `sortHeader`, `toggleSelection`, the accessibility-representation
@@ -170,6 +170,28 @@ extension PositionsTable {
       }
     )
   }
+
+  /// Accessibility label combining the instrument name, kind word, and
+  /// exchange (when present). e.g. "BHP, Stock, ASX" / "AUD, Cash".
+  ///
+  /// Internal (not private) so the macOS Grid extension in
+  /// `PositionsTable+GridLayout.swift` can delegate its
+  /// accessibility-Table instrument cells here — one source of truth so
+  /// the iOS Table path and the macOS accessibility-Table path read
+  /// identical phrasing to VoiceOver.
+  func instrumentLabel(for row: ValuedPosition) -> String {
+    let kindWord: String = {
+      switch row.instrument.kind {
+      case .stock: return "Stock"
+      case .cryptoToken: return "Crypto"
+      case .fiatCurrency: return "Cash"
+      }
+    }()
+    if let exchange = row.instrument.exchange {
+      return "\(row.instrument.name), \(kindWord), \(exchange)"
+    }
+    return "\(row.instrument.name), \(kindWord)"
+  }
 }
 
 // MARK: - Private file-local helpers
@@ -259,21 +281,6 @@ extension PositionsTable {
     )
   }
 
-  // MARK: Shared accessibility helpers
-
-  private func instrumentLabel(for row: ValuedPosition) -> String {
-    let kindWord: String = {
-      switch row.instrument.kind {
-      case .stock: return "Stock"
-      case .cryptoToken: return "Crypto"
-      case .fiatCurrency: return "Cash"
-      }
-    }()
-    if let exchange = row.instrument.exchange {
-      return "\(row.instrument.name), \(kindWord), \(exchange)"
-    }
-    return "\(row.instrument.name), \(kindWord)"
-  }
 }
 
 private func mixedPositionsInput() -> PositionsViewInput {
