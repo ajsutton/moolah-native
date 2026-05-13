@@ -1,6 +1,6 @@
 # Scrolling Detail-View Headers — Redesign
 
-**Status:** Design, awaiting implementation plan
+**Status:** ❌ ABANDONED 2026-05-14 — approach is not viable. See "Post-mortem" at the bottom of this document before reviving any of this work.
 **Date:** 2026-05-13
 **Supersedes:** `plans/2026-05-12-scrolling-detail-headers-design.md`
 **Platforms affected:** macOS only — iOS layout is unchanged
@@ -319,3 +319,51 @@ Maximises layout freedom but loses every `List`-only behaviour the rest of `Tran
 - Does not touch `PositionsTransactionsSplit`, `EarmarkOverviewWithTabs`, or `RecordedValueInvestmentLayout` (iOS-only composition shells).
 - Does not touch the `NavigationStack(.id(selection))` wrap in `ContentView.detail` — that's the toolbar-bridge crash fix from the earlier `2026-05-09-detail-view-structural-fix-design.md` work and stays as-is.
 - Does not change `safeAreaInset` usage anywhere else in the app (it remains valid for content that genuinely should be pinned).
+
+## Post-mortem (2026-05-14) — why this approach was abandoned
+
+The redesign was implemented end-to-end on `ui/scrolling-detail-headers-redesign` (PR #880, 28 commits). Manual review of the running build exposed two distinct, persistent failures that the mechanism cannot fix:
+
+### Failure 1 — `PositionsTable`'s Grid collapses inside the topAccessory row
+
+In production, the macOS positions panel renders **only the Instrument column** (kind badge + name + exchange caption). The other five columns — Qty, Unit Price, Cost, Value, Gain — never render at all. Affects every leaf that wires the redesign: position-tracked investment accounts (e.g. Trust Shares), multi-currency standard accounts (e.g. Revolut holding USD+AUD), and crypto wallets.
+
+Symptoms vary by `.frame(maxWidth: .infinity)` placement:
+
+- No `.frame` anywhere → only column 1 (Instrument) visible
+- `.frame(maxWidth: .infinity)` on `PositionsTable` (default `.center` alignment) → only column 2 (Qty) visible; column 1 disappears
+- `.frame(maxWidth: .infinity)` on the inner `Grid` directly → table renders an empty bordered region with **no cells at all** visible
+- `.gridColumnAlignment(.leading)` added to the Instrument cell → no effect; column 1 still the only visible column
+
+Adding the `.frame(maxWidth: .infinity)` cascade on `AccountPerformanceTiles` / `PositionsHeader` / `PositionsChart` does fix those siblings (they fill width and render), but the `Grid` inside `PositionsTable` continues to collapse regardless. The chart's `.padding(.vertical, 8)` reserves vertical space, but that's height-only — the chart's columns inside a `Chart` view stretch to fill horizontally only when the parent surface offered them flex-width, which the `Section`-row context apparently does not.
+
+### Failure 2 — `cacheDisplay(in:to:)` renders the topAccessory row as blank
+
+Independently of the Grid bug, the `capture screenshot` AppleScript verb added in PR #881 — which calls `view.cacheDisplay(in:to:)` on the profile window's `contentView` — returns a fixed-size 146,789-byte PNG with the right-pane completely white whenever the visible detail leaf uses the `topAccessory`-as-`Section`-row mechanism. This was confirmed via `git bisect` to start at commit `40a9de4c "feat(ui): scroll-as-one InvestmentAccountView on macOS"`, the exact commit that switches Trust Shares from `PositionsTransactionsSplit` to `makeAccountTransactionList(topAccessory:)`. Before that commit, the same `cacheDisplay` capture renders the leaf correctly (~380 KB PNG, full SwiftUI content visible). After, identical wait/navigation produces the 146,789-byte blank — and an additional 20-second wait does not help, so it is not a timing issue.
+
+Replacing the topAccessory content with `Color.red.frame(height: 200)` also produced the blank capture, ruling out `PositionsView` complexity as the cause. The mechanism itself — a multi-component SwiftUI hierarchy as a `Section` row inside a macOS `List` (`.listStyle(.inset)`, NSTableView-backed) — is what fails: NSTableView's row hosting view does not flush its layer content into the bitmap that `cacheDisplay` reads.
+
+### Why this means the approach is not viable
+
+Failures 1 and 2 are *different symptoms with the same root cause:* SwiftUI's macOS `List` row is not a general-purpose container. NSTableView's lazy row machinery imposes constraints (sizing, layer flushing, layout passes) that the empirical preview at §"Empirical findings (validated 2026-05-13 via `mcp__xcode__RenderPreview`)" did not exercise:
+
+- That preview wrapped **`PositionsTable` alone** (a single `Grid`) in a row — and reported "All rows render. Header row, body rows, alternating tinting. Sizes naturally to content."
+- Production wraps **`PositionsView`** (an outer `VStack` of `AccountPerformanceTiles` + `Divider` + `PositionsChart` + `Divider` + `PositionsTable`) in the same row shape.
+
+The multi-component `VStack` is what breaks `Grid` column distribution and what makes `cacheDisplay` fail. The empirical test was not a faithful production shape; its validation does not transfer. The 2026-05-12 spec's confidence in `topAccessory` and this redesign's confidence in `Grid + topAccessory` both inherit the same blind spot.
+
+### Lessons learnt
+
+1. **Empirical SwiftUI validation must mirror the production view hierarchy exactly.** A preview rendering of `PositionsTable` in isolation inside a `List` row is not evidence that `PositionsView` (which *wraps* `PositionsTable` in a multi-component `VStack` with chart + header) will render in the same row. The blast radius of an opaque `List`-row constraint scales with the wrapping hierarchy.
+2. **macOS `List` rows are not VStack-flavoured containers.** They're backed by NSTableView and inherit its row-sizing / lazy-rendering / layer-flushing semantics. Treating a complex SwiftUI hierarchy as a row is a hidden interop boundary, not a structural composition. Symptoms include: column distribution failures in `Grid`, missing visual content for siblings of the `Grid`, and `cacheDisplay` returning a blank bitmap regardless of wait time.
+3. **`.frame(maxWidth: .infinity)` propagation does not survive that boundary cleanly.** Stretching the row's outer frame doesn't push width down through opaque `some View` boundaries to a nested `Grid`'s columns. Adding the modifier at every level changed *which* column became the only visible column (not whether multiple columns rendered), confirming that Grid is receiving a degenerate sizing signal from above. There is no public SwiftUI API that fixes this from inside the row.
+4. **The headline regression was visible only via `git bisect`, not via reasoning.** The first-bad commit (`40a9de4c`) replaced `PositionsTransactionsSplit` (eager, custom layout shell) with `makeAccountTransactionList(topAccessory:)` (lazy, `List`-row hosted). Both bugs trace to that one structural swap. Future similar refactors should treat "change from eager composition to `List`-row hosted" as a single architectural change, not a wiring tweak.
+5. **`mcp__xcode__RenderPreview` and the `capture screenshot` AppleScript verb measure different things.** A preview can render a `Grid` happily; the same view inside a `List` row of the running app may render blank in `cacheDisplay`, even when it renders fine on screen. Visual on-screen verification is not a substitute for capture-tool verification when capture is the means of feedback in an agent loop.
+
+### Where this leaves the work
+
+PR #880 is closed without merging. The 28 commits on `ui/scrolling-detail-headers-redesign` are not landed. The previous (2026-05-12) `safeAreaInset(.top) + Table` design is also not viable per this document's §"Alternatives considered". The status quo on `main` — `PositionsTransactionsSplit` for investments, `MultiInstrumentPositionsSplitModifier` for standard accounts, `RecordedValueInvestmentLayout` for legacy investment values — stays in place. Any future attempt at scroll-as-one detail headers must:
+
+- **Validate against the full production view hierarchy**, not a stripped-down preview. If `PositionsView` is the topAccessory in production, the empirical test must put `PositionsView` (with chart + header + table) in the row.
+- **Verify capture as well as render.** `cacheDisplay(in:to:)` returning a blank bitmap when on-screen rendering looks fine is itself a signal that the mechanism is structurally fragile.
+- **Avoid using a macOS `List` row as a general-purpose SwiftUI host.** Either pin the header via `safeAreaInset(.top)` and accept it not scrolling off, or use a custom `ScrollView { … }` shell that is not NSTableView-backed and reimplement the `List`-specific affordances (`swipeActions`, `searchable`, multi-select, etc.) the project depends on. The trade-off between those two paths is the next decision, not the implementation detail of how to wedge `PositionsView` into a row.
