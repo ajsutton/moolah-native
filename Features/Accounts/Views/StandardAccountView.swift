@@ -53,12 +53,11 @@ struct StandardAccountView: View {
           earmarks: earmarks,
           transactionStore: transactionStore,
           topAccessory: {
-            // Inline switch — the spec embeds the switch at the leaf
-            // call site (spec §3 sample). `PositionsPanel` is a
-            // module-scope enum (see its decl in
-            // `MultiInstrumentPositionsTopAccessoryHost.swift`) so the
-            // switch resolves without coupling to the host's `Content`
-            // generic parameter.
+            // Switch on the host's enum — module-scope `PositionsPanel`
+            // (see its declaration in
+            // `MultiInstrumentPositionsTopAccessoryHost.swift`) breaks
+            // the inference cycle, so the switch resolves without
+            // coupling to the host's `Content` generic parameter.
             switch panel {
             case let .panel(input, range):
               PositionsView(input: input, range: range)

@@ -1,16 +1,5 @@
 import SwiftUI
 
-/// macOS top-accessory host. Owns the same positions-valuator lifecycle
-/// as `MultiInstrumentPositionsSplitModifier` (`@State positionsInput`,
-/// `@State positionsRange`, `.task(id:)` keyed on positions + the
-/// crypto-registry version), but yields a typed `PositionsPanel` enum
-/// to its `content` builder so call sites switch on three concrete
-/// cases (`.panel` / `.loading` / `.absent`) instead of branching on
-/// `AnyView?`.
-///
-/// The visibility predicate is `MultiInstrumentPositionsSplitModifier.shouldShow(…)`
-/// (shared with the iOS modifier) so host and modifier agree on when
-/// to render a panel.
 /// What `MultiInstrumentPositionsTopAccessoryHost` has resolved for the
 /// current positions + valuator state. Call sites switch on this so the
 /// topAccessory builder is type-driven, not `AnyView`-driven.
@@ -39,6 +28,17 @@ enum PositionsPanel {
   case absent
 }
 
+/// macOS top-accessory host. Owns the same positions-valuator lifecycle
+/// as `MultiInstrumentPositionsSplitModifier` (`@State positionsInput`,
+/// `@State positionsRange`, `.task(id:)` keyed on positions + the
+/// crypto-registry version), but yields a typed `PositionsPanel` enum
+/// to its `content` builder so call sites switch on three concrete
+/// cases (`.panel` / `.loading` / `.absent`) instead of branching on
+/// `AnyView?`.
+///
+/// The visibility predicate is `MultiInstrumentPositionsSplitModifier.shouldShow(…)`
+/// (shared with the iOS modifier) so host and modifier agree on when
+/// to render a panel.
 struct MultiInstrumentPositionsTopAccessoryHost<Content: View>: View {
   let positions: [Position]
   let hostCurrency: Instrument
