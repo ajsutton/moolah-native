@@ -41,6 +41,21 @@ struct PositionsTable: View {
     /// means no row is focused (panel doesn't own focus yet, or the
     /// row list is empty). Driven by Up/Down arrow key presses.
     @State var focusedRowIndex: Int?
+
+    /// Which row the pointer is hovering over, by index. Single source
+    /// of truth for hover-tint rendering — per-row `@State isHovered`
+    /// on a custom `View` row struct can't work because SwiftUI's
+    /// `Grid` requires `GridRow` to be a direct child for column
+    /// alignment, so the row chrome lives inline in `macOSGridLayout`
+    /// with no per-row View to hang local state on.
+    @State var hoveredRowIndex: Int?
+
+    /// Window-key state read so the row background can swap between
+    /// `selectedContentBackgroundColor` (key) and the
+    /// `unemphasizedSelected…` variant (not key). AppKit's
+    /// `NSTableView` swaps these automatically; SwiftUI's
+    /// `Color(nsColor:)` is static, so the swap is driven here.
+    @Environment(\.controlActiveState) var controlActiveState
   #endif
 
   var body: some View {

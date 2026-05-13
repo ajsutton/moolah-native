@@ -31,6 +31,12 @@ struct PositionsChart: View {
       rangePicker
     }
     .padding(.horizontal)
+    // Spec Risk #3 mitigation: when `PositionsChart` is embedded in an
+    // unbounded vertical container (e.g. a `TransactionListView` topAccessory
+    // row), SwiftUI offers it the minimum intrinsic height, collapsing the
+    // chart and `ContentUnavailableView` placeholders. Pin a sensible floor
+    // here at the chart's root so every consumer benefits.
+    .frame(minHeight: 220)
   }
 
   // MARK: - Header

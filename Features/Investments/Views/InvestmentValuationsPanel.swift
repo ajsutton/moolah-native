@@ -7,10 +7,14 @@ import SwiftUI
 /// isn't loading) or a list of `InvestmentValueListRow`s with per-row
 /// delete.
 ///
-/// macOS body uses a `VStack(Divider-separated)` rather than `List` so
-/// the panel grows to its content height when embedded inside an outer
-/// transaction-list scroll surface — no nested scroll, no wasted blank
-/// rows. iOS keeps `List` for native swipe / refresh affordances.
+/// macOS body wraps a `VStack(Divider-separated)` of
+/// `InvestmentValueListRow`s in an internal `ScrollView` so the panel
+/// is bounded by its `.frame(height:)` at the call site and scrolls
+/// internally for accounts with many valuations (manual-review Bug
+/// #1: a 60+ valuation crypto account otherwise grew to ~900pt,
+/// dragging an outer `HStack` and creating a huge gap between the
+/// chart and the transaction list below). iOS keeps `List` for native
+/// swipe / refresh affordances.
 struct InvestmentValuationsPanel: View {
   let store: InvestmentStore
   let accountId: UUID
@@ -57,12 +61,14 @@ struct InvestmentValuationsPanel: View {
       )
     } else {
       #if os(macOS)
-        VStack(spacing: 0) {
-          ForEach(store.values) { value in
-            InvestmentValueListRow(value: value) {
-              deleteValue(value)
+        ScrollView {
+          VStack(spacing: 0) {
+            ForEach(store.values) { value in
+              InvestmentValueListRow(value: value) {
+                deleteValue(value)
+              }
+              Divider()
             }
-            Divider()
           }
         }
       #else

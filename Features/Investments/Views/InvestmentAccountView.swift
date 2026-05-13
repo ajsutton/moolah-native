@@ -179,6 +179,13 @@ struct InvestmentAccountView: View {
   }
 
   /// Chart + valuations layout: side-by-side on macOS, stacked on iOS.
+  ///
+  /// macOS pins the HStack at `legacyChartHeight` so the panel and
+  /// the chart share a bounded height — without this, accounts with
+  /// many recorded valuations stretched the panel vertically (~900pt
+  /// for 60+ valuations), creating a huge gap between the chart and
+  /// the transaction list below (manual-review Bug #1). The panel's
+  /// internal `ScrollView` handles overflow inside the bounded space.
   @ViewBuilder private var legacyChartAndValuations: some View {
     #if os(macOS)
       HStack(alignment: .top, spacing: 0) {
@@ -199,6 +206,12 @@ struct InvestmentAccountView: View {
         )
         .frame(width: 240)
       }
+      // Sized to fit the natural height of the chart side
+      // (time-period picker ~30pt + InvestmentChartView ~250pt +
+      // `.padding()` ~32pt on each end). Calibrated empirically; the
+      // chart is flexible and fills the height, while the valuations
+      // panel's internal `ScrollView` scrolls within the same bound.
+      .frame(height: 340)
     #else
       VStack(spacing: 0) {
         VStack(spacing: 16) {
