@@ -172,6 +172,48 @@ moolah-tell 'navigate to account "Savings" of profile "Test"'
 moolah-tell 'navigate to earmark "Holiday" of profile "Test"'
 ```
 
+### Screenshot
+
+```bash
+# Capture the profile window's content view to a PNG.
+# Returns the path inside the container's temp dir.
+moolah-tell 'capture screenshot of profile "Test"'
+# → /Users/aj/Library/Containers/rocks.moolah.app/Data/tmp/moolah-screenshot-2026-05-14-074321-456.png
+```
+
+Renders the window's `contentView` in-process via AppKit
+(`cacheDisplay(in:to:)`), so it does **not** require Screen Recording or
+Accessibility permission — useful on agent / CI hosts where a TCC dialog
+would block you. The PNG is at the display's native scale (2x on Retina).
+
+The app picks the output path (a timestamped filename inside its
+sandbox's temp dir) and returns it. To get the screenshot somewhere
+else, copy it after the fact:
+
+```bash
+PATH_OUT=$(moolah-tell 'capture screenshot of profile "Test"')
+cp "$PATH_OUT" ~/Desktop/moolah.png
+open ~/Desktop/moolah.png
+```
+
+The path is chosen by the app rather than the caller because the
+sandbox only grants `com.apple.security.files.user-selected.read-write`,
+so AppleScript-supplied paths outside the container would be rejected.
+Routing through the container temp sidesteps that entirely.
+
+Caveats:
+
+- The profile must already be open in a window. If unsure, send
+  `navigate to profile "Test"` first.
+- The capture is the `contentView` only — titlebar / traffic-light
+  chrome is not included.
+- Layer-backed content using a hardware-accelerated surface
+  (`AVPlayerLayer`, raw Metal) may render black; the regular SwiftUI
+  surface in Moolah captures fine.
+- Old screenshots accumulate in the container temp dir; the app does
+  not clean them up. `rm ~/Library/Containers/rocks.moolah.app/Data/tmp/moolah-screenshot-*.png`
+  when you want to tidy up.
+
 ### Multi-line scripts
 
 Pipe the body in on stdin (use `-` or omit the arg):
