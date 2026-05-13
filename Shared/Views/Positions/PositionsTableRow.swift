@@ -22,7 +22,7 @@ import SwiftUI
     let row: ValuedPosition
     let isSelected: Bool
     let isFocused: Bool
-    let alternateBg: Bool
+    let isAlternateRow: Bool
     let toggleSelection: () -> Void
 
     @State private var isHovered = false
@@ -50,7 +50,7 @@ import SwiftUI
           isSelected: isSelected,
           isHovered: isHovered,
           isFocused: controlActiveState == .key,
-          alternateBg: alternateBg)
+          isAlternateRow: isAlternateRow)
       )
       .overlay(focusRing)
       .contentShape(Rectangle())
@@ -67,7 +67,6 @@ import SwiftUI
       if isFocused {
         RoundedRectangle(cornerRadius: 4)
           .stroke(Color.accentColor, lineWidth: 2)
-          .accessibilityHidden(true)
       }
     }
 
@@ -99,12 +98,12 @@ import SwiftUI
         HStack(spacing: 4) {
           Text(gain.signedFormatted)
             .monospacedDigit()
-            .foregroundStyle(Self.gainColor(gain))
+            .foregroundStyle(gain.gainColor)
           if let pct = row.gainLossPercent {
             Text(GainLossPercentDisplay.formatted(pct))
               .font(.caption)
               .monospacedDigit()
-              .foregroundStyle(Self.gainColor(gain))
+              .foregroundStyle(gain.gainColor)
           }
         }
       } else {
@@ -127,7 +126,7 @@ import SwiftUI
       isSelected: Bool,
       isHovered: Bool,
       isFocused: Bool,
-      alternateBg: Bool
+      isAlternateRow: Bool
     ) -> Color {
       if isSelected {
         return isFocused
@@ -137,13 +136,7 @@ import SwiftUI
       if isHovered {
         return Color(nsColor: .controlAccentColor).opacity(0.10)
       }
-      return Color(nsColor: NSColor.alternatingContentBackgroundColors[alternateBg ? 1 : 0])
-    }
-
-    private static func gainColor(_ gain: InstrumentAmount) -> Color {
-      if gain.isNegative { return .red }
-      if gain.isZero { return .primary }
-      return .green
+      return Color(nsColor: NSColor.alternatingContentBackgroundColors[isAlternateRow ? 1 : 0])
     }
   }
 

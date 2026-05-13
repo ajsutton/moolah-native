@@ -55,7 +55,7 @@ struct PositionRow: View {
         Text(captionText(for: gain))
           .font(.caption)
           .monospacedDigit()
-          .foregroundStyle(gainColor(gain))
+          .foregroundStyle(gain.gainColor)
       }
     }
   }
@@ -79,12 +79,6 @@ struct PositionRow: View {
       return nil
     case .fiatCurrency: return nil
     }
-  }
-
-  private func gainColor(_ gain: InstrumentAmount) -> Color {
-    if gain.isNegative { return .red }
-    if gain.isZero { return .primary }
-    return .green
   }
 
   private var accessibilityLabel: String {

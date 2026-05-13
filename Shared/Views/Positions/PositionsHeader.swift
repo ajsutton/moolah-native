@@ -44,15 +44,8 @@ struct PositionsHeader: View {
         gainBackground(gain).opacity(0.15),
         in: Capsule()
       )
-      .foregroundStyle(gainColor(gain))
+      .foregroundStyle(gain.gainColor)
       .accessibilityLabel(plPillAccessibilityLabel(gain: gain, percent: percent))
-  }
-
-  /// Foreground colour for gain / loss / zero — matches PositionRow + PositionsTable.
-  private func gainColor(_ gain: InstrumentAmount) -> Color {
-    if gain.isNegative { return .red }
-    if gain.isZero { return .primary }
-    return .green
   }
 
   /// Background tint for the pill capsule. Mirrors `gainColor` but always

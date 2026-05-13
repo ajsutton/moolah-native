@@ -92,12 +92,12 @@ struct PositionsTable: View {
       HStack(spacing: 4) {
         Text(gain.signedFormatted)
           .monospacedDigit()
-          .foregroundStyle(gainColor(gain))
+          .foregroundStyle(gain.gainColor)
         if let pct = row.gainLossPercent {
           Text(GainLossPercentDisplay.formatted(pct))
             .font(.caption)
             .monospacedDigit()
-            .foregroundStyle(gainColor(gain))
+            .foregroundStyle(gain.gainColor)
         }
       }
       .accessibilityElement(children: .combine)
@@ -183,12 +183,6 @@ struct PositionsTable: View {
   }
 
   // MARK: - Helpers
-
-  private func gainColor(_ gain: InstrumentAmount) -> Color {
-    if gain.isNegative { return .red }
-    if gain.isZero { return .primary }
-    return .green
-  }
 
   private func instrumentLabel(for row: ValuedPosition) -> String {
     let kindWord: String = {
