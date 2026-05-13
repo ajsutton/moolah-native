@@ -33,9 +33,7 @@ struct CryptoWalletAccountView: View {
         hostCurrency: account.instrument,
         title: account.name,
         conversionService: conversionService,
-        // Crypto wallets re-fire the per-row valuator when a token is
-        // marked `.spam` in preferences — issue #790.
-        registrationsVersion: session.cryptoTokenStore?.registrationsVersion ?? 0
+        registrationsVersion: registrationsVersion
       ) { panel in
         TransactionListView(
           title: account.name,
@@ -44,24 +42,7 @@ struct CryptoWalletAccountView: View {
           categories: categories,
           earmarks: earmarks,
           transactionStore: transactionStore,
-          topAccessory: {
-            // Wallet header sits above the positions panel inside the
-            // same scrolling row. When `walletHeader` returns
-            // `EmptyView` (chain config / `cryptoSyncStore` missing) it
-            // contributes zero pixels, so the row collapses to just
-            // the panel — or to nothing if `panel` is also `.absent`.
-            VStack(spacing: 0) {
-              walletHeader
-              switch panel {
-              case let .panel(input, range):
-                PositionsView(input: input, range: range)
-              case .loading:
-                ProgressView().frame(maxWidth: .infinity).padding()
-              case .absent:
-                EmptyView()
-              }
-            }
-          }
+          topAccessory: { positionsAccessory(panel: panel) }
         )
       }
     #else
@@ -80,9 +61,7 @@ struct CryptoWalletAccountView: View {
           hostCurrency: account.instrument,
           title: account.name,
           conversionService: conversionService,
-          // Drives a re-fire of the per-row valuator when the user marks
-          // a token as `.spam` from preferences — issue #790.
-          registrationsVersion: session.cryptoTokenStore?.registrationsVersion ?? 0)
+          registrationsVersion: registrationsVersion)
       }
     #endif
   }
@@ -99,6 +78,38 @@ struct CryptoWalletAccountView: View {
         hasApiKey: session.cryptoTokenStore?.hasAlchemyApiKey ?? false)
     }
   }
+
+  /// Drives a re-fire of the per-row valuator when the user marks a
+  /// token as `.spam` from preferences — issue #790. Same value used
+  /// by both the macOS top-accessory host and the iOS
+  /// `multiInstrumentPositionsSplit` modifier; extracted so both call
+  /// sites share one definition.
+  private var registrationsVersion: Int {
+    session.cryptoTokenStore?.registrationsVersion ?? 0
+  }
+
+  #if os(macOS)
+    /// macOS top accessory: wallet header followed by the
+    /// multi-instrument positions panel. Both scroll as one inside the
+    /// transaction list. When `walletHeader` returns `EmptyView` and
+    /// `panel == .absent`, the resulting `VStack { EmptyView; EmptyView }`
+    /// collapses to zero pixels — same invariant as the always-emit
+    /// `Section` row in `TransactionListView+List.swift`.
+    @ViewBuilder
+    private func positionsAccessory(panel: PositionsPanel) -> some View {
+      VStack(spacing: 0) {
+        walletHeader
+        switch panel {
+        case let .panel(input, range):
+          PositionsView(input: input, range: range)
+        case .loading:
+          ProgressView().frame(maxWidth: .infinity).padding()
+        case .absent:
+          EmptyView()
+        }
+      }
+    }
+  #endif
 }
 
 // MARK: - Preview
