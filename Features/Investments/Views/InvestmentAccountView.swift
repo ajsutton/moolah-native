@@ -38,6 +38,8 @@ struct InvestmentAccountView: View {
   private static let logger = Logger(
     subsystem: "com.moolah.app", category: "InvestmentAccountView")
 
+  // MARK: - State
+
   let account: Account
   let accounts: Accounts
   let categories: Categories
@@ -67,6 +69,8 @@ struct InvestmentAccountView: View {
   /// Without this, focus lingers on a button or row from the previous layout
   /// and reads back unrelated content.
   @AccessibilityFocusState private var focusAnchor: InvestmentAccountFocusAnchor?
+
+  // MARK: - Layout
 
   /// Embedded transaction list for this account. Each call site builds a
   /// fresh `TransactionListView`; this is a method (not a `@ViewBuilder`
@@ -101,6 +105,20 @@ struct InvestmentAccountView: View {
     )
   }
 
+  /// Positions content with loading-state fallback. Consumed by both
+  /// the macOS `topAccessory` slot and the iOS `PositionsTransactionsSplit`
+  /// content closure, so a future change to the loading/empty
+  /// rendering applies to both platforms.
+  @ViewBuilder private var positionsContent: some View {
+    if isLoadingPositions && positionsInput.positions.isEmpty {
+      ProgressView()
+        .frame(maxWidth: .infinity)
+        .padding()
+    } else {
+      PositionsView(input: positionsInput, range: $positionsRange)
+    }
+  }
+
   /// The positions/transactions composition for non-legacy accounts. Collapses
   /// to a bare transaction list when `PositionsView` would be redundant with
   /// the host's already-visible account balance (see `shouldHide`).
@@ -110,13 +128,7 @@ struct InvestmentAccountView: View {
     } else {
       #if os(macOS)
         makeAccountTransactionList {
-          if isLoadingPositions && positionsInput.positions.isEmpty {
-            ProgressView()
-              .frame(maxWidth: .infinity)
-              .padding()
-          } else {
-            PositionsView(input: positionsInput, range: $positionsRange)
-          }
+          positionsContent
         }
       #else
         PositionsTransactionsSplit(
@@ -130,13 +142,7 @@ struct InvestmentAccountView: View {
           // need ~530pt to render comfortably without the user dragging.
           initialTopHeight: 540
         ) {
-          if isLoadingPositions && positionsInput.positions.isEmpty {
-            ProgressView()
-              .frame(maxWidth: .infinity)
-              .padding()
-          } else {
-            PositionsView(input: positionsInput, range: $positionsRange)
-          }
+          positionsContent
         } transactions: {
           makeAccountTransactionList()
         }
@@ -214,6 +220,8 @@ struct InvestmentAccountView: View {
       }
     #endif
   }
+
+  // MARK: - Body
 
   var body: some View {
     Group {
