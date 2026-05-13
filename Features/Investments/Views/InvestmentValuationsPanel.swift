@@ -1,20 +1,16 @@
 import SwiftUI
 
 /// Side-of-chart valuations panel rendered on the legacy
-/// (`recordedValue`) investment layout.
+/// (`recordedValue`) investment layout. Composes a "Valuations"
+/// header (with a "+ Record Value" action) above either a
+/// `ContentUnavailableView` (when no snapshots exist and the store
+/// isn't loading) or a list of `InvestmentValueListRow`s with per-row
+/// delete.
 ///
-/// "Valuations" header (with a "+ Record Value" action) above either
-/// a `ContentUnavailableView` (when there are no snapshots yet and
-/// the store isn't loading) or a list of `InvestmentValueListRow`s
-/// with per-row delete. Extracted from `InvestmentAccountView` so
-/// that host stays under SwiftLint's `type_body_length` budget once
-/// the macOS legacy layout flows through `TransactionListView`'s
-/// `topAccessory` slot.
-///
-/// macOS body uses a `VStack(Divider-separated)` so the panel grows
-/// to its content height inside the outer transaction-list scroll
-/// surface — no nested scroll, no wasted blank rows. iOS keeps
-/// `List` for native swipe / refresh affordances.
+/// macOS body uses a `VStack(Divider-separated)` rather than `List` so
+/// the panel grows to its content height when embedded inside an outer
+/// transaction-list scroll surface — no nested scroll, no wasted blank
+/// rows. iOS keeps `List` for native swipe / refresh affordances.
 struct InvestmentValuationsPanel: View {
   let store: InvestmentStore
   let accountId: UUID
@@ -64,9 +60,7 @@ struct InvestmentValuationsPanel: View {
         VStack(spacing: 0) {
           ForEach(store.values) { value in
             InvestmentValueListRow(value: value) {
-              Task {
-                await store.removeValue(accountId: accountId, date: value.date)
-              }
+              deleteValue(value)
             }
             Divider()
           }
@@ -75,14 +69,18 @@ struct InvestmentValuationsPanel: View {
         List {
           ForEach(store.values) { value in
             InvestmentValueListRow(value: value) {
-              Task {
-                await store.removeValue(accountId: accountId, date: value.date)
-              }
+              deleteValue(value)
             }
           }
         }
         .listStyle(.inset)
       #endif
+    }
+  }
+
+  private func deleteValue(_ value: InvestmentValue) {
+    Task {
+      await store.removeValue(accountId: accountId, date: value.date)
     }
   }
 }
