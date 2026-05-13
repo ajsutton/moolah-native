@@ -68,9 +68,9 @@ struct PositionsSortState {
       let rightKey = key(for: right)
       switch (leftKey, rightKey) {
       case let (.some(lhs), .some(rhs)):
-        // Equal keys (neither side strictly less) tiebreak on
-        // instrument.id so order is stable across re-renders.
-        if !(lhs < rhs) && !(rhs < lhs) {
+        // Equal keys tiebreak on instrument.id so order is stable
+        // across re-renders.
+        if lhs == rhs {
           return left.instrument.id < right.instrument.id
         }
         return ascending ? lhs < rhs : lhs > rhs
@@ -121,6 +121,8 @@ struct PositionsSortState {
 }
 
 extension PositionsSortState: Hashable {}
+
+extension PositionsSortState.SortKey: Equatable {}
 
 extension PositionsSortState.SortKey: Comparable {
   static func < (lhs: Self, rhs: Self) -> Bool {
