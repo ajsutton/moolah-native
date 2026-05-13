@@ -148,8 +148,12 @@ struct InvestmentAccountView: View {
 
         Divider()
 
-        valuationsList
-          .frame(width: 240)
+        InvestmentValuationsPanel(
+          store: investmentStore,
+          accountId: account.id,
+          showingAddValue: $showingAddValue
+        )
+        .frame(width: 240)
       }
     #else
       VStack(spacing: 0) {
@@ -163,8 +167,12 @@ struct InvestmentAccountView: View {
 
         Divider()
 
-        valuationsList
-          .frame(maxHeight: 300)
+        InvestmentValuationsPanel(
+          store: investmentStore,
+          accountId: account.id,
+          showingAddValue: $showingAddValue
+        )
+        .frame(maxHeight: 300)
       }
     #endif
   }
@@ -234,58 +242,6 @@ struct InvestmentAccountView: View {
     }
     .refreshable {
       await reloadPositions()
-    }
-  }
-
-  // MARK: - Valuations List
-
-  private var valuationsList: some View {
-    VStack(spacing: 0) {
-      valuationsHeader
-      Divider()
-      valuationsBody
-    }
-  }
-
-  private var valuationsHeader: some View {
-    HStack {
-      Text("Valuations").font(.headline)
-      Spacer()
-      Button {
-        showingAddValue = true
-      } label: {
-        Label("Record Value", systemImage: "plus")
-          .labelStyle(.iconOnly)
-      }
-      .help("Record Value")
-      // `.iconOnly` style hides the title from screen readers on iOS, which
-      // then announce the SF Symbol name ("plus") instead of the action.
-      // Pin the action label explicitly so VoiceOver reads "Record Value".
-      .accessibilityLabel("Record Value")
-    }
-    .padding(.horizontal)
-    .padding(.vertical, 12)
-  }
-
-  @ViewBuilder private var valuationsBody: some View {
-    if investmentStore.values.isEmpty && !investmentStore.isLoading {
-      ContentUnavailableView(
-        "No Values",
-        systemImage: "chart.line.uptrend.xyaxis",
-        description: Text(
-          PlatformActionVerb.emptyStatePrompt(buttonLabel: "+", suffix: "to record a value"))
-      )
-    } else {
-      List {
-        ForEach(investmentStore.values) { value in
-          InvestmentValueListRow(value: value) {
-            Task {
-              await investmentStore.removeValue(accountId: account.id, date: value.date)
-            }
-          }
-        }
-      }
-      .listStyle(.inset)
     }
   }
 
