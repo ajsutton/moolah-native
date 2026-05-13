@@ -1,0 +1,111 @@
+import Foundation
+import Testing
+
+@testable import Moolah
+
+@Suite("PositionsSortState")
+struct PositionsSortStateTests {
+
+  // MARK: - State machine (spec §1.3)
+
+  @Test("Tapping an inactive column activates it in descending order")
+  func inactiveColumnActivatesDescending() {
+    var state = PositionsSortState(column: .value, direction: .descending)
+    state.toggleSort(.instrument)
+    #expect(state.column == .instrument)
+    #expect(state.direction == .descending)
+  }
+
+  @Test("Tapping the active column flips the direction")
+  func activeColumnFlipsDirection() {
+    var state = PositionsSortState(column: .value, direction: .descending)
+    state.toggleSort(.value)
+    #expect(state.column == .value)
+    #expect(state.direction == .ascending)
+    state.toggleSort(.value)
+    #expect(state.direction == .descending)
+  }
+
+  @Test("Sort never reaches a no-sort state — there is always an active column")
+  func sortNeverResetsToNoSort() {
+    var state = PositionsSortState(column: .value, direction: .descending)
+    for _ in 0..<10 {
+      state.toggleSort(.value)
+      #expect(state.column == .value)
+    }
+  }
+
+  // MARK: - Sorting (spec §1: same column set as production Table today)
+
+  @Test("Sorting by value descending puts the largest value first")
+  func sortByValueDescending() {
+    let rows = Self.mixedRows()
+    let state = PositionsSortState(column: .value, direction: .descending)
+    let sorted = state.sorted(rows)
+    // Values: BHP 11_325 > ETH 9_800 > CBA 9_600 > AUD 2_480 (raw quantity, native instrument).
+    // Instrument.id shapes: stocks = "exchange:ticker"; native crypto = "chainId:native".
+    #expect(sorted.map(\.instrument.id) == ["ASX:BHP.AX", "1:native", "ASX:CBA.AX", "AUD"])
+  }
+
+  @Test("Sorting by instrument ascending orders by name lexicographically")
+  func sortByInstrumentAscending() {
+    let rows = Self.mixedRows()
+    let state = PositionsSortState(column: .instrument, direction: .ascending)
+    let sorted = state.sorted(rows)
+    #expect(sorted.first?.instrument.name == "AUD")
+    #expect(sorted.last?.instrument.name == "Ethereum")
+  }
+
+  @Test("Sorting by quantity descending orders by raw quantity")
+  func sortByQuantityDescending() {
+    let rows = Self.mixedRows()
+    let state = PositionsSortState(column: .quantity, direction: .descending)
+    let sorted = state.sorted(rows)
+    #expect(sorted.first?.quantity == 2_480)  // AUD cash
+  }
+
+  @Test("Sorting by gain descending orders by signed gain (refunds preserve sign)")
+  func sortByGainDescending() {
+    let rows = Self.mixedRows()
+    let state = PositionsSortState(column: .gain, direction: .descending)
+    let sorted = state.sorted(rows)
+    // BHP gain +1_200, CBA +600, ETH +2_300, AUD has no gain.
+    // gainLoss-less rows sink to the end regardless of direction.
+    let withGains = sorted.prefix(while: { $0.gainLoss != nil }).map(\.instrument.id)
+    #expect(withGains == ["1:native", "ASX:BHP.AX", "ASX:CBA.AX"])
+  }
+
+  // MARK: - Fixtures
+
+  /// Mixed-instrument fixture matching `PositionsTable.swift`'s
+  /// `mixedPositionsInput()` preview so sort assertions reflect the
+  /// production preview shape.
+  private static func mixedRows() -> [ValuedPosition] {
+    let aud = Instrument.AUD
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let cba = Instrument.stock(ticker: "CBA.AX", exchange: "ASX", name: "CBA")
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
+    return [
+      ValuedPosition(
+        instrument: bhp, quantity: 250,
+        unitPrice: InstrumentAmount(quantity: 45.30, instrument: aud),
+        costBasis: InstrumentAmount(quantity: 10_125, instrument: aud),
+        value: InstrumentAmount(quantity: 11_325, instrument: aud)),
+      ValuedPosition(
+        instrument: cba, quantity: 80,
+        unitPrice: InstrumentAmount(quantity: 120, instrument: aud),
+        costBasis: InstrumentAmount(quantity: 9_000, instrument: aud),
+        value: InstrumentAmount(quantity: 9_600, instrument: aud)),
+      ValuedPosition(
+        instrument: eth, quantity: 2.45,
+        unitPrice: InstrumentAmount(quantity: 4_000, instrument: aud),
+        costBasis: InstrumentAmount(quantity: 7_500, instrument: aud),
+        value: InstrumentAmount(quantity: 9_800, instrument: aud)),
+      ValuedPosition(
+        instrument: aud, quantity: 2_480,
+        unitPrice: nil, costBasis: nil,
+        value: InstrumentAmount(quantity: 2_480, instrument: aud)),
+    ]
+  }
+}
