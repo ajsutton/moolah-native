@@ -85,10 +85,34 @@ struct MultiInstrumentPositionsSplitModifier: ViewModifier {
   }
 
   private func valuatePositions() async {
-    guard let conversionService, !positions.isEmpty else {
-      positionsInput = nil
-      return
-    }
+    positionsInput = await MultiInstrumentPositionsSplitModifier.makePositionsInput(
+      positions: positions,
+      hostCurrency: hostCurrency,
+      title: title,
+      conversionService: conversionService)
+  }
+}
+
+extension MultiInstrumentPositionsSplitModifier {
+  /// Build a `PositionsViewInput` for the given raw positions by running
+  /// them through `PositionsValuator`. Returns `nil` when either
+  /// `conversionService` is `nil` or `positions` is empty — call sites
+  /// should treat `nil` as "no panel content available" and clear their
+  /// own `positionsInput` state. Re-checks `Task.isCancelled` after the
+  /// await because `valuator.valuate(...)` cannot signal cancellation
+  /// through its non-throwing return — without this guard a stale (or
+  /// partial) `rows` array from a superseded task would overwrite the
+  /// freshly-emitting one.
+  ///
+  /// `nonisolated` so unit tests and the macOS top-accessory host can
+  /// call it without spinning up a `@MainActor` context.
+  nonisolated static func makePositionsInput(
+    positions: [Position],
+    hostCurrency: Instrument,
+    title: String,
+    conversionService: (any InstrumentConversionService)?
+  ) async -> PositionsViewInput? {
+    guard let conversionService, !positions.isEmpty else { return nil }
     let valuator = PositionsValuator(conversionService: conversionService)
     let rows = await valuator.valuate(
       positions: positions,
@@ -96,12 +120,8 @@ struct MultiInstrumentPositionsSplitModifier: ViewModifier {
       costBasis: [:],
       on: Date()
     )
-    // The valuator cooperates with cancellation by breaking out of its
-    // per-row loop, but it cannot signal cancellation through the
-    // non-throwing return — re-check here so a stale (or partial) `rows`
-    // from a superseded task never overwrites the freshly-emitting one.
-    guard !Task.isCancelled else { return }
-    positionsInput = PositionsViewInput(
+    guard !Task.isCancelled else { return nil }
+    return PositionsViewInput(
       title: title,
       hostCurrency: hostCurrency,
       positions: rows,

@@ -27,7 +27,7 @@ struct MultiInstrumentPositionsTopAccessoryHost<Content: View>: View {
   /// type-driven, not `AnyView`-driven.
   enum PositionsPanel {
     /// The valuator has produced an input — render `PositionsView`.
-    case panel(PositionsViewInput, Binding<PositionsTimeRange>)
+    case panel(input: PositionsViewInput, range: Binding<PositionsTimeRange>)
     /// The valuator hasn't produced an input yet but should — render a
     /// `ProgressView`. Distinct from `.absent` so call sites can
     /// render a placeholder during the first valuation.
@@ -45,7 +45,7 @@ struct MultiInstrumentPositionsTopAccessoryHost<Content: View>: View {
       positionsInput: positionsInput)
     guard shouldShow else { return .absent }
     if let positionsInput {
-      return .panel(positionsInput, $positionsRange)
+      return .panel(input: positionsInput, range: $positionsRange)
     }
     return .loading
   }
@@ -62,38 +62,20 @@ struct MultiInstrumentPositionsTopAccessoryHost<Content: View>: View {
   }
 
   private func valuatePositions() async {
-    guard let conversionService, !positions.isEmpty else {
-      positionsInput = nil
-      return
-    }
-    let valuator = PositionsValuator(conversionService: conversionService)
-    let rows = await valuator.valuate(
+    positionsInput = await MultiInstrumentPositionsSplitModifier.makePositionsInput(
       positions: positions,
       hostCurrency: hostCurrency,
-      costBasis: [:],
-      on: Date()
-    )
-    // The valuator cooperates with cancellation by breaking out of its
-    // per-row loop, but it cannot signal cancellation through the
-    // non-throwing return — re-check here so a stale (or partial) `rows`
-    // from a superseded task never overwrites the freshly-emitting one.
-    guard !Task.isCancelled else { return }
-    positionsInput = PositionsViewInput(
       title: title,
-      hostCurrency: hostCurrency,
-      positions: rows,
-      historicalValue: nil
-    )
+      conversionService: conversionService)
   }
 }
 
-/// Composite id for `MultiInstrumentPositionsTopAccessoryHost`'s
-/// valuation `.task(id:)`. Re-fires when the positions list changes
-/// OR when the crypto-registry version bumps (issue #790: a `.spam`
-/// flip in preferences must re-run the per-row valuator). Distinct
-/// type from `MultiInstrumentPositionsSplitModifier`'s `PositionsTaskKey`
-/// so the two hosts' `.task(id:)` invalidations don't cross-fire when
-/// both are instantiated under the same parent.
+/// Distinct from `MultiInstrumentPositionsSplitModifier`'s
+/// `PositionsTaskKey` so `.task(id:)` invalidations on the host and the
+/// modifier never cross-fire when both are instantiated under the same
+/// parent view — each uses its own `Hashable` identity space. Re-fires
+/// on positions-list changes or a crypto-registry version bump
+/// (issue #790).
 private struct PositionsTopAccessoryTaskKey: Hashable {
   let positions: [Position]
   let registrationsVersion: Int
