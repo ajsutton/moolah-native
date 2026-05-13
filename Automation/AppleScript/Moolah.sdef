@@ -264,6 +264,12 @@
       <result type="profile" description="The restored profile."/>
     </command>
 
+    <command name="capture screenshot" code="Moolscrn" description="Capture the profile window's content view as a PNG inside the app container's temp dir. Returns the POSIX path of the written file. Renders in-process, so no Screen Recording or Accessibility permission is required.">
+      <cocoa class="Moolah.CaptureScreenshotCommand"/>
+      <direct-parameter type="specifier" description="The profile whose window to capture."/>
+      <result type="text" description="The POSIX path of the written PNG."/>
+    </command>
+
   </suite>
 
 </dictionary>
