@@ -34,7 +34,17 @@ struct EarmarkDetailView: View {
       iOSBody
     #endif
   }
+}
 
+// MARK: - Private file-local helpers
+
+/// File-local helpers grouped here per CODE_GUIDE.md §2 ("Trailing
+/// `private extension Self` for file-private helpers"). Uses
+/// `extension Self { private func … }` rather than
+/// `private extension Self { func … }` to match the project
+/// convention and avoid swift-format rewriting members to
+/// `fileprivate` (which `strict_fileprivate` then flags).
+extension EarmarkDetailView {
   #if os(macOS)
     private var macOSBody: some View {
       VStack(spacing: 0) {
@@ -112,7 +122,7 @@ struct EarmarkDetailView: View {
     .modifier(earmarkDetailChrome)
   }
 
-  private var earmarkDetailChrome: EarmarkDetailChrome {
+  private var earmarkDetailChrome: some ViewModifier {
     EarmarkDetailChrome(
       selectedTransaction: $selectedTransaction,
       accounts: accounts,
