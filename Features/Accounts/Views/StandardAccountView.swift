@@ -33,19 +33,58 @@ struct StandardAccountView: View {
   let conversionService: any InstrumentConversionService
 
   var body: some View {
-    TransactionListView(
-      title: account.name,
-      filter: TransactionFilter(accountId: account.id),
-      accounts: accounts,
-      categories: categories,
-      earmarks: earmarks,
-      transactionStore: transactionStore
-    )
-    .multiInstrumentPositionsSplit(
-      positions: positions,
-      hostCurrency: account.instrument,
-      title: account.name,
-      conversionService: conversionService)
+    #if os(macOS)
+      MultiInstrumentPositionsTopAccessoryHost(
+        positions: positions,
+        hostCurrency: account.instrument,
+        title: account.name,
+        conversionService: conversionService,
+        // Standard accounts are not crypto wallets, so the registry-
+        // version bump trigger (issue #790 spam flip) is inert here.
+        // Crypto callers pass `session.cryptoTokenStore?.registrationsVersion ?? 0`
+        // instead.
+        registrationsVersion: 0
+      ) { panel in
+        TransactionListView(
+          title: account.name,
+          filter: TransactionFilter(accountId: account.id),
+          accounts: accounts,
+          categories: categories,
+          earmarks: earmarks,
+          transactionStore: transactionStore,
+          topAccessory: {
+            // Inline switch — the spec embeds the switch at the leaf
+            // call site (spec §3 sample). `PositionsPanel` is a
+            // module-scope enum (see its decl in
+            // `MultiInstrumentPositionsTopAccessoryHost.swift`) so the
+            // switch resolves without coupling to the host's `Content`
+            // generic parameter.
+            switch panel {
+            case let .panel(input, range):
+              PositionsView(input: input, range: range)
+            case .loading:
+              ProgressView().frame(maxWidth: .infinity).padding()
+            case .absent:
+              EmptyView()
+            }
+          }
+        )
+      }
+    #else
+      TransactionListView(
+        title: account.name,
+        filter: TransactionFilter(accountId: account.id),
+        accounts: accounts,
+        categories: categories,
+        earmarks: earmarks,
+        transactionStore: transactionStore
+      )
+      .multiInstrumentPositionsSplit(
+        positions: positions,
+        hostCurrency: account.instrument,
+        title: account.name,
+        conversionService: conversionService)
+    #endif
   }
 }
 
