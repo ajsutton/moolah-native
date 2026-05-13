@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct TransactionListView: View {
+struct TransactionListView<TopAccessory: View>: View {
   /// Grouping for the rendered list. Default `.flat` keeps existing
   /// callers unchanged. `.scheduledStatus` bundles a `pendingPayId`
   /// binding that the row's Pay action writes into; the binding is
@@ -22,6 +22,16 @@ struct TransactionListView: View {
   let transactionStore: TransactionStore
   let grouping: Grouping
   @Environment(ImportStore.self) private var importStore
+
+  /// Optional content rendered as the sole row of a leading `Section`
+  /// of the embedded `List`. Defaults to `EmptyView` via the
+  /// convenience inits below — the leading `Section` is emitted
+  /// unconditionally and an `EmptyView` row contributes zero visible
+  /// pixels (spec §2). When non-empty, the row carries
+  /// `UITestIdentifiers.TransactionList.headerContainer` and is
+  /// `.selectionDisabled()` so it stays out of the selection model
+  /// and arrow-key navigation.
+  let topAccessory: TopAccessory
 
   /// When non-nil, the parent owns the selection and handles the inspector.
   /// When nil, TransactionListView manages its own selection and inspector.
@@ -72,7 +82,8 @@ struct TransactionListView: View {
     categories: Categories,
     earmarks: Earmarks,
     transactionStore: TransactionStore,
-    grouping: Grouping = .flat
+    grouping: Grouping = .flat,
+    @ViewBuilder topAccessory: () -> TopAccessory
   ) {
     self.title = title
     self.baseFilter = filter
@@ -83,6 +94,7 @@ struct TransactionListView: View {
     self.grouping = grouping
     self._externalSelection = nil
     self._activeFilter = State(initialValue: filter)
+    self.topAccessory = topAccessory()
   }
 
   /// Embedded init — parent provides selection binding and handles the
@@ -97,7 +109,8 @@ struct TransactionListView: View {
     earmarks: Earmarks,
     transactionStore: TransactionStore,
     grouping: Grouping = .flat,
-    selectedTransaction: Binding<Transaction?>
+    selectedTransaction: Binding<Transaction?>,
+    @ViewBuilder topAccessory: () -> TopAccessory
   ) {
     self.title = title
     self.baseFilter = filter
@@ -108,6 +121,7 @@ struct TransactionListView: View {
     self.grouping = grouping
     self._externalSelection = selectedTransaction
     self._activeFilter = State(initialValue: filter)
+    self.topAccessory = topAccessory()
   }
 
   @State private var showError = false
@@ -244,5 +258,66 @@ struct TransactionListView: View {
     return transactionStore.transactions.filter {
       $0.transaction.payee?.localizedCaseInsensitiveContains(searchText) ?? false
     }
+  }
+}
+
+// Convenience initialisers for the common case where no top accessory
+// is provided. Swift 6 rejects the simpler form
+// `@ViewBuilder topAccessory: () -> TopAccessory = { EmptyView() }`
+// at the designated init declaration with:
+//
+//   error: cannot use default expression for inference of
+//   '() -> TopAccessory' because it is inferrable from parameters
+//   #6, #7; this will be an error in a future Swift language mode
+//
+// The diagnostic fires on the init declaration itself (not any call
+// site), and the wording is documented Swift behaviour: a default
+// expression cannot be the sole source of inference for a generic
+// parameter when other parameters in the signature could in principle
+// transitively constrain it. The convenience inits below pin
+// `TopAccessory == EmptyView` so existing call sites that omit
+// `topAccessory:` resolve to these overloads — same surface shape as
+// the pre-generic API, no source changes needed.
+extension TransactionListView where TopAccessory == EmptyView {
+  init(
+    title: String,
+    filter: TransactionFilter,
+    accounts: Accounts,
+    categories: Categories,
+    earmarks: Earmarks,
+    transactionStore: TransactionStore,
+    grouping: Grouping = .flat
+  ) {
+    self.init(
+      title: title,
+      filter: filter,
+      accounts: accounts,
+      categories: categories,
+      earmarks: earmarks,
+      transactionStore: transactionStore,
+      grouping: grouping,
+      topAccessory: { EmptyView() })
+  }
+
+  init(
+    title: String,
+    filter: TransactionFilter,
+    accounts: Accounts,
+    categories: Categories,
+    earmarks: Earmarks,
+    transactionStore: TransactionStore,
+    grouping: Grouping = .flat,
+    selectedTransaction: Binding<Transaction?>
+  ) {
+    self.init(
+      title: title,
+      filter: filter,
+      accounts: accounts,
+      categories: categories,
+      earmarks: earmarks,
+      transactionStore: transactionStore,
+      grouping: grouping,
+      selectedTransaction: selectedTransaction,
+      topAccessory: { EmptyView() })
   }
 }

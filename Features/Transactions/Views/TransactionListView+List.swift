@@ -11,6 +11,14 @@ extension TransactionListView {
   /// same type's extensions; module-internal is the smallest legal scope.
   var transactionsList: some View {
     List(selection: selectedTransactionBinding) {
+      Section {
+        topAccessory
+          .listRowInsets(EdgeInsets())
+          .listRowSeparator(.hidden)
+          .listRowBackground(Color.clear)
+          .selectionDisabled()
+          .accessibilityIdentifier(UITestIdentifiers.TransactionList.headerContainer)
+      }
       listContent
     }
     #if os(macOS)

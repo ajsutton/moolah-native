@@ -55,6 +55,15 @@ public enum UITestIdentifiers {
     /// renders for every account.
     public static let container = "transactionlist.container"
 
+    /// Container of the scrolling header (top accessory) on detail-view
+    /// transaction lists. The leading `Section { topAccessory … }` row
+    /// in `TransactionListView+List.swift` carries this identifier
+    /// unconditionally — even when the accessory is `EmptyView`, since
+    /// the row contributes zero visible pixels but the identifier still
+    /// resolves. UI tests should treat resolution as "the scroll
+    /// surface is wired," NOT as "the accessory has content."
+    public static let headerContainer = "transactionlist.header"
+
     /// Centre-column row for a specific transaction. `id` is the
     /// transaction's UUID, lowercased.
     public static func transaction(_ id: UUID) -> String {
