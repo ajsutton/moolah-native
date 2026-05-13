@@ -57,4 +57,44 @@ struct TransactionListScreen {
       XCTFail("Transaction detail did not surface payee field after ⌘N")
     }
   }
+
+  /// Asserts the scrolling header (top accessory) is in the
+  /// accessibility tree inside the transaction list. Used by detail
+  /// views that pass a `topAccessory` through `TransactionListView`
+  /// (macOS standard / crypto / investment / earmark leaves). Fails
+  /// loudly via `XCTFail` if the header doesn't appear within 3s.
+  func expectHeaderVisible() {
+    Trace.record(#function)
+    let header = app.element(for: UITestIdentifiers.TransactionList.headerContainer)
+    if !header.waitForExistence(timeout: 3) {
+      Trace.recordFailure(
+        "transaction list header '\(UITestIdentifiers.TransactionList.headerContainer)' "
+          + "did not appear")
+      XCTFail(
+        "Transaction list did not surface a scrolling header within 3s "
+          + "(expected '\(UITestIdentifiers.TransactionList.headerContainer)' to resolve)."
+      )
+    }
+  }
+
+  /// Asserts the transaction list container is in the accessibility
+  /// tree. Useful as a post-condition sentinel after a navigation
+  /// action that should land on a leaf rendering a `TransactionListView`
+  /// (e.g. `AllTransactionsView`, sidebar account selection).
+  /// `SidebarScreen.switchToAccount` already waits on this internally,
+  /// so most tests don't need to call it explicitly — but it's
+  /// available for the cases that do.
+  func expectContainerVisible() {
+    Trace.record(#function)
+    let container = app.element(for: UITestIdentifiers.TransactionList.container)
+    if !container.waitForExistence(timeout: 3) {
+      Trace.recordFailure(
+        "transaction list container '\(UITestIdentifiers.TransactionList.container)' "
+          + "did not appear")
+      XCTFail(
+        "Transaction list container did not render within 3s "
+          + "(expected '\(UITestIdentifiers.TransactionList.container)' to resolve)."
+      )
+    }
+  }
 }

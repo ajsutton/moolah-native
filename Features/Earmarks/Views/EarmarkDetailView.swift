@@ -14,7 +14,82 @@ struct EarmarkDetailView: View {
   @Environment(EarmarkStore.self) private var earmarkStore
   @Environment(ProfileSession.self) private var session
 
+  #if os(macOS)
+    /// Named explicitly (not just `Tab`) to avoid shadowing SwiftUI's
+    /// `Tab` type used with `TabView` on macOS 26 / iOS 26. Mirrors
+    /// the enum in `EarmarkOverviewWithTabs` so the two paths agree
+    /// on the segmented picker's value type.
+    private enum EarmarkTab: String, CaseIterable {
+      case transactions = "Transactions"
+      case budget = "Budget"
+    }
+
+    @State private var selectedTab: EarmarkTab = .transactions
+  #endif
+
   var body: some View {
+    #if os(macOS)
+      macOSBody
+    #else
+      iOSBody
+    #endif
+  }
+
+  #if os(macOS)
+    private var macOSBody: some View {
+      VStack(spacing: 0) {
+        macOSTabPicker
+        macOSTabContent
+      }
+      .modifier(earmarkDetailChrome)
+    }
+
+    private var macOSTabPicker: some View {
+      Picker("View", selection: $selectedTab) {
+        ForEach(EarmarkTab.allCases, id: \.self) { tab in
+          Text(tab.rawValue).tag(tab)
+        }
+      }
+      .pickerStyle(.segmented)
+      .padding(.horizontal)
+      .padding(.vertical, 8)
+    }
+
+    @ViewBuilder private var macOSTabContent: some View {
+      switch selectedTab {
+      case .transactions:
+        TransactionListView(
+          title: earmark.name,
+          filter: TransactionFilter(earmarkId: earmark.id),
+          accounts: accounts,
+          categories: categories,
+          earmarks: earmarks,
+          transactionStore: transactionStore,
+          selectedTransaction: $selectedTransaction,
+          topAccessory: { overviewPanel }
+        )
+      case .budget:
+        ScrollView {
+          VStack(spacing: 0) {
+            overviewPanel
+            // `EarmarkBudgetSectionView`'s loading and empty states use
+            // `.frame(maxHeight: .infinity)`, which collapses inside a
+            // `ScrollView` (no bounded vertical resolution). Give the
+            // budget editor a minimum height so those states have room
+            // to centre.
+            EarmarkBudgetSectionView(
+              earmark: earmark,
+              categories: categories,
+              analysisRepository: analysisRepository
+            )
+            .frame(minHeight: 300)
+          }
+        }
+      }
+    }
+  #endif
+
+  private var iOSBody: some View {
     EarmarkOverviewWithTabs {
       overviewPanel
     } transactions: {
@@ -34,34 +109,20 @@ struct EarmarkDetailView: View {
         analysisRepository: analysisRepository
       )
     }
-    .transactionInspector(
+    .modifier(earmarkDetailChrome)
+  }
+
+  private var earmarkDetailChrome: EarmarkDetailChrome {
+    EarmarkDetailChrome(
       selectedTransaction: $selectedTransaction,
       accounts: accounts,
       categories: categories,
       earmarks: earmarks,
-      transactionStore: transactionStore
+      transactionStore: transactionStore,
+      showEditSheet: $showEditSheet,
+      earmark: earmark,
+      earmarkStore: earmarkStore
     )
-    .profileNavigationTitle(earmark.name)
-    .toolbar {
-      ToolbarItem(placement: .primaryAction) {
-        Button {
-          showEditSheet = true
-        } label: {
-          Label("Edit", systemImage: "pencil")
-        }
-      }
-    }
-    .sheet(isPresented: $showEditSheet) {
-      EditEarmarkSheet(
-        earmark: earmark,
-        onUpdate: { updated in
-          Task {
-            _ = await earmarkStore.update(updated)
-            showEditSheet = false
-          }
-        }
-      )
-    }
   }
 
   private var overviewPanel: some View {
@@ -190,6 +251,53 @@ struct EarmarkDetailView: View {
     let months = days / 30
     if months == 1 { return "~1 month left" }
     return "~\(months) months left"
+  }
+}
+
+// MARK: - Modifier
+
+/// Chrome shared between macOS and iOS bodies: inspector, navigation
+/// title, edit toolbar, and edit sheet.
+private struct EarmarkDetailChrome: ViewModifier {
+  @Binding var selectedTransaction: Transaction?
+  let accounts: Accounts
+  let categories: Categories
+  let earmarks: Earmarks
+  let transactionStore: TransactionStore
+  @Binding var showEditSheet: Bool
+  let earmark: Earmark
+  let earmarkStore: EarmarkStore
+
+  func body(content: Content) -> some View {
+    content
+      .transactionInspector(
+        selectedTransaction: $selectedTransaction,
+        accounts: accounts,
+        categories: categories,
+        earmarks: earmarks,
+        transactionStore: transactionStore
+      )
+      .profileNavigationTitle(earmark.name)
+      .toolbar {
+        ToolbarItem(placement: .primaryAction) {
+          Button {
+            showEditSheet = true
+          } label: {
+            Label("Edit", systemImage: "pencil")
+          }
+        }
+      }
+      .sheet(isPresented: $showEditSheet) {
+        EditEarmarkSheet(
+          earmark: earmark,
+          onUpdate: { updated in
+            Task {
+              _ = await earmarkStore.update(updated)
+              showEditSheet = false
+            }
+          }
+        )
+      }
   }
 }
 
