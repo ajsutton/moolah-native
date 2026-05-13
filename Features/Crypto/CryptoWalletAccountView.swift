@@ -1,28 +1,21 @@
 // Features/Crypto/CryptoWalletAccountView.swift
+//
+// Detail view for a crypto wallet account.
+//
+// On macOS the wallet header and the multi-instrument positions panel
+// scroll with the transaction rows as a single `topAccessory` slot on
+// `TransactionListView`. The leading `Section { topAccessory … }` in
+// `TransactionListView+List.swift` is always emitted; when
+// `walletHeader` returns `EmptyView` (no chain config) the row
+// contributes zero visible pixels.
+//
+// On iOS the wallet header sits as a sibling of `TransactionListView`
+// in a `VStack(spacing: 0)`; this leaf is its own `NavigationStack`
+// (provided by `ContentView.detail`'s `.id(selection)` wrap) so the
+// header doesn't race with another leaf's `.toolbar` / `.searchable`
+// registrations.
 import SwiftUI
 
-/// Detail view for a crypto wallet account. Composes the wallet header
-/// (full address, chain, last-synced state, Sync now button) above the
-/// transaction list as siblings in a `VStack(spacing: 0)`.
-///
-/// This composition no longer goes through `TransactionListView`'s
-/// removed `topAccessory` slot — the leaf is its own `NavigationStack`
-/// (provided by `ContentView.detail`'s `.id(selection)` wrap), so the
-/// wallet header and the transaction list are structurally local to
-/// this leaf and cannot race against another leaf's `.toolbar` /
-/// `.searchable` registrations.
-///
-/// The header renders only when `chainId`, the chain config, AND a
-/// `cryptoSyncStore` all resolve; otherwise the `@ViewBuilder` returns
-/// `EmptyView`. Within this leaf's `NavigationStack` a
-/// `VStack(spacing: 0) { EmptyView; TransactionListView }` is safe —
-/// the previously-observed `safeAreaInset+EmptyView+NSHostingView`
-/// zero-size collapse fired only when the EmptyView-bearing layout
-/// crossed an `NSHostingView` column boundary (the
-/// `ResizableVSplit`'s arranged subviews used by
-/// `InvestmentAccountView.calculatedFromTrades`). Inside a SwiftUI-
-/// owned `NavigationStack` column there is no NSHostingView wrapping
-/// at this level, so the bug does not apply.
 struct CryptoWalletAccountView: View {
   let account: Account
   let accounts: Accounts
@@ -34,25 +27,64 @@ struct CryptoWalletAccountView: View {
   let session: ProfileSession
 
   var body: some View {
-    VStack(spacing: 0) {
-      walletHeader
-      TransactionListView(
-        title: account.name,
-        filter: TransactionFilter(accountId: account.id),
-        accounts: accounts,
-        categories: categories,
-        earmarks: earmarks,
-        transactionStore: transactionStore
-      )
-      .multiInstrumentPositionsSplit(
+    #if os(macOS)
+      MultiInstrumentPositionsTopAccessoryHost(
         positions: positions,
         hostCurrency: account.instrument,
         title: account.name,
         conversionService: conversionService,
-        // Drives a re-fire of the per-row valuator when the user marks
-        // a token as `.spam` from preferences — issue #790.
-        registrationsVersion: session.cryptoTokenStore?.registrationsVersion ?? 0)
-    }
+        // Crypto wallets re-fire the per-row valuator when a token is
+        // marked `.spam` in preferences — issue #790.
+        registrationsVersion: session.cryptoTokenStore?.registrationsVersion ?? 0
+      ) { panel in
+        TransactionListView(
+          title: account.name,
+          filter: TransactionFilter(accountId: account.id),
+          accounts: accounts,
+          categories: categories,
+          earmarks: earmarks,
+          transactionStore: transactionStore,
+          topAccessory: {
+            // Wallet header sits above the positions panel inside the
+            // same scrolling row. When `walletHeader` returns
+            // `EmptyView` (chain config / `cryptoSyncStore` missing) it
+            // contributes zero pixels, so the row collapses to just
+            // the panel — or to nothing if `panel` is also `.absent`.
+            VStack(spacing: 0) {
+              walletHeader
+              switch panel {
+              case let .panel(input, range):
+                PositionsView(input: input, range: range)
+              case .loading:
+                ProgressView().frame(maxWidth: .infinity).padding()
+              case .absent:
+                EmptyView()
+              }
+            }
+          }
+        )
+      }
+    #else
+      VStack(spacing: 0) {
+        walletHeader
+        TransactionListView(
+          title: account.name,
+          filter: TransactionFilter(accountId: account.id),
+          accounts: accounts,
+          categories: categories,
+          earmarks: earmarks,
+          transactionStore: transactionStore
+        )
+        .multiInstrumentPositionsSplit(
+          positions: positions,
+          hostCurrency: account.instrument,
+          title: account.name,
+          conversionService: conversionService,
+          // Drives a re-fire of the per-row valuator when the user marks
+          // a token as `.spam` from preferences — issue #790.
+          registrationsVersion: session.cryptoTokenStore?.registrationsVersion ?? 0)
+      }
+    #endif
   }
 
   @ViewBuilder private var walletHeader: some View {
@@ -75,9 +107,9 @@ struct CryptoWalletAccountView: View {
 // reaches into `session.cryptoSyncStore` / `session.cryptoTokenStore`
 // from `walletHeader`. `ProfileSession.preview()` builds an in-memory
 // session whose crypto wiring is `nil`, so `walletHeader` returns
-// `EmptyView` and the preview renders `VStack { EmptyView;
-// TransactionListView }` — still useful for verifying the leaf's
-// structural shape without launching the app.
+// `EmptyView` and the preview renders the leaf without an actual
+// chain header — still useful for verifying the leaf's structural
+// shape without launching the app.
 #Preview {
   let account = Account(
     id: UUID(),
