@@ -6,7 +6,7 @@ import Testing
 @Suite("PositionsSortState")
 struct PositionsSortStateTests {
 
-  // MARK: - State machine (spec §1.3)
+  // MARK: - State machine
 
   @Test("Tapping an inactive column activates it in descending order")
   func inactiveColumnActivatesDescending() {
@@ -35,7 +35,7 @@ struct PositionsSortStateTests {
     }
   }
 
-  // MARK: - Sorting (spec §1: same column set as production Table today)
+  // MARK: - Sorting (same column set as production Table today)
 
   @Test("Sorting by value descending puts the largest value first")
   func sortByValueDescending() {
@@ -64,15 +64,51 @@ struct PositionsSortStateTests {
     #expect(sorted.first?.quantity == 2_480)  // AUD cash
   }
 
-  @Test("Sorting by gain descending orders by signed gain (refunds preserve sign)")
-  func sortByGainDescending() {
+  @Test("Sorting by gain descending orders non-nil gains by value")
+  func sortByGainDescendingOrdersNonNilGainsDescendingByValue() {
     let rows = Self.mixedRows()
     let state = PositionsSortState(column: .gain, direction: .descending)
     let sorted = state.sorted(rows)
     // BHP gain +1_200, CBA +600, ETH +2_300, AUD has no gain.
-    // gainLoss-less rows sink to the end regardless of direction.
     let withGains = sorted.prefix(while: { $0.gainLoss != nil }).map(\.instrument.id)
     #expect(withGains == ["1:native", "ASX:BHP.AX", "ASX:CBA.AX"])
+  }
+
+  @Test("Sorting by gain sinks rows with no gain to the end regardless of direction")
+  func sortByGainSinksNilGainsToEndRegardlessOfDirection() {
+    let rows = Self.mixedRows()
+    for direction in [PositionsSortDirection.descending, .ascending] {
+      let state = PositionsSortState(column: .gain, direction: direction)
+      let sorted = state.sorted(rows)
+      // AUD has no gainLoss (no cost basis) and must always be last.
+      #expect(sorted.last?.instrument.id == "AUD")
+    }
+  }
+
+  @Test("Equal sort keys tiebreak on instrument.id regardless of direction")
+  func equalSortKeysTiebreakOnInstrumentIdRegardlessOfDirection() {
+    let aud = Instrument.AUD
+    let alpha = Instrument.stock(ticker: "AAA.AX", exchange: "ASX", name: "Alpha")
+    let bravo = Instrument.stock(ticker: "BBB.AX", exchange: "ASX", name: "Bravo")
+    // Two rows with identical `value` quantity but different instrument ids.
+    let rows = [
+      ValuedPosition(
+        instrument: bravo, quantity: 10,
+        unitPrice: InstrumentAmount(quantity: 100, instrument: aud),
+        costBasis: InstrumentAmount(quantity: 800, instrument: aud),
+        value: InstrumentAmount(quantity: 1_000, instrument: aud)),
+      ValuedPosition(
+        instrument: alpha, quantity: 5,
+        unitPrice: InstrumentAmount(quantity: 200, instrument: aud),
+        costBasis: InstrumentAmount(quantity: 900, instrument: aud),
+        value: InstrumentAmount(quantity: 1_000, instrument: aud)),
+    ]
+    // Instrument ids: "ASX:AAA.AX" < "ASX:BBB.AX".
+    for direction in [PositionsSortDirection.descending, .ascending] {
+      let state = PositionsSortState(column: .value, direction: direction)
+      let sorted = state.sorted(rows)
+      #expect(sorted.map(\.instrument.id) == ["ASX:AAA.AX", "ASX:BBB.AX"])
+    }
   }
 
   // MARK: - Fixtures
