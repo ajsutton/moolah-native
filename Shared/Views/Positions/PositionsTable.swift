@@ -18,10 +18,39 @@ struct PositionsTable: View {
     .init(\.valueQuantity, order: .reverse)
   ]
 
+  /// macOS-only Grid sort state (spec §1.3). Lives alongside `sortOrder`
+  /// (the iOS Table's `KeyPathComparator` array) — the two states never
+  /// both drive layout because the `#if os(macOS)` branch in `body`
+  /// chooses one or the other.
+  ///
+  /// The macOS Grid state below uses `internal` access (not `private`)
+  /// because the rendering helpers live in
+  /// `PositionsTable+macOSGrid.swift` and Swift extensions in another
+  /// file cannot see `private` members.
+  #if os(macOS)
+    @State var sort = PositionsSortState(column: .value, direction: .descending)
+    @Environment(\.dynamicTypeSize) var dynamicTypeSize
+
+    /// Tracks whether the macOS Grid panel currently owns keyboard
+    /// focus. Driven by `.focusable()` + `.focused($isPanelFocused)`.
+    /// On focus-gain we seed `focusedRowIndex` to 0; on focus-loss we
+    /// clear it so the focus ring disappears when the user Tabs out.
+    @FocusState var isPanelFocused: Bool
+
+    /// Which row inside the panel the keyboard cursor is on. `nil`
+    /// means no row is focused (panel doesn't own focus yet, or the
+    /// row list is empty). Driven by Up/Down arrow key presses.
+    @State var focusedRowIndex: Int?
+  #endif
+
   var body: some View {
     Group {
       #if os(macOS)
-        wideLayout
+        if dynamicTypeSize > .xLarge {
+          narrowLayout
+        } else {
+          macOSGridLayout
+        }
       #else
         if sizeClass == .regular {
           wideLayout
@@ -32,9 +61,22 @@ struct PositionsTable: View {
     }
   }
 
-  private var groups: [InstrumentGroup] {
+  /// Internal (not private) so the macOS Grid extension in
+  /// `PositionsTable+macOSGrid.swift` can read it.
+  var groups: [InstrumentGroup] {
     InstrumentGroup.from(input.positions)
   }
+
+  // MARK: - macOS Grid (spec §1)
+  //
+  // The macOS Grid rendering path (`macOSGridLayout`, `headerRow`,
+  // `sortHeader`, `toggleSelection`, the accessibility-representation
+  // bindings and helpers, and the `KeyPathComparator` ↔ sort-state
+  // translators) lives in `PositionsTable+macOSGrid.swift` to keep this
+  // file inside SwiftLint's `file_length` / `type_body_length`
+  // thresholds. The `@State` / `@FocusState` / `@Environment` properties
+  // driving that code path stay declared here above because Swift
+  // forbids stored properties in extensions.
 
   // MARK: - Wide
 
