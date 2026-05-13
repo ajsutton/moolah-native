@@ -153,7 +153,12 @@ struct PositionsTable: View {
   /// "gain of $1,200, up 12.3 percent" / "loss of $50, down 5.0 percent".
   /// Per `guides/UI_GUIDE.md` every gain renders an explicit
   /// accessibility label so VoiceOver doesn't read "+12%" as ambiguous.
-  private func gainAccessibilityLabel(
+  ///
+  /// Internal (not private) so the macOS Grid extension in
+  /// `PositionsTable+GridLayout.swift` can delegate its
+  /// `accessibilityGainText(for:)` here — one source of truth for the
+  /// gain-phrase construction across both rendering paths.
+  func gainAccessibilityLabel(
     gain: InstrumentAmount, percent: Decimal?
   ) -> String {
     let pctText = GainLossPercentDisplay.accessibilitySuffix(percent)
@@ -168,7 +173,13 @@ struct PositionsTable: View {
 
   /// `Table` selects on `id` (which is `instrument.id`); we adapt that to
   /// our `Instrument?` selection binding.
-  private var rowSelectionBinding: Binding<Set<String>> {
+  ///
+  /// Internal (not private) so the macOS Grid extension in
+  /// `PositionsTable+GridLayout.swift` can route its
+  /// `.accessibilityRepresentation` Table through the same selection
+  /// bridge — avoids byte-identical duplication between the iOS Table
+  /// path and the macOS accessibility-Table path.
+  var rowSelectionBinding: Binding<Set<String>> {
     Binding(
       get: { selection.map { [$0.id] } ?? [] },
       set: { ids in

@@ -78,7 +78,7 @@ import SwiftUI
       // Grid cannot reproduce. The Table's `sortOrder:` binding
       // tunnels VoiceOver's sort gestures back into `PositionsSortState`.
       .accessibilityRepresentation {
-        Table(sortedRows, selection: tableSelectionBinding, sortOrder: tableSortOrderBinding) {
+        Table(sortedRows, selection: rowSelectionBinding, sortOrder: tableSortOrderBinding) {
           TableColumn("Instrument", value: \.instrument.name) { row in
             Text(accessibilityInstrumentText(for: row))
           }
@@ -101,13 +101,13 @@ import SwiftUI
       }
     }
 
-    func toggleSelection(_ instrument: Instrument) {
+    private func toggleSelection(_ instrument: Instrument) {
       selection = (selection?.id == instrument.id) ? nil : instrument
     }
 
     // MARK: - Header row (visible Grid headers)
 
-    @ViewBuilder var headerRow: some View {
+    @ViewBuilder private var headerRow: some View {
       GridRow {
         sortHeader("Instrument", column: .instrument, alignment: .leading)
         sortHeader("Qty", column: .quantity, alignment: .trailing)
@@ -121,7 +121,7 @@ import SwiftUI
     }
 
     @ViewBuilder
-    func sortHeader(
+    private func sortHeader(
       _ title: String, column: PositionsSortColumn, alignment: HorizontalAlignment
     ) -> some View {
       Button {
@@ -153,31 +153,12 @@ import SwiftUI
 
     // MARK: - Accessibility representation bindings
 
-    /// Selection binding bridging the panel's `Binding<Instrument?>`
-    /// to the Table representation's `Binding<Set<String>>`. VoiceOver
-    /// row activation flows through here back into the visual Grid's
-    /// selection chrome.
-    var tableSelectionBinding: Binding<Set<String>> {
-      Binding(
-        get: { selection.map { [$0.id] } ?? [] },
-        set: { ids in
-          if let id = ids.first,
-            let instrument = input.positions.first(where: { $0.id == id })?.instrument
-          {
-            selection = (selection?.id == id) ? nil : instrument
-          } else {
-            selection = nil
-          }
-        }
-      )
-    }
-
     /// Sort-order binding bridging the panel's `PositionsSortState` to
     /// the Table representation's `[KeyPathComparator<ValuedPosition>]`.
     /// VoiceOver column-header sort gestures route here, are converted
     /// to a `PositionsSortColumn` + `PositionsSortDirection`, and update
     /// the visual Grid's sort chrome via the shared state.
-    var tableSortOrderBinding: Binding<[KeyPathComparator<ValuedPosition>]> {
+    private var tableSortOrderBinding: Binding<[KeyPathComparator<ValuedPosition>]> {
       Binding(
         get: { [Self.comparator(for: sort)] },
         set: { newOrder in
@@ -195,7 +176,9 @@ import SwiftUI
     /// `costBasisQuantity` / `valueQuantity` / `gainQuantity`
     /// sortable-`Decimal` accessors on `ValuedPosition` so missing
     /// values (`nil`) sort as zero, identical to the iOS Table path.
-    static func comparator(for state: PositionsSortState) -> KeyPathComparator<ValuedPosition> {
+    private static func comparator(for state: PositionsSortState) -> KeyPathComparator<
+      ValuedPosition
+    > {
       let order: SortOrder = state.direction == .ascending ? .forward : .reverse
       switch state.column {
       case .instrument: return KeyPathComparator(\ValuedPosition.instrument.name, order: order)
@@ -213,7 +196,7 @@ import SwiftUI
     /// nominally possible if SwiftUI ever invents a new comparator
     /// shape from a different code path. Falls back to leaving sort
     /// state untouched in that case.
-    static func sortState(
+    private static func sortState(
       from comparator: KeyPathComparator<ValuedPosition>
     ) -> PositionsSortState? {
       let direction: PositionsSortDirection =
@@ -235,23 +218,20 @@ import SwiftUI
 
     // MARK: - Accessibility cell text
 
-    func accessibilityInstrumentText(for row: ValuedPosition) -> String {
+    private func accessibilityInstrumentText(for row: ValuedPosition) -> String {
       if let exchange = row.instrument.exchange {
         return "\(row.instrument.name), \(exchange)"
       }
       return row.instrument.name
     }
 
-    func accessibilityGainText(for row: ValuedPosition) -> String {
+    /// Delegates to `gainAccessibilityLabel(gain:percent:)` on the main
+    /// type to keep one source of truth for the gain phrase. Preserves
+    /// the explicit "no gain or loss" fallback for the Table
+    /// representation when the row has no gain/loss data.
+    private func accessibilityGainText(for row: ValuedPosition) -> String {
       guard let gain = row.gainLoss else { return "no gain or loss" }
-      let pctText = GainLossPercentDisplay.accessibilitySuffix(row.gainLossPercent)
-      if gain.isNegative {
-        return "loss of \((-gain).formatted)\(pctText)"
-      }
-      if gain.isZero {
-        return pctText.isEmpty ? "no change" : "no change\(pctText)"
-      }
-      return "gain of \(gain.formatted)\(pctText)"
+      return gainAccessibilityLabel(gain: gain, percent: row.gainLossPercent)
     }
   }
 
