@@ -85,6 +85,22 @@ struct InvestmentAccountView: View {
     )
   }
 
+  @ViewBuilder
+  private func makeAccountTransactionList<TopAccessory: View>(
+    @ViewBuilder topAccessory: () -> TopAccessory
+  ) -> some View {
+    TransactionListView(
+      title: "",
+      filter: TransactionFilter(accountId: account.id),
+      accounts: accounts,
+      categories: categories,
+      earmarks: earmarks,
+      transactionStore: transactionStore,
+      selectedTransaction: $selectedTransaction,
+      topAccessory: topAccessory
+    )
+  }
+
   /// The positions/transactions composition for non-legacy accounts. Collapses
   /// to a bare transaction list when `PositionsView` would be redundant with
   /// the host's already-visible account balance (see `shouldHide`).
@@ -92,38 +108,60 @@ struct InvestmentAccountView: View {
     if positionsInput.shouldHide && !isLoadingPositions {
       makeAccountTransactionList()
     } else {
-      PositionsTransactionsSplit(
-        defaultTab: .positions,
-        // Distinct autosave key from the chartless multi-currency split so
-        // the saved divider position from each layout doesn't bleed into
-        // the other; the chart pushes the table off-screen at the
-        // chartless 180pt default.
-        autosaveName: "positions-transactions-split.with-chart",
-        // Header (~50pt) + chart (~250pt with padding) + a few table rows
-        // need ~530pt to render comfortably without the user dragging.
-        initialTopHeight: 540
-      ) {
-        if isLoadingPositions && positionsInput.positions.isEmpty {
-          ProgressView()
-            .frame(maxWidth: .infinity)
-            .padding()
-        } else {
-          PositionsView(input: positionsInput, range: $positionsRange)
+      #if os(macOS)
+        makeAccountTransactionList {
+          if isLoadingPositions && positionsInput.positions.isEmpty {
+            ProgressView()
+              .frame(maxWidth: .infinity)
+              .padding()
+          } else {
+            PositionsView(input: positionsInput, range: $positionsRange)
+          }
         }
-      } transactions: {
-        makeAccountTransactionList()
-      }
+      #else
+        PositionsTransactionsSplit(
+          defaultTab: .positions,
+          // Distinct autosave key from the chartless multi-currency split so
+          // the saved divider position from each layout doesn't bleed into
+          // the other; the chart pushes the table off-screen at the
+          // chartless 180pt default.
+          autosaveName: "positions-transactions-split.with-chart",
+          // Header (~50pt) + chart (~250pt with padding) + a few table rows
+          // need ~530pt to render comfortably without the user dragging.
+          initialTopHeight: 540
+        ) {
+          if isLoadingPositions && positionsInput.positions.isEmpty {
+            ProgressView()
+              .frame(maxWidth: .infinity)
+              .padding()
+          } else {
+            PositionsView(input: positionsInput, range: $positionsRange)
+          }
+        } transactions: {
+          makeAccountTransactionList()
+        }
+      #endif
     }
   }
 
   @ViewBuilder private var legacyValuationsLayout: some View {
-    RecordedValueInvestmentLayout {
-      legacySummary
-    } chartAndValuations: {
-      legacyChartAndValuations
-    } transactions: {
-      makeAccountTransactionList()
-    }
+    #if os(macOS)
+      makeAccountTransactionList {
+        VStack(spacing: 0) {
+          legacySummary
+          legacyChartAndValuations
+          Divider()
+        }
+      }
+    #else
+      RecordedValueInvestmentLayout {
+        legacySummary
+      } chartAndValuations: {
+        legacyChartAndValuations
+      } transactions: {
+        makeAccountTransactionList()
+      }
+    #endif
   }
 
   @ViewBuilder private var legacySummary: some View {
