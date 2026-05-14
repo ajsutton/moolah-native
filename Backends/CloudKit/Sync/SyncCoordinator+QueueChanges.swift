@@ -41,4 +41,34 @@ extension SyncCoordinator {
     syncEngine?.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
     refreshPendingUploadsMirror()
   }
+
+  /// Subset of `candidates` whose record IDs are NOT already queued for
+  /// deletion in `pendingChanges`. Builds a `Set<CKRecord.ID>` from the
+  /// pending `.deleteRecord` entries once (O(pending)) and then filters
+  /// `candidates` against it (O(candidates)). Replaces a prior per-record
+  /// `Sequence.contains(_:)` scan that was O(candidates × pending) on the
+  /// main thread — pathological when a deleted profile leaves tens of
+  /// thousands of stale uploads queued (the same record names re-surface
+  /// every `nextRecordZoneChangeBatch` cycle until the queue drains).
+  ///
+  /// Pending `.saveRecord` entries do not shadow a candidate: a stale
+  /// save and a fresh deletion can legitimately co-exist in the queue,
+  /// and CKSyncEngine resolves the order itself. We only dedup against
+  /// existing `.deleteRecord` entries so the same record-name isn't
+  /// queued for deletion twice.
+  nonisolated static func newMissingDeleteIDs(
+    among candidates: [CKRecord.ID],
+    pendingChanges: [CKSyncEngine.PendingRecordZoneChange]
+  ) -> [CKRecord.ID] {
+    guard !candidates.isEmpty else { return [] }
+    var pendingDeleteIds: Set<CKRecord.ID> = []
+    pendingDeleteIds.reserveCapacity(pendingChanges.count)
+    for change in pendingChanges {
+      if case .deleteRecord(let id) = change {
+        pendingDeleteIds.insert(id)
+      }
+    }
+    if pendingDeleteIds.isEmpty { return candidates }
+    return candidates.filter { !pendingDeleteIds.contains($0) }
+  }
 }
