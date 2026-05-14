@@ -239,6 +239,7 @@ actor FirstFetchGatedTransactionRepository: TransactionRepository {
     AsyncStream { $0.finish() }
   }
   func create(_ transaction: Transaction) async throws -> Transaction { transaction }
+  func createMany(_ transactions: [Transaction]) async throws -> [Transaction] { transactions }
   func update(_ transaction: Transaction) async throws -> Transaction { transaction }
   func delete(id: UUID) async throws {}
   func fetchPayeeSuggestions(

@@ -193,6 +193,23 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     let instruments: [Instrument]
   }
 
+  func createMany(_ transactions: [Transaction]) async throws -> [Transaction] {
+    guard !transactions.isEmpty else { return [] }
+    let outcome = try await database.write { database -> BulkCreateOutcome in
+      try Self.performCreateMany(database: database, transactions: transactions)
+    }
+    for transaction in transactions {
+      onRecordChanged(TransactionRow.recordType, transaction.id)
+    }
+    for legId in outcome.legIds {
+      onRecordChanged(TransactionLegRow.recordType, legId)
+    }
+    for instrument in outcome.instruments {
+      onInstrumentChanged(instrument)
+    }
+    return transactions
+  }
+
   func update(_ transaction: Transaction) async throws -> Transaction {
     let outcome = try await database.write { database -> UpdateOutcome in
       try Self.performUpdate(

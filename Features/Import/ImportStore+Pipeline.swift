@@ -197,12 +197,19 @@ extension ImportStore {
   }
 
   /// Evaluate import rules against each surviving candidate and persist
-  /// the resulting transactions. Fetches every account once and builds a
-  /// `{ id → instrument }` map so `buildTransaction` can stamp each leg
-  /// with its own account's instrument — in particular the destination
-  /// leg of a `.markAsTransfer` rule, which may target an account in a
-  /// different instrument than the source (Rule 11a — never write a leg
-  /// with the wrong instrument).
+  /// the resulting transactions in a single atomic write. Fetches every
+  /// account once and builds a `{ id → instrument }` map so
+  /// `buildTransaction` can stamp each leg with its own account's
+  /// instrument — in particular the destination leg of a
+  /// `.markAsTransfer` rule, which may target an account in a different
+  /// instrument than the source (Rule 11a — never write a leg with the
+  /// wrong instrument).
+  ///
+  /// On any backend failure during the bulk insert, **no** transactions
+  /// from this session persist. A half-imported CSV is hard to reconcile
+  /// against on a retry — the dedup window would have to be narrowed
+  /// manually to skip the rows that did land. Failing the whole session
+  /// instead keeps re-running the same file safe.
   func persistCandidates(
     dedup: CSVDedupResult,
     resolvedProfile: CSVImportProfile,
@@ -226,28 +233,20 @@ extension ImportStore {
         "Account \(resolvedProfile.accountId) not found; cannot resolve its instrument.")
     }
 
-    var persisted: [Transaction] = []
-    for candidate in dedup.kept {
+    let buildContext = ImportBuildContext(
+      routedAccountId: resolvedProfile.accountId,
+      accountInstrument: routedInstrument,
+      accountInstruments: accountInstruments,
+      sessionId: sessionId,
+      source: source,
+      parserIdentifier: parserIdentifier)
+    let transactions: [Transaction] = dedup.kept.compactMap { candidate in
       let evaluation = ImportRulesEngine.evaluate(
         candidate, routedAccountId: resolvedProfile.accountId, rules: rules)
-      if evaluation.isSkipped { continue }
-      let transaction = buildTransaction(
-        from: evaluation,
-        context: ImportBuildContext(
-          routedAccountId: resolvedProfile.accountId,
-          accountInstrument: routedInstrument,
-          accountInstruments: accountInstruments,
-          sessionId: sessionId,
-          source: source,
-          parserIdentifier: parserIdentifier))
-      do {
-        persisted.append(try await backend.transactions.create(transaction))
-      } catch {
-        logger.error(
-          "Create failed for candidate at \(candidate.date): \(error.localizedDescription)")
-      }
+      if evaluation.isSkipped { return nil }
+      return buildTransaction(from: evaluation, context: buildContext)
     }
-    return persisted
+    return try await backend.transactions.createMany(transactions)
   }
 
   func touchProfileLastUsedAt(_ resolvedProfile: CSVImportProfile) async {

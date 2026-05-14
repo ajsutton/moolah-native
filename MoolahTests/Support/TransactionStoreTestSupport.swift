@@ -179,6 +179,10 @@ struct FailingTransactionRepository: TransactionRepository {
     throw BackendError.networkUnavailable
   }
 
+  func createMany(_ transactions: [Transaction]) async throws -> [Transaction] {
+    throw BackendError.networkUnavailable
+  }
+
   func update(_ transaction: Transaction) async throws -> Transaction {
     throw BackendError.networkUnavailable
   }

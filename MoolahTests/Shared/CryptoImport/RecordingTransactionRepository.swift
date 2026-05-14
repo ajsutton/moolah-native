@@ -46,6 +46,10 @@ actor RecordingTransactionRepository: TransactionRepository {
     try await wrapped.create(transaction)
   }
 
+  func createMany(_ transactions: [Transaction]) async throws -> [Transaction] {
+    try await wrapped.createMany(transactions)
+  }
+
   func update(_ transaction: Transaction) async throws -> Transaction {
     try await wrapped.update(transaction)
   }
