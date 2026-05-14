@@ -208,4 +208,31 @@ struct PositionsViewInputTests {
     #expect(mixed.showsGroupSubtotals)
   }
 
+  @Test("hasHistoricalSeries is false when historicalValue is nil")
+  func historicalSeriesAbsentWhenNoSeries() {
+    let input = PositionsViewInput(
+      title: "x", hostCurrency: aud, positions: [], historicalValue: nil)
+    #expect(!input.hasHistoricalSeries)
+  }
+
+  @Test("hasHistoricalSeries is false when total is empty")
+  func historicalSeriesAbsentWhenTotalEmpty() {
+    let input = PositionsViewInput(
+      title: "x", hostCurrency: aud, positions: [],
+      historicalValue: HistoricalValueSeries(
+        hostCurrency: aud, total: [], perInstrument: [:]))
+    #expect(!input.hasHistoricalSeries)
+  }
+
+  @Test("hasHistoricalSeries is true when total has at least one point")
+  func historicalSeriesPresentWhenTotalHasPoints() {
+    let point = HistoricalValueSeries.Point(
+      date: Date(), value: 100, cost: 80, contributions: 80)
+    let input = PositionsViewInput(
+      title: "x", hostCurrency: aud, positions: [],
+      historicalValue: HistoricalValueSeries(
+        hostCurrency: aud, total: [point], perInstrument: [:]))
+    #expect(input.hasHistoricalSeries)
+  }
+
 }
