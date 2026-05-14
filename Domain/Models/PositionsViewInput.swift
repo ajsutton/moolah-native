@@ -52,15 +52,16 @@ struct PositionsViewInput: Sendable, Hashable {
 
   /// `true` iff the chart container is rendered at all. The aggregate
   /// historical series must be non-empty. Beyond that, either:
-  /// - `positions` is empty (every holding has been sold but history
-  ///   is still meaningful), or
+  /// - `shouldHide` is `true` (every remaining position is in
+  ///   `hostCurrency` or no positions remain — the historical series
+  ///   alone justifies the chart for a closed-out account), or
   /// - at least one current position carries cost basis.
   ///
   /// This is intentionally more permissive than `showsPLPill`, which
   /// additionally requires `totalValue` to be non-nil.
   var showsChart: Bool {
     guard let series = historicalValue, !series.total.isEmpty else { return false }
-    return positions.isEmpty || positions.contains(where: { $0.hasCostBasis })
+    return shouldHide || positions.contains(where: { $0.hasCostBasis })
   }
 
   /// `true` iff the all-positions chart line should render. False when any

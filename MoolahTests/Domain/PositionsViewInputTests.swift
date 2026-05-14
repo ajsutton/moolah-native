@@ -116,7 +116,7 @@ struct PositionsViewInputTests {
       title: "x", hostCurrency: aud,
       positions: [
         ValuedPosition(
-          instrument: aud, quantity: 1, unitPrice: nil,
+          instrument: bhp, quantity: 1, unitPrice: nil,
           costBasis: nil, value: amount(100))
       ],
       historicalValue: HistoricalValueSeries(
