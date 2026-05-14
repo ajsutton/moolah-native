@@ -91,7 +91,7 @@ struct InvestmentAccountView: View {
   ///     `PositionsView` with header, optional chart, and table.
   ///   - Positions empty (or all in host currency) but historic series
   ///     has points: show a chart-only surface so the user can review
-  ///     prior performance after closing out every holding.
+  ///     prior performance.
   ///   - Positions empty and no history: collapse to the bare transaction
   ///     list, the same as today.
   @ViewBuilder private var positionTrackedLayout: some View {
@@ -107,7 +107,9 @@ struct InvestmentAccountView: View {
   }
 
   /// Full positions surface — header (or performance tiles), optional
-  /// chart, and the responsive table. Used when current positions exist.
+  /// chart, and the responsive table. Used when current positions exist
+  /// or while positions are still loading (renders a `ProgressView` in
+  /// the top pane until `isLoadingPositions` clears).
   @ViewBuilder private var standardPositionsSplit: some View {
     PositionsTransactionsSplit(
       defaultTab: .positions,
@@ -132,8 +134,9 @@ struct InvestmentAccountView: View {
     }
   }
 
-  /// Chart-only top pane for a position-tracked account that no longer
-  /// holds anything non-host-currency but has historical activity.
+  /// Chart-only top pane for a position-tracked account whose positions
+  /// table is empty (all holdings closed out, or every non-zero position
+  /// is in host currency) but that has historical activity worth reviewing.
   /// Reuses the same `autosaveName` as `standardPositionsSplit` so the
   /// divider position the user has chosen for this account shape
   /// persists across the two branches. `selectedInstrument` is pinned to
