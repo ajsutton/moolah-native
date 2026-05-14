@@ -12,6 +12,13 @@ extension EarmarkStore {
 
     do {
       budgetItems = try await repository.fetchBudget(earmarkId: earmarkId)
+    } catch is CancellationError {
+      // `EarmarkBudgetSectionView`'s `.task(id: earmark.id)` is cancelled
+      // when the user switches to a different earmark mid-fetch; the
+      // repository await rethrows `CancellationError`. Never surface —
+      // the re-keyed `.task` issues its own `loadBudget`.
+      isBudgetLoading = false
+      return
     } catch {
       logger.error("Failed to load budget: \(error.localizedDescription)")
       budgetError = error

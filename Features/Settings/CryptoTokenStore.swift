@@ -203,6 +203,10 @@ final class CryptoTokenStore {
         uniquingKeysWith: { _, last in last }
       )
       error = nil
+    } catch is CancellationError {
+      // `.task`-driven load cancelled by view teardown — never surface;
+      // a re-mount issues its own `loadRegistrations`.
+      return
     } catch {
       logger.error(
         "Failed to load crypto registrations: \(error, privacy: .public)")

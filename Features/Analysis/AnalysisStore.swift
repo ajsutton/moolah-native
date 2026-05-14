@@ -114,6 +114,16 @@ final class AnalysisStore {
       cachedHistoryMonths = historyMonths
       cachedForecastMonths = forecastMonths
       lastLoadedAt = Date()
+    } catch is CancellationError {
+      // View teardown / supersession — `AnalysisView`'s `.task` modifier
+      // is routinely cancelled during cold-launch state restoration and
+      // when navigating between sidebar items. The repository awaits
+      // rethrow `CancellationError` per their documented contract;
+      // surfacing it would render "Swift.CancellationError error 1" in
+      // the view, which sticks because the store outlives the view.
+      // A re-mount issues its own `loadAll()`.
+      isLoading = false
+      return
     } catch {
       logger.error("Failed to load analysis data: \(error)")
       self.error = error

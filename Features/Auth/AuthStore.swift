@@ -29,6 +29,11 @@ final class AuthStore {
       } else {
         state = .signedOut
       }
+    } catch is CancellationError {
+      // `.task`-driven load can be cancelled by view teardown; leave the
+      // existing `state` / `errorMessage` untouched so a re-mount can
+      // issue its own load.
+      return
     } catch {
       state = .signedOut
       errorMessage = error.localizedDescription
@@ -40,6 +45,8 @@ final class AuthStore {
       let user = try await backend.auth.signIn()
       state = .signedIn(user)
       errorMessage = nil
+    } catch is CancellationError {
+      return
     } catch {
       state = .signedOut
       errorMessage = error.localizedDescription
@@ -51,6 +58,8 @@ final class AuthStore {
       try await backend.auth.signOut()
       state = .signedOut
       errorMessage = nil
+    } catch is CancellationError {
+      return
     } catch {
       state = .signedOut
       errorMessage = error.localizedDescription
