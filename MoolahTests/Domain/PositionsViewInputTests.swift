@@ -7,6 +7,7 @@ import Testing
 struct PositionsViewInputTests {
   let aud = Instrument.AUD
   let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+  let fixedTestDate = Date(timeIntervalSinceReferenceDate: 0)
 
   private func amount(_ quantity: Decimal) -> InstrumentAmount {
     InstrumentAmount(quantity: quantity, instrument: aud)
@@ -109,6 +110,8 @@ struct PositionsViewInputTests {
 
   @Test("showsChart is false when no row carries cost basis")
   func chartHiddenWithoutAnyCostBasis() {
+    let point = HistoricalValueSeries.Point(
+      date: fixedTestDate, value: 60, cost: 50, contributions: 50)
     let input = PositionsViewInput(
       title: "x", hostCurrency: aud,
       positions: [
@@ -117,7 +120,7 @@ struct PositionsViewInputTests {
           costBasis: nil, value: amount(100))
       ],
       historicalValue: HistoricalValueSeries(
-        hostCurrency: aud, total: [], perInstrument: [:])
+        hostCurrency: aud, total: [point], perInstrument: [:])
     )
     #expect(!input.showsChart)
   }
@@ -125,7 +128,7 @@ struct PositionsViewInputTests {
   @Test("showsAggregateChart is false when any row's value is nil")
   func aggregateChartHiddenOnFailure() {
     let point = HistoricalValueSeries.Point(
-      date: Date(), value: 60, cost: 50, contributions: 50)
+      date: fixedTestDate, value: 60, cost: 50, contributions: 50)
     let input = PositionsViewInput(
       title: "x", hostCurrency: aud,
       positions: [
@@ -171,7 +174,7 @@ struct PositionsViewInputTests {
     "showsChart is true when historicalValue has points and at least one row carries cost basis")
   func chartVisibleWithSeriesAndCostBasis() {
     let point = HistoricalValueSeries.Point(
-      date: Date(), value: 60, cost: 50, contributions: 50)
+      date: fixedTestDate, value: 60, cost: 50, contributions: 50)
     let input = PositionsViewInput(
       title: "x", hostCurrency: aud,
       positions: [
@@ -232,7 +235,7 @@ struct PositionsViewInputTests {
   @Test("hasHistoricalSeries is true when total has at least one point")
   func historicalSeriesPresentWhenTotalHasPoints() {
     let point = HistoricalValueSeries.Point(
-      date: Date(), value: 100, cost: 80, contributions: 80)
+      date: fixedTestDate, value: 100, cost: 80, contributions: 80)
     let input = PositionsViewInput(
       title: "x", hostCurrency: aud, positions: [],
       historicalValue: HistoricalValueSeries(
@@ -243,7 +246,7 @@ struct PositionsViewInputTests {
   @Test("showsChart is true when positions is empty but historical total has points")
   func chartVisibleForEmptyPositionsWithHistory() {
     let point = HistoricalValueSeries.Point(
-      date: Date(), value: 100, cost: 80, contributions: 80)
+      date: fixedTestDate, value: 100, cost: 80, contributions: 80)
     let input = PositionsViewInput(
       title: "x", hostCurrency: aud, positions: [],
       historicalValue: HistoricalValueSeries(
