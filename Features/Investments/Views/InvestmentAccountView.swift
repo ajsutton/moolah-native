@@ -85,34 +85,72 @@ struct InvestmentAccountView: View {
     )
   }
 
-  /// The positions/transactions composition for non-legacy accounts. Collapses
-  /// to a bare transaction list when `PositionsView` would be redundant with
-  /// the host's already-visible account balance (see `shouldHide`).
+  /// The positions/transactions composition for non-legacy accounts.
+  /// Three branches:
+  ///   - Positions exist (or are still loading): show the full
+  ///     `PositionsView` with header, optional chart, and table.
+  ///   - Positions empty (or all in host currency) but historic series
+  ///     has points: show a chart-only surface so the user can review
+  ///     prior performance after closing out every holding.
+  ///   - Positions empty and no history: collapse to the bare transaction
+  ///     list, the same as today.
   @ViewBuilder private var positionTrackedLayout: some View {
     if positionsInput.shouldHide && !isLoadingPositions {
-      makeAccountTransactionList()
-    } else {
-      PositionsTransactionsSplit(
-        defaultTab: .positions,
-        // Distinct autosave key from the chartless multi-currency split so
-        // the saved divider position from each layout doesn't bleed into
-        // the other; the chart pushes the table off-screen at the
-        // chartless 180pt default.
-        autosaveName: "positions-transactions-split.with-chart",
-        // Header (~50pt) + chart (~250pt with padding) + a few table rows
-        // need ~530pt to render comfortably without the user dragging.
-        initialTopHeight: 540
-      ) {
-        if isLoadingPositions && positionsInput.positions.isEmpty {
-          ProgressView()
-            .frame(maxWidth: .infinity)
-            .padding()
-        } else {
-          PositionsView(input: positionsInput, range: $positionsRange)
-        }
-      } transactions: {
+      if positionsInput.hasHistoricalSeries {
+        chartOnlySplit
+      } else {
         makeAccountTransactionList()
       }
+    } else {
+      standardPositionsSplit
+    }
+  }
+
+  /// Full positions surface — header (or performance tiles), optional
+  /// chart, and the responsive table. Used when current positions exist.
+  @ViewBuilder private var standardPositionsSplit: some View {
+    PositionsTransactionsSplit(
+      defaultTab: .positions,
+      // Distinct autosave key from the chartless multi-currency split so
+      // the saved divider position from each layout doesn't bleed into
+      // the other; the chart pushes the table off-screen at the
+      // chartless 180pt default.
+      autosaveName: "positions-transactions-split.with-chart",
+      // Header (~50pt) + chart (~250pt with padding) + a few table rows
+      // need ~530pt to render comfortably without the user dragging.
+      initialTopHeight: 540
+    ) {
+      if isLoadingPositions && positionsInput.positions.isEmpty {
+        ProgressView()
+          .frame(maxWidth: .infinity)
+          .padding()
+      } else {
+        PositionsView(input: positionsInput, range: $positionsRange)
+      }
+    } transactions: {
+      makeAccountTransactionList()
+    }
+  }
+
+  /// Chart-only top pane for a position-tracked account that no longer
+  /// holds anything non-host-currency but has historical activity.
+  /// Reuses the same `autosaveName` as `standardPositionsSplit` so the
+  /// divider position the user has chosen for this account shape
+  /// persists across the two branches. `selectedInstrument` is pinned to
+  /// `.constant(nil)` — there are no positions to filter to, so the
+  /// per-instrument selection chip would never appear.
+  @ViewBuilder private var chartOnlySplit: some View {
+    PositionsTransactionsSplit(
+      defaultTab: .positions,
+      autosaveName: "positions-transactions-split.with-chart",
+      initialTopHeight: 540
+    ) {
+      PositionsChart(
+        input: positionsInput,
+        range: $positionsRange,
+        selectedInstrument: .constant(nil))
+    } transactions: {
+      makeAccountTransactionList()
     }
   }
 
