@@ -37,6 +37,13 @@ protocol TransactionRepository: Sendable {
   /// typically surface this to a banner / log path.
   func observeErrors() -> AsyncStream<any Error>
   func create(_ transaction: Transaction) async throws -> Transaction
+  /// Atomic bulk insert. Inserts every transaction (with its legs) inside
+  /// a single write transaction; on any failure none of the transactions
+  /// persist. Returns the inserted transactions in input order. Change /
+  /// instrument hooks fire once per inserted row after the write commits,
+  /// matching the per-row fan-out of `create(_:)`. Used by the CSV import
+  /// pipeline so a half-written session can never be left on disk.
+  func createMany(_ transactions: [Transaction]) async throws -> [Transaction]
   func update(_ transaction: Transaction) async throws -> Transaction
   func delete(id: UUID) async throws
   /// Frequency-sorted payee strings beginning with `prefix`. When
