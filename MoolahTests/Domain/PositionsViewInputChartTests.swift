@@ -31,7 +31,7 @@ struct PositionsViewInputChartTests {
     #expect(!input.showsChart)
   }
 
-  @Test("showsChart is false when no row carries cost basis")
+  @Test("showsChart is false when non-host positions have no cost basis and shouldHide is false")
   func chartHiddenWithoutAnyCostBasis() {
     let point = HistoricalValueSeries.Point(
       date: fixedTestDate, value: 60, cost: 50, contributions: 50)
@@ -112,6 +112,25 @@ struct PositionsViewInputChartTests {
       historicalValue: HistoricalValueSeries(
         hostCurrency: aud, total: [point], perInstrument: [:]))
     #expect(input.hasHistoricalSeries)
+  }
+
+  @Test("showsChart is true when all positions are in host currency but history has points")
+  func chartVisibleForHostCurrencyOnlyPositionsWithHistory() {
+    let point = HistoricalValueSeries.Point(
+      date: fixedTestDate, value: 100, cost: 80, contributions: 80)
+    let input = PositionsViewInput(
+      title: "x", hostCurrency: aud,
+      positions: [
+        // AUD position (host currency) — `shouldHide` fires via the
+        // host-currency-only branch, NOT via `positions.isEmpty`.
+        ValuedPosition(
+          instrument: aud, quantity: 5_000, unitPrice: nil,
+          costBasis: nil, value: amount(5_000))
+      ],
+      historicalValue: HistoricalValueSeries(
+        hostCurrency: aud, total: [point], perInstrument: [:]))
+    #expect(input.shouldHide)
+    #expect(input.showsChart)
   }
 
   @Test("showsChart is true when positions is empty but historical total has points")
