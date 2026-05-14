@@ -39,8 +39,11 @@ struct ProfileSessionPragmaOptimizeTests {
 
     session.startPeriodicPragmaOptimize(interval: .milliseconds(20))
 
-    // Wait long enough for at least three ticks to fire.
-    try await waitUntil(timeout: .seconds(2)) {
+    // Wait long enough for at least three ticks to fire. Timeout is
+    // generous because heavily-loaded CI (iOS Simulator under merge-queue
+    // contention) can drag the 20 ms cadence into seconds-range; we only
+    // need *eventually*-fires, not tight cadence (#884).
+    try await waitUntil(timeout: .seconds(10)) {
       session.pragmaOptimizeRunCount >= baseline + 3
     }
 
@@ -63,7 +66,7 @@ struct ProfileSessionPragmaOptimizeTests {
     // takes effect.
     session.startPeriodicPragmaOptimize(interval: .milliseconds(20))
 
-    try await waitUntil(timeout: .seconds(2)) {
+    try await waitUntil(timeout: .seconds(10)) {
       session.pragmaOptimizeRunCount >= baselineAfterFirstStart + 2
     }
 
@@ -84,7 +87,7 @@ struct ProfileSessionPragmaOptimizeTests {
     session.startPeriodicPragmaOptimize(interval: .milliseconds(20))
 
     // Let it fire at least once so we know the loop is running.
-    try await waitUntil(timeout: .seconds(2)) {
+    try await waitUntil(timeout: .seconds(10)) {
       session.pragmaOptimizeRunCount >= 1
     }
 
