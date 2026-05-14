@@ -50,11 +50,15 @@ struct PositionsViewInput: Sendable, Hashable {
     return positions.contains(where: { $0.hasCostBasis })
   }
 
-  /// `true` iff the chart container is rendered at all (a historical series
-  /// exists and at least one row carries cost basis).
+  /// `true` iff the chart container is rendered at all. Requires a
+  /// non-empty aggregate historical series, and — when current positions
+  /// exist — at least one of them carrying cost basis. An empty `positions`
+  /// array is allowed (the historic series alone is sufficient): supports
+  /// position-tracked investment accounts where every holding has been
+  /// sold but the user still wants to inspect prior performance.
   var showsChart: Bool {
-    guard historicalValue != nil else { return false }
-    return positions.contains(where: { $0.hasCostBasis })
+    guard let series = historicalValue, !series.total.isEmpty else { return false }
+    return positions.isEmpty || positions.contains(where: { $0.hasCostBasis })
   }
 
   /// `true` iff the all-positions chart line should render. False when any
