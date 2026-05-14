@@ -64,7 +64,7 @@ struct PositionsViewInput: Sendable, Hashable {
 
   /// `true` iff `historicalValue` exists and its aggregate `total` series
   /// has at least one point. The view layer reads this to decide whether
-  /// a chart-only surface is worth rendering when `shouldHide` is true —
+  /// a chart-only surface is worth rendering when `shouldHide` is `true` —
   /// e.g. a position-tracked investment account where every holding has
   /// been sold but the historical performance is still meaningful.
   var hasHistoricalSeries: Bool {
