@@ -26,8 +26,8 @@ private func seedPositionValuations(backend: any BackendProvider, account: Accou
     Transaction(
       date: Date().addingTimeInterval(-86_400 * 30),
       legs: [
-        TransactionLeg(accountId: account.id, instrument: bhp, quantity: 100, type: .income),
-        TransactionLeg(accountId: account.id, instrument: .AUD, quantity: -4_000, type: .expense),
+        TransactionLeg(accountId: account.id, instrument: bhp, quantity: 100, type: .trade),
+        TransactionLeg(accountId: account.id, instrument: .AUD, quantity: -4_000, type: .trade),
       ]))
 }
 
