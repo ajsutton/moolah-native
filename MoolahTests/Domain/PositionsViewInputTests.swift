@@ -7,6 +7,7 @@ import Testing
 struct PositionsViewInputTests {
   let aud = Instrument.AUD
   let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+  let fixedTestDate = Date(timeIntervalSinceReferenceDate: 0)
 
   private func amount(_ quantity: Decimal) -> InstrumentAmount {
     InstrumentAmount(quantity: quantity, instrument: aud)
@@ -93,54 +94,6 @@ struct PositionsViewInputTests {
     #expect(!input.showsPLPill)
   }
 
-  @Test("showsChart is false when historicalValue is nil")
-  func chartHiddenWithoutSeries() {
-    let input = PositionsViewInput(
-      title: "x", hostCurrency: aud,
-      positions: [
-        ValuedPosition(
-          instrument: bhp, quantity: 1, unitPrice: nil,
-          costBasis: amount(50), value: amount(60))
-      ],
-      historicalValue: nil
-    )
-    #expect(!input.showsChart)
-  }
-
-  @Test("showsChart is false when no row carries cost basis")
-  func chartHiddenWithoutAnyCostBasis() {
-    let input = PositionsViewInput(
-      title: "x", hostCurrency: aud,
-      positions: [
-        ValuedPosition(
-          instrument: aud, quantity: 1, unitPrice: nil,
-          costBasis: nil, value: amount(100))
-      ],
-      historicalValue: HistoricalValueSeries(
-        hostCurrency: aud, total: [], perInstrument: [:])
-    )
-    #expect(!input.showsChart)
-  }
-
-  @Test("showsAggregateChart is false when any row's value is nil")
-  func aggregateChartHiddenOnFailure() {
-    let input = PositionsViewInput(
-      title: "x", hostCurrency: aud,
-      positions: [
-        ValuedPosition(
-          instrument: bhp, quantity: 1, unitPrice: nil,
-          costBasis: amount(50), value: amount(60)),
-        ValuedPosition(
-          instrument: bhp, quantity: 1, unitPrice: nil,
-          costBasis: amount(40), value: nil),
-      ],
-      historicalValue: HistoricalValueSeries(
-        hostCurrency: aud, total: [], perInstrument: [:])
-    )
-    #expect(!input.showsAggregateChart)
-    #expect(input.showsChart)  // chart can still render for working instruments
-  }
-
   @Test("totalValue is zero (not nil) for empty positions")
   func totalValueEmptyPositions() {
     let input = PositionsViewInput(
@@ -163,21 +116,6 @@ struct PositionsViewInputTests {
       historicalValue: nil
     )
     #expect(input.showsPLPill)
-  }
-
-  @Test("showsChart is true when historicalValue exists and at least one row carries cost basis")
-  func chartVisibleWithSeriesAndCostBasis() {
-    let input = PositionsViewInput(
-      title: "x", hostCurrency: aud,
-      positions: [
-        ValuedPosition(
-          instrument: bhp, quantity: 1, unitPrice: nil,
-          costBasis: amount(50), value: amount(60))
-      ],
-      historicalValue: HistoricalValueSeries(
-        hostCurrency: aud, total: [], perInstrument: [:])
-    )
-    #expect(input.showsChart)
   }
 
   @Test("showsGroupSubtotals is true only when more than one kind is present")

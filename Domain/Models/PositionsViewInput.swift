@@ -50,17 +50,34 @@ struct PositionsViewInput: Sendable, Hashable {
     return positions.contains(where: { $0.hasCostBasis })
   }
 
-  /// `true` iff the chart container is rendered at all (a historical series
-  /// exists and at least one row carries cost basis).
+  /// `true` iff the chart container is rendered at all. The aggregate
+  /// historical series must be non-empty. Beyond that, either:
+  /// - `shouldHide` is `true` (every remaining position is in
+  ///   `hostCurrency` or no positions remain — the historical series
+  ///   alone justifies the chart for a closed-out account), or
+  /// - at least one current position carries cost basis.
+  ///
+  /// This is intentionally more permissive than `showsPLPill`, which
+  /// additionally requires `totalValue` to be non-nil.
   var showsChart: Bool {
-    guard historicalValue != nil else { return false }
-    return positions.contains(where: { $0.hasCostBasis })
+    guard let series = historicalValue, !series.total.isEmpty else { return false }
+    return shouldHide || positions.contains(where: { $0.hasCostBasis })
   }
 
   /// `true` iff the all-positions chart line should render. False when any
   /// row's current value is unavailable — partial historical totals would be
   /// misleading.
   var showsAggregateChart: Bool { showsChart && totalValue != nil }
+
+  /// `true` iff `historicalValue` exists and its aggregate `total` series
+  /// has at least one point. The view layer reads this to decide whether
+  /// a chart-only surface is worth rendering when `shouldHide` is `true` —
+  /// e.g. a position-tracked investment account where every holding has
+  /// been sold but the historical performance is still meaningful.
+  var hasHistoricalSeries: Bool {
+    guard let series = historicalValue else { return false }
+    return !series.total.isEmpty
+  }
 
   /// `true` iff more than one `Instrument.Kind` is represented. Drives whether
   /// the table renders per-group subtotals.
