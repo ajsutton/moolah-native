@@ -31,18 +31,12 @@
 
     @MainActor
     private func exportProfile(session: ProfileSession) async {
-      guard let window = NSApp.keyWindow ?? NSApp.mainWindow else {
-        logger.error("Export: no window available")
-        return
-      }
-
       let panel = NSSavePanel()
       panel.allowedContentTypes = [.json]
       panel.nameFieldStringValue = "\(session.profile.label).json"
       panel.canCreateDirectories = true
 
-      let result = await panel.beginSheetModal(for: window)
-      guard result == .OK, let url = panel.url else { return }
+      guard await present(panel) == .OK, let url = panel.url else { return }
 
       logger.info("Export: saving to \(url.path, privacy: .public)")
       session.activeExport = ActiveExport(
@@ -63,24 +57,18 @@
         logger.info("Export: complete — saved to \(url.path, privacy: .public)")
       } catch {
         logger.error("Export: failed — \(error)")
-        let alert = NSAlert(error: error)
-        await alert.beginSheetModal(for: window)
+        await present(NSAlert(error: error))
       }
     }
 
     @MainActor
     private func importProfile() async {
-      guard let window = NSApp.keyWindow ?? NSApp.mainWindow else {
-        logger.error("Import: no window available")
-        return
-      }
-
       let panel = NSOpenPanel()
       panel.allowedContentTypes = [.json]
       panel.allowsMultipleSelection = false
       panel.canChooseDirectories = false
 
-      guard await panel.beginSheetModal(for: window) == .OK, let url = panel.url else { return }
+      guard await present(panel) == .OK, let url = panel.url else { return }
 
       do {
         let coordinator = ExportCoordinator()
@@ -92,8 +80,29 @@
         )
         openWindow(value: newProfileId)
       } catch {
-        let alert = NSAlert(error: error)
-        await alert.beginSheetModal(for: window)
+        await present(NSAlert(error: error))
+      }
+    }
+
+    /// Presents `panel` as a sheet on the current key/main window, or as a
+    /// free-floating modal when no window is open (e.g. the user invoked the
+    /// menu item with every profile window closed). `beginSheetModal(for:)`
+    /// silently no-ops without a parent window, so the fallback is required
+    /// for the menu items to function in that state.
+    @MainActor
+    private func present(_ panel: NSSavePanel) async -> NSApplication.ModalResponse {
+      if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+        return await panel.beginSheetModal(for: window)
+      }
+      return panel.runModal()
+    }
+
+    @MainActor
+    private func present(_ alert: NSAlert) async {
+      if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+        _ = await alert.beginSheetModal(for: window)
+      } else {
+        alert.runModal()
       }
     }
   }
