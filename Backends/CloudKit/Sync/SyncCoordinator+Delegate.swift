@@ -249,21 +249,22 @@ extension SyncCoordinator: CKSyncEngineDelegate {
   }
 
   /// Looks up each profile-index record by ID and either appends it to
-  /// `recordsToSave` or queues a server deletion if the local record has been
-  /// deleted since the pending change was queued.
+  /// `recordsToSave` or collects it for a single batched server-deletion
+  /// queue at the end (locally-deleted-before-batch path).
   @MainActor
   private func appendProfileIndexRecords(
     recordIDs: [CKRecord.ID],
     into recordsToSave: inout [CKRecord]
   ) {
+    var missing: [CKRecord.ID] = []
     for recordID in recordIDs {
       if let record = profileIndexHandler.recordToSave(for: recordID) {
         recordsToSave.append(record)
       } else {
-        // Bug fix #2: record deleted locally, queue server deletion
-        handleMissingRecordToSave(recordID)
+        missing.append(recordID)
       }
     }
+    handleMissingRecordsToSave(missing)
   }
 
   /// Looks up profile-data records using a batch UUID lookup (plus an
@@ -307,13 +308,14 @@ extension SyncCoordinator: CKSyncEngineDelegate {
     let groups = byRecordType.mapValues { Set($0.map(\.1)) }
     let recordLookup = handler.buildBatchRecordLookup(byRecordType: groups)
 
+    var missing: [CKRecord.ID] = []
     for (recordType, items) in byRecordType {
       let typeLookup = recordLookup[recordType] ?? [:]
       for (recordID, uuid) in items {
         if let record = typeLookup[uuid] {
           recordsToSave.append(record)
         } else {
-          handleMissingRecordToSave(recordID)
+          missing.append(recordID)
         }
       }
     }
@@ -324,24 +326,41 @@ extension SyncCoordinator: CKSyncEngineDelegate {
       if let record = handler.recordToSave(for: recordID) {
         recordsToSave.append(record)
       } else {
-        handleMissingRecordToSave(recordID)
+        missing.append(recordID)
       }
     }
+
+    handleMissingRecordsToSave(missing)
   }
 
-  /// Bug fix #2: When `recordToSave` returns nil (record deleted locally before batch built),
-  /// queue a `.deleteRecord` if one isn't already pending.
+  /// When `recordToSave` returns nil for one or more recordIDs (records
+  /// deleted locally before the batch was built), queue a single
+  /// `.deleteRecord` for each that isn't already pending — in one
+  /// `state.add(_:)` call.
+  ///
+  /// Prior history: this fired per-record and re-scanned the entire
+  /// pending queue every call (a Sequence.contains over an
+  /// `[CKSyncEngine.PendingRecordZoneChange]` is linear), so a batch
+  /// where N records were missing did N × pending equality checks on the
+  /// main thread. With a stale 50K-row queue left over from a deleted
+  /// profile, that's the source of the freeze observed during CSV import:
+  /// every `nextRecordZoneChangeBatch` cycle re-found the same 400
+  /// missing records, the scan was quadratic, and the synchronous
+  /// `state.add(_:)` hop to CloudKit's serial queue ran 400 times per
+  /// cycle. The batched call collapses all of that into one set-build,
+  /// one filter pass, and one engine hop.
   @MainActor
-  private func handleMissingRecordToSave(_ recordID: CKRecord.ID) {
-    guard let syncEngine else { return }
-    let hasPendingDelete = syncEngine.state.pendingRecordZoneChanges.contains(
-      .deleteRecord(recordID))
-    if !hasPendingDelete {
-      logger.info(
-        "Record \(recordID.recordName, privacy: .public) deleted locally before batch — queueing server deletion"
-      )
-      syncEngine.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
-      refreshPendingUploadsMirror()
-    }
+  private func handleMissingRecordsToSave(_ recordIDs: [CKRecord.ID]) {
+    guard let syncEngine, !recordIDs.isEmpty else { return }
+    let novel = Self.newMissingDeleteIDs(
+      among: recordIDs,
+      pendingChanges: syncEngine.state.pendingRecordZoneChanges)
+    guard !novel.isEmpty else { return }
+    logger.info(
+      "\(novel.count, privacy: .public) record(s) deleted locally before batch — queueing server deletion"
+    )
+    syncEngine.state.add(
+      pendingRecordZoneChanges: novel.map { .deleteRecord($0) })
+    refreshPendingUploadsMirror()
   }
 }
