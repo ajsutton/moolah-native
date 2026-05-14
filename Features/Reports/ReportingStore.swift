@@ -54,6 +54,15 @@ final class ReportingStore {
       )
       incomeBalances = result.income
       expenseBalances = result.expense
+    } catch is CancellationError {
+      // `ReportsView`'s `.task(id:)` is cancelled whenever the user
+      // changes the date range or navigates away; the cancellation
+      // propagates as `CancellationError` from the repository. Treat
+      // it as a normal lifecycle event — surfacing it would render
+      // "Swift.CancellationError error 1" in the view. A re-mount /
+      // re-keyed `.task` issues its own load.
+      isLoadingCategoryBalances = false
+      return
     } catch {
       logger.error("Failed to load category balances: \(error)")
       categoryBalancesError = error
@@ -72,6 +81,11 @@ final class ReportingStore {
         conversionService: conversionService,
         asOfDate: Date()
       )
+    } catch is CancellationError {
+      // View teardown / supersession — never surface; the next mount
+      // issues its own load.
+      isLoading = false
+      return
     } catch {
       logger.error("Failed to load P&L: \(error)")
       self.error = error
@@ -112,6 +126,11 @@ final class ReportingStore {
         totalGain: result.totalRealizedGain,
         eventCount: result.events.count
       )
+    } catch is CancellationError {
+      // View teardown / supersession — never surface; the next mount
+      // issues its own load.
+      isLoading = false
+      return
     } catch {
       logger.error("Failed to load capital gains: \(error)")
       self.error = error
