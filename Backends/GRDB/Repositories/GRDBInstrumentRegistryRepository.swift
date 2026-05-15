@@ -167,16 +167,7 @@ final class GRDBInstrumentRegistryRepository:
       .filter(InstrumentRow.Columns.id == instrument.id)
       .fetchOne(database)
     {
-      existing.kind = instrument.kind.rawValue
-      existing.name = instrument.name
-      existing.decimals = instrument.decimals
-      existing.ticker = instrument.ticker
-      existing.exchange = instrument.exchange
-      existing.chainId = instrument.chainId
-      existing.contractAddress = instrument.contractAddress
-      existing.coingeckoId = mapping.coingeckoId
-      existing.cryptocompareSymbol = mapping.cryptocompareSymbol
-      existing.binanceSymbol = mapping.binanceSymbol
+      mergeResolvedFields(into: &existing, from: instrument, mapping: mapping)
       try existing.update(database)
     } else {
       var row = InstrumentRow(domain: instrument)
@@ -185,6 +176,39 @@ final class GRDBInstrumentRegistryRepository:
       row.binanceSymbol = mapping.binanceSymbol
       try row.insert(database)
     }
+  }
+
+  /// Upgrade-only field merge: a nil/empty incoming column must never
+  /// downgrade a populated stored column.
+  ///
+  /// A thin ensureInstrument-style publish carries all-nil / empty identity
+  /// fields; allowing it to overwrite would destroy a richer
+  /// discovery-resolved row (e.g. Trust Wallet's ensureInstrument for
+  /// Ethereum clobbering the coingecko-resolved ticker/exchange). Every
+  /// identity column therefore requires a non-empty / non-zero incoming
+  /// value before overwriting; `kind` and `decimals` are always
+  /// authoritative and are updated unconditionally.
+  ///
+  /// Provider mapping columns are also merged: a nil incoming column must
+  /// not downgrade a populated stored column. See the shared-registry
+  /// clobber bug (Trust - Ethereum 1:native).
+  private static func mergeResolvedFields(
+    into existing: inout InstrumentRow,
+    from instrument: Instrument,
+    mapping: CryptoProviderMapping
+  ) {
+    existing.kind = instrument.kind.rawValue
+    if !instrument.name.isEmpty { existing.name = instrument.name }
+    existing.decimals = instrument.decimals
+    if let ticker = instrument.ticker, !ticker.isEmpty { existing.ticker = ticker }
+    if let exchange = instrument.exchange, !exchange.isEmpty { existing.exchange = exchange }
+    if let chainId = instrument.chainId, chainId != 0 { existing.chainId = chainId }
+    if let contractAddress = instrument.contractAddress, !contractAddress.isEmpty {
+      existing.contractAddress = contractAddress
+    }
+    existing.coingeckoId = mapping.coingeckoId ?? existing.coingeckoId
+    existing.cryptocompareSymbol = mapping.cryptocompareSymbol ?? existing.cryptocompareSymbol
+    existing.binanceSymbol = mapping.binanceSymbol ?? existing.binanceSymbol
   }
 
   /// Inserts a new stock row or updates the existing one in-place. Stock
