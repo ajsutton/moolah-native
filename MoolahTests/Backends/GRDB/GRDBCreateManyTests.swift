@@ -64,13 +64,22 @@ struct GRDBCreateManyTests {
     try await Task.sleep(for: .milliseconds(50))
   }
 
-  private func instrumentRowCount(
-    _ database: any DatabaseWriter, id: String
-  ) async throws -> Int {
+  /// Post-`v10_drop_shared_instrument_legacy` the per-profile
+  /// `instrument` table no longer exists, so the "create path must not
+  /// write a per-profile placeholder" contract is now the structural
+  /// fact that the table is absent — a strictly stronger guarantee than
+  /// "zero rows". Returns `true` when the table does not exist.
+  private func perProfileInstrumentTableAbsent(
+    _ database: any DatabaseWriter
+  ) async throws -> Bool {
     try await database.read { database in
-      try InstrumentRow
-        .filter(InstrumentRow.Columns.id == id)
-        .fetchCount(database)
+      try
+        !(Bool.fetchOne(
+          database,
+          sql: """
+            SELECT EXISTS(
+              SELECT 1 FROM sqlite_master WHERE type='table' AND name='instrument')
+            """) ?? true)
     }
   }
 
@@ -108,12 +117,13 @@ struct GRDBCreateManyTests {
   @Test("createMany rolls back every header + leg if any leg insert fails")
   func createManyRollsBackOnLegFailure() async throws {
     let database = try ProfileDatabase.openInMemory()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .AUD,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
     let accountId = UUID()
     let stub = Account(id: accountId, name: "Cash", type: .bank, instrument: .AUD)
     try await database.write { database in
@@ -167,12 +177,15 @@ struct GRDBCreateManyTests {
   func createManyHookFanOut() async throws {
     let database = try ProfileDatabase.openInMemory()
     let capture = HookCapture()
+    // One registry instance as BOTH seams so a registration is
+    // resolvable afterwards — mirrors production wiring.
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .AUD,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database),
+      instrumentResolver: registry,
+      instrumentRegistrar: registry,
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture),
       onInstrumentChanged: makeInstrumentHook(capture))
@@ -188,7 +201,8 @@ struct GRDBCreateManyTests {
     //   - 4 TransactionLegRow change emits (1 + 1 + 2)
     //   - BTC registered exactly once across the whole batch (the
     //     per-batch dedup in `registerNonFiatLegInstruments`), so the
-    //     per-profile registrar wrote a single `instrument` row for it.
+    //     shared registry holds a single resolvable BTC instrument and
+    //     the per-profile `instrument` table is never written.
     let btc = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8)
     let inputs = makeFanOutInputs(accountId: accountId, btc: btc)
@@ -207,11 +221,16 @@ struct GRDBCreateManyTests {
     // create path — registration now goes through the injected
     // registrar before the write.
     #expect(capture.instruments.isEmpty)
-    // Exactly one per-profile `instrument` row for BTC across the whole
+    // BTC is resolvable from the shared registry across the whole
     // batch even though two separate transactions reference it: the
     // per-batch dedup registered it once and the registrar is
-    // idempotent.
-    let btcRowCount = try await instrumentRowCount(database, id: btc.id)
-    #expect(btcRowCount == 1)
+    // idempotent. The per-profile `instrument` table was never written.
+    let resolvedBtc = try await registry.instrumentMap()[btc.id]
+    #expect(resolvedBtc == btc)
+    #expect(resolvedBtc?.kind == .cryptoToken)
+    let absent = try await perProfileInstrumentTableAbsent(database)
+    #expect(
+      absent,
+      "createMany must not write the per-profile instrument table; v10 dropped it")
   }
 }

@@ -14,7 +14,7 @@ struct InstrumentAmountConversionTests {
   }
 
   private func makeService(client: ExchangeRateClient) throws -> ExchangeRateService {
-    ExchangeRateService(client: client, database: try ProfileDatabase.openInMemory())
+    ExchangeRateService(client: client, database: try ProfileIndexDatabase.openInMemory())
   }
 
   @Test

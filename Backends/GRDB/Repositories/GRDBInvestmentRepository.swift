@@ -49,11 +49,9 @@ final class GRDBInvestmentRepository: InvestmentRepository, @unchecked Sendable 
   /// *before* the per-profile snapshot opens — the registry lives on a
   /// separate (profile-index) database, so a cross-database transaction
   /// is impossible. Instrument identity is immutable lookup data.
-  /// Production sessions inject the shared
-  /// `GRDBInstrumentRegistryRepository`; preview / test / apply callers
-  /// inject `PerProfileInstrumentMapResolver` over the same per-profile
-  /// DB so their behaviour is unchanged until the per-profile
-  /// `instrument` table is dropped.
+  /// Every caller — production, preview, test, and the sync apply path
+  /// — injects the shared `GRDBInstrumentRegistryRepository`; nothing
+  /// reads the soon-to-be-dropped per-profile `instrument` table.
   let instrumentResolver: any InstrumentMapResolving
   private let onRecordChanged: @Sendable (String, UUID) -> Void
   private let onRecordDeleted: @Sendable (String, UUID) -> Void

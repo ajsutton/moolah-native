@@ -18,7 +18,7 @@ struct FiatConversionServiceConvertResultTests {
   private func makeService(
     rates: [String: [String: Decimal]] = [:]
   ) throws -> FiatConversionService {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let exchangeService = ExchangeRateService(
       client: FixedRateClient(rates: rates), database: database)
     return FiatConversionService(exchangeRates: exchangeService)

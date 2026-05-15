@@ -80,10 +80,10 @@ struct SyncCoordinatorTestsExtra {
     let txnId = UUID()
     let database = try manager.database(for: profileId)
     try await database.write { database in
-      try ProfileDataSyncHandlerTestSupport.instrumentRow(
-        id: "AUD", kind: "fiatCurrency",
-        name: "Australian Dollar", decimals: 2
-      ).upsert(database)
+      // No `instrumentRow`: the per-profile `instrument` table was
+      // removed by `v10_drop_shared_instrument_legacy`; instruments are
+      // queued by the shared registry on the profile-index zone, never
+      // by the per-profile handler.
       try ProfileDataSyncHandlerTestSupport.accountRow(
         id: accountId, name: "Imported"
       ).upsert(database)

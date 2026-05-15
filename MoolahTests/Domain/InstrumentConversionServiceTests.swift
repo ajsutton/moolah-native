@@ -17,7 +17,7 @@ struct InstrumentConversionServiceTests {
   ) throws -> FiatConversionService {
     let client = FixedRateClient(rates: rates)
     let exchangeRates = ExchangeRateService(
-      client: client, database: try ProfileDatabase.openInMemory())
+      client: client, database: try ProfileIndexDatabase.openInMemory())
     return FiatConversionService(exchangeRates: exchangeRates)
   }
 

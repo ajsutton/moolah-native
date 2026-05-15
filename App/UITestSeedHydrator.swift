@@ -141,6 +141,18 @@ enum UITestSeedHydrator {
     let database = try manager.database(for: profile.id)
     let instrument = profile.instrument
 
+    // Instrument identity lives on the shared profile-index registry —
+    // the per-profile `instrument` table was removed by
+    // `v10_drop_shared_instrument_legacy`. Register every denomination
+    // the baseline references there before the per-profile rows fan a
+    // domain `Instrument` out of a leg. (Fiat is ambient via the ISO
+    // fallback, but registering keeps the seed explicit and matches the
+    // non-fiat path.)
+    try manager.profileIndexDatabase.write { database in
+      try upsertInstrument(instrument, in: database)
+      try upsertInstrument(.USD, in: database)
+    }
+
     try database.write { database in
       try seedTradeBaselineAccounts(instrument: instrument, in: database)
       // Snapshots depend on accounts existing; transactions don't depend on
@@ -158,8 +170,10 @@ enum UITestSeedHydrator {
   private static func seedTradeBaselineAccounts(
     instrument: Instrument, in database: Database
   ) throws {
+    // Instruments are registered on the shared profile-index DB by the
+    // caller (`hydrateTradeBaseline`); the per-profile `instrument`
+    // table no longer exists post-v10.
     let fixtures = UITestFixtures.TradeBaseline.self
-    try upsertInstrument(instrument, in: database)
     try upsertAccount(
       AccountSpec(
         id: fixtures.checkingAccountId,
@@ -178,7 +192,6 @@ enum UITestSeedHydrator {
       in: database)
 
     let usd = Instrument.USD
-    try upsertInstrument(usd, in: database)
     try upsertAccount(
       AccountSpec(
         id: fixtures.usdAccountId,

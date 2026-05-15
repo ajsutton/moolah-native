@@ -1,0 +1,37 @@
+// MoolahTests/Backends/GRDB/NoLegacyTableAccessTests.swift
+import Foundation
+import GRDB
+import Testing
+
+@testable import Moolah
+
+/// Documents the post-v10 contract: a fully-migrated per-profile
+/// `data.sqlite` no longer carries the legacy instrument / market-data
+/// tables, so any code that still tried to read them would fail loudly
+/// at the SQLite layer rather than silently see an empty result. The
+/// authoritative instrument registry is the shared profile-index DB;
+/// the price caches are network-derived and also live on the shared DB.
+@Suite("Legacy per-profile tables are inaccessible after v10")
+struct NoLegacyTableAccessTests {
+  @Test
+  func selectFromDroppedInstrumentTableThrows() throws {
+    let queue = try DatabaseQueue()
+    try ProfileSchema.migrator.migrate(queue)
+    #expect(throws: DatabaseError.self) {
+      try queue.read { database in
+        _ = try Int.fetchOne(database, sql: "SELECT 1 FROM instrument")
+      }
+    }
+  }
+
+  @Test
+  func selectFromDroppedPriceCacheTableThrows() throws {
+    let queue = try DatabaseQueue()
+    try ProfileSchema.migrator.migrate(queue)
+    #expect(throws: DatabaseError.self) {
+      try queue.read { database in
+        _ = try Int.fetchOne(database, sql: "SELECT 1 FROM crypto_price")
+      }
+    }
+  }
+}

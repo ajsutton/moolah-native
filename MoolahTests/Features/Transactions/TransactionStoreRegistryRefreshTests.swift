@@ -79,7 +79,7 @@ struct TransactionStoreRegistryRefreshTests {
 
   @Test("instrument rename in the shared registry refreshes the open list")
   func instrumentRenameRefreshesOpenList() async throws {
-    let registry = try TestBackend.makeSharedRegistry()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let (backend, _) = try TestBackend.create(sharedRegistry: registry)
     let crypto = wbtc(named: "Wrapped Bitcoin")
     try await register(crypto, in: registry)
@@ -107,7 +107,7 @@ struct TransactionStoreRegistryRefreshTests {
 
   @Test("registry change after stopObserving does not refresh the store")
   func registryChangeAfterStopDoesNotRefresh() async throws {
-    let registry = try TestBackend.makeSharedRegistry()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let (backend, _) = try TestBackend.create(sharedRegistry: registry)
     let crypto = wbtc(named: "Wrapped Bitcoin")
     try await register(crypto, in: registry)

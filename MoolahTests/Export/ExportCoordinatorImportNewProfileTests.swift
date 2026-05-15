@@ -82,11 +82,17 @@ struct ExportCoordinatorImportNewProfileTests {
     let containerManager = try ProfileContainerManager.forTesting()
     let profileStore = try makeProfileStore(containerManager: containerManager)
 
+    // Instrument identity lives on the shared profile-index registry
+    // post-`v10_drop_shared_instrument_legacy`; the import registers
+    // non-fiat denominations there and the verification backend reads
+    // through the same instance.
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let newProfileId = try await exportCoordinator.importNewProfileFromFile(
       url: tempURL,
       profileStore: profileStore,
       containerManager: containerManager,
-      syncCoordinator: nil
+      syncCoordinator: nil,
+      instrumentRegistrar: registry
     )
 
     // Profile was registered in profileStore
@@ -104,7 +110,7 @@ struct ExportCoordinatorImportNewProfileTests {
       instrument: instrument,
       profileLabel: registeredProfile.label,
       conversionService: FixedConversionService(),
-      instrumentRegistry: GRDBInstrumentRegistryRepository(database: freshDatabase)
+      instrumentRegistry: registry
     )
 
     let accounts = try await freshBackend.accounts.fetchAll()

@@ -49,7 +49,9 @@ struct CryptoSyncStoreTests {
     let (backend, database) = try TestBackend.create()
     let alchemy = RecordingAlchemyClientStub()
     alchemy.setTransfersResponse(.transfers([]))
-    let registry = GRDBInstrumentRegistryRepository(database: database)
+    // Resolve through the backend's shared profile-index registry
+    // (per-profile `instrument` table removed by v10).
+    let registry = backend.grdbInstruments
     let discovery = CryptoTokenDiscoveryService(
       registry: registry,
       resolver: CountingRegistrationResolver(),

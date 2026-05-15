@@ -16,12 +16,6 @@ struct MoolahApp: App {
   // scene-phase / URL-scheme handlers.
   let containerManager: ProfileContainerManager
   let syncCoordinator: SyncCoordinator
-  /// Handle on the launch-time SwiftData → GRDB profile-index
-  /// migration. Held as a stored property so the task is named and
-  /// reachable from the type instead of an anonymous side effect, and
-  /// so future code paths (e.g. tests) can `await` completion if
-  /// needed.
-  let profileIndexMigrationTask: Task<Void, Never>
   /// The seeded profile ID under `--ui-testing`, or `nil` for production
   /// launches. Stored as `let` because `MoolahApp.init` runs once per
   /// process; the value is decided at launch and never changes.
@@ -80,13 +74,10 @@ struct MoolahApp: App {
     let setup = Self.makeContainerSetup(uiTestingSeed: uiTestingSeed)
 
     // Build the app-level shared instrument registry + market-data
-    // services pointed at the profile-index DB, fire the
-    // SwiftData→GRDB + union migrations on a detached task, construct
-    // the SyncCoordinator, and rotate the
-    // registry's sync hooks in. See MoolahApp+Setup for details.
-    let bootstrap = Self.bootstrapSyncCoordinator(setup: setup)
-    profileIndexMigrationTask = bootstrap.migrationTask
-    let coordinator = bootstrap.coordinator
+    // services pointed at the profile-index DB, construct the
+    // SyncCoordinator, and rotate the registry's sync hooks in. See
+    // MoolahApp+Setup for details.
+    let coordinator = Self.bootstrapSyncCoordinator(setup: setup)
     containerManager = setup.manager
     syncCoordinator = coordinator
     uiTestingProfileId = setup.uiTestingProfileId
@@ -115,8 +106,7 @@ struct MoolahApp: App {
     Self.configureSyncCoordinator(
       store: store,
       coordinator: coordinator,
-      isUITesting: uiTestingSeed != nil,
-      profileIndexMigrationTask: profileIndexMigrationTask)
+      isUITesting: uiTestingSeed != nil)
 
     let sessionManager = Self.makeSessionManager(
       setup: setup, store: store, coordinator: coordinator)

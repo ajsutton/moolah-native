@@ -20,17 +20,31 @@ struct ImportResult: Sendable {
 /// which is the canonical store the runtime reads from. The GRDB writes
 /// are queue-serialised inside `database.write`, so the importer itself
 /// does not need any actor isolation.
+///
+/// Instrument identity is **not** written to `data.sqlite`: the
+/// `v10_drop_shared_instrument_legacy` migration removed the per-profile
+/// `instrument` table. Every non-fiat denomination the import
+/// references is registered through the injected
+/// `InstrumentRegistering` (production = the shared profile-index
+/// registry) before the per-profile rows are written, so a read issued
+/// after the import resolves each leg / account instrument. Fiat is
+/// ambient (ISO fallback) and needs no registration. The registrar is
+/// optional only so legacy callers that never had a registry (a few
+/// older tests) still construct; production always injects one.
 struct CloudKitDataImporter {
   private let database: any DatabaseWriter
   private let currencyCode: String
+  private let instrumentRegistrar: (any InstrumentRegistering)?
   private let logger = Logger(subsystem: "com.moolah.app", category: "Import")
 
   init(
     database: any DatabaseWriter,
-    currencyCode: String
+    currencyCode: String,
+    instrumentRegistrar: (any InstrumentRegistering)? = nil
   ) {
     self.database = database
     self.currencyCode = currencyCode
+    self.instrumentRegistrar = instrumentRegistrar
   }
 
   @discardableResult
@@ -74,20 +88,68 @@ struct CloudKitDataImporter {
   /// upserted up-front so accounts and legs that reference them by id
   /// can resolve their full domain `Instrument` on read.
   private func writeGRDB(data: ExportedData) async throws {
+    // Register every non-fiat denomination on the shared registry
+    // *before* the per-profile write so a read after import resolves
+    // each leg / account instrument. The per-profile `instrument` table
+    // no longer exists (`v10_drop_shared_instrument_legacy`); fiat is
+    // ambient and a no-op in `registerResolvable`.
+    try await registerInstruments(data: data)
     try await database.write { database in
-      try Self.writeInstrumentsAndCategories(data: data, database: database)
+      try Self.writeCategories(data: data, database: database)
       try Self.writeAccountsAndEarmarks(data: data, database: database)
       try Self.writeTransactions(data: data, database: database)
       try Self.writeInvestmentValues(data: data, database: database)
     }
   }
 
-  nonisolated private static func writeInstrumentsAndCategories(
+  /// Registers every distinct non-fiat instrument the import references
+  /// (the explicit `data.instruments` list plus account / leg
+  /// denominations) through the shared registry. Idempotent; fiat is
+  /// skipped by `registerResolvable`.
+  private func registerInstruments(data: ExportedData) async throws {
+    guard let instrumentRegistrar else {
+      // Production always supplies a registrar (see the call site in
+      // ProfileSession's backend build). A nil registrar is a
+      // test-only wiring; if the import nonetheless carries any
+      // non-fiat instrument (stock / crypto), those denominations will
+      // be unresolvable on read-back because there is nowhere to
+      // register them. Make that loud rather than silently importing
+      // rows that later fail to resolve.
+      let hasNonFiat =
+        data.instruments.contains { $0.kind != .fiatCurrency }
+        || data.accounts.contains { $0.instrument.kind != .fiatCurrency }
+        || data.transactions.contains { txn in
+          txn.legs.contains { $0.instrument.kind != .fiatCurrency }
+        }
+      if hasNonFiat {
+        logger.fault(
+          "Import carries non-fiat instruments but no instrumentRegistrar was supplied; those denominations will be unresolvable on read-back"
+        )
+      }
+      return
+    }
+    var seen: Set<String> = []
+    func register(_ instrument: Instrument) async throws {
+      guard instrument.kind != .fiatCurrency, seen.insert(instrument.id).inserted
+      else { return }
+      try await instrumentRegistrar.registerResolvable(instrument)
+    }
+    for instrument in data.instruments {
+      try await register(instrument)
+    }
+    for account in data.accounts {
+      try await register(account.instrument)
+    }
+    for txn in data.transactions {
+      for leg in txn.legs {
+        try await register(leg.instrument)
+      }
+    }
+  }
+
+  nonisolated private static func writeCategories(
     data: ExportedData, database: Database
   ) throws {
-    for instrument in data.instruments {
-      try InstrumentRow(domain: instrument).upsert(database)
-    }
     for category in data.categories {
       try CategoryRow(domain: category).upsert(database)
     }
@@ -97,9 +159,6 @@ struct CloudKitDataImporter {
     data: ExportedData, database: Database
   ) throws {
     for account in data.accounts {
-      if account.instrument.kind != .fiatCurrency {
-        try InstrumentRow(domain: account.instrument).upsert(database)
-      }
       try AccountRow(domain: account).upsert(database)
     }
     for earmark in data.earmarks {
@@ -118,9 +177,9 @@ struct CloudKitDataImporter {
     for txn in data.transactions {
       try TransactionRow(domain: txn).upsert(database)
       for (index, leg) in txn.legs.enumerated() {
-        if leg.instrument.kind != .fiatCurrency {
-          try InstrumentRow(domain: leg.instrument).upsert(database)
-        }
+        // Non-fiat denominations were registered on the shared registry
+        // by `registerInstruments` before this transaction; the
+        // per-profile `instrument` table no longer exists post-v10.
         try TransactionLegRow(domain: leg, transactionId: txn.id, sortOrder: index)
           .upsert(database)
       }

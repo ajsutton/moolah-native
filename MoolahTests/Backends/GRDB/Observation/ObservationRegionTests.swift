@@ -52,7 +52,11 @@ struct ObservationRegionTests {
 
   @Test("InstrumentRow.observableRegion excludes encoded_system_fields")
   func instrumentRowRegion() throws {
-    try assertProfileRegionExcludesSystemFields(InstrumentRow.observableRegion)
+    // `InstrumentRow` lives on the profile-index DB — the per-profile
+    // `instrument` table was removed by
+    // `v10_drop_shared_instrument_legacy`, so the region must resolve
+    // against the schema that still has the table.
+    try assertProfileIndexRegionExcludesSystemFields(InstrumentRow.observableRegion)
   }
 
   @Test("InvestmentValueRow.observableRegion excludes encoded_system_fields")
@@ -118,6 +122,25 @@ struct ObservationRegionTests {
     _ request: R
   ) throws {
     let databaseQueue = try ProfileDatabase.openInMemory()
+    try databaseQueue.read { database in
+      let region = try request.databaseRegion(database)
+      let description = String(describing: region)
+      #expect(
+        !description.contains("encoded_system_fields"),
+        "tracked region must exclude encoded_system_fields, was: \(description)")
+    }
+  }
+
+  /// Profile-index analogue of `assertProfileRegionExcludesSystemFields`
+  /// for rows whose table lives on the shared profile-index DB
+  /// (`InstrumentRow`, post-`v10_drop_shared_instrument_legacy`).
+  /// Assertion semantics are identical.
+  private func assertProfileIndexRegionExcludesSystemFields<
+    R: DatabaseRegionConvertible
+  >(
+    _ request: R
+  ) throws {
+    let databaseQueue = try ProfileIndexDatabase.openInMemory()
     try databaseQueue.read { database in
       let region = try request.databaseRegion(database)
       let description = String(describing: region)

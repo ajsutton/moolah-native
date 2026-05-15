@@ -29,17 +29,20 @@ struct GRDBInstrumentRegistrationRollbackTests {
   )
   func instrumentRowPersistsAfterPerProfileWriteRollback() async throws {
     let perProfile = try ProfileDatabase.openInMemory()
+    let sharedQueue = try ProfileIndexDatabase.openInMemory()
+    let registry = GRDBInstrumentRegistryRepository(database: sharedQueue)
 
-    // `PerProfileInstrumentRegistrar` writes the instrument row in its own
-    // separate `database.write` BEFORE the per-profile transaction/leg
-    // write. This is the boundary under test: the registrar's write is
-    // NOT part of the per-profile write transaction.
+    // The shared registry writes the instrument row into the
+    // profile-index DB in its own separate transaction BEFORE the
+    // per-profile transaction/leg write. This is the boundary under
+    // test: the registration write is NOT part of the per-profile
+    // write transaction, so a per-profile rollback cannot undo it.
     let repo = GRDBTransactionRepository(
       database: perProfile,
       defaultInstrument: Instrument.fiat(code: "USD"),
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: perProfile),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: perProfile))
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
 
     // Install a trigger that aborts every INSERT into the `transaction`
     // table. The per-profile write inserts the transaction header first,
@@ -70,18 +73,19 @@ struct GRDBInstrumentRegistrationRollbackTests {
       try await repo.create(txn)
     }
 
-    // The registrar committed its write before the per-profile write;
-    // that registration is NOT rolled back with the failing write. This
-    // is the intentional cross-transaction atomicity contract: register
-    // then write; registration is not rolled back with a failed
-    // per-profile write; safe because idempotent.
-    let instrumentRows = try await perProfile.read { database in
-      try InstrumentRow
-        .filter(InstrumentRow.Columns.id == eth.id)
-        .fetchAll(database)
-    }
+    // The registrar committed its write into the shared registry
+    // before the per-profile write; that registration is NOT rolled
+    // back with the failing write. This is the intentional
+    // cross-transaction atomicity contract: register then write;
+    // registration is not rolled back with a failed per-profile write;
+    // safe because idempotent.
+    // Resolvable from the shared registry (the per-profile-zero
+    // invariant is pinned by `transactionCreateRegistersInSharedRegistry`).
+    let resolved = try await registry.instrumentMap()[eth.id]
     #expect(
-      instrumentRows.count == 1, "instrument row must persist after per-profile write rolls back")
+      resolved == eth,
+      "instrument must remain resolvable from the shared registry after per-profile write rolls back"
+    )
 
     // The per-profile transaction write did roll back: no transaction
     // header and no legs on disk.
@@ -115,17 +119,26 @@ struct GRDBInstrumentRegistrationRollbackTests {
 ///      `cryptoRegistration(byId:)` — that is the inbox projection — so
 ///      resolvability must be probed via the resolver the read paths
 ///      actually use.)
-///   2. the per-profile `instrument` table has ZERO rows for that id
-///      (the placeholder write is gone).
+///   2. the per-profile `instrument` table no longer exists at all
+///      (`v10_drop_shared_instrument_legacy` dropped it) — a strictly
+///      stronger guarantee than "zero placeholder rows".
 @Suite("create registers the instrument via the shared registry, not a per-profile placeholder")
 struct GRDBCreatePathRegistersInstrumentTests {
-  private func perProfileInstrumentRowCount(
-    _ database: any DatabaseWriter, id: String
-  ) async throws -> Int {
+  /// Post-v10 the per-profile `instrument` table is dropped, so the
+  /// "no per-profile placeholder" contract is now the structural fact
+  /// that the table does not exist. Returns `true` when the table is
+  /// absent (the expected, stronger guarantee).
+  private func perProfileInstrumentTableAbsent(
+    _ database: any DatabaseWriter
+  ) async throws -> Bool {
     try await database.read { database in
-      try InstrumentRow
-        .filter(InstrumentRow.Columns.id == id)
-        .fetchCount(database)
+      try
+        !(Bool.fetchOne(
+          database,
+          sql: """
+            SELECT EXISTS(
+              SELECT 1 FROM sqlite_master WHERE type='table' AND name='instrument')
+            """) ?? true)
     }
   }
 
@@ -163,9 +176,10 @@ struct GRDBCreatePathRegistersInstrumentTests {
     #expect(resolved == eth, "create must register the crypto so the resolver resolves it")
     #expect(resolved?.kind == .cryptoToken)
 
-    // (2) no per-profile placeholder row was written.
-    let count = try await perProfileInstrumentRowCount(perProfile, id: eth.id)
-    #expect(count == 0, "create must not write a per-profile instrument placeholder")
+    // (2) the per-profile `instrument` table is gone (v10) — no place
+    // for a placeholder row to exist.
+    let absent = try await perProfileInstrumentTableAbsent(perProfile)
+    #expect(absent, "the per-profile instrument table must be dropped post-v10")
   }
 
   @Test("account create registers a new crypto denomination in the shared registry")
@@ -195,20 +209,24 @@ struct GRDBCreatePathRegistersInstrumentTests {
       "account create must register the crypto so the resolver resolves it")
     #expect(resolved?.kind == .cryptoToken)
 
-    let count = try await perProfileInstrumentRowCount(perProfile, id: eth.id)
-    #expect(count == 0, "account create must not write a per-profile instrument placeholder")
+    let absent = try await perProfileInstrumentTableAbsent(perProfile)
+    #expect(absent, "the per-profile instrument table must be dropped post-v10")
   }
 
-  @Test("per-profile registrar keeps create→read resolvable behind the seam")
-  func perProfileRegistrarPreservesResolution() async throws {
+  @Test("shared registry keeps create→read resolvable behind the seam")
+  func sharedRegistryPreservesResolution() async throws {
     let perProfile = try ProfileDatabase.openInMemory()
+    let sharedQueue = try ProfileIndexDatabase.openInMemory()
+    // One registry instance used as BOTH seams so a registration is
+    // resolvable on the subsequent read — the production wiring.
+    let registry = GRDBInstrumentRegistryRepository(database: sharedQueue)
 
     let repo = GRDBTransactionRepository(
       database: perProfile,
       defaultInstrument: Instrument.fiat(code: "USD"),
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: perProfile),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: perProfile))
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
 
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum",
@@ -228,12 +246,18 @@ struct GRDBCreatePathRegistersInstrumentTests {
     }
     _ = try await repo.create(txn)
 
-    // The per-profile registrar wrote the row behind the seam, so the
-    // per-profile resolver still resolves the full crypto instrument.
+    // The registrar wrote the row into the shared registry behind the
+    // seam, so the resolver still resolves the full crypto instrument
+    // — without any per-profile `instrument` row.
     let fetched = try await repo.fetchAll(
       filter: TransactionFilter(accountId: account.id))
     let resolvedLeg = try #require(fetched.first?.legs.first)
     #expect(resolvedLeg.instrument == eth)
     #expect(resolvedLeg.instrument.kind == .cryptoToken)
+
+    let absent = try await perProfileInstrumentTableAbsent(perProfile)
+    #expect(
+      absent,
+      "resolution must come from the shared registry; the per-profile table is dropped")
   }
 }

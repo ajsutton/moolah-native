@@ -10,21 +10,11 @@ import GRDB
 /// `file_length` budget.
 extension MoolahApp {
 
-  /// Bundle returned by `bootstrapSyncCoordinator` so `MoolahApp.init`
-  /// consumes the result in two lines and stays under the
-  /// `function_body_length` threshold.
-  struct SyncBootstrap {
-    let coordinator: SyncCoordinator
-    let migrationTask: Task<Void, Never>
-  }
-
   /// Boot-time sync setup: shared registry + market-data services
-  /// pointed at the profile-index DB, the shared-registry union
-  /// migration task, and the constructed `SyncCoordinator` with the
-  /// registry's sync hooks rotated in.
-  static func bootstrapSyncCoordinator(setup: ContainerSetup) -> SyncBootstrap {
+  /// pointed at the profile-index DB, plus the constructed
+  /// `SyncCoordinator` with the registry's sync hooks rotated in.
+  static func bootstrapSyncCoordinator(setup: ContainerSetup) -> SyncCoordinator {
     let scope = makeSharedInstrumentScope(setup: setup)
-    let migrationTask = runUnionMigration(setup: setup)
     // App-level store of the registry data — every per-session
     // `CryptoTokenStore` proxies its `registrations` /
     // `instruments` / `providerMappings` / `registrationsVersion`
@@ -41,7 +31,7 @@ extension MoolahApp {
       sharedRegistryStore: registryStore)
     attachSharedInstrumentRegistrySyncHooks(
       registry: scope.registry, coordinator: coordinator)
-    return SyncBootstrap(coordinator: coordinator, migrationTask: migrationTask)
+    return coordinator
   }
 
   /// Constructs the app-level shared `GRDBInstrumentRegistryRepository`

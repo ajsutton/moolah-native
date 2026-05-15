@@ -71,8 +71,6 @@ struct GRDBCategorySyncCascadeTests {
     try await database.write { database in
       try database.execute(
         sql: """
-          INSERT INTO instrument (id, record_name, kind, name, decimals)
-            VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
           INSERT INTO category (id, record_name, name) VALUES (?, 'cat-1', 'Food');
           INSERT INTO category (id, record_name, name, parent_id)
             VALUES (?, 'cat-2', 'Restaurants', ?);

@@ -83,8 +83,7 @@ extension MoolahApp {
   static func configureSyncCoordinator(
     store: ProfileStore,
     coordinator: SyncCoordinator,
-    isUITesting: Bool,
-    profileIndexMigrationTask: Task<Void, Never>?
+    isUITesting: Bool
   ) {
     let logger = Logger(subsystem: "com.moolah.app", category: "BackgroundSync")
     let isRunningTests = NSClassFromString("XCTestCase") != nil
@@ -106,15 +105,13 @@ extension MoolahApp {
     _ = coordinator.addIndexObserver { [weak store] in
       store?.loadCloudProfiles()
     }
-    // Defer the engine `start()` until the SwiftData → GRDB profile-index
-    // migration commits, otherwise CKSyncEngine can deliver fetched
-    // profile-data zone changes for a profile id whose `ProfileSession`
-    // has not yet been registered (the local index reads zero rows
-    // until the migration finishes), which traps in
-    // `SyncCoordinator.handlerForProfileZone(profileId:zoneID:)`. The
-    // coordinator owns the spawned `launchTask` so `stop()` can cancel
-    // it if the app tears down before the migration finishes.
-    coordinator.startAfter(profileIndexMigration: profileIndexMigrationTask)
+    // No launch-time data migration gates the engine start: the local
+    // profile index is hydrated synchronously by `ProfileIndexDatabase.open`
+    // before the coordinator exists, so `start()` can run immediately.
+    // `startAfter(profileIndexMigration: nil)` keeps the established
+    // launch path (the coordinator owns the spawned `launchTask` so
+    // `stop()` can still cancel a pending start on early teardown).
+    coordinator.startAfter(profileIndexMigration: nil)
     // Clean up the legacy CloudKit zone from SwiftData's automatic sync.
     LegacyZoneCleanup.performIfNeeded()
   }
@@ -166,31 +163,18 @@ extension MoolahApp {
     }
   }
 
-  /// Build the `SessionManager` and wire its `onProfileRemoved` cleanup
-  /// hook. Extracted from `MoolahApp.init` so the initializer body
-  /// stays under SwiftLint's `function_body_length` threshold; the
-  /// hook closure captures the manager and coordinator weakly so a
-  /// cleanup hop after profile deletion doesn't keep them alive past
-  /// the app's lifetime.
-  /// Spawns the shared-registry union runner in a detached `Task`.
-  /// Returned for tests that need to `await` first-launch completion.
-  static func runUnionMigration(
-    setup: ContainerSetup
-  ) -> Task<Void, Never> {
-    Task { [containerManager = setup.manager] in
-      let profileIds = await containerManager.allProfileIds()
-      await SharedRegistryUnionRunner.run(
-        sharedQueue: containerManager.profileIndexDatabase,
-        profileIds: profileIds)
-    }
-  }
-
   // Shared-registry plumbing (`bootstrapSyncCoordinator`,
   // `makeSharedInstrumentRegistry`, `makeSharedInstrumentScope`,
   // `attachSharedInstrumentRegistrySyncHooks`) lives in the sibling
   // `MoolahApp+SharedInstrumentScope.swift` file so this one stays
   // under SwiftLint's `file_length` threshold.
 
+  /// Build the `SessionManager` and wire its `onProfileRemoved` cleanup
+  /// hook. Extracted from `MoolahApp.init` so the initializer body
+  /// stays under SwiftLint's `function_body_length` threshold; the
+  /// hook closure captures the manager and coordinator weakly so a
+  /// cleanup hop after profile deletion doesn't keep them alive past
+  /// the app's lifetime.
   static func makeSessionManager(
     setup: ContainerSetup, store: ProfileStore, coordinator: SyncCoordinator
   ) -> SessionManager {

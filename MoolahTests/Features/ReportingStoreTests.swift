@@ -23,6 +23,7 @@ struct ReportingStoreTests {
     let bhp = Instrument(
       id: "ASX:BHP.AX", kind: .stock, name: "BHP", decimals: 0,
       ticker: "BHP.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
+    try await TestBackend.register(bhp, in: backend)
 
     let buyTx = Transaction(
       date: Date(),
@@ -64,6 +65,7 @@ struct ReportingStoreTests {
     let bhp = Instrument(
       id: "ASX:BHP.AX", kind: .stock, name: "BHP", decimals: 0,
       ticker: "BHP.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
+    try await TestBackend.register(bhp, in: backend)
 
     let calendar = Calendar(identifier: .gregorian)
     // Buy in early FY2026 (August 2025)
@@ -116,8 +118,12 @@ struct ReportingStoreTests {
       id: UUID(), name: "Brokerage", type: .bank, instrument: .defaultTestInstrument
     )
     TestBackend.seed(accounts: [account], in: database)
-    TestBackend.seed(
-      transactions: makeShortAndLongTermGainsFixture(accountId: account.id), in: database)
+    let fixture = makeShortAndLongTermGainsFixture(accountId: account.id)
+    for instrument in fixture.flatMap(\.legs).map(\.instrument)
+    where instrument.kind != .fiatCurrency {
+      try await TestBackend.register(instrument, in: backend)
+    }
+    TestBackend.seed(transactions: fixture, in: database)
 
     let store = ReportingStore(
       transactionRepository: backend.transactions,

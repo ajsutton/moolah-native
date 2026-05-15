@@ -9,13 +9,11 @@ extension InstrumentRow {
   /// `AccountRow+ObservableRegion.swift` for the shared pattern and
   /// issue #865 for the motivation.
   ///
-  /// Retained even though no per-profile `ValueObservation` currently
-  /// tracks it: `PerProfileInstrumentMapResolver` and the apply path both
-  /// still read the per-profile `instrument` table, and the
-  /// `v10_drop_shared_instrument_legacy` migration will drop that table
-  /// (and this region) in a future release. Do not remove this property
-  /// until that migration lands and all callers have switched to the
-  /// shared `GRDBInstrumentRegistryRepository`.
+  /// `InstrumentRow` now maps only the shared profile-index
+  /// `instrument` table (the per-profile readers/writers were removed
+  /// ahead of the `v10_drop_shared_instrument_legacy` migration). This
+  /// region is consumed by the shared `GRDBInstrumentRegistryRepository`
+  /// observation; it stays valid against the shared table.
   static var observableRegion: QueryInterfaceRequest<InstrumentRow> {
     let columns: [any SQLSelectable] = Columns.allCases
       .filter { $0 != .encodedSystemFields }

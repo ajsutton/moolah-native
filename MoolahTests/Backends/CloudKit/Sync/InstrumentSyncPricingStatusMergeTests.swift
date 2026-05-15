@@ -18,11 +18,17 @@ struct InstrumentSyncPricingStatusMergeTests {
   // MARK: - Fixture helpers
 
   /// Builds a fresh in-memory database + registry for one test.
+  ///
+  /// The registry is backed by a profile-index DB — instrument identity
+  /// lives there post-`v10_drop_shared_instrument_legacy`; the
+  /// per-profile `instrument` table no longer exists. The returned
+  /// handle is the registry's own DB, so the `InstrumentRow` read-backs
+  /// observe exactly what the registry persisted.
   private func makeRegistry() throws -> (
     database: any DatabaseWriter,
     registry: GRDBInstrumentRegistryRepository
   ) {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let registry = GRDBInstrumentRegistryRepository(database: database)
     return (database, registry)
   }

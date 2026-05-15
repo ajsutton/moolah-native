@@ -24,7 +24,7 @@ struct CryptoPriceServicePriceLookupTests {
     prices: [String: [String: Decimal]] = [:],
     shouldFail: Bool = false
   ) throws -> CryptoPriceService {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     return CryptoPriceService(
       clients: [FixedCryptoPriceClient(prices: prices, shouldFail: shouldFail)],
       database: database

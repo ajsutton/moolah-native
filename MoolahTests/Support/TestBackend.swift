@@ -41,28 +41,47 @@ enum TestBackend {
   /// `GRDBInstrumentRegistryRepository` across multiple backends so
   /// cross-profile sharing is observable in test (matches production's
   /// `SyncCoordinator.sharedInstrumentRegistry`). When omitted, each
-  /// call constructs a fresh per-backend registry against the
-  /// per-backend `ProfileDatabase` — equivalent to the pre-shared-
-  /// registry behaviour.
+  /// call constructs a fresh registry against its own in-memory
+  /// profile-index DB (`SharedRegistryTestSupport.makeSharedRegistry()`)
+  /// — the test-time analogue of production's shared registry. It is
+  /// never pointed at the per-profile `ProfileDatabase`: the
+  /// `v10_drop_shared_instrument_legacy` migration removes the
+  /// per-profile `instrument` table, so instrument identity lives only
+  /// on the profile-index registry.
+  ///
+  /// The backend's `grdbInstruments` is the exact registry instance its
+  /// repositories resolve and register through. Tests that seed a
+  /// non-fiat denomination directly (bypassing the create path) register
+  /// it there via `TestBackend.register(_:in:)` so it is resolvable on
+  /// read-back, mirroring how production's create path registers via the
+  /// same registry.
   static func create(
     instrument: Instrument = .defaultTestInstrument,
     exchangeRates: [String: [String: Decimal]] = [:],
     sharedRegistry: GRDBInstrumentRegistryRepository? = nil
   ) throws -> (backend: CloudKitBackend, database: DatabaseQueue) {
     let rateClient = FixedRateClient(rates: exchangeRates)
-    // One in-memory GRDB queue per backend covers every repository on
-    // the same connection — domain rows, the rate-cache service, and
-    // the two synced csv-import tables share the per-profile
-    // `data.sqlite` in production.
+    // The per-profile `data.sqlite` carries domain rows and the two
+    // synced csv-import tables. Instrument identity and the rate /
+    // price caches no longer live here: the
+    // `v10_drop_shared_instrument_legacy` migration removed the
+    // per-profile `instrument` + six rate-cache tables, so they live
+    // solely on the shared profile-index DB. This mirrors production,
+    // where `SyncCoordinator.sharedMarketData` and the shared registry
+    // are both pointed at `ProfileContainerManager.profileIndexDatabase`.
     let database = try ProfileDatabase.openInMemory()
+    let registry =
+      try sharedRegistry
+      ?? SharedRegistryTestSupport.makeSharedRegistry()
+    // The rate / price caches share the registry's profile-index DB,
+    // exactly as production shares one profile-index DB across the
+    // shared registry and `sharedMarketData`.
+    let marketDataDatabase = registry.database
     let exchangeRateService = ExchangeRateService(
-      client: rateClient, database: database)
+      client: rateClient, database: marketDataDatabase)
     let conversionService = FiatConversionService(
       exchangeRates: exchangeRateService,
-      database: database)
-    let registry =
-      sharedRegistry
-      ?? GRDBInstrumentRegistryRepository(database: database)
+      database: marketDataDatabase)
     let backend = CloudKitBackend(
       database: database,
       instrument: instrument,
@@ -73,13 +92,22 @@ enum TestBackend {
     return (backend, database)
   }
 
-  /// Convenience: constructs a fresh in-memory shared registry that
-  /// can be passed to multiple `TestBackend.create` calls so they
-  /// observe each other's instrument writes — the test-time analogue
-  /// of `SyncCoordinator.sharedInstrumentRegistry`.
-  static func makeSharedRegistry() throws -> GRDBInstrumentRegistryRepository {
-    let queue = try ProfileIndexDatabase.openInMemory()
-    return GRDBInstrumentRegistryRepository(database: queue)
+  /// Registers a non-fiat instrument into the backend's shared
+  /// profile-index registry so it resolves on read-back.
+  ///
+  /// `seed(transactions:)` and friends materialise FK / cascade
+  /// structure by writing raw Rows; they cannot write a non-fiat
+  /// `instrument` row because the `v10_drop_shared_instrument_legacy`
+  /// migration removed the per-profile `instrument` table. Instrument
+  /// identity now lives solely on the profile-index registry, so a test
+  /// that seeds a stock / crypto leg must register its denomination here
+  /// — the same `InstrumentRegistering` seam production's create path
+  /// uses. Fiat is ambient (resolved from ISO data) and a no-op here.
+  static func register(
+    _ instrument: Instrument,
+    in backend: CloudKitBackend
+  ) async throws {
+    try await backend.grdbInstruments.registerResolvable(instrument)
   }
 
   // MARK: - Data Seeding
@@ -169,7 +197,13 @@ enum TestBackend {
   }
 
   /// Seeds transactions into the in-memory store.
-  /// Also creates InstrumentRow entries for non-fiat instruments so they resolve correctly on fetch.
+  ///
+  /// Non-fiat denominations are NOT auto-registered: instrument identity
+  /// lives on the profile-index registry (the per-profile `instrument`
+  /// table was removed by `v10_drop_shared_instrument_legacy`). A test
+  /// seeding a stock / crypto leg must register it via
+  /// `TestBackend.register(_:in:)` so the resolver resolves it on
+  /// read-back; fiat is ambient and needs no registration.
   @discardableResult
   static func seed(
     transactions: [Transaction],
@@ -193,15 +227,14 @@ enum TestBackend {
   /// a single `seed(transactions:)` call so the per-leg helper doesn't
   /// re-issue an `INSERT` for the same parent.
   private struct TransactionSeedState {
-    var instruments: Set<String> = []
     var accounts: Set<UUID> = []
     var categories: Set<UUID> = []
     var earmarks: Set<UUID> = []
   }
 
-  /// Materialises placeholder parents (`instrument`, `account`,
-  /// `category`, `earmark`) referenced by a single leg, if any of them
-  /// are missing in the test database.
+  /// Materialises placeholder parents (`account`, `category`,
+  /// `earmark`) referenced by a single leg, if any of them are missing
+  /// in the test database.
   ///
   /// Convenience for SwiftData-era tests that rarely pre-seed parents
   /// before legs that reference them. Under v5 the schema no longer
@@ -210,17 +243,19 @@ enum TestBackend {
   /// `Transaction` values with non-trivial parent rows for assertion
   /// purposes. Tests that care about a specific parent shape seed it
   /// explicitly; the `ensurePlaceholder*` helpers respect existing rows.
+  ///
+  /// It does **not** materialise an `instrument` row: the
+  /// `v10_drop_shared_instrument_legacy` migration removed the
+  /// per-profile `instrument` table, so instrument identity lives only
+  /// on the profile-index registry. A test that seeds a non-fiat leg
+  /// must register its denomination via `TestBackend.register(_:in:)`
+  /// so the resolver (the shared registry) resolves it on read-back —
+  /// fiat is ambient and needs no registration.
   private static func ensureLegParents(
     database: Database,
     leg: TransactionLeg,
     seen: inout TransactionSeedState
   ) throws {
-    if leg.instrument.kind != .fiatCurrency,
-      !seen.instruments.contains(leg.instrument.id)
-    {
-      seen.instruments.insert(leg.instrument.id)
-      try InstrumentRow(domain: leg.instrument).insert(database)
-    }
     if let accountId = leg.accountId, !seen.accounts.contains(accountId) {
       seen.accounts.insert(accountId)
       try ensurePlaceholderAccount(

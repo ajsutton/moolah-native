@@ -19,7 +19,7 @@ struct StockPriceServicePersistenceTests {
     database: DatabaseQueue? = nil
   ) throws -> StockPriceService {
     let client = FixedStockPriceClient(responses: responses, shouldFail: shouldFail)
-    let resolved = try database ?? ProfileDatabase.openInMemory()
+    let resolved = try database ?? ProfileIndexDatabase.openInMemory()
     return StockPriceService(client: client, database: resolved)
   }
 
@@ -48,7 +48,7 @@ struct StockPriceServicePersistenceTests {
   /// first without going to the network.
   @Test
   func sqlRoundTripPreservesData() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
 
     let service1 = try makeService(responses: ["BHP.AX": bhpResponse()], database: database)
     let price = try await service1.price(ticker: "BHP.AX", on: try date("2026-04-07"))
@@ -77,7 +77,7 @@ struct StockPriceServicePersistenceTests {
   /// back along with it.
   @Test
   func saveCacheRollsBackOnInsertFailure() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let service = try makeService(responses: ["BHP.AX": bhpResponse()], database: database)
     _ = try await service.price(ticker: "BHP.AX", on: try date("2026-04-07"))
 
@@ -146,7 +146,7 @@ struct StockPriceServicePersistenceTests {
   /// stock_price` counter trigger installed after priming.
   @Test
   func emptyFetchResultDoesNotRewriteCache() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let service = try makeService(
       responses: [
         "BHP.AX": StockPriceResponse(
@@ -189,7 +189,7 @@ struct StockPriceServicePersistenceTests {
   /// row.
   @Test
   func saveCacheWritesOnlyChangedRows() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let service = try makeService(
       responses: [
         "BHP.AX": StockPriceResponse(

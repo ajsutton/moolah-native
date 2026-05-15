@@ -19,11 +19,12 @@ import Testing
 /// `makeForApply`. The apply path never invokes them today (it writes
 /// raw Rows via `applyRemoteChangesSync`), but they were per-profile
 /// `PerProfile*` shims pointed at the per-profile `instrument` table —
-/// which the follow-up `v10_drop_shared_instrument_legacy` migration
-/// drops. After this cutover, when a shared registry is supplied the
-/// bundle's resolver/registrar are the shared registry, so any
-/// apply-time instrument resolution lands against the profile-index DB
-/// and never the per-profile table.
+/// which the `v10_drop_shared_instrument_legacy` migration has now
+/// dropped. After the cutover the per-profile `instrument` table no
+/// longer exists at all, so when a shared registry is supplied the
+/// bundle's resolver/registrar are the shared registry and any
+/// apply-time instrument resolution lands against the profile-index
+/// DB — the per-profile table is structurally unreachable.
 @MainActor
 @Suite("Apply-path bundle resolves via the shared registry")
 struct ApplyPathSharedRegistryResolutionTests {
@@ -32,7 +33,7 @@ struct ApplyPathSharedRegistryResolutionTests {
     "makeForApply resolver reads instruments from the shared registry, not the per-profile table")
   func resolverUsesSharedRegistry() async throws {
     // Two distinct databases: the per-profile DB (whose `instrument`
-    // table v10 will drop) and the shared profile-index DB.
+    // table v10 has dropped) and the shared profile-index DB.
     let perProfile = try ProfileDatabase.openInMemory()
     let sharedDB = try ProfileIndexDatabase.openInMemory()
     let sharedRegistry = GRDBInstrumentRegistryRepository(database: sharedDB)
@@ -67,30 +68,45 @@ struct ApplyPathSharedRegistryResolutionTests {
     #expect(earmarkMap[crypto.id]?.kind == .cryptoToken)
     #expect(investmentMap[crypto.id]?.kind == .cryptoToken)
 
-    // The per-profile `instrument` table was never read or written for
-    // this id — it stays empty.
-    let perProfileCount = try await perProfile.read { database in
-      try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM instrument") ?? 0
+    // Post-v10 the per-profile `instrument` table no longer exists —
+    // resolution through it is structurally impossible, a strictly
+    // stronger guarantee than "the table is empty".
+    let perProfileTableExists = try await perProfile.read { database in
+      try Bool.fetchOne(
+        database,
+        sql: """
+          SELECT EXISTS(
+            SELECT 1 FROM sqlite_master WHERE type='table' AND name='instrument')
+          """) ?? true
     }
-    #expect(perProfileCount == 0)
+    #expect(perProfileTableExists == false)
   }
 
-  @Test("no shared registry (legacy/preview) keeps the per-profile shim")
-  func legacyPathKeepsPerProfileShim() async throws {
+  @Test("apply bundle never resolves through the per-profile instrument table")
+  func applyBundleIgnoresPerProfileInstrumentTable() async throws {
     let perProfile = try ProfileDatabase.openInMemory()
+    let sharedRegistry = try SharedRegistryTestSupport.makeSharedRegistry()
     let bundle = ProfileGRDBRepositories.makeForApply(
-      database: perProfile, sharedRegistry: nil)
+      database: perProfile, sharedRegistry: sharedRegistry)
 
-    // Seed the per-profile `instrument` table directly; the legacy
-    // shim resolver must still read it (byte-for-byte preserved until
-    // the per-profile table is dropped).
-    let row = ProfileDataSyncHandlerTestSupport.instrumentRow(
-      id: "AUD", kind: "fiatCurrency", name: "Australian Dollar")
-    try await perProfile.write { database in
-      try row.insert(database)
+    // Post-v10 the per-profile `instrument` table is dropped, so it is
+    // structurally impossible for the bundle's resolver to fall back to
+    // a per-profile crypto row: the table simply does not exist.
+    let perProfileTableExists = try await perProfile.read { database in
+      try Bool.fetchOne(
+        database,
+        sql: """
+          SELECT EXISTS(
+            SELECT 1 FROM sqlite_master WHERE type='table' AND name='instrument')
+          """) ?? true
     }
+    #expect(perProfileTableExists == false)
 
+    // A crypto id present in neither the per-profile DB nor the shared
+    // registry resolves to nothing — resolution is shared-only now.
     let map = try await bundle.transactions.instrumentResolver.instrumentMap()
-    #expect(map["AUD"] != nil)
+    #expect(
+      map["1:native"] == nil,
+      "the apply bundle must not resolve crypto from any per-profile table")
   }
 }

@@ -312,7 +312,7 @@ struct InstrumentLocalSyncQueueTests {
 
   @Test("unsyncedNonFiatRowIdsSync returns non-fiat rows with null encoded_system_fields")
   func unsyncedNonFiatRowIdsSyncReturnsUnsyncedStocks() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let stock = Instrument.stock(ticker: "IFRA.AX", exchange: "ASX", name: "IFRA")
     try await database.write { database in
       try InstrumentRow(domain: stock).insert(database)
@@ -326,7 +326,7 @@ struct InstrumentLocalSyncQueueTests {
 
   @Test("unsyncedNonFiatRowIdsSync excludes rows whose encoded_system_fields is non-null")
   func unsyncedNonFiatRowIdsSyncExcludesSyncedRows() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let stock = Instrument.stock(ticker: "IOZ.AX", exchange: "ASX", name: "IOZ")
     try await database.write { database in
       var row = InstrumentRow(domain: stock)
@@ -342,7 +342,7 @@ struct InstrumentLocalSyncQueueTests {
 
   @Test("unsyncedNonFiatRowIdsSync excludes fiat rows even when unsynced")
   func unsyncedNonFiatRowIdsSyncExcludesFiat() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     // Synthetic fiat rows aren't normally written, but the migration
     // boundary means a stale row might exist; the helper must filter
     // them out so the reconciliation pass doesn't try to upload AUD.

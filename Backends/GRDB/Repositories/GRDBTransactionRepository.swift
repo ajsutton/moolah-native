@@ -70,12 +70,10 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   /// registry lives on a separate (profile-index) database, so a
   /// cross-database transaction is impossible. Instrument identity is
   /// immutable lookup data; a read that is not atomic with the
-  /// transaction-row snapshot is safe and intended. Production sessions
-  /// inject the shared `GRDBInstrumentRegistryRepository`;
-  /// preview / test / apply callers inject
-  /// `PerProfileInstrumentMapResolver` over the same per-profile DB so
-  /// their behaviour is unchanged until the per-profile `instrument`
-  /// table is dropped.
+  /// transaction-row snapshot is safe and intended. Every caller —
+  /// production, preview, test, and the sync apply path — injects the
+  /// shared `GRDBInstrumentRegistryRepository`; nothing reads the
+  /// soon-to-be-dropped per-profile `instrument` table.
   let instrumentResolver: any InstrumentMapResolving
   /// Registers a non-fiat leg instrument so it becomes resolvable by
   /// `instrumentResolver` before `create` / `createMany` / `update`
@@ -83,13 +81,11 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   /// registry lives on a separate database — a cross-database
   /// transaction is impossible, and the registration must be durable
   /// before a reader can observe the new txn / legs). Replaces the old
-  /// per-profile placeholder `instrument` insert. Production sessions
-  /// inject the shared `GRDBInstrumentRegistryRepository` (so the row
-  /// reaches the canonical registry and CloudKit); preview / test /
-  /// apply callers inject `PerProfileInstrumentRegistrar` over the same
-  /// per-profile DB, which performs the exact idempotent per-profile
-  /// insert the removed helper did so their behaviour is unchanged
-  /// until the per-profile `instrument` table is dropped.
+  /// per-profile placeholder `instrument` insert. Every caller —
+  /// production, preview, test, and the sync apply path — injects the
+  /// shared `GRDBInstrumentRegistryRepository` (so the row reaches the
+  /// canonical registry and CloudKit); nothing writes the
+  /// soon-to-be-dropped per-profile `instrument` table.
   private let instrumentRegistrar: any InstrumentRegistering
   /// Single shared error channel for every observation subscription
   /// returned by this repo instance. The bridge in

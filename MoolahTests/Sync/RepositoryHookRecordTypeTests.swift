@@ -63,12 +63,13 @@ struct RepositoryHookRecordTypeTests {
   func transactionCreateEmitsLegRecordType() async throws {
     let database = try ProfileDatabase.openInMemory()
     let capture = HookCapture()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database),
+      instrumentResolver: registry,
+      instrumentRegistrar: registry,
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
     // Leg-level hooks are emitted via the txn repo's bundled write path;
@@ -108,10 +109,11 @@ struct RepositoryHookRecordTypeTests {
   func accountCreateOpeningBalanceTagsRecordTypes() async throws {
     let database = try ProfileDatabase.openInMemory()
     let capture = HookCapture()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let repo = GRDBAccountRepository(
       database: database,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database),
+      instrumentResolver: registry,
+      instrumentRegistrar: registry,
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
 
@@ -142,7 +144,7 @@ struct RepositoryHookRecordTypeTests {
     let earmarkRepo = GRDBEarmarkRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
     let earmark = try await earmarkRepo.create(

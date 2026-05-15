@@ -71,14 +71,19 @@ struct ExportImportIntegrationTests {
   /// for the post-import verification step. Centralised so each test
   /// isn't repeating the constructor boilerplate.
   private func makeCloudBackend(
-    database: DatabaseQueue, label: String = "Test Profile"
+    database: DatabaseQueue,
+    registry: GRDBInstrumentRegistryRepository,
+    label: String = "Test Profile"
   ) -> CloudKitBackend {
+    // Instrument identity lives on the shared profile-index registry
+    // post-`v10_drop_shared_instrument_legacy`; the verification backend
+    // reads through the same instance the import registered into.
     CloudKitBackend(
       database: database,
       instrument: instrument,
       profileLabel: label,
       conversionService: FixedConversionService(),
-      instrumentRegistry: GRDBInstrumentRegistryRepository(database: database)
+      instrumentRegistry: registry
     )
   }
 
@@ -143,11 +148,15 @@ struct ExportImportIntegrationTests {
       profile: profile
     )
 
-    // Import into fresh database
+    // Import into fresh database. Instrument identity lives on the
+    // shared profile-index registry post-`v10_drop_shared_instrument_legacy`;
+    // the verification backend reads through the same instance.
     let freshDatabase = try ProfileDatabase.openInMemory()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let result = try await coordinator.importFromFile(
       url: tempURL,
-      database: freshDatabase
+      database: freshDatabase,
+      instrumentRegistrar: registry
     )
 
     #expect(result.accountCount == 1)
@@ -158,7 +167,7 @@ struct ExportImportIntegrationTests {
     #expect(result.budgetItemCount == 1)
 
     // Verify data is readable through CloudKit repositories
-    let cloudBackend = makeCloudBackend(database: freshDatabase)
+    let cloudBackend = makeCloudBackend(database: freshDatabase, registry: registry)
 
     let accounts = try await cloudBackend.accounts.fetchAll()
     #expect(accounts.count == 1)

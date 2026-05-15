@@ -31,20 +31,30 @@ extension ProfileSession {
     // constructed with one. All sessions on the same iCloud account
     // then share a single registry instance, so spam classifications
     // and discovered-token resolutions propagate without per-profile
-    // duplication. Fall back to a per-profile registry for legacy
-    // callers (preview / tests) that didn't pass a shared instance
-    // through `SyncCoordinator.init`.
+    // duplication. Production ALWAYS lands here:
+    // `MoolahApp.bootstrapSyncCoordinator` constructs the only
+    // production `SyncCoordinator` with a non-nil
+    // `sharedInstrumentRegistry`, so the fallback below is reached
+    // exclusively by legacy callers (preview / tests) that didn't pass
+    // a shared instance through `SyncCoordinator.init`.
     let registry: GRDBInstrumentRegistryRepository
     if let shared = syncCoordinator?.sharedInstrumentRegistry {
       registry = shared
     } else {
-      // Per-profile fallback for legacy callers (preview / tests).
+      // Preview / test fallback. The registry is built over a
+      // profile-index database — never the per-profile `data.sqlite`:
+      // the `v10_drop_shared_instrument_legacy` migration removed the
+      // per-profile `instrument` table, so instrument identity lives
+      // solely on the profile-index registry. When a coordinator is
+      // present its container manager's profile-index DB is reused;
+      // otherwise a fresh in-memory profile-index DB stands in.
+      //
       // The shared-registry path drives all remote-change fan-out via
       // `SyncCoordinator.makeInstrumentRemoteChangeFanOut` (installed
       // by `SyncCoordinator.init` on the profile-index handler), so
       // no extra wiring is needed here.
       registry = makeInstrumentRegistry(
-        database: database, zoneID: zoneID, syncCoordinator: syncCoordinator)
+        zoneID: zoneID, syncCoordinator: syncCoordinator)
     }
     // CloudKit profiles need full stock+crypto conversion support. The
     // closure reads the profile's registry on each conversion so
@@ -197,16 +207,35 @@ extension ProfileSession {
       })
   }
 
-  /// Builds the `GRDBInstrumentRegistryRepository` for a profile, wiring
-  /// its mutation hooks to the sync coordinator's per-zone queue helpers.
-  /// Extracted from `makeCloudKitBackend` so the per-mutation closure
-  /// definitions don't bloat its body length.
+  /// Builds the preview/test-only `GRDBInstrumentRegistryRepository`,
+  /// wiring its mutation hooks to the sync coordinator's per-zone queue
+  /// helpers. Extracted from `makeCloudKitBackend` so the per-mutation
+  /// closure definitions don't bloat its body length.
+  ///
+  /// The registry is backed by a profile-index database, never the
+  /// per-profile `data.sqlite` (whose `instrument` table the
+  /// `v10_drop_shared_instrument_legacy` migration removed): the
+  /// coordinator's container-manager profile-index DB when a coordinator
+  /// is present, otherwise a fresh in-memory profile-index DB. This
+  /// branch is unreachable in production — see `makeCloudKitBackend` —
+  /// so trapping on the (test-harness-only) in-memory open failure
+  /// mirrors `PreviewBackend`'s precedent and never affects shipping
+  /// code.
   private static func makeInstrumentRegistry(
-    database: any DatabaseWriter,
     zoneID: CKRecordZone.ID,
     syncCoordinator: SyncCoordinator?
   ) -> GRDBInstrumentRegistryRepository {
-    GRDBInstrumentRegistryRepository(
+    let database: any DatabaseWriter
+    if let containerManager = syncCoordinator?.containerManager {
+      database = containerManager.profileIndexDatabase
+    } else {
+      // In-memory ProfileIndexDatabase.openInMemory() cannot fail (no
+      // filesystem path); this branch is test-harness-only (no
+      // coordinator) and never runs in production — see the doc comment.
+      // swiftlint:disable:next force_try
+      database = try! ProfileIndexDatabase.openInMemory()
+    }
+    return GRDBInstrumentRegistryRepository(
       database: database,
       onRecordChanged: { [weak syncCoordinator] recordName in
         // Registry callbacks may run off MainActor; hop onto MainActor to

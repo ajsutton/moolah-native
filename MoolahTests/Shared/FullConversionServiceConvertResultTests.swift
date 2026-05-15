@@ -32,7 +32,7 @@ struct FullConversionServiceConvertResultTests {
     shouldFail: Bool = false,
     registrations: [CryptoRegistration] = []
   ) throws -> Bundle {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let cryptoService = CryptoPriceService(
       clients: [FixedCryptoPriceClient(prices: cryptoPrices, shouldFail: shouldFail)],
       database: database

@@ -49,44 +49,40 @@ extension ProfileGRDBRepositories {
   /// session-side bundle owned by `CloudKitBackend` continues to carry
   /// real values for user-mutation paths.
   ///
-  /// `sharedRegistry`, when supplied (production CloudKit sync always
-  /// passes `SyncCoordinator.sharedInstrumentRegistry`), is injected as
-  /// the `instrumentResolver` / `instrumentRegistrar` for every repo
-  /// that takes one. The apply path never invokes either seam today —
+  /// `sharedRegistry` (production CloudKit sync always passes
+  /// `SyncCoordinator.sharedInstrumentRegistry`; tests / previews now
+  /// pass an in-memory shared registry too) is injected as the
+  /// `instrumentResolver` / `instrumentRegistrar` for every repo that
+  /// takes one. The apply path never invokes either seam today —
   /// `applyRemoteChangesSync` writes raw Rows and never calls
   /// `instrumentMap()`, and the apply path never calls
   /// `create` / `createMany` / `update`, so `registerResolvable` is
   /// never reached — but pointing the seams at the shared profile-index
-  /// registry instead of a per-profile `PerProfile*` shim guarantees
-  /// that any future apply-time resolution can never read or write the
-  /// per-profile `instrument` table that the follow-up
-  /// `v10_drop_shared_instrument_legacy` migration drops.
-  ///
-  /// When `sharedRegistry` is `nil` (preview / legacy callers / tests
-  /// that don't construct a shared registry) the `PerProfile*` shims
-  /// are kept so create→read behaviour stays byte-for-byte preserved
-  /// until that migration removes the per-profile table.
+  /// registry guarantees that any future apply-time resolution can
+  /// never read or write the per-profile `instrument` table that the
+  /// follow-up `v10_drop_shared_instrument_legacy` migration drops.
+  /// There is no longer a per-profile fallback: the `PerProfile*`
+  /// shims have been removed because no production or test path may
+  /// read the soon-to-be-dropped per-profile `instrument` table.
   ///
   /// The bundle's `instruments` member stays a per-profile
   /// `GRDBInstrumentRegistryRepository(database:)` deliberately: its
-  /// only sync caller is `ProfileDataSyncHandler.deleteLocalData`,
-  /// which wipes a *single profile's* local rows on zone purge /
-  /// sign-out / account-switch. Pointing it at the shared, iCloud-
-  /// account-scoped registry would let one profile's zone purge wipe
-  /// every profile's instruments. The per-profile rows survive on disk
-  /// until `v10_drop_shared_instrument_legacy` drops the table.
+  /// only sync caller is `ProfileDataSyncHandler` system-fields
+  /// clearing on zone purge / sign-out / account-switch. Pointing it
+  /// at the shared, iCloud-account-scoped registry would let one
+  /// profile's zone purge mutate every profile's instruments. The
+  /// per-profile rows survive on disk until
+  /// `v10_drop_shared_instrument_legacy` drops the table.
   static func makeForApply(
     database: any GRDB.DatabaseWriter,
-    sharedRegistry: GRDBInstrumentRegistryRepository? = nil
+    sharedRegistry: GRDBInstrumentRegistryRepository
   ) -> ProfileGRDBRepositories {
     // USD is a stable, locale-independent fiat that satisfies
     // `Instrument.fiat(code:)`'s `isoCurrencies` lookup. The choice is
     // arbitrary — only the type matters for the apply path.
     let placeholderInstrument = Instrument.fiat(code: "USD")
-    let resolver: any InstrumentMapResolving =
-      sharedRegistry ?? PerProfileInstrumentMapResolver(database: database)
-    let registrar: any InstrumentRegistering =
-      sharedRegistry ?? PerProfileInstrumentRegistrar(database: database)
+    let resolver: any InstrumentMapResolving = sharedRegistry
+    let registrar: any InstrumentRegistering = sharedRegistry
     return ProfileGRDBRepositories(
       csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
       importRules: GRDBImportRuleRepository(database: database),

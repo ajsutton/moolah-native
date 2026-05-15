@@ -67,12 +67,13 @@ struct SystemFieldsBatchTests {
   private static func makeRepository() throws -> (GRDBTransactionRepository, DatabaseQueue) {
     let database = try ProfileDatabase.openInMemory()
     let conversionService = FixedConversionService(rates: [:])
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let repo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: conversionService,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
     return (repo, database)
   }
 

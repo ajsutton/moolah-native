@@ -53,12 +53,13 @@ struct TransactionHookUpdateDeleteTests {
   func transactionUpdateEmitsLegRecordType() async throws {
     let database = try ProfileDatabase.openInMemory()
     let capture = HookCapture()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database),
+      instrumentResolver: registry,
+      instrumentRegistrar: registry,
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
 
@@ -104,12 +105,13 @@ struct TransactionHookUpdateDeleteTests {
   func transactionUpdateWithReplacedLegsEmitsDeletes() async throws {
     let database = try ProfileDatabase.openInMemory()
     let capture = HookCapture()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database),
+      instrumentResolver: registry,
+      instrumentRegistrar: registry,
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
 
@@ -153,12 +155,13 @@ struct TransactionHookUpdateDeleteTests {
   func transactionDeleteEmitsLegRecordType() async throws {
     let database = try ProfileDatabase.openInMemory()
     let capture = HookCapture()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database),
+      instrumentResolver: registry,
+      instrumentRegistrar: registry,
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
 

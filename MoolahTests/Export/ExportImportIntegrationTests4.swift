@@ -51,14 +51,20 @@ struct ExportImportIntegrationTests4 {
     let exportedInstrumentIds = Set(decoded.instruments.map(\.id))
     #expect(exportedInstrumentIds == [aud.id, usd.id, bhp.id, eth.id])
 
+    // Instrument identity lives on the shared profile-index registry
+    // post-`v10_drop_shared_instrument_legacy`; the import registers the
+    // non-fiat BHP / ETH there and the verification backend reads
+    // through the same instance.
     let freshDatabase = try ProfileDatabase.openInMemory()
-    _ = try await coordinator.importFromFile(url: tempURL, database: freshDatabase)
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
+    _ = try await coordinator.importFromFile(
+      url: tempURL, database: freshDatabase, instrumentRegistrar: registry)
     let freshBackend = CloudKitBackend(
       database: freshDatabase,
       instrument: aud,
       profileLabel: profile.label,
       conversionService: FixedConversionService(),
-      instrumentRegistry: GRDBInstrumentRegistryRepository(database: freshDatabase)
+      instrumentRegistry: registry
     )
 
     try await verifyMultiCurrencyRoundTrip(

@@ -150,12 +150,13 @@ struct GRDBTransactionStableLegIdTests {
     "header-only update preserves each leg's encodedSystemFields blob")
   func headerOnlyEditPreservesEncodedSystemFields() async throws {
     let database = try ProfileDatabase.openInMemory()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
     let accountId = UUID()
     let txn = try await txnRepo.create(
       Transaction(
@@ -224,12 +225,13 @@ struct GRDBTransactionStableLegIdTests {
   @Test("performUpdate rolls back the header on a mid-write throw")
   func performUpdateRollsBackHeaderOnFailure() async throws {
     let database = try ProfileDatabase.openInMemory()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
     let accountId = UUID()
     let txn = try await txnRepo.create(
       Transaction(
@@ -257,12 +259,13 @@ struct GRDBTransactionStableLegIdTests {
   @Test("performUpdate rolls back the legs on a mid-write throw")
   func performUpdateRollsBackLegsOnFailure() async throws {
     let database = try ProfileDatabase.openInMemory()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
     let accountId = UUID()
     let txn = try await txnRepo.create(
       Transaction(

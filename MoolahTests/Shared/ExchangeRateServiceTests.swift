@@ -14,7 +14,7 @@ struct ExchangeRateServiceTests {
     now: @Sendable @escaping () -> Date = { Date() }
   ) throws -> ExchangeRateService {
     let client = FixedRateClient(rates: rates, shouldFail: shouldFail)
-    let resolved = try database ?? ProfileDatabase.openInMemory()
+    let resolved = try database ?? ProfileIndexDatabase.openInMemory()
     return ExchangeRateService(client: client, database: resolved, now: now)
   }
 
@@ -65,7 +65,7 @@ struct ExchangeRateServiceTests {
     ]
     let fridayClient = FixedRateClient(rates: fridayRates, shouldFail: false)
     let service = ExchangeRateService(
-      client: fridayClient, database: try ProfileDatabase.openInMemory())
+      client: fridayClient, database: try ProfileIndexDatabase.openInMemory())
 
     // Fetch Friday to populate cache
     let fridayRate = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-17"))
@@ -197,7 +197,7 @@ struct ExchangeRateServiceTests {
     ]
     let client = FixedRateClient(rates: futureRates, shouldFail: false)
     let service = ExchangeRateService(
-      client: client, database: try ProfileDatabase.openInMemory())
+      client: client, database: try ProfileIndexDatabase.openInMemory())
 
     // Fetch future date to populate cache
     _ = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-20"))
@@ -288,7 +288,7 @@ struct ExchangeRateServiceTests {
     let primingClient = FixedRateClient(rates: [
       "2025-01-10": ["USD": dec("0.6400")]
     ])
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let service = ExchangeRateService(client: primingClient, database: database)
     _ = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-10"))
 
@@ -317,7 +317,7 @@ struct ExchangeRateServiceTests {
       "2025-01-20": ["USD": dec("0.6510")],  // Monday
     ])
     let client = CountingRateClient(inner)
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let service = ExchangeRateService(client: client, database: database)
 
     // Prime cache with both Friday and Monday so the cached range spans

@@ -26,7 +26,7 @@ struct InstrumentConversionServiceCryptoTests {
     exchangeRates: [String: [String: Decimal]] = [:],
     providerMappings: [CryptoProviderMapping] = []
   ) throws -> FullConversionService {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let cryptoClient = FixedCryptoPriceClient(prices: cryptoPrices)
     let cryptoService = CryptoPriceService(
       clients: [cryptoClient],
@@ -239,7 +239,7 @@ struct InstrumentConversionServiceCryptoTests {
     let cryptoClient = FixedCryptoPriceClient(
       prices: ["1:native": ["2026-04-10": dec("1623.45")]]
     )
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let cryptoService = CryptoPriceService(
       clients: [cryptoClient],
       database: database

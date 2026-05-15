@@ -5,6 +5,12 @@ import Testing
 
 @testable import Moolah
 
+/// Pinned to the v7 era: `v10_drop_shared_instrument_legacy` later
+/// drops the six rate-cache tables from the per-profile schema, so a
+/// full `migrate(queue)` would leave them absent. v7's behaviour is
+/// only meaningful while the tables exist, so these tests migrate
+/// `upTo: "v7_purge_intraday_cached_prices"` — each shipped migration
+/// keeps its own era's contract.
 @Suite("v7_purge_intraday_cached_prices migration")
 struct PurgeIntradayCachesMigrationTests {
   @Test("seeded rows in all six cache tables are wiped by v7")
@@ -34,8 +40,9 @@ struct PurgeIntradayCachesMigrationTests {
           """)
     }
 
-    // Now run v7 — should empty every cache table.
-    try ProfileSchema.migrator.migrate(queue)
+    // Now run v7 — should empty every cache table. Stop at v7: v10
+    // later drops these tables, which would defeat the assertions.
+    try ProfileSchema.migrator.migrate(queue, upTo: "v7_purge_intraday_cached_prices")
 
     try queue.read { database in
       for table in [
@@ -52,7 +59,7 @@ struct PurgeIntradayCachesMigrationTests {
   @Test("schema is intact after v7 — re-inserts work")
   func schemaIntactAfterPurge() throws {
     let queue = try DatabaseQueue()
-    try ProfileSchema.migrator.migrate(queue)
+    try ProfileSchema.migrator.migrate(queue, upTo: "v7_purge_intraday_cached_prices")
 
     try queue.write { database in
       try database.execute(

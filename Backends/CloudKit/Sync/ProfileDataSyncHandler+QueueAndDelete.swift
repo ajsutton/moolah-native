@@ -211,17 +211,14 @@ extension ProfileDataSyncHandler {
     // to leaving local data in an inconsistent state.
     var clearedAll = true
     let wipes: [(String, () throws -> Void)] = [
-      // The per-profile `instrument` table is decommissioned but its
-      // rows survive on disk until the
-      // `v10_drop_shared_instrument_legacy` migration drops the table
-      // outright.
-      // Keep the wipe here — `deleteLocalData` runs on sign-out,
-      // account-switch, and zone purge, where the entire per-profile
-      // DB is meant to be cleared. Asymmetry with `clearOperations()`
-      // (which deliberately omits this row type) is intentional:
-      // there's no upload path left to resolve a "system fields
-      // cleared" state, but a hard delete is always correct.
-      (InstrumentRow.recordType, { try self.grdbRepositories.instruments.deleteAllSync() }),
+      // No per-profile `instrument` wipe. Instrument data no longer
+      // lives in a per-profile table: it is owned by the shared,
+      // iCloud-account-scoped profile-index registry, and a
+      // single-profile purge (sign-out / account-switch / zone purge)
+      // must NOT wipe instruments shared by every other profile. The
+      // per-profile `instrument` table is also about to be removed by
+      // the `v10_drop_shared_instrument_legacy` migration, after which
+      // a `deleteAllSync` against it would throw `no such table`.
       (CategoryRow.recordType, { try self.grdbRepositories.categories.deleteAllSync() }),
       (AccountRow.recordType, { try self.grdbRepositories.accounts.deleteAllSync() }),
       (EarmarkRow.recordType, { try self.grdbRepositories.earmarks.deleteAllSync() }),

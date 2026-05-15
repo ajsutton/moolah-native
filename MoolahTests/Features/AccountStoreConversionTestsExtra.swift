@@ -14,6 +14,7 @@ struct AccountStoreConversionTestsExtra {
       id: accountId, name: "Sharesight", type: .investment,
       instrument: .defaultTestInstrument)
     let (backend, database) = try TestBackend.create()
+    try await TestBackend.register(bhp, in: backend)
     TestBackend.seed(accounts: [account], in: database)
 
     let audTx = Transaction(
@@ -61,6 +62,8 @@ struct AccountStoreConversionTestsExtra {
       id: accountId, name: "Portfolio", type: .investment,
       instrument: .defaultTestInstrument)
     let (backend, database) = try TestBackend.create()
+    try await TestBackend.register(bhp, in: backend)
+    try await TestBackend.register(eth, in: backend)
     TestBackend.seed(accounts: [account], in: database)
 
     let txns = [

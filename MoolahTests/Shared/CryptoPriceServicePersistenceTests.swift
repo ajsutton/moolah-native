@@ -36,7 +36,7 @@ struct CryptoPriceServicePersistenceTests {
       clients.isEmpty
       ? [FixedCryptoPriceClient(prices: prices, shouldFail: shouldFail)]
       : clients
-    let resolved = try database ?? ProfileDatabase.openInMemory()
+    let resolved = try database ?? ProfileIndexDatabase.openInMemory()
     return CryptoPriceService(clients: clientList, database: resolved)
   }
 
@@ -52,7 +52,7 @@ struct CryptoPriceServicePersistenceTests {
   /// must load prices persisted by the first.
   @Test
   func sqlRoundTripPreservesData() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
 
     let service1 = try makeService(
       prices: ["1:native": ["2026-04-10": dec("1623.45")]],
@@ -83,7 +83,7 @@ struct CryptoPriceServicePersistenceTests {
   /// back along with it.
   @Test
   func saveCacheRollsBackOnInsertFailure() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let service = try makeService(
       prices: ["1:native": ["2026-04-10": dec("1623.45"), "2026-04-11": dec("1700")]],
       database: database
@@ -154,7 +154,7 @@ struct CryptoPriceServicePersistenceTests {
   /// Detected via an `AFTER INSERT ON crypto_price` counter trigger.
   @Test
   func prefetchWithUnchangedPriceDoesNotRewriteCache() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withFullDate]
     let today = formatter.string(from: Date())
@@ -196,7 +196,7 @@ struct CryptoPriceServicePersistenceTests {
   /// delta-write only the M new dates are persisted.
   @Test
   func saveCacheWritesOnlyChangedRows() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     // Client has data for both Apr 10 (priming target) and Apr 15
     // (subsequent target). The Apr 15 forward extension fetch returns
     // both dates, but Apr 10 is already cached at the same value.

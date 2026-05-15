@@ -165,7 +165,10 @@ struct CryptoWalletFieldsMigrationTests {
   @Test("instrument gains pricing_status with priced default and CHECK constraint")
   func instrumentPricingStatusColumn() throws {
     let queue = try DatabaseQueue()
-    try ProfileSchema.migrator.migrate(queue)
+    // Pinned to the v8 era: `v10_drop_shared_instrument_legacy` later
+    // drops the per-profile `instrument` table, so this column's
+    // contract is only observable at the migration that added it.
+    try ProfileSchema.migrator.migrate(queue, upTo: "v8_add_crypto_wallet_fields")
     try queue.read { database in
       let columns = try database.columns(in: "instrument").map(\.name)
       #expect(columns.contains("pricing_status"))

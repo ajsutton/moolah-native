@@ -14,7 +14,7 @@ struct StockPriceServiceTests {
     now: @Sendable @escaping () -> Date = { Date() }
   ) throws -> StockPriceService {
     let client = FixedStockPriceClient(responses: responses, shouldFail: shouldFail)
-    let resolved = try database ?? ProfileDatabase.openInMemory()
+    let resolved = try database ?? ProfileIndexDatabase.openInMemory()
     return StockPriceService(client: client, database: resolved, now: now)
   }
 
@@ -121,7 +121,7 @@ struct StockPriceServiceTests {
 
   @Test
   func networkFailureWithCacheReturnsCachedData() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
 
     let service1 = try makeService(responses: ["BHP.AX": bhpResponse()], database: database)
     _ = try await service1.price(ticker: "BHP.AX", on: date("2026-04-07"))
@@ -205,7 +205,7 @@ struct StockPriceServiceTests {
     // Seed yesterday via a writeable client, then re-issue the same query
     // with a failing client — if the cap routes "today" to "yesterday" and
     // yesterday is in the cache, no fetch is needed.
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let frozen = self.date("2026-04-12")
     let writer = try makeService(
       responses: ["BHP.AX": bhpResponse()],
@@ -226,7 +226,7 @@ struct StockPriceServiceTests {
     // First service caches a value for 2026-04-11; second returns a
     // *different* value for the same date. Asking for a later date should
     // trigger a forward extension that overlaps 2026-04-11 and overwrites.
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let initial = StockPriceResponse(
       instrument: .AUD,
       prices: ["2026-04-11": dec("38.60")])

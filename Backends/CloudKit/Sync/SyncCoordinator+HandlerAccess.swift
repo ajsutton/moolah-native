@@ -50,10 +50,18 @@ extension SyncCoordinator {
     // (the profile-index registry); the apply bundle's resolver /
     // registrar must therefore target it, never the per-profile
     // `instrument` table that `v10_drop_shared_instrument_legacy`
-    // drops. `nil` only for legacy callers (tests without a shared
-    // registry) — those keep the per-profile shim.
+    // drops. Tests that build a `SyncCoordinator` without injecting a
+    // shared registry fall back to a registry over the container's own
+    // profile-index DB — still the shared, account-scoped table, never
+    // the per-profile one. The apply path never invokes the
+    // resolver / registrar seam (it writes raw Rows), so the fallback
+    // registry is correct-by-construction even though it is unseeded.
+    let sharedRegistry =
+      sharedInstrumentRegistry
+      ?? GRDBInstrumentRegistryRepository(
+        database: containerManager.profileIndexDatabase)
     let bundle = ProfileGRDBRepositories.makeForApply(
-      database: database, sharedRegistry: sharedInstrumentRegistry)
+      database: database, sharedRegistry: sharedRegistry)
     cachedGRDBRepositories[profileId] = bundle
     return bundle
   }

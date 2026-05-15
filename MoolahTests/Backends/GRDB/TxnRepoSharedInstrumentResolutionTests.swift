@@ -94,7 +94,7 @@ struct TxnRepoSharedInstrumentResolutionTests {
       defaultInstrument: Instrument.fiat(code: "USD"),
       conversionService: FixedConversionService(),
       instrumentResolver: AlwaysThrowingInstrumentMapResolver(),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: perProfile))
+      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
 
     // Start consuming errors before subscribing so the single-shot
     // channel emission cannot be missed.

@@ -42,7 +42,7 @@ struct CryptoPriceServiceTests {
       clients.isEmpty
       ? [FixedCryptoPriceClient(prices: prices, shouldFail: shouldFail)]
       : clients
-    let resolved = try database ?? ProfileDatabase.openInMemory()
+    let resolved = try database ?? ProfileIndexDatabase.openInMemory()
     return CryptoPriceService(
       clients: clientList,
       database: resolved,
@@ -225,7 +225,7 @@ struct CryptoPriceServiceTests {
   /// or meta entry survived.
   @Test("purgeCache removes the in-memory cache entry and SQL rows")
   func purgeCacheRemovesInMemoryAndSQL() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
 
     let service = try makeService(
       prices: ["1:native": ["2026-04-10": dec("1623.45")]],

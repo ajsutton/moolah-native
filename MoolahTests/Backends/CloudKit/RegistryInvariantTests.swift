@@ -10,12 +10,12 @@ import Testing
 /// Pins the structural invariant `id == record_name` on every
 /// `InstrumentRecord` round-trip: the CloudKit `recordName`, the GRDB
 /// `id` column, and the GRDB `record_name` column must all carry the
-/// same string. The migration runner's `INSERT … ON CONFLICT(id)`
-/// merge in `SharedRegistryUnionRunner` and the spec's reservation of
-/// `record_name UNIQUE` (`ProfileIndexSchema+SharedInstrumentRegistry`)
-/// rely on this invariant — drift between the two columns would
-/// silently split a single instrument into two registry rows that
-/// could never reconcile.
+/// same string. The shared registry's `INSERT … ON CONFLICT(id)`
+/// apply-merge and the `record_name UNIQUE` reservation
+/// (`ProfileIndexSchema+SharedInstrumentRegistry`) rely on this
+/// invariant — drift between the two columns would silently split a
+/// single instrument into two registry rows that could never
+/// reconcile.
 @Suite("InstrumentRecord id == record_name invariant")
 struct RegistryInvariantTests {
 

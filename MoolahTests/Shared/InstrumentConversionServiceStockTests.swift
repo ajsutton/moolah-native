@@ -15,7 +15,7 @@ struct InstrumentConversionServiceStockTests {
     stockPrices: [String: StockPriceResponse] = [:],
     exchangeRates: [String: [String: Decimal]] = [:]
   ) throws -> FullConversionService {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let stockClient = FixedStockPriceClient(responses: stockPrices)
     let stockService = StockPriceService(client: stockClient, database: database)
     let rateClient = FixedRateClient(rates: exchangeRates)
@@ -139,7 +139,7 @@ struct InstrumentConversionServiceStockTests {
   @Test
   func stockPriceFetchFailureThrows() async throws {
     let today = Date()
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let stockClient = FixedStockPriceClient(shouldFail: true)
     let stockService = StockPriceService(client: stockClient, database: database)
     let rateClient = FixedRateClient(rates: [:])
