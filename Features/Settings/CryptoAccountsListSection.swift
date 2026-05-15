@@ -117,14 +117,14 @@ struct CryptoAccountsListSection: View {
     return account.instrument.displaySymbol ?? account.instrument.name
   }
 
-  /// "Synced 2h ago" relative caption. Uses `RelativeDateTimeFormatter`
-  /// with `.short` units to match `ImportRulesSettingsView`'s existing
-  /// idiom — keeps the project's relative-date language consistent.
+  /// "Synced 2h ago" relative caption. Delegates to
+  /// `WalletAccountHeaderLogic.lastSyncedText` so the settings pane and
+  /// the wallet header share one formatter — including its
+  /// `.distantPast`-sentinel "Never synced" handling for an account that
+  /// has never had a successful sync (matches the `errorCaption`
+  /// delegation below; avoids drift if the wording changes).
   private func lastSyncedCaption(for state: WalletSyncState) -> String {
-    let formatter = RelativeDateTimeFormatter()
-    formatter.unitsStyle = .short
-    let relative = formatter.localizedString(for: state.lastSyncedAt, relativeTo: Date())
-    return "Synced \(relative)"
+    WalletAccountHeaderLogic.lastSyncedText(state: state, now: Date())
   }
 
   /// Delegates to `WalletAccountHeaderLogic.errorCaption(for:)` so the

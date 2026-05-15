@@ -266,10 +266,15 @@ extension WalletAccountHeaderView {
 /// unit-testable without instantiating a SwiftUI view.
 enum WalletAccountHeaderLogic {
   /// User-facing relative-time label for the wallet's last successful
-  /// sync. `nil` state → "Never synced". Otherwise uses
-  /// `RelativeDateTimeFormatter.short` and prefixes "Synced ".
+  /// sync. A `nil` state — or a state whose checkpoint is still the
+  /// `.distantPast` sentinel that `persistError` writes for an account
+  /// that has never had a successful sync — renders as "Never synced".
+  /// Otherwise uses `RelativeDateTimeFormatter.short` and prefixes
+  /// "Synced ".
   static func lastSyncedText(state: WalletSyncState?, now: Date) -> String {
-    guard let lastSyncedAt = state?.lastSyncedAt else { return "Never synced" }
+    guard let lastSyncedAt = state?.lastSyncedAt, lastSyncedAt != .distantPast else {
+      return "Never synced"
+    }
     let formatter = RelativeDateTimeFormatter()
     formatter.unitsStyle = .short
     let relative = formatter.localizedString(for: lastSyncedAt, relativeTo: now)
