@@ -45,6 +45,17 @@ struct WalletAccountHeaderViewLogicTests {
     #expect(!trailing.isEmpty)
   }
 
+  @Test("State with a .distantPast checkpoint renders as 'Never synced'")
+  func neverSyncedWhenCheckpointIsDistantPast() {
+    // persistError writes lastSyncedAt: .distantPast for an account that
+    // has never had a successful sync (e.g. the first attempt failed).
+    // That sentinel must read as "Never synced", not "Synced 2025 years ago".
+    let state = WalletSyncState(
+      id: UUID(), lastSyncedBlockNumber: 0, lastSyncedAt: .distantPast, lastError: nil)
+    let label = WalletAccountHeaderLogic.lastSyncedText(state: state, now: Date())
+    #expect(label == "Never synced")
+  }
+
   // MARK: - Sync-now enabled state
 
   @Test("Sync-now button enabled when account is not in flight and a key is configured")
