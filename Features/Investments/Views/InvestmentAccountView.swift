@@ -89,35 +89,16 @@ struct InvestmentAccountView: View {
     )
   }
 
-  /// The positions/transactions composition for non-legacy accounts.
-  /// Three branches:
-  ///   - Positions exist (or are still loading): show the full
-  ///     `PositionsView` with header, optional chart, and table.
-  ///   - Positions empty (or all in host currency) but the account has
-  ///     historical investment activity: show a chart-only surface so
-  ///     the user can review prior performance. Gating uses
-  ///     `hasAnyHistoricalActivity` (range-independent) rather than
-  ///     `hasHistoricalSeries` (range-scoped) so an account whose last
-  ///     trade pre-dates the active range still surfaces the chart.
-  ///   - Positions empty and no historical activity: collapse to the
-  ///     bare transaction list, the same as today.
+  /// The positions/transactions composition for position-tracked
+  /// accounts. The full `PositionsView` surface — performance tiles,
+  /// chart, and positions table — always renders, even when every
+  /// holding has been sold (`positionsInput.alwaysShowsFullSurface`
+  /// keeps `PositionsView` from collapsing). This is deliberately
+  /// unconditional: a consistent layout across every account state is
+  /// simpler and more predictable than branching the surface on whether
+  /// positions remain. While the first load is still running and there
+  /// are no rows yet, a `ProgressView` stands in for the top pane.
   @ViewBuilder private var positionTrackedLayout: some View {
-    if positionsInput.shouldHide && !isLoadingPositions {
-      if positionsInput.hasAnyHistoricalActivity {
-        chartOnlySplit
-      } else {
-        makeAccountTransactionList()
-      }
-    } else {
-      standardPositionsSplit
-    }
-  }
-
-  /// Full positions surface — header (or performance tiles), optional
-  /// chart, and the responsive table. Used when current positions exist
-  /// or while positions are still loading (renders a `ProgressView` in
-  /// the top pane until `isLoadingPositions` clears).
-  @ViewBuilder private var standardPositionsSplit: some View {
     PositionsTransactionsSplit(
       defaultTab: .positions,
       // Distinct autosave key from the chartless multi-currency split so
@@ -136,29 +117,6 @@ struct InvestmentAccountView: View {
       } else {
         PositionsView(input: positionsInput, range: $positionsRange)
       }
-    } transactions: {
-      makeAccountTransactionList()
-    }
-  }
-
-  /// Chart-only top pane for a position-tracked account whose positions
-  /// table is empty (all holdings closed out, or every non-zero position
-  /// is in host currency) but that has historical activity worth reviewing.
-  /// Reuses the same `autosaveName` as `standardPositionsSplit` so the
-  /// divider position the user has chosen for this account shape
-  /// persists across the two branches. `selectedInstrument` is pinned to
-  /// `.constant(nil)` — there are no positions to filter to, so the
-  /// per-instrument selection chip would never appear.
-  @ViewBuilder private var chartOnlySplit: some View {
-    PositionsTransactionsSplit(
-      defaultTab: .positions,
-      autosaveName: "positions-transactions-split.with-chart",
-      initialTopHeight: 540
-    ) {
-      PositionsChart(
-        input: positionsInput,
-        range: $positionsRange,
-        selectedInstrument: .constant(nil))
     } transactions: {
       makeAccountTransactionList()
     }
