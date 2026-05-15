@@ -69,6 +69,56 @@ struct InvestmentStoreFullySoldChartTests {
     #expect(
       input.showsAggregateChart,
       "aggregate chart line should render when totalValue is available")
+    #expect(
+      input.hasAnyHistoricalActivity,
+      "non-host trade legs in the transaction set should set hasAnyHistoricalActivity")
+  }
+
+  @Test("fully-sold account reports hasAnyHistoricalActivity even on a narrow range")
+  func fullySoldAccountReportsActivityOnNarrowRange() async throws {
+    // Regression for the production bug: the user's last sale predates the
+    // default `.threeMonths` window, so `hasHistoricalSeries` is false. The
+    // view layer needs a range-independent signal to still take the
+    // chart-only branch — `hasAnyHistoricalActivity`.
+    let (backend, _) = try TestBackend.create()
+    let conversionService = FixedConversionService(rates: [bhp.id: Decimal(50)])
+    let store = InvestmentStore(
+      repository: backend.investments,
+      transactionRepository: backend.transactions,
+      conversionService: conversionService
+    )
+    let account = Account(
+      name: "Brokerage", type: .investment, instrument: aud,
+      valuationMode: .calculatedFromTrades)
+    _ = try await backend.accounts.create(
+      account, openingBalance: InstrumentAmount(quantity: 0, instrument: aud))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: buyDate,
+        legs: [
+          TransactionLeg(accountId: account.id, instrument: bhp, quantity: 100, type: .trade),
+          TransactionLeg(accountId: account.id, instrument: aud, quantity: -4_000, type: .trade),
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: sellDate,
+        legs: [
+          TransactionLeg(accountId: account.id, instrument: bhp, quantity: -100, type: .trade),
+          TransactionLeg(accountId: account.id, instrument: aud, quantity: 5_000, type: .trade),
+        ]))
+
+    let input = try await store.loadAndBuildPositionsInput(
+      account: account, profileCurrency: aud, range: .threeMonths)
+
+    #expect(
+      input.shouldHide,
+      "host-currency-only positions should still trigger shouldHide")
+    #expect(
+      !input.hasHistoricalSeries,
+      "trades from 2020 fall outside .threeMonths so the series is empty")
+    #expect(
+      input.hasAnyHistoricalActivity,
+      "the non-host trade legs make the account chart-worthy even on a narrow range")
   }
 
   @Test("empty account with no trade history hides the chart")
@@ -92,5 +142,8 @@ struct InvestmentStoreFullySoldChartTests {
     #expect(input.shouldHide)
     #expect(!input.hasHistoricalSeries)
     #expect(!input.showsChart)
+    #expect(
+      !input.hasAnyHistoricalActivity,
+      "no transactions at all means no historical activity to surface")
   }
 }

@@ -90,7 +90,24 @@ extension InvestmentStore {
       hostCurrency: hostCurrency,
       positions: rowsWithCost,
       historicalValue: series,
-      performance: accountPerformance)
+      performance: accountPerformance,
+      hasAnyHistoricalActivity: Self.hasAnyTradeLeg(
+        in: txns, accountId: loadedAccountId, hostCurrency: hostCurrency))
+  }
+
+  /// Range-independent "did this account ever hold a non-host-currency
+  /// position" check used to gate the chart-only branch on accounts
+  /// whose last trade pre-dates the active range.
+  static func hasAnyTradeLeg(
+    in transactions: [Transaction], accountId: UUID?, hostCurrency: Instrument
+  ) -> Bool {
+    transactions.contains { txn in
+      txn.legs.contains { leg in
+        leg.accountId == accountId
+          && leg.type == .trade
+          && leg.instrument != hostCurrency
+      }
+    }
   }
 
   func fetchAllTransactions(

@@ -19,6 +19,42 @@ struct PositionsViewInput: Sendable, Hashable {
   /// this `nil` and keep the existing header layout.
   let performance: AccountPerformance?
 
+  /// `true` iff the account has ever held a non-host-currency position
+  /// — i.e. the user's transactions include at least one trade leg in
+  /// an instrument other than `hostCurrency`. Range-independent: derived
+  /// from the full transaction set, not the current chart range.
+  ///
+  /// The view layer reads this to decide whether to render the chart-only
+  /// surface when `shouldHide` is `true`. `hasHistoricalSeries` only
+  /// answers "does the active range carry points right now"; that flips
+  /// to `false` when the user opens an account whose last trade
+  /// pre-dates the default range, so the chart never gets a chance to
+  /// render. `hasAnyHistoricalActivity` survives that.
+  let hasAnyHistoricalActivity: Bool
+
+  /// Single designated init with defaults so non-investment callers
+  /// (the transaction list, all previews) only have to fill in the
+  /// fields they care about. The investment-account path opts in to
+  /// `performance` and `hasAnyHistoricalActivity` explicitly. Declared
+  /// inside the struct body so it replaces Swift's synthesised
+  /// memberwise init rather than co-existing with it (which would make
+  /// every call ambiguous).
+  init(
+    title: String,
+    hostCurrency: Instrument,
+    positions: [ValuedPosition],
+    historicalValue: HistoricalValueSeries?,
+    performance: AccountPerformance? = nil,
+    hasAnyHistoricalActivity: Bool = false
+  ) {
+    self.title = title
+    self.hostCurrency = hostCurrency
+    self.positions = positions
+    self.historicalValue = historicalValue
+    self.performance = performance
+    self.hasAnyHistoricalActivity = hasAnyHistoricalActivity
+  }
+
   /// Sum of per-row values. `nil` if any row's `value` is `nil` — per the
   /// project rule "never display a partial aggregate", a single conversion
   /// failure marks the whole total unavailable.
@@ -101,27 +137,5 @@ struct PositionsViewInput: Sendable, Hashable {
       positions.lazy.filter { $0.quantity != 0 }.map(\.instrument)
     )
     return nonZeroInstruments == [hostCurrency]
-  }
-}
-
-extension PositionsViewInput {
-  /// Backward-compat init for the four-arg shape that pre-dates
-  /// `performance`. Lets non-investment-account callers (the
-  /// transaction list, all previews) keep their existing
-  /// `PositionsViewInput(title:hostCurrency:positions:historicalValue:)`
-  /// invocation unchanged. The investment-account path opts in via
-  /// the synthesised memberwise init.
-  init(
-    title: String,
-    hostCurrency: Instrument,
-    positions: [ValuedPosition],
-    historicalValue: HistoricalValueSeries?
-  ) {
-    self.init(
-      title: title,
-      hostCurrency: hostCurrency,
-      positions: positions,
-      historicalValue: historicalValue,
-      performance: nil)
   }
 }
