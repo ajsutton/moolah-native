@@ -65,18 +65,31 @@ struct SessionManagerTests {
     #expect(manager.sessions.isEmpty)
   }
 
-  @Test("rebuildSession replaces existing session with new instance")
-  func rebuildsSession() async throws {
+  @Test("refreshProfile updates the live session in place without rebuilding")
+  func refreshProfileUpdatesInPlace() async throws {
     let manager = try makeManager()
-    let profile = makeProfile()
+    let profile = makeProfile(label: "Before")
 
     let original = try await openSession(manager, for: profile)
-    _ = await manager.rebuildSession(for: profile)
-    let rebuilt = manager.sessions[profile.id]
 
-    #expect(rebuilt !== original)
-    #expect(rebuilt?.profile.id == profile.id)
+    var renamed = profile
+    renamed.label = "After"
+    manager.refreshProfile(renamed)
+
+    let current = manager.sessions[profile.id]
+    #expect(current === original)
+    #expect(current?.profile.label == "After")
     #expect(manager.sessions.count == 1)
+  }
+
+  @Test("refreshProfile is a no-op when no session is open for the profile")
+  func refreshProfileNoOpWhenNoSession() throws {
+    let manager = try makeManager()
+    var renamed = makeProfile(label: "Ghost")
+    renamed.label = "Renamed"
+
+    manager.refreshProfile(renamed)
+    #expect(manager.sessions.isEmpty)
   }
 
   @Test("multiple profiles get independent sessions")

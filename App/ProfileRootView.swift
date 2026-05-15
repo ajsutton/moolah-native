@@ -56,8 +56,11 @@
         updateSession(for: newID)
       }
       .onChange(of: profileStore.activeProfile?.label) { _, _ in
-        // Update cached profile in session when label changes
-        rebuildSessionIfNeeded()
+        // A rename updates the cached session's profile in place — no
+        // teardown, no data reload. `ProfileSession.profile` is
+        // `@Observable`, so label-bound UI refreshes off that single
+        // assignment without rebuilding the session.
+        refreshSessionProfile()
       }
       .onChange(of: profileStore.profiles) { _, _ in
         // Cloud profiles may arrive late (SwiftData/CloudKit not ready at startup).
@@ -103,15 +106,15 @@
       }
     }
 
-    /// Recreates the session if the active profile's properties changed (e.g. label edited in Settings).
-    private func rebuildSessionIfNeeded() {
+    /// Propagates a metadata edit (e.g. label changed in Settings)
+    /// into the live session in place. No teardown — the session is
+    /// `@Observable`, so label-bound UI updates off the assignment.
+    /// Remote `dataFormatVersion` bumps that could make the profile
+    /// incompatible are handled separately by `SessionManager`'s index
+    /// observer, so a rename must not rebuild the session.
+    private func refreshSessionProfile() {
       guard let profile = profileStore.activeProfile else { return }
-      if let session = activeSession, session.profile.id == profile.id {
-        Task {
-          let result = await sessionManager.rebuildSession(for: profile)
-          applyOpenResult(result)
-        }
-      }
+      sessionManager.refreshProfile(profile)
     }
 
     private func applyOpenResult(_ result: SessionOpenResult) {

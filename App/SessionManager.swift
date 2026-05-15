@@ -10,11 +10,11 @@ import SwiftData
 final class SessionManager {
   /// Live sessions keyed by profile id.
   ///
-  /// **Mutation invariant:** any code path that drops or replaces a
-  /// session **must** go through `removeSession(for:)` or
-  /// `rebuildSession(for:)` so the session's `cleanupSync(coordinator:)`
-  /// runs first. `cleanupSync` is the only place that cancels the
-  /// session's tracked tasks (`catalogRefreshTask`, `pragmaOptimizeTask`,
+  /// **Mutation invariant:** any code path that drops a session
+  /// **must** go through `removeSession(for:)` so the session's
+  /// `cleanupSync(coordinator:)` runs first. `cleanupSync` is the
+  /// only place that cancels the session's tracked tasks
+  /// (`catalogRefreshTask`, `pragmaOptimizeTask`,
   /// `periodicPragmaOptimizeTask`, `setUpTask`); a direct mutation to
   /// `sessions` would leak any of those that happen to be in flight.
   /// Adding new tracked tasks to `ProfileSession`? Cancel them in
@@ -29,15 +29,6 @@ final class SessionManager {
   /// Cleared on a successful `.ready` open for the same profile id, so
   /// after an app update the entry doesn't linger.
   private(set) var incompatibleProfiles: [UUID: IncompatibleProfileInfo] = [:]
-
-  /// Per-profile rebuild-task registry. `rebuildSession(for:)` cancels
-  /// any prior in-flight rebuild for the same profile id before
-  /// starting a new one — so rapid `onChange`-driven rebuilds (e.g.
-  /// label edits arriving via sync) don't race writes back into the
-  /// view's `sessionResult`. Storing the handle here (not in view
-  /// `@State`) survives view-identity changes — see
-  /// `guides/CONCURRENCY_GUIDE.md` §8 ("Store tasks in the store").
-  private var rebuildTasks: [UUID: Task<SessionOpenResult, Never>] = [:]
 
   /// Token returned by `SyncCoordinator.addIndexObserver` when
   /// `installIndexObserver` registers the mid-session bump-arrival
@@ -210,34 +201,22 @@ final class SessionManager {
     Array(sessions.values)
   }
 
-  /// Replaces the session for a profile with a fresh instance — runs
-  /// `cleanupSync` on the prior session and re-opens through
-  /// `session(for:)` so the gate fires again. Returns the same
-  /// `SessionOpenResult` shape as `session(for:)`.
+  /// Propagates a profile-metadata edit (label, currency code,
+  /// financial-year start) into the live session **in place** — no
+  /// teardown, no data reload, no sync restart. This is the path a
+  /// rename takes: `ProfileSession.profile` is `@Observable`, so the
+  /// window title and any label-bound UI update reactively off the
+  /// single assignment. Mirrors the bump-on-write in-place update
+  /// (`bumpDataFormatVersionIfNeeded`).
   ///
-  /// `cleanupSync` runs unconditionally (see `removeSession` for the
-  /// rationale on no-coordinator builds). Cancels any prior rebuild
-  /// task for the same profile id before starting a new one.
-  func rebuildSession(for profile: Profile) async -> SessionOpenResult {
-    rebuildTasks[profile.id]?.cancel()
-    if let oldSession = sessions.removeValue(forKey: profile.id) {
-      oldSession.cleanupSync(coordinator: syncCoordinator)
-      syncCoordinator?.removeDataHandler(for: profile.id)
-    }
-    let task = Task { await self.session(for: profile) }
-    rebuildTasks[profile.id] = task
-    defer {
-      // Identity-guard the eviction: a later concurrent caller may
-      // have already replaced this slot with its own task. Removing
-      // unconditionally would leave a third caller unable to cancel
-      // the (still-running) replacement, breaking the cancel-prior
-      // invariant. `Task` is a value type wrapping a stable handle, so
-      // `==` compares the underlying continuation identity.
-      if rebuildTasks[profile.id] == task {
-        rebuildTasks.removeValue(forKey: profile.id)
-      }
-    }
-    return await task.value
+  /// No-op when no session is open for the profile — the next
+  /// `session(for:)` reads the fresh value from the profile index.
+  /// A remote `dataFormatVersion` bump that would make the profile
+  /// incompatible is handled independently by the index observer
+  /// (`installIndexObserver` / `reconcileIncompatibilityFromIndex`),
+  /// so a metadata edit must not trigger `rebuildSession`.
+  func refreshProfile(_ profile: Profile) {
+    sessions[profile.id]?.updateProfile(profile)
   }
 
   // MARK: - Mid-session compatibility reconcile
