@@ -31,7 +31,7 @@ struct ExchangeRateServicePersistenceTests {
   /// precision (4 dp on Frankfurter) is far above this tolerance.
   @Test
   func sqlRoundTripPreservesData() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
 
     let client = FixedRateClient(rates: [
       "2026-04-11": ["USD": dec("0.632"), "EUR": dec("0.581")]
@@ -80,7 +80,7 @@ struct ExchangeRateServicePersistenceTests {
   /// SQLite rolls the transaction back atomically.
   @Test
   func saveCacheRollsBackOnInsertFailure() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     // Pick a specific (date, quote, rate) triple we can re-look-up after
     // the failed save so the assertion proves the prior rows survived —
     // not just that the row count happens to match.
@@ -178,7 +178,7 @@ struct ExchangeRateServicePersistenceTests {
   /// `saveCacheWritesOnlyChangedRows` test pins.
   @Test
   func emptyFetchResultDoesNotRewriteCache() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let client = FixedRateClient(rates: [
       "2025-01-17": ["USD": dec("0.6500")]
     ])
@@ -229,7 +229,7 @@ struct ExchangeRateServicePersistenceTests {
   /// three priming rows plus the new one).
   @Test
   func saveCacheWritesOnlyChangedRows() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let client = FixedRateClient(rates: [
       "2025-01-13": ["USD": dec("0.6480")],  // Mon
       "2025-01-14": ["USD": dec("0.6490")],  // Tue

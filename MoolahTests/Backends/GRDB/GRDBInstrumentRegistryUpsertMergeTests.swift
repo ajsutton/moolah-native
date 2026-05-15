@@ -7,8 +7,10 @@ import Testing
 @Suite("GRDBInstrumentRegistryRepository upsert preserves provider mapping")
 struct GRDBInstrumentRegistryUpsertMergeTests {
   private func makeRegistry() throws -> GRDBInstrumentRegistryRepository {
-    let queue = try DatabaseQueue()
-    try ProfileSchema.migrator.migrate(queue)
+    // The registry's canonical store is the profile-index DB — the
+    // per-profile `instrument` table was removed by
+    // `v10_drop_shared_instrument_legacy`.
+    let queue = try ProfileIndexDatabase.openInMemory()
     return GRDBInstrumentRegistryRepository(database: queue)
   }
 

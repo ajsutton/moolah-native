@@ -119,17 +119,26 @@ struct GRDBInstrumentRegistrationRollbackTests {
 ///      `cryptoRegistration(byId:)` — that is the inbox projection — so
 ///      resolvability must be probed via the resolver the read paths
 ///      actually use.)
-///   2. the per-profile `instrument` table has ZERO rows for that id
-///      (the placeholder write is gone).
+///   2. the per-profile `instrument` table no longer exists at all
+///      (`v10_drop_shared_instrument_legacy` dropped it) — a strictly
+///      stronger guarantee than "zero placeholder rows".
 @Suite("create registers the instrument via the shared registry, not a per-profile placeholder")
 struct GRDBCreatePathRegistersInstrumentTests {
-  private func perProfileInstrumentRowCount(
-    _ database: any DatabaseWriter, id: String
-  ) async throws -> Int {
+  /// Post-v10 the per-profile `instrument` table is dropped, so the
+  /// "no per-profile placeholder" contract is now the structural fact
+  /// that the table does not exist. Returns `true` when the table is
+  /// absent (the expected, stronger guarantee).
+  private func perProfileInstrumentTableAbsent(
+    _ database: any DatabaseWriter
+  ) async throws -> Bool {
     try await database.read { database in
-      try InstrumentRow
-        .filter(InstrumentRow.Columns.id == id)
-        .fetchCount(database)
+      try
+        !(Bool.fetchOne(
+          database,
+          sql: """
+            SELECT EXISTS(
+              SELECT 1 FROM sqlite_master WHERE type='table' AND name='instrument')
+            """) ?? true)
     }
   }
 
@@ -167,9 +176,10 @@ struct GRDBCreatePathRegistersInstrumentTests {
     #expect(resolved == eth, "create must register the crypto so the resolver resolves it")
     #expect(resolved?.kind == .cryptoToken)
 
-    // (2) no per-profile placeholder row was written.
-    let count = try await perProfileInstrumentRowCount(perProfile, id: eth.id)
-    #expect(count == 0, "create must not write a per-profile instrument placeholder")
+    // (2) the per-profile `instrument` table is gone (v10) — no place
+    // for a placeholder row to exist.
+    let absent = try await perProfileInstrumentTableAbsent(perProfile)
+    #expect(absent, "the per-profile instrument table must be dropped post-v10")
   }
 
   @Test("account create registers a new crypto denomination in the shared registry")
@@ -199,8 +209,8 @@ struct GRDBCreatePathRegistersInstrumentTests {
       "account create must register the crypto so the resolver resolves it")
     #expect(resolved?.kind == .cryptoToken)
 
-    let count = try await perProfileInstrumentRowCount(perProfile, id: eth.id)
-    #expect(count == 0, "account create must not write a per-profile instrument placeholder")
+    let absent = try await perProfileInstrumentTableAbsent(perProfile)
+    #expect(absent, "the per-profile instrument table must be dropped post-v10")
   }
 
   @Test("shared registry keeps create→read resolvable behind the seam")
@@ -245,10 +255,9 @@ struct GRDBCreatePathRegistersInstrumentTests {
     #expect(resolvedLeg.instrument == eth)
     #expect(resolvedLeg.instrument.kind == .cryptoToken)
 
-    let perProfileCount = try await perProfileInstrumentRowCount(
-      perProfile, id: eth.id)
+    let absent = try await perProfileInstrumentTableAbsent(perProfile)
     #expect(
-      perProfileCount == 0,
-      "resolution must come from the shared registry, not a per-profile row")
+      absent,
+      "resolution must come from the shared registry; the per-profile table is dropped")
   }
 }

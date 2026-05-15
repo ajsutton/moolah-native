@@ -43,11 +43,15 @@ struct ConversionObservationContractTests {
 
   @Test("write to cache table emits a tick", arguments: CacheTable.allCases)
   func writeEmitsTick(table: CacheTable) async throws {
-    let (backend, database) = try TestBackend.create()
+    let (backend, _) = try TestBackend.create()
+    // The rate caches live on the registry's profile-index DB post-v10
+    // — the per-profile rate-cache tables were dropped. The conversion
+    // service observes that DB, so the fixture write must land there.
+    let cacheDatabase = backend.grdbInstruments.database
     var iterator = backend.conversionService.observeRates().makeAsyncIterator()
     _ = await iterator.next()  // initial tick on subscription
 
-    try await Self.write(table, into: database)
+    try await Self.write(table, into: cacheDatabase)
 
     let next: Void? = await iterator.next()
     #expect(next != nil, "observeRates() did not emit after writing to \(table.rawValue)")
@@ -61,11 +65,12 @@ struct ConversionObservationContractTests {
     // profile (empty cache tables) never emits on the first sync write.
     // The fix is `tracking(regions:)` with an explicit table list. This
     // test catches a regression to the inference form.
-    let (backend, database) = try TestBackend.create()  // empty cache tables
+    let (backend, _) = try TestBackend.create()  // empty cache tables
+    let cacheDatabase = backend.grdbInstruments.database
     var iterator = backend.conversionService.observeRates().makeAsyncIterator()
     _ = await iterator.next()  // initial tick
 
-    try await Self.write(table, into: database)
+    try await Self.write(table, into: cacheDatabase)
 
     let next: Void? = await iterator.next()
     #expect(

@@ -53,7 +53,11 @@ struct AccountStoreSyncRefreshTests {
     // cache-table write, so the test would pass for the wrong reason
     // (an unrelated emission from the account observation) and would
     // not catch a regression to the empty-table region inference bug.
-    let (backend, database) = try TestBackend.create()
+    let (backend, _) = try TestBackend.create()
+    // The rate caches live on the registry's profile-index DB post-v10
+    // — the per-profile rate-cache tables were dropped. The conversion
+    // service observes that DB, so the fixture write must land there.
+    let cacheDatabase = backend.grdbInstruments.database
     let store = AccountStore(
       repository: backend.accounts,
       conversionService: backend.conversionService,
@@ -67,7 +71,7 @@ struct AccountStoreSyncRefreshTests {
     // WITHOUT ROWID tables — without it the SQLite update hook never
     // fires and the observation hangs (see
     // `Backends/GRDB/Observation/RateCacheTable.swift`).
-    try await database.write { connection in
+    try await cacheDatabase.write { connection in
       switch table {
       case "exchange_rate":
         try connection.execute(literal: insertExchangeRateFixture())

@@ -41,6 +41,8 @@ struct InvestmentStoreSpamFilterTests {
     let aud = Instrument.AUD
 
     let (backend, database) = try TestBackend.create()
+    try await TestBackend.register(realOp, in: backend)
+    try await TestBackend.register(spamOp, in: backend)
     TestBackend.seed(
       accounts: [
         Account(
@@ -94,6 +96,8 @@ struct InvestmentStoreSpamFilterTests {
     let aud = Instrument.AUD
 
     let (backend, database) = try TestBackend.create()
+    try await TestBackend.register(realOp, in: backend)
+    try await TestBackend.register(spamOp, in: backend)
     let account = Account(
       id: accountId, name: "OP Wallet", type: .crypto, instrument: aud,
       valuationMode: .calculatedFromTrades)

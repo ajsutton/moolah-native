@@ -54,6 +54,8 @@ struct ReportingStoreTestsMore {
     let cba = Instrument(
       id: "ASX:CBA.AX", kind: .stock, name: "CBA", decimals: 0,
       ticker: "CBA.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
+    try await TestBackend.register(bhp, in: backend)
+    try await TestBackend.register(cba, in: backend)
 
     let buyBHP = Transaction(
       date: Date(),
@@ -109,6 +111,8 @@ struct ReportingStoreTestsMore {
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18
     )
+    try await TestBackend.register(bhp, in: backend)
+    try await TestBackend.register(eth, in: backend)
 
     let txns = [
       Transaction(

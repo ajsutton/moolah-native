@@ -13,6 +13,14 @@ import Testing
 /// future migration can't silently regress to a rowid table (which
 /// would also reintroduce the `RETURNING "rowid"` upsert hazard
 /// described in #582).
+///
+/// Pinned to the v9 era: `v10_drop_shared_instrument_legacy` later
+/// drops the six rate-cache tables (incl. all three `*_meta` tables)
+/// from the per-profile schema, so a full migration would leave them
+/// absent. The WITHOUT-ROWID contract is only observable while the
+/// tables exist, so the migrator is run `upTo:` the last migration
+/// before the v10 drop — each shipped migration keeps its own era's
+/// contract.
 @Suite("Rate cache *_meta table schema")
 struct RateCacheSchemaTests {
   @Test
@@ -31,7 +39,8 @@ struct RateCacheSchemaTests {
   }
 
   private func assertWithoutRowid(table: String) async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try DatabaseQueue()
+    try ProfileSchema.migrator.migrate(database, upTo: "v9_add_counterparty_address")
     let createSQL = try await database.read { database in
       try String.fetchOne(
         database,

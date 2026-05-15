@@ -15,7 +15,7 @@ struct CryptoTokenStoreTests {
     // the test fixture remains a one-liner without threading `throws`
     // through every caller.
     // swiftlint:disable:next force_try
-    let database = try! ProfileDatabase.openInMemory()
+    let database = try! ProfileIndexDatabase.openInMemory()
     let registry = GRDBInstrumentRegistryRepository(database: database)
     for reg in registrations {
       // swiftlint:disable:next force_try
@@ -73,7 +73,8 @@ struct CryptoTokenStoreTests {
   func loadRegistrationsSurfacesError() async {
     let failing = FailingRegistry()
     // swiftlint:disable:next force_try
-    let service = CryptoPriceService(clients: [], database: try! ProfileDatabase.openInMemory())
+    let priceDatabase = try! ProfileIndexDatabase.openInMemory()
+    let service = CryptoPriceService(clients: [], database: priceDatabase)
     let store = CryptoTokenStore(
       registry: failing,
       cryptoPriceService: service,

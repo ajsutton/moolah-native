@@ -16,11 +16,16 @@ import Testing
 /// table's primary key (`base`, `ticker`, `token_id`) so the planner is
 /// expected to choose `SEARCH USING PRIMARY KEY`. Anything else
 /// (including `SCAN <table>`) is a regression.
+///
+/// The rate caches now live on the shared profile-index DB
+/// (`ProfileIndexSchema`); the per-profile copies were dropped by
+/// `v10_drop_shared_instrument_legacy`. The plan is pinned against the
+/// shared schema because that is what production reads.
 @Suite("Rate cache loadCache query plans")
 struct RateQueryPlanTests {
   @Test
   func exchangeRateLoadCacheUsesPrimaryKey() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     try await database.read { database in
       // `SELECT *` here is wrapped in `EXPLAIN QUERY PLAN`; the planner
       // never expands the column list, so the star is fine.
@@ -39,7 +44,7 @@ struct RateQueryPlanTests {
 
   @Test
   func stockPriceLoadCacheUsesPrimaryKey() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     try await database.read { database in
       // `SELECT *` here is wrapped in `EXPLAIN QUERY PLAN`; the planner
       // never expands the column list, so the star is fine.
@@ -58,7 +63,7 @@ struct RateQueryPlanTests {
 
   @Test
   func cryptoPriceLoadCacheUsesPrimaryKey() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     try await database.read { database in
       // `SELECT *` here is wrapped in `EXPLAIN QUERY PLAN`; the planner
       // never expands the column list, so the star is fine.
@@ -77,7 +82,7 @@ struct RateQueryPlanTests {
 
   @Test
   func exchangeRateMetaLoadUsesPrimaryKey() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     try await database.read { database in
       // `SELECT *` here is wrapped in `EXPLAIN QUERY PLAN`; the planner
       // never expands the column list, so the star is fine.
@@ -96,7 +101,7 @@ struct RateQueryPlanTests {
 
   @Test
   func stockTickerMetaLoadUsesPrimaryKey() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     try await database.read { database in
       // `SELECT *` here is wrapped in `EXPLAIN QUERY PLAN`; the planner
       // never expands the column list, so the star is fine.
@@ -115,7 +120,7 @@ struct RateQueryPlanTests {
 
   @Test
   func cryptoTokenMetaLoadUsesPrimaryKey() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     try await database.read { database in
       // `SELECT *` here is wrapped in `EXPLAIN QUERY PLAN`; the planner
       // never expands the column list, so the star is fine.

@@ -11,12 +11,13 @@ struct TransactionDeleteRollbackTests {
   @Test
   func deleteRollsBackOnFailureAfterLegDelete() async throws {
     let database = try ProfileDatabase.openInMemory()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let txRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .AUD,
       conversionService: FixedConversionService(),
-      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
-      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
     let txId = UUID()
     let legId = UUID()
 
@@ -27,8 +28,6 @@ struct TransactionDeleteRollbackTests {
     try await database.write { database in
       try database.execute(
         sql: """
-          INSERT INTO instrument (id, record_name, kind, name, decimals)
-            VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
           INSERT INTO "transaction" (id, record_name, date)
             VALUES (?, 'tx-1', '2026-01-01');
           INSERT INTO transaction_leg (id, record_name, transaction_id, instrument_id,

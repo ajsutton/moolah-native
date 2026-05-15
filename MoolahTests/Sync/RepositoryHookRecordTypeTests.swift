@@ -63,12 +63,13 @@ struct RepositoryHookRecordTypeTests {
   func transactionCreateEmitsLegRecordType() async throws {
     let database = try ProfileDatabase.openInMemory()
     let capture = HookCapture()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
-      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
-      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()),
+      instrumentResolver: registry,
+      instrumentRegistrar: registry,
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
     // Leg-level hooks are emitted via the txn repo's bundled write path;
@@ -108,10 +109,11 @@ struct RepositoryHookRecordTypeTests {
   func accountCreateOpeningBalanceTagsRecordTypes() async throws {
     let database = try ProfileDatabase.openInMemory()
     let capture = HookCapture()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let repo = GRDBAccountRepository(
       database: database,
-      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
-      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()),
+      instrumentResolver: registry,
+      instrumentRegistrar: registry,
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
 

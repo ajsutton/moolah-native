@@ -38,7 +38,8 @@ struct CryptoSettingsAPIKeyTests {
   /// ids. Returns the keychain handles too so tests can read the raw
   /// entry to confirm round-trips.
   private func makeFixture() throws -> Fixture {
-    let database = try ProfileDatabase.openInMemory()
+    // Registry + price cache live on the profile-index DB post-v10.
+    let database = try ProfileIndexDatabase.openInMemory()
     let registry = GRDBInstrumentRegistryRepository(database: database)
     let priceService = CryptoPriceService(
       clients: [FixedCryptoPriceClient()], database: database)

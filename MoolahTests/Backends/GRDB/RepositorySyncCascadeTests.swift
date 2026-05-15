@@ -31,10 +31,11 @@ struct RepositorySyncCascadeTests {
   @Test
   func accountSyncDeleteCascadesToInvestmentValuesAndNullsLegs() async throws {
     let database = try ProfileDatabase.openInMemory()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let accountRepo = GRDBAccountRepository(
       database: database,
-      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
-      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
     let accountId = UUID()
     let legId = UUID()
     let txId = UUID()
@@ -43,8 +44,6 @@ struct RepositorySyncCascadeTests {
     try await database.write { database in
       try database.execute(
         sql: """
-          INSERT INTO instrument (id, record_name, kind, name, decimals)
-            VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
           INSERT INTO account (id, record_name, name, type, instrument_id, position, is_hidden)
             VALUES (?, 'account-1', 'Checking', 'bank', 'USD', 0, 0);
           INSERT INTO "transaction" (id, record_name, date)
@@ -89,8 +88,6 @@ struct RepositorySyncCascadeTests {
     try await database.write { database in
       try database.execute(
         sql: """
-          INSERT INTO instrument (id, record_name, kind, name, decimals)
-            VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
           INSERT INTO "transaction" (id, record_name, date)
             VALUES (?, 'tx-1', '2026-01-01');
           INSERT INTO transaction_leg (id, record_name, transaction_id, instrument_id,
@@ -125,8 +122,6 @@ struct RepositorySyncCascadeTests {
     try await database.write { database in
       try database.execute(
         sql: """
-          INSERT INTO instrument (id, record_name, kind, name, decimals)
-            VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
           INSERT INTO "transaction" (id, record_name, date)
             VALUES (?, 'tx-1', '2026-01-01');
           INSERT INTO transaction_leg (id, record_name, transaction_id, instrument_id,
@@ -167,8 +162,6 @@ struct RepositorySyncCascadeTests {
     try await database.write { database in
       try database.execute(
         sql: """
-          INSERT INTO instrument (id, record_name, kind, name, decimals)
-            VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
           INSERT INTO category (id, record_name, name) VALUES (?, 'cat-1', 'Food');
           INSERT INTO earmark (id, record_name, name, position, is_hidden)
             VALUES (?, 'earmark-1', 'Holiday', 0, 0);
@@ -220,8 +213,6 @@ struct RepositorySyncCascadeTests {
     try await database.write { database in
       try database.execute(
         sql: """
-          INSERT INTO instrument (id, record_name, kind, name, decimals)
-            VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
           INSERT INTO earmark (id, record_name, name, position, is_hidden, instrument_id)
             VALUES (?, 'earmark-1', 'Holiday', 0, 0, 'USD');
           """,
@@ -263,14 +254,9 @@ struct RepositorySyncCascadeTests {
     let orphanCategoryId = UUID()
     let orphanEarmarkId = UUID()
 
-    try await database.write { database in
-      try database.execute(
-        sql: """
-          INSERT INTO instrument (id, record_name, kind, name, decimals)
-            VALUES ('AUD', 'instrument-AUD', 'fiatCurrency', 'Australian Dollar', 2);
-          """)
-    }
-
+    // No instrument seed: `.AUD` is an ambient fiat instrument resolved
+    // via the shared registry / fiat fallback, and the per-profile
+    // `instrument` table no longer exists post-v10.
     let txId = UUID()
     let leg = TransactionLeg(
       accountId: orphanAccountId,

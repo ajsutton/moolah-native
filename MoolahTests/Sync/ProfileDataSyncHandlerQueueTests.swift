@@ -24,9 +24,6 @@ struct ProfileDataSyncHandlerQueueTests {
       try ProfileDataSyncHandlerTestSupport.categoryRow(
         id: UUID(), name: "Cat"
       ).upsert(database)
-      try ProfileDataSyncHandlerTestSupport.instrumentRow(
-        id: "AUD", kind: "fiatCurrency", name: "Australian Dollar", decimals: 2
-      ).upsert(database)
     }
 
     let changedTypes = handler.deleteLocalData()
@@ -37,15 +34,26 @@ struct ProfileDataSyncHandlerQueueTests {
     #expect(counts.accounts == 0)
     #expect(counts.transactions == 0)
     #expect(counts.categories == 0)
-    // The per-profile `instrument` table is NOT wiped: instrument data
-    // is owned by the shared, iCloud-account-scoped profile-index
-    // registry, and a single-profile purge must not wipe instruments
-    // shared by every other profile. (The per-profile table is also
-    // about to be removed by `v10_drop_shared_instrument_legacy`, after
-    // which a wipe against it would throw `no such table`.)
+    // `deleteLocalData` must not touch the per-profile `instrument`
+    // table — instrument data is owned by the shared,
+    // iCloud-account-scoped profile-index registry and a single-profile
+    // purge must not wipe instruments shared by every other profile.
+    // Post-`v10_drop_shared_instrument_legacy` the per-profile table is
+    // gone entirely, so a wipe against it would throw `no such table`;
+    // that the purge completes without error proves it leaves the
+    // (now-absent) per-profile instrument surface alone.
+    let perProfileInstrumentAbsent = try await harness.database.read { database in
+      try
+        !(Bool.fetchOne(
+          database,
+          sql: """
+            SELECT EXISTS(
+              SELECT 1 FROM sqlite_master WHERE type='table' AND name='instrument')
+            """) ?? true)
+    }
     #expect(
-      counts.instruments == 1,
-      "deleteLocalData must not wipe the per-profile instrument table")
+      perProfileInstrumentAbsent,
+      "the per-profile instrument table must be dropped post-v10")
     #expect(changedTypes == Set(RecordTypeRegistry.allTypes.keys))
   }
 
@@ -58,6 +66,12 @@ struct ProfileDataSyncHandlerQueueTests {
     let txnId = UUID()
     let instrumentId = "AUD"
 
+    // No `instrumentRow` seed: the per-profile `instrument` table was
+    // removed by `v10_drop_shared_instrument_legacy`. Instrument ids
+    // are queued by the shared registry on the profile-index zone (via
+    // `SyncCoordinator.queueUnsyncedSharedInstruments`), never by the
+    // per-profile handler — so the per-profile queue holds only the
+    // account + transaction below.
     try await ProfileDataSyncHandlerTestSupport.seed(into: harness.database) { database in
       try ProfileDataSyncHandlerTestSupport.accountRow(
         id: accountId, name: "Acc"
@@ -65,19 +79,10 @@ struct ProfileDataSyncHandlerQueueTests {
       try ProfileDataSyncHandlerTestSupport.transactionRow(
         id: txnId, payee: "Test"
       ).upsert(database)
-      try ProfileDataSyncHandlerTestSupport.instrumentRow(
-        id: instrumentId, kind: "fiatCurrency",
-        name: "Australian Dollar", decimals: 2
-      ).upsert(database)
     }
 
     let recordIDs = handler.queueAllExistingRecords()
 
-    // Instrument ids are queued by the shared registry on the
-    // profile-index zone (via
-    // `SyncCoordinator.queueUnsyncedSharedInstruments`), not by the
-    // per-profile handler. The seeded `AUD` instrument is therefore
-    // not part of the per-profile queue.
     #expect(recordIDs.count == 2)
 
     let recordNames = Set(recordIDs.map(\.recordName))
@@ -100,6 +105,10 @@ struct ProfileDataSyncHandlerQueueTests {
     let unsyncedInstrumentId = "AUD"
     let syncedInstrumentId = "USD"
 
+    // No `instrumentRow` seeds: the per-profile `instrument` table was
+    // removed by `v10_drop_shared_instrument_legacy` and the
+    // per-profile handler never enumerates instruments anyway (the
+    // shared registry's `queueUnsyncedSharedInstruments` covers them).
     try await ProfileDataSyncHandlerTestSupport.seed(into: harness.database) { database in
       try ProfileDataSyncHandlerTestSupport.accountRow(
         id: unsyncedAccountId, name: "Unsynced"
@@ -107,15 +116,6 @@ struct ProfileDataSyncHandlerQueueTests {
       try ProfileDataSyncHandlerTestSupport.accountRow(
         id: syncedAccountId, name: "Synced", position: 1,
         encodedSystemFields: Data([0x01, 0x02, 0x03])
-      ).upsert(database)
-      try ProfileDataSyncHandlerTestSupport.instrumentRow(
-        id: unsyncedInstrumentId, kind: "fiatCurrency",
-        name: "Australian Dollar", decimals: 2
-      ).upsert(database)
-      try ProfileDataSyncHandlerTestSupport.instrumentRow(
-        id: syncedInstrumentId, kind: "fiatCurrency",
-        name: "US Dollar", decimals: 2,
-        encodedSystemFields: Data([0x04, 0x05])
       ).upsert(database)
     }
 
@@ -160,9 +160,11 @@ struct ProfileDataSyncHandlerQueueTests {
     let instrumentId = "AUD"
 
     func insert(into database: Database) throws {
-      try ProfileDataSyncHandlerTestSupport.instrumentRow(
-        id: instrumentId, kind: "fiatCurrency", name: "AUD Dollar", decimals: 2
-      ).upsert(database)
+      // No `instrumentRow`: the per-profile `instrument` table was
+      // removed by `v10_drop_shared_instrument_legacy`; the leg /
+      // account / earmark rows below carry `instrumentId` as a plain
+      // column (no FK — `v5_drop_foreign_keys`), and the per-profile
+      // handler never queues instruments (the shared registry does).
       try ProfileDataSyncHandlerTestSupport.accountRow(
         id: accountId, name: "Acc", instrumentId: instrumentId
       ).upsert(database)
@@ -256,18 +258,21 @@ struct ProfileDataSyncHandlerQueueTests {
 }
 
 /// Per-table row counts for `deleteLocalDataRemovesAllRecordTypes`.
-/// Replaces a four-tuple to satisfy SwiftLint's `large_tuple` policy.
+/// Replaces a tuple to satisfy SwiftLint's `large_tuple` policy.
+///
+/// No `instruments` count: the per-profile `instrument` table was
+/// removed by `v10_drop_shared_instrument_legacy`. Instrument identity
+/// lives solely on the shared profile-index registry, which a
+/// single-profile `deleteLocalData` must not wipe.
 private struct DeleteLocalDataCounts {
   let accounts: Int
   let transactions: Int
   let categories: Int
-  let instruments: Int
 
   static func fetch(from database: Database) throws -> DeleteLocalDataCounts {
     DeleteLocalDataCounts(
       accounts: try AccountRow.fetchCount(database),
       transactions: try TransactionRow.fetchCount(database),
-      categories: try CategoryRow.fetchCount(database),
-      instruments: try InstrumentRow.fetchCount(database))
+      categories: try CategoryRow.fetchCount(database))
   }
 }

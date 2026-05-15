@@ -21,6 +21,8 @@ struct StockPositionDisplayTests {
   func loadPositionsComputesFromLegs() async throws {
     let accountId = UUID()
     let (backend, database) = try TestBackend.create()
+    try await TestBackend.register(bhp, in: backend)
+    try await TestBackend.register(cba, in: backend)
     TestBackend.seed(
       accounts: [
         Account(
@@ -74,7 +76,7 @@ struct StockPositionDisplayTests {
       "BHP.AX": StockPriceResponse(
         instrument: .AUD, prices: [dateKey: dec("45.00"), yKey: dec("45.00")])
     ])
-    let cacheDatabase = try ProfileDatabase.openInMemory()
+    let cacheDatabase = try ProfileIndexDatabase.openInMemory()
     let stockService = StockPriceService(client: stockClient, database: cacheDatabase)
     let rateClient = FixedRateClient(rates: [:])
     let rateService = ExchangeRateService(client: rateClient, database: cacheDatabase)
@@ -84,6 +86,8 @@ struct StockPositionDisplayTests {
     )
 
     let (backend, database) = try TestBackend.create()
+    try await TestBackend.register(bhp, in: backend)
+    try await TestBackend.register(cba, in: backend)
     TestBackend.seed(
       accounts: [
         Account(
@@ -125,6 +129,8 @@ struct StockPositionDisplayTests {
 
     let conversionService = try makeTotalPortfolioConversionService(today: today)
     let (backend, database) = try TestBackend.create()
+    try await TestBackend.register(bhp, in: backend)
+    try await TestBackend.register(cba, in: backend)
     TestBackend.seed(
       accounts: [
         Account(
@@ -158,7 +164,7 @@ struct StockPositionDisplayTests {
       "CBA.AX": StockPriceResponse(
         instrument: .AUD, prices: [dateKey: dec("120.00"), yKey: dec("120.00")]),
     ])
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let stockService = StockPriceService(client: stockClient, database: database)
     let rateClient = FixedRateClient(rates: [:])
     let rateService = ExchangeRateService(client: rateClient, database: database)
@@ -209,6 +215,8 @@ struct StockPositionDisplayTests {
     )
 
     let (backend, database) = try TestBackend.create()
+    try await TestBackend.register(bhp, in: backend)
+    try await TestBackend.register(cba, in: backend)
     TestBackend.seed(
       accounts: [
         Account(

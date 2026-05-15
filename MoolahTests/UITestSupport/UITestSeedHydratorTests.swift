@@ -256,11 +256,15 @@ final class UITestSeedHydratorTests: XCTestCase {
   }
 
   func testHydrateTradeReadySeedsVgsaxInstrument() throws {
-    let profile = try XCTUnwrap(
+    _ = try XCTUnwrap(
       try UITestSeedHydrator.hydrate(.tradeReady, into: containerManager))
-    let database = try containerManager.database(for: profile.id)
 
-    let instruments = try database.read { database in try InstrumentRow.fetchAll(database) }
+    // Instrument identity lives on the shared profile-index registry
+    // post-`v10_drop_shared_instrument_legacy`; the per-profile
+    // `instrument` table no longer exists.
+    let instruments = try containerManager.profileIndexDatabase.read { database in
+      try InstrumentRow.fetchAll(database)
+    }
     let ids = Set(instruments.map(\.id))
     XCTAssertTrue(
       ids.contains(UITestFixtures.TradeReady.vgsaxInstrumentId),

@@ -64,13 +64,22 @@ struct GRDBCreateManyTests {
     try await Task.sleep(for: .milliseconds(50))
   }
 
-  private func instrumentRowCount(
-    _ database: any DatabaseWriter, id: String
-  ) async throws -> Int {
+  /// Post-`v10_drop_shared_instrument_legacy` the per-profile
+  /// `instrument` table no longer exists, so the "create path must not
+  /// write a per-profile placeholder" contract is now the structural
+  /// fact that the table is absent — a strictly stronger guarantee than
+  /// "zero rows". Returns `true` when the table does not exist.
+  private func perProfileInstrumentTableAbsent(
+    _ database: any DatabaseWriter
+  ) async throws -> Bool {
     try await database.read { database in
-      try InstrumentRow
-        .filter(InstrumentRow.Columns.id == id)
-        .fetchCount(database)
+      try
+        !(Bool.fetchOne(
+          database,
+          sql: """
+            SELECT EXISTS(
+              SELECT 1 FROM sqlite_master WHERE type='table' AND name='instrument')
+            """) ?? true)
     }
   }
 
@@ -108,12 +117,13 @@ struct GRDBCreateManyTests {
   @Test("createMany rolls back every header + leg if any leg insert fails")
   func createManyRollsBackOnLegFailure() async throws {
     let database = try ProfileDatabase.openInMemory()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .AUD,
       conversionService: FixedConversionService(),
-      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
-      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
     let accountId = UUID()
     let stub = Account(id: accountId, name: "Cash", type: .bank, instrument: .AUD)
     try await database.write { database in
@@ -218,9 +228,9 @@ struct GRDBCreateManyTests {
     let resolvedBtc = try await registry.instrumentMap()[btc.id]
     #expect(resolvedBtc == btc)
     #expect(resolvedBtc?.kind == .cryptoToken)
-    let btcRowCount = try await instrumentRowCount(database, id: btc.id)
+    let absent = try await perProfileInstrumentTableAbsent(database)
     #expect(
-      btcRowCount == 0,
-      "createMany must not write the per-profile instrument table")
+      absent,
+      "createMany must not write the per-profile instrument table; v10 dropped it")
   }
 }

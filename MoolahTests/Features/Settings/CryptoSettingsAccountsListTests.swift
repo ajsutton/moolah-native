@@ -36,7 +36,10 @@ struct CryptoSettingsAccountsListTests {
     let (backend, database) = try TestBackend.create()
     let alchemy = RecordingAlchemyClientStub()
     alchemy.setTransfersResponse(.transfers([]))
-    let registry = GRDBInstrumentRegistryRepository(database: database)
+    // Resolve through the backend's own shared profile-index registry —
+    // the per-profile `instrument` table was removed by
+    // `v10_drop_shared_instrument_legacy`.
+    let registry = backend.grdbInstruments
     let discovery = CryptoTokenDiscoveryService(
       registry: registry, resolver: CountingRegistrationResolver(), alchemy: alchemy)
     let walletSyncEngine = WalletSyncEngine(

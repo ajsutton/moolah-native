@@ -45,17 +45,20 @@ struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable {
     let database = try ProfileDatabase.openInMemory()
     self.database = database
     let currency = Instrument.defaultTestInstrument
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
+    self.instrumentRegistry = registry
     let conversion: any InstrumentConversionService
     if let customConversion {
       conversion = customConversion
     } else {
       let rateClient = FixedRateClient()
+      // The rate cache lives on the registry's profile-index DB — the
+      // per-profile rate-cache tables were removed by
+      // `v10_drop_shared_instrument_legacy`.
       let exchangeRates = ExchangeRateService(
-        client: rateClient, database: database)
+        client: rateClient, database: registry.database)
       conversion = FiatConversionService(exchangeRates: exchangeRates)
     }
-    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
-    self.instrumentRegistry = registry
     let backend = CloudKitBackend(
       database: database,
       instrument: currency,

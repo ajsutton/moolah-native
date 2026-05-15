@@ -45,14 +45,23 @@ import GRDB
 /// `nil` for non-crypto legs and gas/self-send legs. Surfaced in the
 /// transaction detail's "On-chain counterparty" row. See
 /// `ProfileSchema+CounterpartyAddress.swift`.
+/// `v10_drop_shared_instrument_legacy` — drops the seven legacy
+/// per-profile tables (`instrument`, `exchange_rate`,
+/// `exchange_rate_meta`, `stock_price`, `stock_ticker_meta`,
+/// `crypto_price`, `crypto_token_meta`). Every device has completed
+/// the one-time union into the shared profile-index registry, so the
+/// per-profile copies have no remaining reader. Permitted per
+/// `guides/DATABASE_SCHEMA_GUIDE.md` §1 rule 3 / §6 rule 7. See
+/// `ProfileSchema+DropSharedInstrumentLegacy.swift` for the full
+/// rationale.
 ///
-/// **Retention policy for the cache tables.** All six cache tables
-/// created by `v1_initial` (`exchange_rate`, `exchange_rate_meta`,
-/// `stock_price`, `stock_ticker_meta`, `crypto_price`,
-/// `crypto_token_meta`) are **kept forever** — needed for
-/// historic-conversion correctness on reports older than the upstream
-/// rate APIs can serve. See `guides/DATABASE_SCHEMA_GUIDE.md` §9. The
-/// `v7` purge resets state once; the retention policy is unchanged.
+/// **Retention policy for the cache tables.** The six rate-cache
+/// tables originally created by `v1_initial` are kept forever — needed
+/// for historic-conversion correctness on reports older than the
+/// upstream rate APIs can serve (see `guides/DATABASE_SCHEMA_GUIDE.md`
+/// §9). As of `v10` that retained copy lives on the **shared**
+/// `profile-index.sqlite` DB, not per-profile; the per-profile copies
+/// are dropped because they are now duplicated derived caches.
 ///
 /// Each migration body lives in its own sibling-extension file so
 /// `ProfileSchema.swift` stays a small index of registered migrations.
@@ -66,7 +75,7 @@ enum ProfileSchema {
   /// Bumped each time a migration is added. Surfaced for open-time
   /// integrity checks; not used by `DatabaseMigrator` (which keys on
   /// the stable string IDs of registered migrations).
-  static let version = 9
+  static let version = 10
 
   static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
@@ -92,13 +101,8 @@ enum ProfileSchema {
       "v8_add_crypto_wallet_fields", migrate: addCryptoWalletFields)
     migrator.registerMigration(
       "v9_add_counterparty_address", migrate: addCounterpartyAddressToTransactionLeg)
-
-    // v10_drop_shared_instrument_legacy is RESERVED.
-    // Will drop the per-profile `instrument`, `crypto_token_meta`,
-    // `stock_ticker_meta`, `crypto_price`, `stock_price`, `exchange_rate`,
-    // and `exchange_rate_meta` tables once all devices have migrated to
-    // the shared profile-index registry.
-    // Do NOT use "v10_*" for any other migration.
+    migrator.registerMigration(
+      "v10_drop_shared_instrument_legacy", migrate: dropSharedInstrumentLegacy)
 
     return migrator
   }

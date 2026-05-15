@@ -60,10 +60,22 @@ struct CoreFinancialGraphSyncRoundTripTests {
       Issue.record("applyRemoteChanges reported saveFailed: \(message)")
     }
 
-    let row = try await harness.database.read { database in
-      try InstrumentRow.filter(InstrumentRow.Columns.id == id).fetchOne(database)
+    // Post-`v10_drop_shared_instrument_legacy` the per-profile
+    // `instrument` table no longer exists, so an apply to it is
+    // structurally impossible — a strictly stronger guarantee than
+    // "the row wasn't written". Assert the table is absent.
+    let perProfileInstrumentAbsent = try await harness.database.read { database in
+      try
+        !(Bool.fetchOne(
+          database,
+          sql: """
+            SELECT EXISTS(
+              SELECT 1 FROM sqlite_master WHERE type='table' AND name='instrument')
+            """) ?? true)
     }
-    #expect(row == nil, "InstrumentRecord must not be applied to per-profile instrument table")
+    #expect(
+      perProfileInstrumentAbsent,
+      "InstrumentRecord must not be applied to a per-profile instrument table; v10 dropped it")
   }
 
   // MARK: - CategoryRow

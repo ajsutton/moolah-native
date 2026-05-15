@@ -17,7 +17,7 @@ struct ExchangeRateServiceCapTests {
     now: @Sendable @escaping () -> Date
   ) throws -> ExchangeRateService {
     let client = FixedRateClient(rates: rates, shouldFail: shouldFail)
-    let resolved = try database ?? ProfileDatabase.openInMemory()
+    let resolved = try database ?? ProfileIndexDatabase.openInMemory()
     return ExchangeRateService(client: client, database: resolved, now: now)
   }
 
@@ -39,7 +39,7 @@ struct ExchangeRateServiceCapTests {
 
   @Test
   func todayHitsCacheWithoutNetworkFetch() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let frozen = try self.date("2025-01-20")
     let writer = try makeService(
       rates: ["2025-01-19": ["USD": dec("0.6510")]],
@@ -57,7 +57,7 @@ struct ExchangeRateServiceCapTests {
 
   @Test
   func forwardExtensionOverwritesStaleLatest() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let initial: [String: [String: Decimal]] = ["2025-01-17": ["USD": dec("0.6500")]]
     let revised: [String: [String: Decimal]] = [
       "2025-01-17": ["USD": dec("0.6555")],

@@ -16,7 +16,8 @@ struct CryptoTokenStoreSpamInstrumentsTests {
   /// `presetCount` built-in presets registered so the store has rows to
   /// flip to `.spam` and assert membership of `spamInstruments`.
   private func makeStore(presetCount: Int = 2) async throws -> Fixture {
-    let database = try ProfileDatabase.openInMemory()
+    // Registry + price cache live on the profile-index DB post-v10.
+    let database = try ProfileIndexDatabase.openInMemory()
     let registry = GRDBInstrumentRegistryRepository(database: database)
     for preset in CryptoRegistration.builtInPresets.prefix(presetCount) {
       try await registry.registerCrypto(preset.instrument, mapping: preset.mapping)

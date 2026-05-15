@@ -18,23 +18,41 @@ enum PreviewBackend {
   /// optional `sharedRegistry` mirrors `TestBackend.create`'s
   /// equivalent parameter — pass the same instance across multiple
   /// preview backends to share one registry like production does.
-  /// Defaults to a fresh per-call registry against the per-call
-  /// in-memory `ProfileDatabase`.
+  /// Defaults to a fresh per-call registry over its own in-memory
+  /// profile-index DB (the preview analogue of production's shared
+  /// registry); it is never pointed at the per-profile `ProfileDatabase`
+  /// because `v10_drop_shared_instrument_legacy` removed the per-profile
+  /// `instrument` table.
   static func create(
     instrument: Instrument = .AUD,
     sharedRegistry: GRDBInstrumentRegistryRepository? = nil
   ) -> CloudKitBackend {
+    // In-memory ProfileDatabase.openInMemory() cannot fail (no
+    // filesystem path); this factory is preview-only and never runs in
+    // production, so a trap is acceptable.
     // swiftlint:disable:next force_try
     let database = try! ProfileDatabase.openInMemory()
+    let registry: GRDBInstrumentRegistryRepository
+    if let sharedRegistry {
+      registry = sharedRegistry
+    } else {
+      // In-memory ProfileIndexDatabase.openInMemory() cannot fail (no
+      // filesystem path); preview-only path, never runs in production.
+      // swiftlint:disable:next force_try
+      let indexDatabase = try! ProfileIndexDatabase.openInMemory()
+      registry = GRDBInstrumentRegistryRepository(database: indexDatabase)
+    }
+    // The rate / price caches share the registry's profile-index DB,
+    // mirroring production (`sharedMarketData` + shared registry both
+    // on `profileIndexDatabase`). The per-profile rate-cache tables
+    // were removed by `v10_drop_shared_instrument_legacy`.
+    let marketDataDatabase = registry.database
     let exchangeRates = ExchangeRateService(
       client: FrankfurterClient(),
-      database: database
+      database: marketDataDatabase
     )
     let conversionService = FiatConversionService(
-      exchangeRates: exchangeRates, database: database)
-    let registry =
-      sharedRegistry
-      ?? GRDBInstrumentRegistryRepository(database: database)
+      exchangeRates: exchangeRates, database: marketDataDatabase)
     return CloudKitBackend(
       database: database,
       instrument: instrument,

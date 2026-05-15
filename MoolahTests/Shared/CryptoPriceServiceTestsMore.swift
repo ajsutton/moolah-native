@@ -42,7 +42,7 @@ struct CryptoPriceServiceTestsMore {
       clients.isEmpty
       ? [FixedCryptoPriceClient(prices: prices, shouldFail: shouldFail)]
       : clients
-    let resolved = try database ?? ProfileDatabase.openInMemory()
+    let resolved = try database ?? ProfileIndexDatabase.openInMemory()
     return CryptoPriceService(
       clients: clientList,
       database: resolved,

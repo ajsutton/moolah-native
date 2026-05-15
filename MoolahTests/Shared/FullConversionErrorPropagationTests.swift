@@ -16,7 +16,7 @@ struct FullConversionErrorPropagationTests {
   /// `guides/INSTRUMENT_CONVERSION_GUIDE.md`.
   @Test
   func cryptoConversionPropagatesRegistryError() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let cryptoService = CryptoPriceService(
       clients: [FixedCryptoPriceClient()],
       database: database

@@ -87,12 +87,20 @@ final class ExportCoordinator {
   ///     when `syncCoordinator` is non-nil so imported records can be queued for upload.
   ///   - syncCoordinator: Optional sync coordinator. When provided, all imported records
   ///     are queued for upload so the profile syncs to CloudKit and other devices.
+  ///   - instrumentRegistrar: The registry every non-fiat denomination is
+  ///     registered into before the per-profile write — instrument
+  ///     identity lives on the shared profile-index registry
+  ///     (`v10_drop_shared_instrument_legacy` removed the per-profile
+  ///     `instrument` table). Defaults to the coordinator's shared
+  ///     registry; an explicit value lets coordinator-less callers
+  ///     (some tests) supply a shared test registry.
   /// - Returns: The import result with counts of imported records
   func importFromFile(
     url: URL,
     database: any DatabaseWriter,
     profileId: UUID? = nil,
-    syncCoordinator: SyncCoordinator? = nil
+    syncCoordinator: SyncCoordinator? = nil,
+    instrumentRegistrar: (any InstrumentRegistering)? = nil
   ) async throws -> ImportResult {
     state = .importing(step: "reading file", progress: 0)
     lastRecordIDsQueuedForUpload = []
@@ -115,7 +123,8 @@ final class ExportCoordinator {
       exported,
       database: database,
       profileId: profileId,
-      syncCoordinator: syncCoordinator
+      syncCoordinator: syncCoordinator,
+      instrumentRegistrar: instrumentRegistrar ?? syncCoordinator?.sharedInstrumentRegistry
     )
   }
 
@@ -127,7 +136,8 @@ final class ExportCoordinator {
     _ exported: ExportedData,
     database: any DatabaseWriter,
     profileId: UUID?,
-    syncCoordinator: SyncCoordinator?
+    syncCoordinator: SyncCoordinator?,
+    instrumentRegistrar: (any InstrumentRegistering)?
   ) async throws -> ImportResult {
     guard exported.version <= 1 else {
       throw ExportError.unsupportedVersion(exported.version)
@@ -135,9 +145,15 @@ final class ExportCoordinator {
 
     state = .importing(step: "saving", progress: 0.3)
 
+    // Instrument identity lives on the shared profile-index registry —
+    // the per-profile `instrument` table was removed by
+    // `v10_drop_shared_instrument_legacy`. Production always has a
+    // coordinator carrying the shared registry; the importer registers
+    // every non-fiat denomination there before the per-profile write.
     let importer = CloudKitDataImporter(
       database: database,
-      currencyCode: exported.currencyCode
+      currencyCode: exported.currencyCode,
+      instrumentRegistrar: instrumentRegistrar
     )
 
     let result: ImportResult
@@ -184,7 +200,8 @@ final class ExportCoordinator {
     url: URL,
     profileStore: ProfileStore,
     containerManager: ProfileContainerManager,
-    syncCoordinator: SyncCoordinator?
+    syncCoordinator: SyncCoordinator?,
+    instrumentRegistrar: (any InstrumentRegistering)? = nil
   ) async throws -> UUID {
     state = .importing(step: "reading file", progress: 0)
     lastRecordIDsQueuedForUpload = []
@@ -216,7 +233,8 @@ final class ExportCoordinator {
         exported,
         database: database,
         profileId: newProfile.id,
-        syncCoordinator: syncCoordinator
+        syncCoordinator: syncCoordinator,
+        instrumentRegistrar: instrumentRegistrar ?? syncCoordinator?.sharedInstrumentRegistry
       )
     } catch {
       profileStore.removeProfile(newProfile.id)

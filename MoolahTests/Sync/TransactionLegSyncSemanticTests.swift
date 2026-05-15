@@ -15,12 +15,13 @@ struct TransactionLegSyncSemanticTests {
   @Test("applyRemoteChangesSync with same-id leg row is idempotent — no duplicate")
   func sameLegIdUpsertIsIdempotent() async throws {
     let database = try ProfileDatabase.openInMemory()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
-      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
-      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
     let legRepo = GRDBTransactionLegRepository(database: database)
     let accountId = UUID()
     let txn = try await txnRepo.create(
@@ -64,12 +65,13 @@ struct TransactionLegSyncSemanticTests {
   )
   func differentIdOrphanLandsAsSecondRow() async throws {
     let database = try ProfileDatabase.openInMemory()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
-      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
-      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
     let legRepo = GRDBTransactionLegRepository(database: database)
     let accountId = UUID()
     let txn = try await txnRepo.create(
@@ -158,8 +160,6 @@ struct TransactionLegSyncSemanticTests {
     try database.write { database in
       try database.execute(
         sql: """
-          INSERT INTO instrument (id, record_name, kind, name, decimals)
-            VALUES ('AUD', 'instrument-AUD', 'fiatCurrency', 'AUD', 2);
           INSERT INTO "transaction" (id, record_name, date)
             VALUES (?, 'tx-rollback', '2026-01-01');
           INSERT INTO transaction_leg

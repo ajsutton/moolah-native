@@ -25,7 +25,7 @@ struct CryptoPriceServiceCapTests {
     now: @Sendable @escaping () -> Date
   ) throws -> CryptoPriceService {
     let client = FixedCryptoPriceClient(prices: prices, shouldFail: shouldFail)
-    let resolved = try database ?? ProfileDatabase.openInMemory()
+    let resolved = try database ?? ProfileIndexDatabase.openInMemory()
     return CryptoPriceService(
       clients: [client],
       database: resolved,
@@ -52,7 +52,7 @@ struct CryptoPriceServiceCapTests {
 
   @Test
   func todayHitsCacheWithoutNetworkFetch() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let frozen = try self.date("2026-04-12")
     let writer = try makeService(
       prices: ["1:native": ["2026-04-11": dec("1640.00")]],
@@ -72,7 +72,7 @@ struct CryptoPriceServiceCapTests {
 
   @Test
   func forwardExtensionOverwritesStaleLatest() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let initial: [String: [String: Decimal]] = [
       "1:native": ["2026-04-11": dec("1640.00")]
     ]

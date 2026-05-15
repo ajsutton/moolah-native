@@ -21,10 +21,11 @@ struct RepositorySyncCascadeRollbackTests {
   @Test
   func accountSyncDeleteRollsBackInvestmentValueAndLegEdits() async throws {
     let database = try ProfileDatabase.openInMemory()
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let accountRepo = GRDBAccountRepository(
       database: database,
-      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
-      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
     let fixture = try await Self.seedAccountScenario(in: database)
 
     do {
@@ -87,8 +88,6 @@ struct RepositorySyncCascadeRollbackTests {
     try await database.write { database in
       try database.execute(
         sql: """
-          INSERT INTO instrument (id, record_name, kind, name, decimals)
-            VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
           INSERT INTO account (id, record_name, name, type, instrument_id, position, is_hidden)
             VALUES (?, 'account-1', 'Checking', 'bank', 'USD', 0, 0);
           INSERT INTO "transaction" (id, record_name, date)
@@ -155,8 +154,6 @@ struct RepositorySyncCascadeRollbackTests {
     try await database.write { database in
       try database.execute(
         sql: """
-          INSERT INTO instrument (id, record_name, kind, name, decimals)
-            VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
           INSERT INTO category (id, record_name, name) VALUES (?, 'cat-1', 'Food');
           INSERT INTO earmark (id, record_name, name, position, is_hidden)
             VALUES (?, 'earmark-1', 'Holiday', 0, 0);
@@ -226,8 +223,6 @@ struct RepositorySyncCascadeRollbackTests {
     try await database.write { database in
       try database.execute(
         sql: """
-          INSERT INTO instrument (id, record_name, kind, name, decimals)
-            VALUES ('USD', 'instrument-USD', 'fiatCurrency', 'US Dollar', 2);
           INSERT INTO category (id, record_name, name) VALUES (?, 'cat-1', 'Food');
           INSERT INTO category (id, record_name, name, parent_id)
             VALUES (?, 'cat-2', 'Groceries', ?);

@@ -38,7 +38,7 @@ struct ConvertCacheInvalidationTests {
     let toggle = ToggleableCryptoPriceClient()
     await toggle.setPrices(["1:native": ["2026-04-10": dec("1623.45")]])
 
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let cryptoService = CryptoPriceService(
       clients: [toggle], database: database)
     let exchangeService = ExchangeRateService(
@@ -80,7 +80,7 @@ struct ConvertCacheInvalidationTests {
   /// affect any subsequent crypto conversion.
   @Test
   func invalidateCacheForFiatInstrumentIsNoOp() async throws {
-    let database = try ProfileDatabase.openInMemory()
+    let database = try ProfileIndexDatabase.openInMemory()
     let cryptoService = CryptoPriceService(
       clients: [FixedCryptoPriceClient(prices: ["1:native": ["2026-04-10": dec("1623.45")]])],
       database: database)
