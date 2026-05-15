@@ -17,11 +17,14 @@ import os
 /// mutations, and a non-protocol `notifyExternalChange()` method that the
 /// sync layer calls when remote pulls touch instrument rows.
 ///
-/// **`@unchecked Sendable` justification.** Has two mutable stored
+/// **`@unchecked Sendable` justification.** Has three mutable stored
 /// properties: `subscribers` (the `@MainActor`-confined
-/// AsyncStream-continuation map driving `observeChanges()`) and
+/// AsyncStream-continuation map driving `observeChanges()`),
 /// `hooks` (the lock-guarded `HookState` swapped in by
-/// `attachSyncHooks`). Both are race-free at runtime — see
+/// `attachSyncHooks`), and `mapCache` (the lock-guarded
+/// `MapCacheState` memoising the instrument-map snapshot; see
+/// `GRDBInstrumentRegistryRepository+InstrumentMapResolving.swift`).
+/// All three are race-free at runtime — see
 /// `guides/CONCURRENCY_GUIDE.md` §2 "False Positives to Avoid",
 /// Carve-out 3 (GRDB repositories).
 final class GRDBInstrumentRegistryRepository:
@@ -52,6 +55,20 @@ final class GRDBInstrumentRegistryRepository:
   // scoped because Swift extensions in separate files don't share
   // `private` access.
   let hooks: OSAllocatedUnfairLock<HookState>
+
+  /// Lock-guarded memoised instrument-map snapshot. The
+  /// `MapCacheState` type and the invalidation / test-accessor helpers
+  /// live in the sibling `+SyncHooks` extension file so this file stays
+  /// under SwiftLint's `file_length` / `type_body_length` thresholds;
+  /// only the stored property itself must be declared in the class
+  /// body. Guarded by the same `OSAllocatedUnfairLock` primitive the
+  /// type already uses for `hooks` — deliberately not a second,
+  /// divergent synchronisation mechanism. `internal` (default) so the
+  /// sibling `+InstrumentMapResolving` / `+SyncEntryPoints` extensions
+  /// can read and invalidate it.
+  let mapCache = OSAllocatedUnfairLock(
+    initialState: MapCacheState(
+      snapshot: [:], isValid: false, generation: 0, dbReadCount: 0))
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "InstrumentRegistry")
 
@@ -122,6 +139,7 @@ final class GRDBInstrumentRegistryRepository:
       try Self.upsertCrypto(
         database: database, instrument: instrument, mapping: mapping)
     }
+    invalidateInstrumentMapCache()
     fireOnRecordChanged(instrument.id)
     await notifySubscribers()
   }
@@ -131,6 +149,7 @@ final class GRDBInstrumentRegistryRepository:
     try await database.write { database in
       try Self.upsertStock(database: database, instrument: instrument)
     }
+    invalidateInstrumentMapCache()
     fireOnRecordChanged(instrument.id)
     await notifySubscribers()
   }
@@ -148,6 +167,7 @@ final class GRDBInstrumentRegistryRepository:
       return try InstrumentRow.deleteOne(database, key: id)
     }
     guard didDelete else { return }
+    invalidateInstrumentMapCache()
     fireOnRecordDeleted(id)
     await notifySubscribers()
   }
@@ -315,6 +335,10 @@ final class GRDBInstrumentRegistryRepository:
         _ = try InstrumentRow.deleteOne(database, key: id)
       }
     }
+    // Remote pulls mutate rows just like local writes; the memoised
+    // map must be rebuilt before the next reader (e.g. a price-cache
+    // resolution) observes it.
+    invalidateInstrumentMapCache()
   }
 
   /// Persists a new `pricingStatus` for the row identified by
@@ -352,6 +376,7 @@ final class GRDBInstrumentRegistryRepository:
         "InstrumentRegistry: no row registered for id '\(registration.instrument.id)'"
       )
     }
+    invalidateInstrumentMapCache()
     fireOnRecordChanged(registration.instrument.id)
     await notifySubscribers()
   }
