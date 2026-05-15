@@ -45,7 +45,7 @@ import OSLog
 /// protocol (`InstrumentMapResolving`) and immutable post-init.
 /// `instrumentRegistrar` is a `Sendable` protocol
 /// (`InstrumentRegistering`) and immutable post-init.
-/// `onRecordChanged`, `onRecordDeleted`, and `onInstrumentChanged` are
+/// `onRecordChanged` and `onRecordDeleted` are
 /// `@Sendable` closures captured at init. Nothing mutates post-init, so
 /// the reference can be shared across actor boundaries without a data
 /// race; `@unchecked` only waives Swift's structural check that
@@ -73,7 +73,8 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   /// transaction-row snapshot is safe and intended. Every caller —
   /// production, preview, test, and the sync apply path — injects the
   /// shared `GRDBInstrumentRegistryRepository`; nothing reads the
-  /// soon-to-be-dropped per-profile `instrument` table.
+  /// per-profile `instrument` table
+  /// `v10_drop_shared_instrument_legacy` removed.
   let instrumentResolver: any InstrumentMapResolving
   /// Registers a non-fiat leg instrument so it becomes resolvable by
   /// `instrumentResolver` before `create` / `createMany` / `update`
@@ -85,7 +86,8 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   /// production, preview, test, and the sync apply path — injects the
   /// shared `GRDBInstrumentRegistryRepository` (so the row reaches the
   /// canonical registry and CloudKit); nothing writes the
-  /// soon-to-be-dropped per-profile `instrument` table.
+  /// per-profile `instrument` table
+  /// `v10_drop_shared_instrument_legacy` removed.
   private let instrumentRegistrar: any InstrumentRegistering
   /// Single shared error channel for every observation subscription
   /// returned by this repo instance. The bridge in
@@ -103,17 +105,6 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   /// `RepositoryHookRecordTypeTests`.
   private let onRecordChanged: @Sendable (String, UUID) -> Void
   private let onRecordDeleted: @Sendable (String, UUID) -> Void
-  /// Legacy hook fired when a non-fiat instrument was auto-inserted by
-  /// the removed per-profile placeholder path. The write cutover routes
-  /// instrument registration through `instrumentRegistrar`
-  /// (`registerResolvable`) instead — for production that is the shared
-  /// `GRDBInstrumentRegistryRepository`, whose `registerStock` /
-  /// `registerCrypto` already invalidate the map cache and drive the
-  /// CloudKit upload fan-out, so this hook is no longer fired from the
-  /// create / update paths. Retained (plumbed but unused here) to avoid
-  /// touching the surrounding sync wiring in this change; a follow-up
-  /// can remove the now-dead hook end to end.
-  private let onInstrumentChanged: @Sendable (Instrument) -> Void
 
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "GRDBTransactionRepository")
@@ -125,8 +116,7 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     instrumentResolver: any InstrumentMapResolving,
     instrumentRegistrar: any InstrumentRegistering,
     onRecordChanged: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
-    onRecordDeleted: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
-    onInstrumentChanged: @escaping @Sendable (Instrument) -> Void = { _ in }
+    onRecordDeleted: @escaping @Sendable (String, UUID) -> Void = { _, _ in }
   ) {
     self.database = database
     self.defaultInstrument = defaultInstrument
@@ -135,7 +125,6 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     self.instrumentRegistrar = instrumentRegistrar
     self.onRecordChanged = onRecordChanged
     self.onRecordDeleted = onRecordDeleted
-    self.onInstrumentChanged = onInstrumentChanged
   }
 
   // MARK: - TransactionRepository conformance

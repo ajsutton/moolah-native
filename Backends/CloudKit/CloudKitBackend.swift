@@ -65,15 +65,6 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
     let onTransactionDeleted: @Sendable (String, UUID) -> Void
     let onTransactionLegChanged: @Sendable (String, UUID) -> Void
     let onTransactionLegDeleted: @Sendable (String, UUID) -> Void
-    /// Fires when an account / transaction write auto-inserts a non-fiat
-    /// `InstrumentRow` to satisfy a leg or account denomination.
-    /// Carries the full `Instrument` value so the production hook can
-    /// publish it to the shared registry (`registerStock` /
-    /// `registerCrypto`). The registry's own register paths fire a
-    /// separate hook on shared-DB writes, so this surface only covers
-    /// the auto-insert path inside the transaction / account
-    /// repositories.
-    let onInstrumentChanged: @Sendable (Instrument) -> Void
 
     static let noop = CloudKitBackendHooks(
       onCSVImportProfileChanged: { _, _ in },
@@ -93,8 +84,7 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
       onTransactionChanged: { _, _ in },
       onTransactionDeleted: { _, _ in },
       onTransactionLegChanged: { _, _ in },
-      onTransactionLegDeleted: { _, _ in },
-      onInstrumentChanged: { (_: Instrument) in })
+      onTransactionLegDeleted: { _, _ in })
   }
 
   init(
@@ -241,8 +231,7 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
         instrumentResolver: resolver,
         instrumentRegistrar: instrumentSeams.registrar,
         onRecordChanged: hooks.onAccountChanged,
-        onRecordDeleted: hooks.onAccountDeleted,
-        onInstrumentChanged: hooks.onInstrumentChanged),
+        onRecordDeleted: hooks.onAccountDeleted),
       transactions: GRDBTransactionRepository(
         database: database,
         defaultInstrument: instrument,
@@ -250,8 +239,7 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
         instrumentResolver: resolver,
         instrumentRegistrar: instrumentSeams.registrar,
         onRecordChanged: hooks.onTransactionChanged,
-        onRecordDeleted: hooks.onTransactionDeleted,
-        onInstrumentChanged: hooks.onInstrumentChanged),
+        onRecordDeleted: hooks.onTransactionDeleted),
       earmarks: GRDBEarmarkRepository(
         database: database,
         defaultInstrument: instrument,

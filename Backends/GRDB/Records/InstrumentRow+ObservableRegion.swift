@@ -11,7 +11,8 @@ extension InstrumentRow {
   ///
   /// `InstrumentRow` now maps only the shared profile-index
   /// `instrument` table (the per-profile readers/writers were removed
-  /// ahead of the `v10_drop_shared_instrument_legacy` migration). This
+  /// and `v10_drop_shared_instrument_legacy` then dropped the
+  /// per-profile table). This
   /// region is consumed by the shared `GRDBInstrumentRegistryRepository`
   /// observation; it stays valid against the shared table.
   static var observableRegion: QueryInterfaceRequest<InstrumentRow> {

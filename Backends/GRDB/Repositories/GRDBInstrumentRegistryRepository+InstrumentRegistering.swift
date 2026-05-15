@@ -18,8 +18,8 @@ extension GRDBInstrumentRegistryRepository: InstrumentRegistering {
   /// discovery service's `resolveOrLoad` later enriches it), while a
   /// redundant call for an already-resolved instrument is a no-op merge.
   /// Both register methods additionally invalidate the instrument-map
-  /// cache and fire the sync fan-out, so the row reaches CloudKit — the
-  /// work the create-path `onInstrumentChanged` hook used to do.
+  /// cache and fire the sync fan-out, so the registered row reaches
+  /// CloudKit and propagates to sibling devices.
   func registerResolvable(_ instrument: Instrument) async throws {
     switch instrument.kind {
     case .fiatCurrency:

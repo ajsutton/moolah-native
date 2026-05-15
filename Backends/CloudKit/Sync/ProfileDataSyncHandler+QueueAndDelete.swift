@@ -216,9 +216,9 @@ extension ProfileDataSyncHandler {
       // iCloud-account-scoped profile-index registry, and a
       // single-profile purge (sign-out / account-switch / zone purge)
       // must NOT wipe instruments shared by every other profile. The
-      // per-profile `instrument` table is also about to be removed by
-      // the `v10_drop_shared_instrument_legacy` migration, after which
-      // a `deleteAllSync` against it would throw `no such table`.
+      // per-profile `instrument` table was also removed by the
+      // `v10_drop_shared_instrument_legacy` migration, so a
+      // `deleteAllSync` against it would throw `no such table`.
       (CategoryRow.recordType, { try self.grdbRepositories.categories.deleteAllSync() }),
       (AccountRow.recordType, { try self.grdbRepositories.accounts.deleteAllSync() }),
       (EarmarkRow.recordType, { try self.grdbRepositories.earmarks.deleteAllSync() }),

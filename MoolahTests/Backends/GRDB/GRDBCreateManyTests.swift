@@ -12,9 +12,10 @@ import Testing
 ///    every leg, and every auto-inserted instrument across the whole
 ///    input array — leaving the DB byte-equal to the pre-call state.
 /// 2. Hook fan-out. After the write commits, `onRecordChanged` fires
-///    exactly once per transaction header and once per leg;
-///    `onInstrumentChanged` fires once per unique new instrument across
-///    the whole batch (regardless of how many legs reference it).
+///    exactly once per transaction header and once per leg. Each unique
+///    non-fiat leg instrument is registered (batch-deduped) through the
+///    injected registrar *before* the write, so it is resolvable
+///    afterwards without any per-profile placeholder.
 ///
 /// The per-row pattern is already covered by
 /// `CoreFinancialGraphRollbackTests.transactionCreateRollsBackOnLegFailure`
@@ -27,7 +28,6 @@ struct GRDBCreateManyTests {
   final class HookCapture {
     var changed: [(recordType: String, id: UUID)] = []
     var deleted: [(recordType: String, id: UUID)] = []
-    var instruments: [Instrument] = []
   }
 
   private func makeChangedHook(
@@ -46,16 +46,6 @@ struct GRDBCreateManyTests {
     { recordType, id in
       Task { @MainActor in
         capture.deleted.append((recordType, id))
-      }
-    }
-  }
-
-  private func makeInstrumentHook(
-    _ capture: HookCapture
-  ) -> @Sendable (Instrument) -> Void {
-    { instrument in
-      Task { @MainActor in
-        capture.instruments.append(instrument)
       }
     }
   }
@@ -187,8 +177,7 @@ struct GRDBCreateManyTests {
       instrumentResolver: registry,
       instrumentRegistrar: registry,
       onRecordChanged: makeChangedHook(capture),
-      onRecordDeleted: makeDeletedHook(capture),
-      onInstrumentChanged: makeInstrumentHook(capture))
+      onRecordDeleted: makeDeletedHook(capture))
     let accountId = UUID()
     let stub = Account(id: accountId, name: "Cash", type: .bank, instrument: .AUD)
     try await database.write { database in
@@ -217,10 +206,6 @@ struct GRDBCreateManyTests {
     #expect(Set(legChanges.map(\.id)) == Set(expectedLegIds))
     #expect(legChanges.count == expectedLegIds.count)
     #expect(capture.deleted.isEmpty)
-    // The legacy `onInstrumentChanged` hook is no longer fired from the
-    // create path — registration now goes through the injected
-    // registrar before the write.
-    #expect(capture.instruments.isEmpty)
     // BTC is resolvable from the shared registry across the whole
     // batch even though two separate transactions reference it: the
     // per-batch dedup registered it once and the registrar is

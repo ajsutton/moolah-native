@@ -60,10 +60,10 @@ extension ProfileGRDBRepositories {
   /// never reached — but pointing the seams at the shared profile-index
   /// registry guarantees that any future apply-time resolution can
   /// never read or write the per-profile `instrument` table that the
-  /// follow-up `v10_drop_shared_instrument_legacy` migration drops.
+  /// `v10_drop_shared_instrument_legacy` migration removed.
   /// There is no longer a per-profile fallback: the `PerProfile*`
   /// shims have been removed because no production or test path may
-  /// read the soon-to-be-dropped per-profile `instrument` table.
+  /// read the now-removed per-profile `instrument` table.
   ///
   /// The bundle's `instruments` member stays a per-profile
   /// `GRDBInstrumentRegistryRepository(database:)` deliberately: its
@@ -71,8 +71,8 @@ extension ProfileGRDBRepositories {
   /// clearing on zone purge / sign-out / account-switch. Pointing it
   /// at the shared, iCloud-account-scoped registry would let one
   /// profile's zone purge mutate every profile's instruments. The
-  /// per-profile rows survive on disk until
-  /// `v10_drop_shared_instrument_legacy` drops the table.
+  /// `v10_drop_shared_instrument_legacy` migration has since removed
+  /// the per-profile table.
   static func makeForApply(
     database: any GRDB.DatabaseWriter,
     sharedRegistry: GRDBInstrumentRegistryRepository

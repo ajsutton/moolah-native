@@ -5,8 +5,7 @@ import GRDB
 
 // `performAccountInsert` + `OpeningBalanceInserts` extracted from
 // `GRDBAccountRepository` so the main type body stays under SwiftLint's
-// `type_body_length` and `file_length` budgets after the
-// `onInstrumentChanged` hook plumbing widened the create flow.
+// `type_body_length` and `file_length` budgets.
 extension GRDBAccountRepository {
   /// Captures the ids written by `create(_:openingBalance:)` so the
   /// caller can fan out hook fires after the write transaction commits.
