@@ -128,16 +128,22 @@ struct TransactionStoreAutocompleteTests {
   @Test
   func testDebouncedSaveOnlyCallsLastAction() async throws {
     let (backend, _) = try TestBackend.create()
+    // `.zero` short-circuits the production 300ms wait — the debounced
+    // task still hops the executor, so cancellation still cancels
+    // earlier saves before they run, but we don't burn wall-clock time.
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
+      targetInstrument: .defaultTestInstrument,
+      debounceInterval: .zero
     )
 
     var callCount = 0
     var lastValue = ""
 
-    // Rapidly call debouncedSave 3 times — only the last should fire
+    // Rapidly call debouncedSave 3 times — only the last should fire.
+    // Discard the first two tasks; they're cancelled by the time we
+    // await the third.
     store.debouncedSave {
       callCount += 1
       lastValue = "first"
@@ -146,13 +152,13 @@ struct TransactionStoreAutocompleteTests {
       callCount += 1
       lastValue = "second"
     }
-    store.debouncedSave {
+    let liveSave = store.debouncedSave {
       callCount += 1
       lastValue = "third"
     }
 
-    // Wait for the debounce delay (300ms) plus a small buffer
-    try await Task.sleep(nanoseconds: 500_000_000)
+    // Await the live save's completion directly — no sleep needed.
+    await liveSave.value
 
     #expect(callCount == 1)
     #expect(lastValue == "third")

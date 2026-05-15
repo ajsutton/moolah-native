@@ -105,11 +105,18 @@ final class TransactionStore {
   /// change. internal so `+Observation` can manage the lifecycle.
   var subscriptionTask: Task<Void, Never>?
 
+  /// Interval that `debouncedSave` waits before invoking the action.
+  /// Production wires this from the default; tests pass `.zero` so the
+  /// debounced task completes as soon as it's scheduled and can be
+  /// awaited deterministically rather than via a wall-clock sleep.
+  private let debounceInterval: Duration
+
   init(
     repository: TransactionRepository,
     conversionService: any InstrumentConversionService,
     targetInstrument: Instrument,
-    pageSize: Int = 50
+    pageSize: Int = 50,
+    debounceInterval: Duration = .milliseconds(300)
   ) {
     self.repository = repository
     self.payeeSuggestionSource = PayeeSuggestionSource(repository: repository)
@@ -117,6 +124,7 @@ final class TransactionStore {
     self.targetInstrument = targetInstrument
     self.currentTargetInstrument = targetInstrument
     self.pageSize = pageSize
+    self.debounceInterval = debounceInterval
     let pair = AsyncStream<Void>.makeStream()
     self.testObservationTickStream = pair.stream
     self.testObservationTickContinuation = pair.continuation
@@ -282,15 +290,21 @@ final class TransactionStore {
 
   private var saveTask: Task<Void, Never>?
 
-  /// Debounces save calls: cancels any pending save, waits 300ms, then calls the callback.
-  /// The callback is invoked on the main actor after the debounce delay.
-  func debouncedSave(perform action: @escaping @MainActor () -> Void) {
+  /// Debounces save calls: cancels any pending save, waits
+  /// `debounceInterval` (300ms in production), then calls the callback
+  /// on the main actor. Returns the spawned task so tests can await
+  /// the live (uncancelled) save deterministically; callers in
+  /// production fire-and-forget.
+  @discardableResult
+  func debouncedSave(perform action: @escaping @MainActor () -> Void) -> Task<Void, Never> {
     saveTask?.cancel()
-    saveTask = Task {
-      try? await Task.sleep(nanoseconds: 300_000_000)  // 300ms debounce
+    let task = Task { [debounceInterval] in
+      try? await Task.sleep(for: debounceInterval)
       guard !Task.isCancelled else { return }
       action()
     }
+    saveTask = task
+    return task
   }
 
   enum PayResult {
