@@ -71,7 +71,8 @@ struct SystemFieldsBatchTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: conversionService,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
     return (repo, database)
   }
 

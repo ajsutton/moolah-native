@@ -43,7 +43,9 @@ import OSLog
 /// access). `defaultInstrument` is a value type. `conversionService` is
 /// a `Sendable` protocol. `instrumentResolver` is a `Sendable`
 /// protocol (`InstrumentMapResolving`) and immutable post-init.
-/// `onRecordChanged` and `onRecordDeleted` are
+/// `instrumentRegistrar` is a `Sendable` protocol
+/// (`InstrumentRegistering`) and immutable post-init.
+/// `onRecordChanged`, `onRecordDeleted`, and `onInstrumentChanged` are
 /// `@Sendable` closures captured at init. Nothing mutates post-init, so
 /// the reference can be shared across actor boundaries without a data
 /// race; `@unchecked` only waives Swift's structural check that
@@ -75,6 +77,20 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   /// their behaviour is unchanged until the per-profile `instrument`
   /// table is dropped.
   let instrumentResolver: any InstrumentMapResolving
+  /// Registers a non-fiat leg instrument so it becomes resolvable by
+  /// `instrumentResolver` before `create` / `createMany` / `update`
+  /// returns. Awaited *before* the per-profile `database.write` (the
+  /// registry lives on a separate database — a cross-database
+  /// transaction is impossible, and the registration must be durable
+  /// before a reader can observe the new txn / legs). Replaces the old
+  /// per-profile placeholder `instrument` insert. Production sessions
+  /// inject the shared `GRDBInstrumentRegistryRepository` (so the row
+  /// reaches the canonical registry and CloudKit); preview / test /
+  /// apply callers inject `PerProfileInstrumentRegistrar` over the same
+  /// per-profile DB, which performs the exact idempotent per-profile
+  /// insert the removed helper did so their behaviour is unchanged
+  /// until the per-profile `instrument` table is dropped.
+  private let instrumentRegistrar: any InstrumentRegistering
   /// Single shared error channel for every observation subscription
   /// returned by this repo instance. The bridge in
   /// `Backends/GRDB/Observation/AsyncValueObservation+AsyncStream.swift`
@@ -91,17 +107,16 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   /// `RepositoryHookRecordTypeTests`.
   private let onRecordChanged: @Sendable (String, UUID) -> Void
   private let onRecordDeleted: @Sendable (String, UUID) -> Void
-  /// Receives the `Instrument.id` (which doubles as the InstrumentRow's
-  /// `Instrument` value of any non-fiat instrument that
-  /// `ensureInstrumentReadable` had to auto-insert into the per-profile
-  /// `instrument` table to satisfy a leg referenced by `create` /
-  /// `update`. The wired closure publishes the value to the shared
-  /// registry on the profile-index zone so sibling devices see it; the
-  /// per-profile copy stays for read paths. Without this hook the new
-  /// row would never reach CloudKit, sibling devices would receive the
-  /// leg but no `InstrumentRecord`, and stock conversions would fall
-  /// back to `Instrument.fiat(code: id)` and 404 against the fiat-only
-  /// Frankfurter API — see `InstrumentLocalSyncQueueTests`.
+  /// Legacy hook fired when a non-fiat instrument was auto-inserted by
+  /// the removed per-profile placeholder path. The write cutover routes
+  /// instrument registration through `instrumentRegistrar`
+  /// (`registerResolvable`) instead — for production that is the shared
+  /// `GRDBInstrumentRegistryRepository`, whose `registerStock` /
+  /// `registerCrypto` already invalidate the map cache and drive the
+  /// CloudKit upload fan-out, so this hook is no longer fired from the
+  /// create / update paths. Retained (plumbed but unused here) to avoid
+  /// touching the surrounding sync wiring in this change; a follow-up
+  /// can remove the now-dead hook end to end.
   private let onInstrumentChanged: @Sendable (Instrument) -> Void
 
   private let logger = Logger(
@@ -112,6 +127,7 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     defaultInstrument: Instrument,
     conversionService: any InstrumentConversionService,
     instrumentResolver: any InstrumentMapResolving,
+    instrumentRegistrar: any InstrumentRegistering,
     onRecordChanged: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
     onRecordDeleted: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
     onInstrumentChanged: @escaping @Sendable (Instrument) -> Void = { _ in }
@@ -120,6 +136,7 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     self.defaultInstrument = defaultInstrument
     self.conversionService = conversionService
     self.instrumentResolver = instrumentResolver
+    self.instrumentRegistrar = instrumentRegistrar
     self.onRecordChanged = onRecordChanged
     self.onRecordDeleted = onRecordDeleted
     self.onInstrumentChanged = onInstrumentChanged
@@ -172,28 +189,22 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   }
 
   func create(_ transaction: Transaction) async throws -> Transaction {
-    let result = try await database.write { database -> CreateOutcome in
+    // Register every distinct non-fiat leg instrument so a read issued
+    // immediately after this method returns resolves it. Awaited
+    // *before* the per-profile write: the registry lives on a separate
+    // database (a cross-database transaction is impossible) and the
+    // registration must be durable before the txn / legs become
+    // observable. Replaces the old per-profile placeholder insert.
+    try await Self.registerNonFiatLegInstruments(
+      transaction.legs, using: instrumentRegistrar)
+
+    let legIds = try await database.write { database -> [UUID] in
       let txnRow = TransactionRow(domain: transaction)
       try txnRow.insert(database)
 
       var legIds: [UUID] = []
       legIds.reserveCapacity(transaction.legs.count)
-      // De-dup so two legs sharing one new instrument fire the hook
-      // exactly once. Order-preserving — the first occurrence wins so
-      // the hook order is stable for tests.
-      var insertedInstruments: [Instrument] = []
-      var seenInstrumentIds: Set<String> = []
       for (index, leg) in transaction.legs.enumerated() {
-        // Ensure non-fiat instrument rows exist so `fetchAll` can resolve
-        // the full `Instrument` value on read. After v5 dropped FKs, a leg
-        // referencing an account/category/earmark that hasn't arrived yet
-        // is allowed to land as-is — see `+FKEnsure.swift` and SYNC_GUIDE.
-        if let inserted = try Self.ensureInstrumentReadable(
-          database: database, leg: leg),
-          seenInstrumentIds.insert(inserted.id).inserted
-        {
-          insertedInstruments.append(inserted)
-        }
         let legRow = TransactionLegRow(
           id: leg.id,
           domain: leg,
@@ -202,47 +213,41 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
         try legRow.insert(database)
         legIds.append(leg.id)
       }
-      return CreateOutcome(legIds: legIds, instruments: insertedInstruments)
+      return legIds
     }
 
     onRecordChanged(TransactionRow.recordType, transaction.id)
-    for legId in result.legIds {
+    for legId in legIds {
       onRecordChanged(TransactionLegRow.recordType, legId)
-    }
-    for instrument in result.instruments {
-      onInstrumentChanged(instrument)
     }
     return transaction
   }
 
-  /// Bundle returned by `create`'s write block: the legs that were
-  /// inserted (for the per-leg sync hook) and the instruments that
-  /// the leg-level `ensureInstrumentReadable` had to auto-insert (for
-  /// the shared-registry publish hook). Replaces a tuple to satisfy
-  /// SwiftLint's `large_tuple` policy.
-  private struct CreateOutcome: Sendable {
-    let legIds: [UUID]
-    let instruments: [Instrument]
-  }
-
   func createMany(_ transactions: [Transaction]) async throws -> [Transaction] {
     guard !transactions.isEmpty else { return [] }
-    let outcome = try await database.write { database -> BulkCreateOutcome in
+    // Register every distinct non-fiat instrument across the whole
+    // batch before the per-profile write (see `create`).
+    try await Self.registerNonFiatLegInstruments(
+      transactions.flatMap(\.legs), using: instrumentRegistrar)
+
+    let legIds = try await database.write { database -> [UUID] in
       try Self.performCreateMany(database: database, transactions: transactions)
     }
     for transaction in transactions {
       onRecordChanged(TransactionRow.recordType, transaction.id)
     }
-    for legId in outcome.legIds {
+    for legId in legIds {
       onRecordChanged(TransactionLegRow.recordType, legId)
-    }
-    for instrument in outcome.instruments {
-      onInstrumentChanged(instrument)
     }
     return transactions
   }
 
   func update(_ transaction: Transaction) async throws -> Transaction {
+    // Register every distinct non-fiat leg instrument before the
+    // per-profile write (see `create`).
+    try await Self.registerNonFiatLegInstruments(
+      transaction.legs, using: instrumentRegistrar)
+
     let outcome = try await database.write { database -> UpdateOutcome in
       try Self.performUpdate(
         database: database,
@@ -255,9 +260,6 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     }
     for legId in outcome.deletedLegIds {
       onRecordDeleted(TransactionLegRow.recordType, legId)
-    }
-    for instrument in outcome.insertedInstruments {
-      onInstrumentChanged(instrument)
     }
     return transaction
   }
@@ -383,6 +385,6 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   //   `candidateTransactionRows(...)`, `applyLegFilters(...)`,
   //   `fetchLegs(...)` →
   //     `GRDBTransactionRepository+Fetch.swift`
-  //   `ensureInstrumentReadable(database:leg:)` →
-  //     `GRDBTransactionRepository+FKEnsure.swift`
+  //   `registerNonFiatLegInstruments(_:using:)` →
+  //     `GRDBTransactionRepository+CreateMany.swift`
 }

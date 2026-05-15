@@ -10,14 +10,12 @@ import GRDB
 extension GRDBAccountRepository {
   /// Captures the ids written by `create(_:openingBalance:)` so the
   /// caller can fan out hook fires after the write transaction commits.
-  /// `instrument` is non-nil only when the account's instrument was
-  /// non-fiat AND no row existed for it in the per-profile copy — the
-  /// create path auto-inserted one and the caller must publish it to
-  /// the shared registry for cross-device propagation.
+  /// Non-fiat instrument registration is done by `create` itself via
+  /// `instrumentRegistrar.registerResolvable` *before* this write — it
+  /// is no longer part of the per-profile insert.
   struct OpeningBalanceInserts: Sendable {
     let transactionId: UUID?
     let legId: UUID?
-    let instrument: Instrument?
   }
 
   /// Single-statement body of `create(_:openingBalance:)`'s
@@ -31,15 +29,12 @@ extension GRDBAccountRepository {
     openingBalance: InstrumentAmount?,
     openingBalanceDate: Date
   ) throws -> OpeningBalanceInserts {
-    let insertedInstrument = try ensureNonFiatInstrumentRow(
-      database: database, instrument: account.instrument)
     let accountRow = AccountRow(domain: account)
     try accountRow.insert(database)
 
     // No opening balance — only the account row was inserted.
     guard let openingBalance, !openingBalance.isZero else {
-      return OpeningBalanceInserts(
-        transactionId: nil, legId: nil, instrument: insertedInstrument)
+      return OpeningBalanceInserts(transactionId: nil, legId: nil)
     }
 
     let txnId = UUID()
@@ -48,30 +43,7 @@ extension GRDBAccountRepository {
     try makeOpeningBalanceLegRow(
       id: legId, transactionId: txnId, account: account, openingBalance: openingBalance
     ).insert(database)
-    return OpeningBalanceInserts(
-      transactionId: txnId, legId: legId, instrument: insertedInstrument)
-  }
-
-  /// Inserts the placeholder `instrument` row for stocks / crypto if it
-  /// isn't already present in the per-profile copy. Fiat is ambient —
-  /// synthesised from `Locale.Currency.isoCurrencies` in
-  /// `fetchInstrumentMap`. Returns the inserted `Instrument` (or `nil`
-  /// for fiat / pre-existing rows) so the caller's hook fan-out can
-  /// publish it to the shared registry on the profile-index zone.
-  /// Without that publish the row would stay local-only and sibling
-  /// devices would fall back to `Instrument.fiat(code: id)` for a
-  /// stock (see `InstrumentLocalSyncQueueTests`).
-  private static func ensureNonFiatInstrumentRow(
-    database: Database, instrument: Instrument
-  ) throws -> Instrument? {
-    guard instrument.kind != .fiatCurrency else { return nil }
-    let exists =
-      try InstrumentRow
-      .filter(InstrumentRow.Columns.id == instrument.id)
-      .fetchOne(database)
-    guard exists == nil else { return nil }
-    try InstrumentRow(domain: instrument).insert(database)
-    return instrument
+    return OpeningBalanceInserts(transactionId: txnId, legId: legId)
   }
 
   private static func makeOpeningBalanceTxnRow(id: UUID, date: Date) -> TransactionRow {

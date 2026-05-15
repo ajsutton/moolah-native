@@ -5,7 +5,7 @@ import Foundation
 /// crypto instruments are stored in the profile's CloudKit-synced
 /// `InstrumentRecord` table; fiat instruments are ambient and synthesized
 /// from `Locale.Currency.isoCurrencies`.
-protocol InstrumentRegistryRepository: Sendable {
+protocol InstrumentRegistryRepository: InstrumentChangeObserving {
   /// Every instrument visible to the profile: stock + crypto rows from the
   /// database, merged with the ambient fiat ISO list from
   /// `Locale.Currency.isoCurrencies`. De-duplicated by `Instrument.id`
@@ -77,33 +77,21 @@ protocol InstrumentRegistryRepository: Sendable {
   /// implementation's sync-queue hook after a successful delete.
   func remove(id: String) async throws
 
-  /// Creates a fresh change-observation stream for a single consumer.
-  /// Every mutating call on this repository (`registerCrypto`, `registerStock`,
-  /// `remove`) yields a `Void` to every outstanding stream created via this
-  /// method. Terminating the returned AsyncStream (consumer cancellation
-  /// or break) removes its continuation from the fan-out list.
-  ///
-  /// After receiving a notification, callers must re-fetch by calling
-  /// `all()` or `allCryptoRegistrations()` to obtain the updated snapshot —
-  /// the `Void` payload is a signal, not a diff.
-  ///
-  /// Scope: the stream fires for **both local mutations and
-  /// remote-arriving changes** on the registry's underlying storage.
-  /// Local mutations fan out synchronously inside the corresponding
-  /// `register…` / `update` / `remove` method; remote-arriving rows
-  /// from `ProfileIndexSyncHandler.applyRemoteChanges` (the
-  /// profile-index zone now carries `InstrumentRecord` after the
-  /// shared-instrument-registry rollout) fan out via the handler's
-  /// injected `onInstrumentRemoteChange` closure, which calls
-  /// `notifyExternalChange()` on the @MainActor-confined repository.
-  /// Subscribers therefore see both directions through this single
-  /// stream — no second per-profile `SyncCoordinator` subscription is
-  /// required.
-  ///
-  /// `@MainActor`-isolated because the implementation registers the
-  /// continuation in a `@MainActor`-confined dictionary synchronously —
-  /// hopping via `Task { @MainActor in ... }` would let a mutation fired
-  /// immediately after this call miss the event.
-  @MainActor
-  func observeChanges() -> AsyncStream<Void>
+  // `observeChanges() -> AsyncStream<Void>` is inherited from the
+  // narrow `InstrumentChangeObserving` seam (which per-profile stores
+  // depend on without pulling in the full registry surface). For this
+  // repository the stream fires for **both local mutations and
+  // remote-arriving changes**: local mutations (`registerCrypto`,
+  // `registerStock`, `update`, `remove`) fan out synchronously inside
+  // the corresponding method; remote-arriving rows from
+  // `ProfileIndexSyncHandler.applyRemoteChanges` (the profile-index
+  // zone carries `InstrumentRecord` after the shared-instrument-
+  // registry rollout) fan out via the handler's injected
+  // `onInstrumentRemoteChange` closure, which calls
+  // `notifyExternalChange()` on the @MainActor-confined repository.
+  // Subscribers see both directions through the single stream — no
+  // second per-profile `SyncCoordinator` subscription is required.
+  // After a tick, callers re-fetch via `all()` /
+  // `allCryptoRegistrations()`; the `Void` payload is a signal, not a
+  // diff.
 }

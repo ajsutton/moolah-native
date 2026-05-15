@@ -15,7 +15,8 @@ struct TransactionDeleteRollbackTests {
       database: database,
       defaultInstrument: .AUD,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
     let txId = UUID()
     let legId = UUID()
 

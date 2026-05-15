@@ -97,6 +97,22 @@ final class TransactionStore {
   /// from `init`; torn down by `stopObserving()`.
   private var rateObservationTask: Task<Void, Never>?
 
+  /// Narrow seam onto the shared instrument registry's change stream.
+  /// Per-profile list observations no longer track the `instrument`
+  /// table (identity is resolved once per fetch via the shared
+  /// registry), so a metadata edit there does not re-fire the data
+  /// observation. When wired, `instrumentChangeObservationTask`
+  /// re-runs the imperative reload on each tick so an open list
+  /// live-refreshes across the DB boundary. Nil in previews / legacy
+  /// tests that don't exercise cross-DB instrument refresh.
+  private let instrumentChanges: (any InstrumentChangeObserving)?
+
+  /// Observes `instrumentChanges.observeChanges()` and re-fetches the
+  /// active filter on each tick. Spawned from `init` only when a
+  /// registry seam is wired; torn down by `stopObserving()` / `deinit`
+  /// alongside `rateObservationTask`.
+  private var instrumentChangeObservationTask: Task<Void, Never>?
+
   /// The long-lived data-subscription task for the current filter. Owned
   /// by the store (not by the view's `.task`) so `load(filter:)` and
   /// `observe(filter:)` callers see the same active subscription, and
@@ -116,7 +132,8 @@ final class TransactionStore {
     conversionService: any InstrumentConversionService,
     targetInstrument: Instrument,
     pageSize: Int = 50,
-    debounceInterval: Duration = .milliseconds(300)
+    debounceInterval: Duration = .milliseconds(300),
+    instrumentChanges: (any InstrumentChangeObserving)? = nil
   ) {
     self.repository = repository
     self.payeeSuggestionSource = PayeeSuggestionSource(repository: repository)
@@ -125,6 +142,7 @@ final class TransactionStore {
     self.currentTargetInstrument = targetInstrument
     self.pageSize = pageSize
     self.debounceInterval = debounceInterval
+    self.instrumentChanges = instrumentChanges
     let pair = AsyncStream<Void>.makeStream()
     self.testObservationTickStream = pair.stream
     self.testObservationTickContinuation = pair.continuation
@@ -136,6 +154,12 @@ final class TransactionStore {
     // preventing the retain — and `guard let self else { return }` would
     // mask cancellation-propagation bugs by silently exiting.
     rateObservationTask = Task { await self.observeRateChannels() }
+    if let instrumentChanges {
+      let changes = instrumentChanges.observeChanges()
+      instrumentChangeObservationTask = Task { [self] in
+        await self.observeInstrumentRegistryChanges(changes)
+      }
+    }
   }
 
   deinit {
@@ -150,6 +174,7 @@ final class TransactionStore {
     // code (`ProfileSession`), so the assumption holds in practice.
     MainActor.assumeIsolated {
       rateObservationTask?.cancel()
+      instrumentChangeObservationTask?.cancel()
       subscriptionTask?.cancel()
       subscriptionRestartContinuation?.finish()
       testObservationTickContinuation.finish()
@@ -226,6 +251,7 @@ final class TransactionStore {
   /// `awaitObservationTermination()` before the assertion.
   func stopObserving() {
     rateObservationTask?.cancel()
+    instrumentChangeObservationTask?.cancel()
     subscriptionTask?.cancel()
     subscriptionRestartContinuation?.finish()
     subscriptionRestartContinuation = nil
@@ -239,8 +265,31 @@ final class TransactionStore {
   func awaitObservationTermination() async {
     await rateObservationTask?.value
     rateObservationTask = nil
+    await instrumentChangeObservationTask?.value
+    instrumentChangeObservationTask = nil
     await subscriptionTask?.value
     subscriptionTask = nil
+  }
+
+  /// Consumes the shared registry's change stream. Each tick re-runs
+  /// the imperative reload for the active filter so an instrument-
+  /// metadata edit applied to the shared registry (which does not
+  /// re-fire the per-profile data observation) live-refreshes the
+  /// open list. No-op until a subscription has been started
+  /// (`lastSnapshotPage != nil`); the first `load`/`observe` will
+  /// fetch fresh data anyway. `Task.isCancelled` is re-checked after
+  /// the stream suspension so a teardown that races a tick exits
+  /// before issuing a fetch. Strong `self` capture matches
+  /// `observeRateChannels()` — the task's lifetime is gated by
+  /// `stopObserving()` / `deinit`.
+  private func observeInstrumentRegistryChanges(
+    _ changes: AsyncStream<Void>
+  ) async {
+    for await _ in changes {
+      if Task.isCancelled { return }
+      guard lastSnapshotPage != nil else { continue }
+      await runImperativeReload(filter: currentFilter)
+    }
   }
 
   /// Subscribes to `conversionService.observeRates()` /

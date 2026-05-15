@@ -64,6 +64,45 @@ struct GRDBCreateManyTests {
     try await Task.sleep(for: .milliseconds(50))
   }
 
+  private func instrumentRowCount(
+    _ database: any DatabaseWriter, id: String
+  ) async throws -> Int {
+    try await database.read { database in
+      try InstrumentRow
+        .filter(InstrumentRow.Columns.id == id)
+        .fetchCount(database)
+    }
+  }
+
+  /// Three transactions for the fan-out test: a fiat-only one, then two
+  /// that both reference the shared non-fiat `btc` instrument (the
+  /// second with an extra fiat leg). Exercises per-batch instrument
+  /// dedup and per-header / per-leg hook counts.
+  private func makeFanOutInputs(accountId: UUID, btc: Instrument) -> [Transaction] {
+    [
+      Transaction(
+        date: Date(), payee: "Coffee",
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: .AUD, quantity: -5, type: .expense)
+        ]),
+      Transaction(
+        date: Date(), payee: "BTC buy",
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: btc, quantity: 1, type: .income)
+        ]),
+      Transaction(
+        date: Date(), payee: "BTC swap",
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: btc, quantity: -1, type: .transfer),
+          TransactionLeg(
+            accountId: accountId, instrument: .AUD, quantity: 100, type: .transfer),
+        ]),
+    ]
+  }
+
   // MARK: - Atomicity
 
   @Test("createMany rolls back every header + leg if any leg insert fails")
@@ -73,7 +112,8 @@ struct GRDBCreateManyTests {
       database: database,
       defaultInstrument: .AUD,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
     let accountId = UUID()
     let stub = Account(id: accountId, name: "Cash", type: .bank, instrument: .AUD)
     try await database.write { database in
@@ -123,7 +163,7 @@ struct GRDBCreateManyTests {
 
   // MARK: - Hook fan-out
 
-  @Test("createMany fan-out: 1 hook per txn + 1 per leg + 1 per unique instrument")
+  @Test("createMany fan-out: 1 hook per txn + 1 per leg; instrument registered once per unique id")
   func createManyHookFanOut() async throws {
     let database = try ProfileDatabase.openInMemory()
     let capture = HookCapture()
@@ -132,6 +172,7 @@ struct GRDBCreateManyTests {
       defaultInstrument: .AUD,
       conversionService: FixedConversionService(),
       instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database),
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture),
       onInstrumentChanged: makeInstrumentHook(capture))
@@ -142,34 +183,15 @@ struct GRDBCreateManyTests {
     }
 
     // Three transactions. The middle two reference a shared non-fiat
-    // instrument (BTC); the others are fiat. Expected hook fan-out:
+    // instrument (BTC); the others are fiat. Expected fan-out:
     //   - 3 TransactionRow change emits (one per header)
     //   - 4 TransactionLegRow change emits (1 + 1 + 2)
-    //   - 1 onInstrumentChanged for BTC (shared between legs in txn 2 + txn 3)
+    //   - BTC registered exactly once across the whole batch (the
+    //     per-batch dedup in `registerNonFiatLegInstruments`), so the
+    //     per-profile registrar wrote a single `instrument` row for it.
     let btc = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8)
-    let inputs: [Transaction] = [
-      Transaction(
-        date: Date(), payee: "Coffee",
-        legs: [
-          TransactionLeg(
-            accountId: accountId, instrument: .AUD, quantity: -5, type: .expense)
-        ]),
-      Transaction(
-        date: Date(), payee: "BTC buy",
-        legs: [
-          TransactionLeg(
-            accountId: accountId, instrument: btc, quantity: 1, type: .income)
-        ]),
-      Transaction(
-        date: Date(), payee: "BTC swap",
-        legs: [
-          TransactionLeg(
-            accountId: accountId, instrument: btc, quantity: -1, type: .transfer),
-          TransactionLeg(
-            accountId: accountId, instrument: .AUD, quantity: 100, type: .transfer),
-        ]),
-    ]
+    let inputs = makeFanOutInputs(accountId: accountId, btc: btc)
 
     _ = try await txnRepo.createMany(inputs)
     try await drainHookHops()
@@ -181,9 +203,15 @@ struct GRDBCreateManyTests {
     #expect(Set(legChanges.map(\.id)) == Set(expectedLegIds))
     #expect(legChanges.count == expectedLegIds.count)
     #expect(capture.deleted.isEmpty)
-    // Exactly one instrument-change emit for BTC across the whole batch
-    // even though two separate transactions reference it.
-    #expect(capture.instruments.count == 1)
-    #expect(capture.instruments.first?.id == btc.id)
+    // The legacy `onInstrumentChanged` hook is no longer fired from the
+    // create path — registration now goes through the injected
+    // registrar before the write.
+    #expect(capture.instruments.isEmpty)
+    // Exactly one per-profile `instrument` row for BTC across the whole
+    // batch even though two separate transactions reference it: the
+    // per-batch dedup registered it once and the registrar is
+    // idempotent.
+    let btcRowCount = try await instrumentRowCount(database, id: btc.id)
+    #expect(btcRowCount == 1)
   }
 }

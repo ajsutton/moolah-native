@@ -256,24 +256,38 @@ extension ProfileSession {
     profile: Profile,
     backend: BackendProvider
   ) -> DomainStores {
+    // The per-profile list observations no longer track the
+    // `instrument` table — instrument identity is resolved once per
+    // fetch via the shared registry. Thread the registry's change
+    // stream into the affected stores so a shared-registry metadata
+    // edit live-refreshes an open list across the DB boundary. Derived
+    // from the backend (not a parameter) so `ProfileSession.init` stays
+    // within its body-length budget; nil for backends without a shared
+    // registry. Accessed via the `BackendProvider` seam — no downcast to
+    // a concrete backend type.
+    let instrumentChanges = backend.instrumentChangeObserver
     let auth = AuthStore(backend: backend)
     let account = AccountStore(
       repository: backend.accounts, conversionService: backend.conversionService,
-      targetInstrument: profile.instrument, investmentRepository: backend.investments)
+      targetInstrument: profile.instrument, investmentRepository: backend.investments,
+      instrumentChanges: instrumentChanges)
     let category = CategoryStore(repository: backend.categories)
     let earmark = EarmarkStore(
       repository: backend.earmarks, conversionService: backend.conversionService,
-      targetInstrument: profile.instrument)
+      targetInstrument: profile.instrument,
+      instrumentChanges: instrumentChanges)
     let transaction = TransactionStore(
       repository: backend.transactions,
       conversionService: backend.conversionService,
-      targetInstrument: profile.instrument
+      targetInstrument: profile.instrument,
+      instrumentChanges: instrumentChanges
     )
     let analysis = AnalysisStore(repository: backend.analysis)
     let investment = InvestmentStore(
       repository: backend.investments,
       transactionRepository: backend.transactions,
-      conversionService: backend.conversionService
+      conversionService: backend.conversionService,
+      instrumentChanges: instrumentChanges
     )
     let reporting = ReportingStore(
       transactionRepository: backend.transactions,

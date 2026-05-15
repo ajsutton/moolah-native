@@ -15,6 +15,12 @@ import Foundation
 //      `onInvestmentValueChanged` callback that previously lived on
 //      `InvestmentStore`.
 //
+// A fourth surface, the shared instrument registry's
+// `observeChanges()` stream, is owned by `instrumentChangeObservationTask`
+// (spawned from `init`) and drained by `observeInstrumentRegistryChanges`
+// below — kept separate from the always-on `TaskGroup` for the same
+// reason as the other stores.
+//
 // All `addTask` bodies are deliberately one-line so the enclosing
 // closure body stays under SwiftLint's `closure_body_length`.
 extension AccountStore {
@@ -89,5 +95,55 @@ extension AccountStore {
         for await error in errors { await self.surfaceObservationError(error) }
       }
     }
+  }
+
+  /// Consumes the shared instrument registry's change stream. Each tick
+  /// re-fetches the accounts list and re-applies it so an instrument-
+  /// metadata edit applied to the shared registry (which does not
+  /// re-fire `repository.observeAll()` — the accounts observation no
+  /// longer tracks the `instrument` table) live-refreshes the sidebar.
+  /// `Task.isCancelled` is re-checked after the stream suspension so a
+  /// teardown that races a tick exits before issuing a fetch. The
+  /// task's lifetime is gated by `stopObserving()` / `deinit`, matching
+  /// `observe()`.
+  func observeInstrumentRegistryChanges(_ changes: AsyncStream<Void>) async {
+    for await _ in changes {
+      if Task.isCancelled { return }
+      do {
+        let fresh = try await repository.fetchAll()
+        if Task.isCancelled { return }
+        await applyAccountsSnapshot(fresh)
+      } catch {
+        surfaceObservationError(error)
+      }
+    }
+  }
+
+  // MARK: - Entry-point shims
+
+  /// Per-emission entry point invoked by the `accounts` subscription
+  /// driver above. Internal so the `addTask` body can call into
+  /// MainActor-isolated state across the file split.
+  func applyAccountsSnapshot(_ fresh: [Account]) async {
+    await apply(accounts: fresh)
+  }
+
+  /// Per-emission entry point for the rate-tick subscription.
+  func recomputeForRateTick() async {
+    await recomputeConvertedTotals()
+  }
+
+  /// Re-hydrate `investmentValueCache` from the repository and trigger
+  /// a balance recompute. Driven by `investmentRepository.observeAllValues()`
+  /// so a sync-driven write to `investment_value` reaches this store
+  /// without the cross-store callback path.
+  func refreshInvestmentValuesAndRecompute() async {
+    await preloadInvestmentValues()
+    await recomputeConvertedTotals()
+  }
+
+  /// Surface an observation error onto `self.error`.
+  func surfaceObservationError(_ error: any Error) {
+    surface(error: error)
   }
 }

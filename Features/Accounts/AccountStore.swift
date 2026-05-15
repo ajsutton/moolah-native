@@ -63,6 +63,11 @@ final class AccountStore {
   /// `ProfileSession.cleanupSync`) or by `deinit` as a safety net.
   private var observationTask: Task<Void, Never>?
 
+  /// Shared instrument-registry change seam + the child task draining
+  /// it (see `+Observation`). Nil in previews / legacy tests.
+  private let instrumentChanges: (any InstrumentChangeObserving)?
+  private var instrumentChangeObservationTask: Task<Void, Never>?
+
   /// Background retry loop spawned by `recomputeConvertedTotals()` when
   /// a conversion pass reports any failure. Cancelled when a subsequent
   /// pass succeeds; otherwise continues until success or the store is
@@ -93,7 +98,8 @@ final class AccountStore {
     conversionService: any InstrumentConversionService,
     targetInstrument: Instrument,
     investmentRepository: (any InvestmentRepository)? = nil,
-    retryDelay: Duration = .seconds(30)
+    retryDelay: Duration = .seconds(30),
+    instrumentChanges: (any InstrumentChangeObserving)? = nil
   ) {
     self.repository = repository
     self.conversionService = conversionService
@@ -103,6 +109,7 @@ final class AccountStore {
     self.balanceCalculator = AccountBalanceCalculator(
       conversionService: conversionService, targetInstrument: targetInstrument)
     self.retryDelay = retryDelay
+    self.instrumentChanges = instrumentChanges
     let pair = AsyncStream<Void>.makeStream()
     self.testObservationTickStream = pair.stream
     self.testObservationTickContinuation = pair.continuation
@@ -114,6 +121,12 @@ final class AccountStore {
     // preventing the retain — and `guard let self else { return }` would
     // mask cancellation-propagation bugs by silently exiting.
     observationTask = Task { await self.observe() }
+    if let instrumentChanges {
+      let changes = instrumentChanges.observeChanges()
+      instrumentChangeObservationTask = Task { [self] in
+        await self.observeInstrumentRegistryChanges(changes)
+      }
+    }
   }
 
   deinit {
@@ -128,48 +141,23 @@ final class AccountStore {
     // code (`ProfileSession`), so the assumption holds in practice.
     MainActor.assumeIsolated {
       observationTask?.cancel()
+      instrumentChangeObservationTask?.cancel()
       conversionTask?.cancel()
       showHiddenTask?.cancel()
       testObservationTickContinuation.finish()
     }
   }
 
-  // MARK: - Observation entry points (driven by `+Observation.swift`)
-
-  /// Per-emission entry point invoked by the `accounts` subscription
-  /// driver in `AccountStore+Observation.swift`. internal so the
-  /// extension's `addTask` body can call into MainActor-isolated state.
-  func applyAccountsSnapshot(_ fresh: [Account]) async {
-    await apply(accounts: fresh)
-  }
-
-  /// Per-emission entry point for the rate-tick subscription. internal
-  /// so `+Observation.swift` can dispatch into MainActor-isolated state.
-  func recomputeForRateTick() async {
-    await recomputeConvertedTotals()
-  }
-
-  /// Re-hydrate `investmentValueCache` from the repository and trigger
-  /// a balance recompute. Driven by `investmentRepository.observeAllValues()`
-  /// so a sync-driven write to `investment_value` reaches this store
-  /// without the cross-store callback path.
-  func refreshInvestmentValuesAndRecompute() async {
-    await preloadInvestmentValues()
-    await recomputeConvertedTotals()
-  }
-
-  /// Surface an observation error onto `self.error`. internal so
-  /// `+Observation.swift` can call it from the per-stream error tasks.
-  func surfaceObservationError(_ error: any Error) {
-    surface(error: error)
-  }
+  // MARK: - Observation support (entry-point shims live in `+Observation.swift`)
 
   /// Applies a fresh accounts snapshot from `observeAll()`. Wrapped in
   /// the Layer 7 signpost 4 interval so `SyncReactivityBenchmarks` and
   /// Instruments traces can attribute `mainThreadMs` to this method.
   /// The nested `recomputeConvertedTotals` call has its own signpost;
   /// the outer interval includes both bodies plus `preloadInvestmentValues`.
-  private func apply(accounts fresh: [Account]) async {
+  /// Internal (not `private`) so the entry-point shims in
+  /// `+Observation.swift` can drive it across the file split.
+  func apply(accounts fresh: [Account]) async {
     await withReactiveStoreSignpost("account-store-apply") {
       let started = ContinuousClock.now
       self.accounts = Accounts(from: fresh)
@@ -180,7 +168,9 @@ final class AccountStore {
     }
   }
 
-  private func surface(error: any Error) {
+  /// Internal (not `private`) so `surfaceObservationError` in
+  /// `+Observation.swift` can route per-stream errors here.
+  func surface(error: any Error) {
     logger.error("AccountStore observation error: \(error.localizedDescription)")
     self.error = error
   }
@@ -199,6 +189,7 @@ final class AccountStore {
   /// happen after teardown.
   func stopObserving() {
     observationTask?.cancel()
+    instrumentChangeObservationTask?.cancel()
     conversionTask?.cancel()
     showHiddenTask?.cancel()
   }
@@ -208,6 +199,8 @@ final class AccountStore {
   func awaitObservationTermination() async {
     await observationTask?.value
     observationTask = nil
+    await instrumentChangeObservationTask?.value
+    instrumentChangeObservationTask = nil
     await conversionTask?.value
     conversionTask = nil
     await showHiddenTask?.value
@@ -220,7 +213,7 @@ final class AccountStore {
   /// `updateInvestmentValue(accountId:value:)`, so the sidebar flashes the
   /// transaction sum until the user opens an investment account. See
   /// `InvestmentValueCache.preload(for:)` for the failure-tolerant details.
-  private func preloadInvestmentValues() async {
+  func preloadInvestmentValues() async {
     // Only `recordedValue` investment accounts read from the snapshot cache;
     // `calculatedFromTrades` accounts derive their value from positions, so
     // their snapshot fetch would be a wasted round-trip.
@@ -269,7 +262,7 @@ final class AccountStore {
   /// it running on repeat failure is intentional — every emission from
   /// either source would otherwise reset the clock and a profile with
   /// frequent unrelated rate ticks could delay recovery indefinitely.
-  private func recomputeConvertedTotals() async {
+  func recomputeConvertedTotals() async {
     // Layer 7 signpost 4 (recompute path). Region covers the balance
     // compute + main-thread publish; the retry-loop spawn that follows
     // on failure is outside the region (background work). When called

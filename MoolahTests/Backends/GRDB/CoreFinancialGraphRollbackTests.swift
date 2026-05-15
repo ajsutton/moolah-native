@@ -25,7 +25,8 @@ struct CoreFinancialGraphRollbackTests {
     let database = try ProfileDatabase.openInMemory()
     let repo = GRDBAccountRepository(
       database: database,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
 
     // Pre-seed an account whose row must remain untouched after the
     // failed second-account create — its existence pins the "no torn
@@ -97,7 +98,8 @@ struct CoreFinancialGraphRollbackTests {
       database: database,
       defaultInstrument: .AUD,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
     let accountId = UUID()
     let stub = Account(id: accountId, name: "Cash", type: .bank, instrument: .AUD)
     try await database.write { database in
@@ -151,7 +153,8 @@ struct CoreFinancialGraphRollbackTests {
       database: database,
       defaultInstrument: .AUD,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
     let accountId = UUID()
     try await seedAccountStub(in: database, accountId: accountId)
 
@@ -243,7 +246,8 @@ struct CoreFinancialGraphRollbackTests {
     let database = try ProfileDatabase.openInMemory()
     let repo = GRDBAccountRepository(
       database: database,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
 
     let id = UUID()
     let original = Account(id: id, name: "Original", type: .bank, instrument: .AUD)

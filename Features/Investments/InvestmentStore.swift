@@ -57,6 +57,23 @@ final class InvestmentStore {
   /// extension can manage the lifecycle.
   var perAccountObservationTask: Task<Void, Never>?
 
+  /// Narrow seam onto the shared instrument registry's change stream.
+  /// The per-account values observation no longer tracks the
+  /// `instrument` table (identity / valuation resolved via the shared
+  /// registry), so a metadata edit there does not re-fire
+  /// `observeValues(...)`. When wired,
+  /// `instrumentChangeObservationTask` re-runs the conversion-sensitive
+  /// recompute on each registry tick so an open investment account
+  /// live-refreshes its valuation across the DB boundary. Nil in
+  /// previews / legacy tests.
+  private let instrumentChanges: (any InstrumentChangeObserving)?
+
+  /// Observes `instrumentChanges.observeChanges()` and re-runs the
+  /// valuation recompute on each tick. Spawned from `init` only when a
+  /// registry seam is wired; torn down by `stopObserving()` / `deinit`
+  /// alongside `observationTask`.
+  private var instrumentChangeObservationTask: Task<Void, Never>?
+
   /// Test-only emission tick stream. Yields `()` after every state
   /// assignment in the apply pipeline. Tests use the
   /// `TestableStoreObservation` helpers in
@@ -69,11 +86,13 @@ final class InvestmentStore {
   init(
     repository: InvestmentRepository,
     transactionRepository: TransactionRepository? = nil,
-    conversionService: any InstrumentConversionService
+    conversionService: any InstrumentConversionService,
+    instrumentChanges: (any InstrumentChangeObserving)? = nil
   ) {
     self.repository = repository
     self.transactionRepository = transactionRepository
     self.conversionService = conversionService
+    self.instrumentChanges = instrumentChanges
     let pair = AsyncStream<Void>.makeStream()
     self.testObservationTickStream = pair.stream
     self.testObservationTickContinuation = pair.continuation
@@ -85,6 +104,33 @@ final class InvestmentStore {
     // preventing the retain — and `guard let self else { return }` would
     // mask cancellation-propagation bugs by silently exiting.
     observationTask = Task { await self.runAlwaysOnObservation() }
+    if let instrumentChanges {
+      let changes = instrumentChanges.observeChanges()
+      instrumentChangeObservationTask = Task { [self] in
+        await self.observeInstrumentRegistryChanges(changes)
+      }
+    }
+  }
+
+  /// Consumes the shared registry's change stream. Each tick re-runs
+  /// the conversion-sensitive valuation recompute (`recomputeOnRateTick`)
+  /// so an instrument-metadata edit applied to the shared registry
+  /// (which does not re-fire the per-account `observeValues(...)`
+  /// stream) live-refreshes the open account's valued positions.
+  /// `recomputeOnRateTick` is a no-op until an account is loaded and
+  /// yields the test observation tick itself. `Task.isCancelled` is
+  /// re-checked after the stream suspension so a teardown that races a
+  /// tick exits before recomputing. Strong `self` capture matches
+  /// `runAlwaysOnObservation()` — the task's lifetime is gated by
+  /// `stopObserving()` / `deinit`.
+  private func observeInstrumentRegistryChanges(
+    _ changes: AsyncStream<Void>
+  ) async {
+    for await _ in changes {
+      if Task.isCancelled { return }
+      await recomputeOnRateTick()
+      if Task.isCancelled { return }
+    }
   }
 
   deinit {
@@ -99,6 +145,7 @@ final class InvestmentStore {
     // code (`ProfileSession`), so the assumption holds in practice.
     MainActor.assumeIsolated {
       observationTask?.cancel()
+      instrumentChangeObservationTask?.cancel()
       perAccountObservationTask?.cancel()
       testObservationTickContinuation.finish()
     }
@@ -115,6 +162,7 @@ final class InvestmentStore {
   /// `awaitObservationTermination()` before the assertion.
   func stopObserving() {
     observationTask?.cancel()
+    instrumentChangeObservationTask?.cancel()
     perAccountObservationTask?.cancel()
   }
 
@@ -123,6 +171,8 @@ final class InvestmentStore {
   func awaitObservationTermination() async {
     await observationTask?.value
     observationTask = nil
+    await instrumentChangeObservationTask?.value
+    instrumentChangeObservationTask = nil
     await perAccountObservationTask?.value
     perAccountObservationTask = nil
   }

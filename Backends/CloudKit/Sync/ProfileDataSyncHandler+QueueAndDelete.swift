@@ -27,10 +27,12 @@ extension ProfileDataSyncHandler {
 
   // `queueUnsyncedInstrumentRecords` was removed alongside
   // `SyncCoordinator.queueUnsyncedInstrumentsForAllProfiles`. Auto-
-  // inserted non-fiat instruments now publish through the shared
-  // registry on the profile-index zone via the redirected
-  // `onInstrumentChanged` hook in `ProfileSession+CloudKitBackendBuild`,
-  // and the residual self-heal lives in
+  // inserted non-fiat instruments now publish through the shared registry
+  // on the profile-index zone: the create path calls
+  // `instrumentRegistrar.registerResolvable` (production = the shared
+  // `GRDBInstrumentRegistryRepository`) → `registerStock`/`registerCrypto`
+  // → `fireOnRecordChanged` → `queueSave(recordName:zoneID:)` on the
+  // profile-index zone. The residual self-heal lives in
   // `SyncCoordinator.queueUnsyncedSharedInstruments`.
 
   /// Scans all record types and returns CKRecord.IDs for records that have never been

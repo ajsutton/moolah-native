@@ -241,7 +241,8 @@ enum ProfileDataSyncHandlerTestSupport {
       categories: GRDBCategoryRepository(database: database),
       accounts: GRDBAccountRepository(
         database: database,
-        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
+        instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+        instrumentRegistrar: PerProfileInstrumentRegistrar(database: database)),
       earmarks: GRDBEarmarkRepository(
         database: database,
         defaultInstrument: instrument,
@@ -255,7 +256,8 @@ enum ProfileDataSyncHandlerTestSupport {
         database: database,
         defaultInstrument: instrument,
         conversionService: conversionService,
-        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
+        instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+        instrumentRegistrar: PerProfileInstrumentRegistrar(database: database)),
       transactionLegs: GRDBTransactionLegRepository(database: database),
       database: database)
   }

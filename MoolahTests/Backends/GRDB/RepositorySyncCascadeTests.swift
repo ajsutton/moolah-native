@@ -8,6 +8,21 @@ import Testing
 
 @Suite("Repository sync delete cascades")
 struct RepositorySyncCascadeTests {
+  /// Builds a `GRDBTransactionRepository` with the per-profile
+  /// resolver / registrar wiring shared by every test in this suite.
+  /// Factored out so the repeated construction doesn't push the type
+  /// body over SwiftLint's `type_body_length` budget.
+  private func makeTxnRepo(
+    _ database: any DatabaseWriter
+  ) -> GRDBTransactionRepository {
+    GRDBTransactionRepository(
+      database: database,
+      defaultInstrument: .AUD,
+      conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+  }
+
   /// `applyRemoteChangesSync(saved: [], deleted: [accountId])` must
   /// also remove `investment_value` rows for that account and null
   /// `transaction_leg.account_id` references — replacing what the v4
@@ -17,7 +32,8 @@ struct RepositorySyncCascadeTests {
     let database = try ProfileDatabase.openInMemory()
     let accountRepo = GRDBAccountRepository(
       database: database,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
     let accountId = UUID()
     let legId = UUID()
     let txId = UUID()
@@ -64,11 +80,7 @@ struct RepositorySyncCascadeTests {
   @Test
   func transactionDomainDeleteRemovesLegs() async throws {
     let database = try ProfileDatabase.openInMemory()
-    let txRepo = GRDBTransactionRepository(
-      database: database,
-      defaultInstrument: .AUD,
-      conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+    let txRepo = makeTxnRepo(database)
     let txId = UUID()
     let leg1Id = UUID()
     let leg2Id = UUID()
@@ -105,11 +117,7 @@ struct RepositorySyncCascadeTests {
   @Test
   func transactionSyncDeleteRemovesLegs() async throws {
     let database = try ProfileDatabase.openInMemory()
-    let txRepo = GRDBTransactionRepository(
-      database: database,
-      defaultInstrument: .AUD,
-      conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+    let txRepo = makeTxnRepo(database)
     let txId = UUID()
     let legId = UUID()
 
@@ -240,19 +248,15 @@ struct RepositorySyncCascadeTests {
     }
   }
 
-  /// After v5 + Task 6b, applying a CKRecord-equivalent leg upsert
-  /// whose `account_id` / `category_id` / `earmark_id` reference rows
-  /// that don't yet exist must NOT create blank-name stub rows. The
-  /// FK-driven stub insertion in `ensureFKTargets` is removed; only
-  /// the non-fiat instrument insertion survives.
+  /// Applying a CKRecord-equivalent leg upsert whose `account_id` /
+  /// `category_id` / `earmark_id` reference rows that don't yet exist
+  /// must NOT create blank-name stub rows. The FK-driven stub insertion
+  /// in `ensureFKTargets` is removed; only the non-fiat instrument
+  /// insertion survives.
   @Test
   func legUpsertWithMissingParentsDoesNotCreatePhantomRows() async throws {
     let database = try ProfileDatabase.openInMemory()
-    let txRepo = GRDBTransactionRepository(
-      database: database,
-      defaultInstrument: .AUD,
-      conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+    let txRepo = makeTxnRepo(database)
 
     let orphanAccountId = UUID()
     let orphanCategoryId = UUID()

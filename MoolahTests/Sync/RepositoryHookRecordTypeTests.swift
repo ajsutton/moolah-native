@@ -68,6 +68,7 @@ struct RepositoryHookRecordTypeTests {
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
       instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database),
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
     // Leg-level hooks are emitted via the txn repo's bundled write path;
@@ -110,6 +111,7 @@ struct RepositoryHookRecordTypeTests {
     let repo = GRDBAccountRepository(
       database: database,
       instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database),
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
 
