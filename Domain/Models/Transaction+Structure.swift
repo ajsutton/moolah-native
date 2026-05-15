@@ -1,7 +1,6 @@
 import Foundation
 
 // Structural shape queries and display-amount computation for `Transaction`.
-// Kept here to keep `Transaction.swift` itself under the file_length threshold.
 extension Transaction {
   /// Whether this transaction has the structural shape of a trade per
   /// `plans/2026-04-28-trade-transaction-ui-design.md` §1.2:

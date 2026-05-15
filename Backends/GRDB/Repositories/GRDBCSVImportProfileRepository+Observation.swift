@@ -3,11 +3,7 @@
 import Foundation
 import GRDB
 
-// Reactive observation surface for `CSVImportProfileRepository`. Split
-// out of the main class file to keep `GRDBCSVImportProfileRepository.swift`
-// under SwiftLint's `file_length` warning threshold and to mirror the
-// established `GRDBImportRuleRepository+Observation.swift` /
-// `GRDBCategoryRepository+Observation.swift` companion-file pattern.
+// Reactive observation surface for `CSVImportProfileRepository`.
 //
 // `observeAll()` returns the same domain projection as `fetchAll()`:
 // every `csv_import_profile` row, ordered by `created_at`, mapped

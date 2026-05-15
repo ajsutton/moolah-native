@@ -4,11 +4,9 @@ import Testing
 
 @testable import Moolah
 
-/// Coalescing-specific coverage for the gas-leg receipt fetches added
-/// in #762. Split out of `TransferEventBuilderGasLegTests` so each
-/// suite stays inside SwiftLint's `type_body_length` budget. Verifies
-/// the per-hash deduplication that keeps an N-leg outbound transaction
-/// to a single `eth_getTransactionReceipt` round-trip.
+/// Coalescing-specific coverage for the gas-leg receipt fetches.
+/// Verifies the per-hash deduplication that keeps an N-leg outbound
+/// transaction to a single `eth_getTransactionReceipt` round-trip.
 @Suite("TransferEventBuilder — gas leg coalescing")
 struct TransferEventBuilderGasCoalescingTests {
   private static let wallet = "0x1111111111111111111111111111111111111111"
@@ -147,7 +145,7 @@ struct TransferEventBuilderGasCoalescingTests {
     #expect(alchemy.recordedReceiptCalls == ["0xmulti"])
     let candidate = try #require(built.first)
     // Filter by the gas leg's `:gas` `externalId` suffix; outbound value
-    // legs are now `.expense` too, so type alone no longer disambiguates.
+    // legs are `.expense` too, so type alone does not disambiguate.
     let gasLegs = candidate.transaction.legs.filter {
       $0.externalId?.hasSuffix(":gas") == true
     }

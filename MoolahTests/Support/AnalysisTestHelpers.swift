@@ -34,9 +34,9 @@ enum AnalysisTestHelpers {
   /// row.sampleDate)` math — required by Rule 10
   /// same-`startOfDay` normalization tests.
   ///
-  /// Renamed from the `date(...)` overload to make the calendar
-  /// asymmetry explicit at the call site: the prefix-shared
-  /// `date(year:month:day:)` is fixed-Gregorian; this is local.
+  /// Named to make the calendar asymmetry explicit at the call site:
+  /// the prefix-shared `date(year:month:day:)` is fixed-Gregorian;
+  /// this is local.
   static func localDate(
     year: Int, month: Int, day: Int, hour: Int
   ) throws -> Date {

@@ -100,9 +100,9 @@ extension TransactionDraft {
   /// suggestion is highlighted. Called from the category field's blur
   /// handler so the suggestion the user navigated to with arrow keys is
   /// captured even when they Tab or click out instead of pressing Enter
-  /// (#509). Without this, blurring with a highlight pending dropped the
-  /// suggestion and then cleared the typed text because the unmatched
-  /// path didn't resolve to any `categoryId`.
+  /// (#509). Without this, blurring with a highlight pending drops the
+  /// suggestion and then clears the typed text because the unmatched
+  /// path doesn't resolve to any `categoryId`.
   mutating func commitHighlightedCategoryOrNormalise(
     highlighted: CategorySuggestion?, using categories: Categories
   ) {
@@ -130,10 +130,9 @@ extension TransactionDraft {
   /// `categoryId = …; categoryText = …` writes through a `@Binding`):
   /// SwiftUI snapshots the source between consecutive binding writes, so
   /// the second write is built from a snapshot taken before the first
-  /// landed and clobbers it. With two writes, `categoryId` would silently
-  /// revert to nil, then `normaliseCategoryText(using:)` on the next blur
-  /// would clear the field — the reopening of #509 reported by the user
-  /// after the original Tab-without-Enter fix.
+  /// landed and clobbers it. With two writes, `categoryId` silently
+  /// reverts to nil, then `normaliseCategoryText(using:)` on the next
+  /// blur clears the field (#509).
   mutating func commitCategorySelection(id: UUID, path: String) {
     categoryId = id
     categoryText = path

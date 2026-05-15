@@ -54,9 +54,9 @@ struct AccountStoreSyncRefreshTests {
     // (an unrelated emission from the account observation) and would
     // not catch a regression to the empty-table region inference bug.
     let (backend, _) = try TestBackend.create()
-    // The rate caches live on the registry's profile-index DB post-v10
-    // — the per-profile rate-cache tables were dropped. The conversion
-    // service observes that DB, so the fixture write must land there.
+    // The rate caches live on the registry's profile-index DB. The
+    // conversion service observes that DB, so the fixture write must
+    // land there.
     let cacheDatabase = backend.grdbInstruments.database
     let store = AccountStore(
       repository: backend.accounts,

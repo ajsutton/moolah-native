@@ -9,8 +9,7 @@ import os
 
 // `CKSyncEngineDelegate` conformance for `SyncCoordinator`. The delegate runs
 // on CKSyncEngine's internal executor; both entry points hop to `@MainActor`
-// for all state access. Helper methods extracted from `nextRecordZoneChangeBatch`
-// keep the parent under the SwiftLint complexity / body-length limits.
+// for all state access.
 extension SyncCoordinator: CKSyncEngineDelegate {
   nonisolated func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
     if case .fetchedRecordZoneChanges(let changes) = event {
@@ -129,8 +128,7 @@ extension SyncCoordinator: CKSyncEngineDelegate {
   }
 
   /// Splits a batch of pending changes into per-zone save IDs and a flat list of
-  /// delete IDs. Extracted from `nextRecordZoneChangeBatchOnMain` to keep that
-  /// function under the SwiftLint body-length limit.
+  /// delete IDs.
   @MainActor
   private func partitionBatch(
     _ batch: [CKSyncEngine.PendingRecordZoneChange]
@@ -161,8 +159,8 @@ extension SyncCoordinator: CKSyncEngineDelegate {
     )
   }
 
-  /// Counters captured at the end of one `nextBatch` call. Grouped so
-  /// `logBatchOutcome` can stay under the SwiftLint parameter-count limit.
+  /// Counters captured at the end of one `nextBatch` call, grouped for
+  /// `logBatchOutcome`.
   struct BatchOutcome {
     let rawPending: Int
     let deduped: Int
@@ -190,8 +188,7 @@ extension SyncCoordinator: CKSyncEngineDelegate {
 
   /// Returns pending changes filtered to the delegate's scope, deduplicated by
   /// record ID, with records in zones awaiting creation skipped (they'll be
-  /// re-queued by `ensureProfileZone` once the zone exists). Extracted so
-  /// `nextRecordZoneChangeBatchOnMain` stays under the complexity limit; see
+  /// re-queued by `ensureProfileZone` once the zone exists). See
   /// SYNC_GUIDE Rule 12.
   @MainActor
   private func dedupedPendingChanges(

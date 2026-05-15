@@ -5,9 +5,7 @@ import Foundation
 import GRDB
 
 /// Boot-time setup for the app-level shared instrument registry and
-/// the coordinated `MarketDataServices`. Extracted from
-/// `MoolahApp+Setup` so neither file overruns SwiftLint's
-/// `file_length` budget.
+/// the coordinated `MarketDataServices`.
 extension MoolahApp {
 
   /// Boot-time sync setup: shared registry + market-data services

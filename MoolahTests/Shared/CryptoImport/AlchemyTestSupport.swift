@@ -26,7 +26,7 @@ enum AlchemyTestSupport {
 
   /// Variant that takes a `@Sendable` closure provider so tests can mutate
   /// the returned key between calls (covering the key-set-after-launch
-  /// case where `LiveAlchemyClient` was previously stale).
+  /// case).
   static func makeClient(
     apiKeyProvider: @escaping @Sendable () -> String?,
     permitsPerSecond: Double = 1_000,

@@ -86,8 +86,8 @@ struct SelfWealthMovementsParser: CSVParser, Sendable {
   }
 
   /// Common per-row state derived once and threaded through the action
-  /// dispatch + builders. Keeps `makeTradeRecord` / `makeTransferRecord`
-  /// under SwiftLint's `function_parameter_count` limit.
+  /// dispatch + builders, keeping `makeTradeRecord` / `makeTransferRecord`
+  /// parameter lists small.
   private struct RowContext {
     let row: [String]
     let rowIndex: Int

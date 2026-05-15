@@ -6,11 +6,8 @@ import Foundation
 /// `AreaMark` / `LineMark` per row; `legendUnavailable` on the last
 /// entry drives the legend swatch state.
 ///
-/// Lives in its own file (rather than nested inside
-/// `PositionsChart.swift`) because that view file is already at
-/// `file_length` budget and the rendering helper is plain Swift —
-/// a SwiftUI dependency is not required for the resolver, so it
-/// tests cleanly without `@MainActor` machinery.
+/// Plain Swift with no SwiftUI dependency, so the resolver tests
+/// cleanly without `@MainActor` machinery.
 struct PositionsChartRenderRow: Sendable, Hashable {
   let date: Date
   let value: Decimal

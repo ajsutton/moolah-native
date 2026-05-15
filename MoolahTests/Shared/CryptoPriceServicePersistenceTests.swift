@@ -5,13 +5,11 @@ import Testing
 
 @testable import Moolah
 
-/// Persistence tests live in their own suite so the main behavioural
-/// suite (`CryptoPriceServiceTests`) and the resolution / multi-token
-/// suite (`CryptoPriceServiceTestsMore`) stay under SwiftLint's
-/// `type_body_length` cap. Covers the SQL save/load round-trip, the
-/// rollback contract for `CryptoPriceService.persistDelta`, and the
-/// delta-write + in-range short-circuit semantics that keep chart
-/// renders off the GRDB serial queue.
+/// Persistence tests for `CryptoPriceService`. Covers the SQL save/load
+/// round-trip, the rollback contract for
+/// `CryptoPriceService.persistDelta`, and the delta-write + in-range
+/// short-circuit semantics that keep chart renders off the GRDB serial
+/// queue.
 @Suite("CryptoPriceService — Persistence")
 struct CryptoPriceServicePersistenceTests {
   private let ethInstrument = Instrument.crypto(

@@ -5,8 +5,7 @@ import Testing
 
 @testable import Moolah
 
-/// Persistence tests live in their own suite so the main behavioural suite
-/// (`ExchangeRateServiceTests`) stays under the `type_body_length` cap.
+/// Persistence tests for `ExchangeRateService`.
 /// Covers the SQL save/load round-trip, the rollback contract for
 /// `ExchangeRateService.persistDelta`, and the delta-write semantics that
 /// keep chart renders off the GRDB serial queue.
@@ -20,8 +19,6 @@ struct ExchangeRateServicePersistenceTests {
 
   /// Two service instances sharing the same `DatabaseQueue` — the second
   /// must load rates persisted by the first without going to the network.
-  /// Renamed from `gzipRoundTripPreservesData` after the migration from
-  /// gzipped JSON cache files to GRDB.
   ///
   /// Rates are stored as `REAL` (`Double`) per the schema; the boundary
   /// conversion `Decimal → Double → Decimal` preserves source precision
@@ -168,14 +165,10 @@ struct ExchangeRateServicePersistenceTests {
   /// must not touch the database when they bring back nothing.
   ///
   /// We detect the unwanted write by installing an `AFTER INSERT ON
-  /// exchange_rate` counter trigger after priming. With the guard in
-  /// place the counter stays at zero. Without the guard, the legacy
-  /// `saveCache` rewrote every cached rate row on every fetch and the
-  /// counter would increment by one per primed row. The current
-  /// delta-based `persistDelta` would still increment the counter for
-  /// the same scenario only if a non-empty fetch produced a non-empty
-  /// delta — which is exactly what the sibling
-  /// `saveCacheWritesOnlyChangedRows` test pins.
+  /// exchange_rate` counter trigger after priming; with the guard in
+  /// place the counter stays at zero. `persistDelta` increments the
+  /// counter only when a non-empty fetch produces a non-empty delta —
+  /// which the sibling `saveCacheWritesOnlyChangedRows` test pins.
   @Test
   func emptyFetchResultDoesNotRewriteCache() async throws {
     let database = try ProfileIndexDatabase.openInMemory()
@@ -215,18 +208,14 @@ struct ExchangeRateServicePersistenceTests {
   }
 
   /// `saveCache` must persist only the rows that the latest fetch added
-  /// or changed — not the entire cache. Before this contract was added
-  /// the implementation deleted every cached row for the base and
-  /// re-inserted them one by one on every save, so a chart with N cached
-  /// rates paid O(N) inserts per single-day extension. The user-visible
-  /// effect was the GRDB serial queue saturating on `ExchangeRateRecord`
-  /// inserts during chart renders against a populated cache.
+  /// or changed — not the entire cache. Rewriting every cached row for
+  /// the base on every save costs O(N) inserts per single-day extension
+  /// and saturates the GRDB serial queue on `ExchangeRateRecord` inserts
+  /// during chart renders against a populated cache.
   ///
   /// The test primes a cache of three rates, then drives one forward
-  /// extension that adds one new (date, quote) row. With a delta-write
-  /// implementation the `AFTER INSERT` counter sees exactly 1 — the new
-  /// row. With the legacy delete-and-rewrite path it would see 4 (the
-  /// three priming rows plus the new one).
+  /// extension that adds one new (date, quote) row; the `AFTER INSERT`
+  /// counter must see exactly 1 (the new row), not 4.
   @Test
   func saveCacheWritesOnlyChangedRows() async throws {
     let database = try ProfileIndexDatabase.openInMemory()

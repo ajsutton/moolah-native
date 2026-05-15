@@ -187,8 +187,8 @@ final class ImportPipelineBenchmarks: XCTestCase {
   }
 
   /// End-to-end: 10 files × 1 000 rows each against a fresh TestBackend per
-  /// iteration so numbers are comparable (earlier versions accumulated
-  /// transactions across iterations, inflating dedup cost).
+  /// iteration so numbers are comparable: accumulating transactions
+  /// across iterations would inflate dedup cost.
   /// Measures tokenize + parse + profile match + dedup + rules + persist +
   /// the cleanup steps. One of the most realistic benchmarks.
   func testImportPipelineEndToEnd10Files1000RowsEach() throws {

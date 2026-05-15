@@ -59,8 +59,8 @@ final class ProfileDataSyncHandler {
   /// avoid `.serverRecordChanged` conflicts. If the cached system
   /// fields reference a *different* zone than this handler's own zone,
   /// they are discarded and the record is uploaded as a fresh create
-  /// in the handler's zone — defence-in-depth against legacy
-  /// corruption from before per-zone fetches were introduced.
+  /// in the handler's zone — defence-in-depth against cross-zone
+  /// system-fields corruption.
   func buildCKRecord<T: CloudKitRecordConvertible>(
     from record: T, encodedSystemFields: Data?
   ) -> CKRecord {

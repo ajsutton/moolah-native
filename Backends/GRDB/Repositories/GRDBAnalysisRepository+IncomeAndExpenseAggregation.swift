@@ -3,9 +3,8 @@ import GRDB
 
 /// SQL-side helpers for the `fetchIncomeAndExpense` aggregation. Holds
 /// the query string, the row decoder, and the `database.read` entry
-/// point — split out of `+IncomeAndExpense.swift` so that file's Swift
-/// assembly path (the per-row conversion + month-bucket fold) stays
-/// under the SwiftLint `file_length` budget.
+/// point. The Swift assembly path (the per-row conversion +
+/// month-bucket fold) lives in `+IncomeAndExpense.swift`.
 extension GRDBAnalysisRepository {
   /// Runs the per-(day, instrument) conditional-sum aggregation
   /// pinned by
@@ -57,10 +56,9 @@ extension GRDBAnalysisRepository {
   }
 }
 
-/// File-private SQL for the per-(day, instrument) aggregation. Hoisted
-/// to file scope so the read closure body stays under SwiftLint's
-/// `closure_body_length` budget. The query's plan shape (index usage,
-/// absence of full-table scans) is pinned by
+/// File-private SQL for the per-(day, instrument) aggregation. The
+/// query's plan shape (index usage, absence of full-table scans) is
+/// pinned by
 /// `AnalysisAggregationPlanPinningTests.fetchIncomeAndExpenseUsesTypeAccountIndex`;
 /// structural changes here (WHERE predicates, JOIN reorders, GROUP BY)
 /// should be reflected in that test so the plan stays under EXPLAIN.

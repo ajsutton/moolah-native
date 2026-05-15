@@ -3,9 +3,7 @@ import GRDB
 
 @testable import Moolah
 
-// `seedWithTransactions(...)` and its private leg-insertion helper —
-// split out of `TestBackend.swift` so that file's enum body stays under
-// SwiftLint's `type_body_length` threshold.
+// `seedWithTransactions(...)` and its private leg-insertion helper.
 extension TestBackend {
   /// Identifies an earmark transaction leg to seed alongside its earmark row.
   /// Bundles the per-call parameters that vary between the saved/spent paths

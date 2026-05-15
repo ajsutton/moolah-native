@@ -77,7 +77,7 @@
         // Register in-process entry points for App Intents so
         // `OpenAccountIntent` can switch profile / set a pending navigation
         // without going through `UIApplication.shared.open(moolah://…)` —
-        // the URL scheme has been removed (issue #386).
+        // the URL scheme does not exist (issue #386).
         let pendingBinding = pendingNavigationBinding
         let store = profileStore
         NavigationBridge.openProfile = { id in store.setActiveProfile(id) }

@@ -124,8 +124,8 @@ struct AccountStoreConversionTestsMore {
     #expect(store.convertedNetWorth == nil)
   }
 
-  /// After conversion service recovers, a retry populates the previously
-  /// failing account balance and the aggregate totals.
+  /// After the conversion service recovers, a retry populates the
+  /// failed account balance and the aggregate totals.
   @Test
   func conversionFailuresAreRetriedAfterDelay() async throws {
     let aud = Instrument.AUD

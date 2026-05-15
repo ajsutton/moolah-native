@@ -40,9 +40,8 @@ actor DataExporter {
   }
 
   /// Holds the raw per-stage download output before it's assembled into an
-  /// `ExportedData`. Exists so `export()` can stay within SwiftLint's
-  /// function-body-length limit by delegating the download fan-out to a
-  /// helper and the assembly to another.
+  /// `ExportedData`, letting `export()` delegate the download fan-out and
+  /// the assembly to separate helpers.
   private struct StagedDownloads {
     let accounts: [Account]
     let categories: [Category]

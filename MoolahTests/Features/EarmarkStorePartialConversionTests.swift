@@ -71,8 +71,8 @@ struct EarmarkStorePartialConversionTests {
     #expect(store.convertedTotalBalance == nil)
   }
 
-  /// After conversion service recovers, retry populates the previously
-  /// failing earmark balance and the aggregate total.
+  /// After the conversion service recovers, a retry populates the
+  /// failed earmark balance and the aggregate total.
   @Test
   func conversionFailuresAreRetriedAfterDelay() async throws {
     let aud = Instrument.AUD

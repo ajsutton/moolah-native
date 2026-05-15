@@ -75,9 +75,9 @@ struct ExportImportIntegrationTests {
     registry: GRDBInstrumentRegistryRepository,
     label: String = "Test Profile"
   ) -> CloudKitBackend {
-    // Instrument identity lives on the shared profile-index registry
-    // post-`v10_drop_shared_instrument_legacy`; the verification backend
-    // reads through the same instance the import registered into.
+    // Instrument identity lives on the shared profile-index registry;
+    // the verification backend reads through the same instance the
+    // import registered into.
     CloudKitBackend(
       database: database,
       instrument: instrument,
@@ -149,8 +149,8 @@ struct ExportImportIntegrationTests {
     )
 
     // Import into fresh database. Instrument identity lives on the
-    // shared profile-index registry post-`v10_drop_shared_instrument_legacy`;
-    // the verification backend reads through the same instance.
+    // shared profile-index registry; the verification backend reads
+    // through the same instance.
     let freshDatabase = try ProfileDatabase.openInMemory()
     let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let result = try await coordinator.importFromFile(

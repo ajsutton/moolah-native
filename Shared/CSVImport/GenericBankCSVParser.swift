@@ -306,8 +306,7 @@ struct GenericBankCSVParser: CSVParser, Sendable {
 
 }
 
-// Field-level parsing helpers extracted into an extension so the main struct
-// body stays under SwiftLint's `type_body_length` threshold.
+// Field-level parsing helpers for `GenericBankCSVParser`.
 extension GenericBankCSVParser {
   // MARK: - Parsing helpers
 

@@ -2,9 +2,7 @@ import Foundation
 import GRDB
 import OSLog
 
-// `PRAGMA optimize` cadence per `guides/DATABASE_SCHEMA_GUIDE.md` §5,
-// extracted from the main `ProfileSession` body so it stays under
-// SwiftLint's `type_body_length` and `file_length` thresholds.
+// `PRAGMA optimize` cadence per `guides/DATABASE_SCHEMA_GUIDE.md` §5.
 extension ProfileSession {
 
   // MARK: - Database maintenance
@@ -57,9 +55,9 @@ extension ProfileSession {
   /// (`MoolahApp+Lifecycle.runPragmaOptimizeOnAllSessions`) covers the
   /// "right now" case.
   ///
-  /// Replaces any previously-scheduled periodic task (the prior handle is
-  /// cancelled first) so callers can change the cadence without leaking
-  /// loops. The handle is tracked on `periodicPragmaOptimizeTask` and
+  /// Cancels any already-scheduled periodic task before scheduling a new
+  /// one so callers can change the cadence without leaking loops. The
+  /// handle is tracked on `periodicPragmaOptimizeTask` and
   /// cancelled in `cleanupSync(coordinator:)` per `guides/CONCURRENCY_GUIDE.md`
   /// §8.
   ///

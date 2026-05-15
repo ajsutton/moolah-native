@@ -1,7 +1,6 @@
 import Foundation
 
-// Loading + mutation surface for `InvestmentStore`. Hoisted into an
-// extension so `InvestmentStore.swift` stays under `type_body_length`.
+// Loading + mutation surface for `InvestmentStore`.
 //
 // `loadValues` and `loadDailyBalances` paginate against the repository
 // and write into `values` / `dailyBalances`. `loadAllData` is the
@@ -47,9 +46,9 @@ extension InvestmentStore {
 
   /// Loads the legacy account-level cumulative-balance series.
   ///
-  /// The repository now returns one entry per (date, instrument) tuple
-  /// so multi-instrument legacy accounts no longer conflate quantities
-  /// of different instruments under one label (issue #579). This store
+  /// The repository returns one entry per (date, instrument) tuple so
+  /// multi-instrument legacy accounts do not conflate quantities of
+  /// different instruments under one label (issue #579). This store
   /// converts each per-instrument balance to `hostCurrency` on its own
   /// date and aggregates by date so the consuming chart sees a single
   /// series in the host currency.

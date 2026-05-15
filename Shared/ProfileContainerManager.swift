@@ -182,8 +182,7 @@ final class ProfileContainerManager {
 
   /// Returns all known profile IDs from the GRDB profile-index DB.
   /// Reads through the repository's async helper so the calling thread
-  /// (typically `@MainActor`) doesn't block on the GRDB queue. Callers
-  /// that historically invoked the sync form must now `await`.
+  /// (typically `@MainActor`) doesn't block on the GRDB queue.
   func allProfileIds() async -> [UUID] {
     do {
       return try await profileIndexRepository.allRowIds()

@@ -169,7 +169,7 @@ actor CryptoTokenDiscoveryService {
   /// Re-runs resolution for an `.unpriced` registration.
   ///
   /// Idempotent: re-reads the registry to find the *current* status before
-  /// deciding whether to re-resolve. If the live row is no longer
+  /// deciding whether to re-resolve. If the live row is not
   /// `.unpriced` (user marked it spam, or another path resolved it),
   /// returns that row without issuing any network calls. This preserves
   /// the design's "user intent wins" property — a spam classification

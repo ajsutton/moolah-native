@@ -3,10 +3,8 @@
 import SwiftUI
 
 // Needs Setup / Failed Files panel for the Recently Added screen, with its
-// two row types. Extracted from `RecentlyAddedView.swift` so the primary
-// view file stays under SwiftLint's `file_length` threshold. These types
-// are file-visible to this feature and referenced only from
-// `RecentlyAddedView`.
+// two row types. These types are file-visible to this feature and
+// referenced only from `RecentlyAddedView`.
 
 /// Needs Setup / Failed Files panel. Shown above the session list when either
 /// list is non-empty; fully hidden when both are empty.

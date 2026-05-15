@@ -2,15 +2,15 @@ import XCTest
 
 /// Smoke test for navigation across heterogeneous detail-column leaves.
 ///
-/// Originally written to reproduce the AppKit toolbar bridge crash
+/// This sweep does not reproduce the AppKit toolbar bridge crash
 /// (`NSInternalInconsistencyException: NSToolbar already contains an
 /// item with the identifier com.apple.SwiftUI.search`) that fires when
 /// SwiftUI re-mounts a `.searchable` / `.toolbar`-bearing leaf while
-/// the previous leaf's registration is still live. The crash fires
+/// the previous leaf's registration is still live: the crash fires
 /// during sub-second navigation in production, but XCUITest's natural
 /// `waitForExistence` pacing (~1-2 s per click) is too slow to surface
-/// the race in a deterministic test — the sweep takes ~110 s end to
-/// end and never reproduces. So this test serves a different role:
+/// the race deterministically — the sweep takes ~110 s end to end and
+/// never reproduces. So this test serves a different role:
 ///
 /// **As a navigation smoke test**, it catches accidental regressions
 /// to the navigation graph: a missing `accessibilityIdentifier`, a

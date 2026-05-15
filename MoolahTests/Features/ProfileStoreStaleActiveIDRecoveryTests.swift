@@ -4,8 +4,8 @@ import Testing
 @testable import Moolah
 
 /// Covers the stale-`activeProfileID` recovery path in
-/// `ProfileStore.applyLoadedProfiles(_:isInitialLoad:)`. A previously
-/// active profile may be deleted on another device — or the local
+/// `ProfileStore.applyLoadedProfiles(_:isInitialLoad:)`. The active
+/// profile may be deleted on another device — or the local
 /// `activeProfileID` UserDefault may simply not match the loaded set
 /// (e.g. switching between Debug and Release builds, which share a
 /// bundle id but talk to different CloudKit containers). On the next

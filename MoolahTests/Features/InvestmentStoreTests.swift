@@ -169,10 +169,9 @@ struct InvestmentStoreTests {
     #expect(store.error != nil)
   }
 
-  // The previous `onInvestmentValueChanged` callback is no longer part
-  // of `InvestmentStore` — cross-store fan-out to `AccountStore` happens
-  // via `AccountStore`'s `investmentRepository.observeAllValues()`
-  // subscription. See `AccountStoreSyncRefreshTests.investmentValueWriteReachesAccountStore`.
+  // Cross-store fan-out to `AccountStore` happens via `AccountStore`'s
+  // `investmentRepository.observeAllValues()` subscription. See
+  // `AccountStoreSyncRefreshTests.investmentValueWriteReachesAccountStore`.
 
   // MARK: - Daily Balances
 }

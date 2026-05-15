@@ -2,11 +2,9 @@
 import SwiftUI
 
 /// "Registered Tokens" + "CoinGecko API Key" sections of the Crypto
-/// preferences tab. Extracted from `CryptoSettingsView.swift` so the
-/// main view body stays under SwiftLint's `type_body_length` and
-/// `file_length` thresholds. Every member here closes over the parent
-/// view's `store` / `showAddToken` / `coinGeckoApiKeyInput` bindings —
-/// no new state owned at this layer.
+/// preferences tab. Every member here closes over the parent view's
+/// `store` / `showAddToken` / `coinGeckoApiKeyInput` bindings — no new
+/// state owned at this layer.
 extension CryptoSettingsView {
 
   // MARK: - Registered Tokens

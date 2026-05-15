@@ -5,10 +5,8 @@ import Testing
 @testable import Moolah
 
 /// Coverage for the gas-attribution gating predicate that suppresses
-/// the `:gas` leg when the wallet did not sign the outer tx. Split out
-/// of `TransferEventBuilderGasLegTests` so each suite stays inside
-/// SwiftLint's `type_body_length` budget. The two real-world
-/// misattribution paths covered here are:
+/// the `:gas` leg when the wallet did not sign the outer tx. The two
+/// real-world misattribution paths covered here are:
 ///
 /// - An `internal` sub-call inside someone else's tx where the wallet
 ///   appears as `from` of the inner call (not the outer signer).

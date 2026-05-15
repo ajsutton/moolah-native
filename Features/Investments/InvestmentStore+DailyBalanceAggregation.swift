@@ -3,9 +3,7 @@
 import Foundation
 
 // Per-instrument forward-fill + host-currency aggregation for the
-// legacy investment-account chart, extracted from `InvestmentStore`
-// so the main store body stays under SwiftLint's `type_body_length`
-// budget after issue #579.
+// legacy investment-account chart (issue #579).
 
 extension InvestmentStore {
   /// Aggregates per-(date, instrument) entries into a single

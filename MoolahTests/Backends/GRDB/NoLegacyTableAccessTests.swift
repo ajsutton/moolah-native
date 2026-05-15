@@ -5,10 +5,10 @@ import Testing
 
 @testable import Moolah
 
-/// Documents the post-v10 contract: a fully-migrated per-profile
-/// `data.sqlite` no longer carries the legacy instrument / market-data
-/// tables, so any code that still tried to read them would fail loudly
-/// at the SQLite layer rather than silently see an empty result. The
+/// Documents the contract that a fully-migrated per-profile
+/// `data.sqlite` does not carry the legacy instrument / market-data
+/// tables, so any code that tries to read them fails loudly at the
+/// SQLite layer rather than silently seeing an empty result. The
 /// authoritative instrument registry is the shared profile-index DB;
 /// the price caches are network-derived and also live on the shared DB.
 @Suite("Legacy per-profile tables are inaccessible after v10")

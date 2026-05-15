@@ -1,9 +1,7 @@
 import SwiftUI
 
-// Command-menu definitions extracted from `MoolahApp.swift` so the app file
-// stays under SwiftLint's `file_length` threshold. Each struct remains a
-// top-level `Commands` type, preserving its role in `MoolahApp.body`'s
-// `.commands { ... }` builder.
+// Command-menu definitions. Each struct is a top-level `Commands` type
+// used in `MoolahApp.body`'s `.commands { ... }` builder.
 
 /// Combined File > New… commands (Transaction, Earmark, Account, Category).
 /// Grouping them into one Commands struct keeps the top-level `.commands` block

@@ -7,18 +7,15 @@ import Foundation
 /// other thrown error drops the day from `dailyBalances` and logs
 /// through `handleInvestmentValueFailure`.
 ///
-/// Split out of `+DailyBalancesInvestmentValues.swift` for the
-/// SwiftLint `file_length` budget — recorded-value (snapshot) and
-/// trades-mode (position) folds are conceptually paired but each is
-/// long enough to warrant its own file.
+/// Paired with the recorded-value (snapshot) fold in
+/// `+DailyBalancesInvestmentValues.swift`.
 extension GRDBAnalysisRepository {
 
   // MARK: - Trades-mode per-day fold
 
   /// One decoded entry in the trades-mode cursor walk — a per-day,
   /// per-account, per-instrument quantity ready to apply to the
-  /// cumulative `positions` dict. Four fields exceeds SwiftLint's
-  /// `large_tuple` error threshold, so a named struct is required.
+  /// cumulative `positions` dict.
   private struct TradesModePositionEntry {
     let dayKey: Date
     let accountId: UUID

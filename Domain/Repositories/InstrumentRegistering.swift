@@ -10,10 +10,9 @@
 /// `database.write` that inserts the txn / leg / account rows, so a read
 /// issued immediately after the method returns resolves the instrument.
 /// Every caller — production, preview, test, and the sync apply path
-/// — injects the shared profile-index registry (where the matching
-/// `InstrumentMapResolving` reads). Nothing writes the per-profile
-/// `instrument` table, which the `v10_drop_shared_instrument_legacy`
-/// migration removes.
+/// — injects the shared profile-index registry, where the matching
+/// `InstrumentMapResolving` reads. There is no per-profile `instrument`
+/// table.
 protocol InstrumentRegistering: Sendable {
   func registerResolvable(_ instrument: Instrument) async throws
 }

@@ -3,11 +3,9 @@ import GRDB
 
 @testable import Moolah
 
-// Private seeding helpers extracted from `BenchmarkFixtures` so the main
-// enum body stays under SwiftLint's `type_body_length` threshold. All
-// members are `static` on the enum and remain `internal` to the benchmark
-// target (no new public surface — the only entry point is
-// `BenchmarkFixtures.seed`).
+// Private seeding helpers for `BenchmarkFixtures`. All members are
+// `static` on the enum and `internal` to the benchmark target; the only
+// entry point is `BenchmarkFixtures.seed`.
 extension BenchmarkFixtures {
 
   // MARK: - Private Helpers
@@ -153,11 +151,11 @@ extension BenchmarkFixtures {
     return ids
   }
 
-  /// Bundled identifier sets passed to `seedTransactions`. Holds the account,
-  /// category, and earmark UUIDs produced by earlier seeding passes so the
-  /// transaction seeder can reference them without threading three separate
-  /// `[UUID]` parameters through its signature (which would breach
-  /// SwiftLint's `function_parameter_count` limit).
+  /// Bundled identifier sets passed to `seedTransactions`. Holds the
+  /// account, category, and earmark UUIDs produced by the preceding
+  /// seeding passes so the transaction seeder can reference them
+  /// without threading three separate `[UUID]` parameters through its
+  /// signature.
   struct SeedIds {
     let accounts: [UUID]
     let categories: [UUID]

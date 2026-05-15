@@ -265,6 +265,5 @@ struct CryptoPriceServiceTests {
   }
 
   // Rollback contract for `persistDelta` lives in `CryptoPriceServiceTestsMore.swift`
-  // and cap-at-yesterday tests live in `CryptoPriceServiceCapTests.swift`
-  // so this file stays under SwiftLint's `type_body_length` cap.
+  // and cap-at-yesterday tests live in `CryptoPriceServiceCapTests.swift`.
 }

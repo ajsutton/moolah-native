@@ -20,9 +20,8 @@ enum PreviewBackend {
   /// preview backends to share one registry like production does.
   /// Defaults to a fresh per-call registry over its own in-memory
   /// profile-index DB (the preview analogue of production's shared
-  /// registry); it is never pointed at the per-profile `ProfileDatabase`
-  /// because `v10_drop_shared_instrument_legacy` removed the per-profile
-  /// `instrument` table.
+  /// registry); it is never pointed at the per-profile `ProfileDatabase`,
+  /// which has no `instrument` table.
   static func create(
     instrument: Instrument = .AUD,
     sharedRegistry: GRDBInstrumentRegistryRepository? = nil
@@ -44,8 +43,8 @@ enum PreviewBackend {
     }
     // The rate / price caches share the registry's profile-index DB,
     // mirroring production (`sharedMarketData` + shared registry both
-    // on `profileIndexDatabase`). The per-profile rate-cache tables
-    // were removed by `v10_drop_shared_instrument_legacy`.
+    // on `profileIndexDatabase`). There are no per-profile rate-cache
+    // tables.
     let marketDataDatabase = registry.database
     let exchangeRates = ExchangeRateService(
       client: FrankfurterClient(),

@@ -19,8 +19,7 @@ enum FinancialMonth {
   /// `TimeZone(identifier: "UTC")` is documented to never return nil
   /// for the canonical `"UTC"` identifier; the `??` fallback uses the
   /// always-non-nil seconds-from-GMT initialiser so the resolved
-  /// constant is non-optional without an `as!` / `!` cast (keeping
-  /// SwiftLint's `force_unwrapping` rule satisfied).
+  /// constant is non-optional without a force-unwrap.
   ///
   /// Module-internal so sibling files (e.g.
   /// `GRDBAnalysisRepository+Conversion.swift`) can share the same

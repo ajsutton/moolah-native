@@ -40,12 +40,11 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
   let grdbTransactionLegs: GRDBTransactionLegRepository
 
   /// Bundle of the change/delete hook closures the GRDB repos call on
-  /// each successful local mutation. Bundling them keeps the
-  /// `CloudKitBackend.init` parameter count under SwiftLint's
-  /// `function_parameter_count` threshold while still letting callers
-  /// inject distinct closures per repo if they need to (no current
-  /// caller does — `makeCloudKitBackend` shares one pair across every
-  /// repo).
+  /// each successful local mutation. Bundling keeps
+  /// `CloudKitBackend.init`'s parameter list small while still letting
+  /// callers inject distinct closures per repo if they need to (no
+  /// current caller does — `makeCloudKitBackend` shares one pair across
+  /// every repo).
   struct CloudKitBackendHooks {
     let onCSVImportProfileChanged: @Sendable (String, UUID) -> Void
     let onCSVImportProfileDeleted: @Sendable (String, UUID) -> Void
@@ -156,8 +155,7 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
     // The instrument-resolving read repos (accounts, transactions,
     // earmarks, investments, analysis) all take the instrument seams;
     // the remaining record-type repos don't, so the two groups are
-    // built by separate helpers to keep this function body under
-    // SwiftLint's `function_body_length` budget.
+    // built by separate helpers.
     let resolving = makeResolvingRepositories(
       database: database,
       instrument: instrument,
@@ -193,12 +191,10 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
   }
 
   /// The five repositories that resolve instruments via the injected
-  /// `InstrumentMapResolving`. Split out of `makeRepositories` so
-  /// neither function body exceeds SwiftLint's
-  /// `function_body_length` budget after the resolver cutover. The
-  /// grouping is also semantic: resolver-dependent repositories belong
-  /// together so a future repository that needs the resolver is added
-  /// here, not back into the main `makeRepositories` body.
+  /// `InstrumentMapResolving`. Grouped together semantically:
+  /// resolver-dependent repositories belong here, so a future repository
+  /// that needs the resolver is added here, not into the main
+  /// `makeRepositories` body.
   private struct ResolvingRepositories {
     let accounts: GRDBAccountRepository
     let transactions: GRDBTransactionRepository
@@ -208,10 +204,10 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
   }
 
   /// The read-side instrument resolver and the write-side registrar,
-  /// bundled so the repository-construction helpers stay within
-  /// SwiftLint's `function_parameter_count` budget. In production both
-  /// are the same shared `GRDBInstrumentRegistryRepository`; the type
-  /// keeps them distinct so the seams remain independently swappable.
+  /// bundled to keep the repository-construction helpers' parameter
+  /// lists small. In production both are the same shared
+  /// `GRDBInstrumentRegistryRepository`; the type keeps them distinct
+  /// so the seams remain independently swappable.
   struct InstrumentSeams {
     let resolver: any InstrumentMapResolving
     let registrar: any InstrumentRegistering

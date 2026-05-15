@@ -14,13 +14,12 @@ import Testing
 /// would also reintroduce the `RETURNING "rowid"` upsert hazard
 /// described in #582).
 ///
-/// Pinned to the v9 era: `v10_drop_shared_instrument_legacy` later
-/// drops the six rate-cache tables (incl. all three `*_meta` tables)
-/// from the per-profile schema, so a full migration would leave them
-/// absent. The WITHOUT-ROWID contract is only observable while the
-/// tables exist, so the migrator is run `upTo:` the last migration
-/// before the v10 drop — each shipped migration keeps its own era's
-/// contract.
+/// Pinned to the v9 era: `v10_drop_shared_instrument_legacy` drops the
+/// six rate-cache tables (incl. all three `*_meta` tables) from the
+/// per-profile schema, so a full migration leaves them absent. The
+/// WITHOUT-ROWID contract is only observable while the tables exist,
+/// so the migrator is run `upTo:` the last migration that still has
+/// them — each shipped migration keeps its own era's contract.
 @Suite("Rate cache *_meta table schema")
 struct RateCacheSchemaTests {
   @Test

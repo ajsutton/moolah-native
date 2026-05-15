@@ -26,9 +26,8 @@ import GRDB
 //   transaction_leg.earmark_id           → SET NULL
 //   investment_value.account_id          → CASCADE
 //
-// Cascade behaviours that the FKs encoded are reproduced in repository
-// code (`applyRemoteChangesSync` and the domain `delete(...)` methods
-// that previously leaned on the FK).
+// Cascade behaviours the FKs encode are reproduced in repository code
+// (`applyRemoteChangesSync` and the domain `delete(...)` methods).
 
 extension ProfileSchema {
   static func dropForeignKeys(_ database: Database) throws {

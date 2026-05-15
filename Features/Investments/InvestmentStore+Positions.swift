@@ -1,8 +1,6 @@
 import Foundation
 
-// Position-tracking surface for `InvestmentStore`. Hoisted into an
-// extension so the main type body stays under SwiftLint's
-// `type_body_length` budget.
+// Position-tracking surface for `InvestmentStore`.
 //
 // `loadPositions` reads transaction legs for `accountId` and aggregates
 // them into per-instrument `Position`s. `valuatePositions` converts

@@ -3,9 +3,9 @@ import GRDB
 
 /// Swift assembly helpers and shared types for `fetchIncomeAndExpense`.
 /// The SQL aggregation itself lives in the sibling
-/// `+IncomeAndExpenseAggregation.swift` (split out for the SwiftLint
-/// `file_length` budget); this file fans the per-`(day, instrument)`
-/// rows it produces out into per-month income/expense buckets.
+/// `+IncomeAndExpenseAggregation.swift`; this file fans the
+/// per-`(day, instrument)` rows it produces out into per-month
+/// income/expense buckets.
 ///
 /// Mirrors the `+ExpenseBreakdown.swift` and `+CategoryBalances.swift`
 /// shapes: static helpers take their dependencies as parameters so
@@ -80,8 +80,8 @@ extension GRDBAnalysisRepository {
   /// outside `MonthlyIncomeExpense` (which has only `let` fields) so
   /// the loop can `+=` into each bucket without rebuilding the value
   /// type on every leg. `start` / `end` track the min/max parsed-day
-  /// `Date` so the resulting `MonthlyIncomeExpense` preserves the
-  /// SwiftData-era display behaviour.
+  /// `Date` so the resulting `MonthlyIncomeExpense` carries the
+  /// expected display range.
   private struct MonthBucket {
     var start: Date
     var end: Date
@@ -92,9 +92,8 @@ extension GRDBAnalysisRepository {
     var earmarkedProfit: InstrumentAmount
   }
 
-  /// Bundle of converted per-row sums fed into a month bucket. Lifted
-  /// out of the assembly loop so the bucket-update helper stays under
-  /// SwiftLint's `function_parameter_count` budget.
+  /// Bundle of converted per-row sums fed into a month bucket, so the
+  /// bucket-update helper takes one parameter instead of many.
   private struct ConvertedRowSums {
     let day: Date
     let income: InstrumentAmount

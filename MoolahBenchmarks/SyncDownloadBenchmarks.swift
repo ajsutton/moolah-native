@@ -163,8 +163,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
 
   /// Seeds `count` transaction rows in `database` and returns the matching
   /// `(CKRecord.ID, recordType)` tuples so the deletion-benchmark loop can
-  /// hand them to `applyRemoteChanges`. Extracted from the `measure` body
-  /// to keep the closure under SwiftLint's `closure_body_length` ceiling.
+  /// hand them to `applyRemoteChanges`.
   private static func seedDeletionTargets(
     into database: DatabaseWriter, zone: CKRecordZone.ID, count: Int
   ) throws -> [(CKRecord.ID, String)] {

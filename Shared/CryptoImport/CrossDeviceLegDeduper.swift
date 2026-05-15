@@ -12,11 +12,9 @@ import os
 ///
 /// **All deletes route through `TransactionRepository.delete(id:)`**, not
 /// directly to GRDB, so the change propagates back through CKSyncEngine
-/// to other devices via the repository's existing `onRecordDeleted`
+/// to other devices via the repository's `onRecordDeleted`
 /// hook. Bypassing the repository would silently desync the deduper's
-/// local cleanup from CloudKit. (See
-/// `plans/2026-05-05-crypto-wallet-import-design.md` §"Multi-device race
-/// window — honest description".)
+/// local cleanup from CloudKit.
 ///
 /// **v1 scope.** A transaction whose every leg duplicates another
 /// transaction's legs is removed wholesale. Mixed transactions — one

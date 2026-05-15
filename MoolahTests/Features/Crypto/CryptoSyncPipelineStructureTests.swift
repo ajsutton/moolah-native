@@ -34,8 +34,8 @@ struct CryptoSyncPipelineStructureTests {
   private func makeFixture() throws -> Fixture {
     let (backend, database) = try TestBackend.create()
     let alchemy = RecordingAlchemyClientStub()
-    // Resolve through the backend's shared profile-index registry
-    // (per-profile `instrument` table removed by v10).
+    // Resolve through the backend's shared profile-index registry;
+    // there is no per-profile `instrument` table.
     let registry = backend.grdbInstruments
     let discovery = CryptoTokenDiscoveryService(
       registry: registry,

@@ -102,13 +102,6 @@ extension SyncCoordinator {
     return queued
   }
 
-  // `queueUnsyncedInstrumentsForAllProfiles` was removed when the
-  // shared-instrument-registry rollout finished. It used to scan
-  // every per-profile `instrument` table for unsynced non-fiat rows
-  // and queue them for upload to each `profile-<UUID>` zone — a path
-  // the new shared registry on the profile-index zone owns end-to-end.
-  // The replacement is `queueUnsyncedSharedInstruments()` below.
-
   /// Re-queues shared `InstrumentRecord` rows whose
   /// `encoded_system_fields` is `NULL`. Closes the residual idempotency
   /// gap between "shared-registry GRDB write committed" and

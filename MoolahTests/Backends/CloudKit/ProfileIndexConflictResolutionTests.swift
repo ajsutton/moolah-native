@@ -7,8 +7,8 @@ import Testing
 
 @Suite("ProfileIndexSyncHandler — dataFormatVersion conflict resolution")
 struct ProfileIndexConflictResolutionTests {
-  /// Bundles the handler, the backing repository, and a fresh profile id
-  /// so the helper signature stays under SwiftLint's `large_tuple` ceiling.
+  /// Bundles the handler, the backing repository, and a fresh profile
+  /// id for the test helpers.
   private struct Fixture {
     let handler: ProfileIndexSyncHandler
     let repository: GRDBProfileIndexRepository

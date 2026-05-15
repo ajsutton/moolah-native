@@ -1,9 +1,8 @@
 import Charts
 import SwiftUI
 
-/// Per-series chart-content builders. Split out so the main view's body
-/// stays focused on layout / accessibility / state, and the
-/// `type_body_length` budget isn't dominated by Swift Charts plumbing.
+/// Per-series chart-content builders, kept separate so the main view's
+/// body stays focused on layout / accessibility / state.
 extension NetWorthGraphCard {
   @ChartContentBuilder var availableFundsMarks: some ChartContent {
     if visibleSeries.contains(.availableFunds) {

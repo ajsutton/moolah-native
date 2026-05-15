@@ -186,8 +186,8 @@ struct ExchangeRateServiceTests {
     #expect(rate == dec("0.632"))
   }
 
-  // SQL persistence tests live in `ExchangeRateServicePersistenceTests`
-  // (round-trip + rollback) so this file stays under `type_body_length`.
+  // SQL persistence tests (round-trip + rollback) live in
+  // `ExchangeRateServicePersistenceTests`.
 
   @Test
   func fallbackNeverUsesFutureDate() async throws {
@@ -335,6 +335,5 @@ struct ExchangeRateServiceTests {
     #expect(client.fetchCount == primedFetches)
   }
 
-  // Cap-at-yesterday tests live in `ExchangeRateServiceCapTests.swift`
-  // so this suite stays under SwiftLint's `type_body_length` cap.
+  // Cap-at-yesterday tests live in `ExchangeRateServiceCapTests.swift`.
 }

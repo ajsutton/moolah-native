@@ -25,15 +25,15 @@ extension InstrumentRow {
 
   /// ISO-4217 fiat instruments synthesised once at first use.
   ///
-  /// `fetchInstrumentMap` previously rebuilt this on every call —
-  /// ~150 `Instrument.fiat(code:)` constructions (each spinning up a
-  /// `NumberFormatter` to derive the currency's decimal places) over
-  /// `Locale.Currency.isoCurrencies`. On the cold-launch resolution
-  /// burst that dominated the call. The inputs are process-stable:
+  /// Computed into a `static let` rather than per `fetchInstrumentMap`
+  /// call: ~150 `Instrument.fiat(code:)` constructions (each spinning
+  /// up a `NumberFormatter` to derive the currency's decimal places)
+  /// over `Locale.Currency.isoCurrencies` would otherwise dominate the
+  /// cold-launch resolution burst. The inputs are process-stable:
   /// `Locale.Currency.isoCurrencies` is a fixed ISO table for the
   /// process lifetime, and `Instrument.fiat(code:)` derives decimals
   /// from the currency *code* (not the user's locale), so the synthesis
-  /// is deterministic and safe to compute once into a `static let`.
+  /// is deterministic and safe to compute once.
   private static let ambientFiat: [String: Instrument] = {
     var map: [String: Instrument] = [:]
     for code in Locale.Currency.isoCurrencies.map(\.identifier) {

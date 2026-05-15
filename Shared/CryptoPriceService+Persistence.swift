@@ -5,9 +5,7 @@ import GRDB
 
 // MARK: - CryptoPriceService SQL persistence
 
-// SQL persistence for `CryptoPriceService`. Lives in its own file so the
-// main actor body stays under SwiftLint's `type_body_length` and
-// `file_length` thresholds.
+// SQL persistence for `CryptoPriceService`.
 
 extension CryptoPriceService {
   /// Hydrates `caches[tokenId]` from `crypto_price` + `crypto_token_meta`.

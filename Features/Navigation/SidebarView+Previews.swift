@@ -1,7 +1,6 @@
-// SidebarView previews live in their own file so SidebarView.swift stays
-// under SwiftLint's file_length budget. Both previews reference internal
-// SidebarView APIs and seed an in-memory PreviewBackend; nothing here is
-// referenced from production code.
+// SidebarView previews. Both previews reference internal SidebarView
+// APIs and seed an in-memory PreviewBackend; nothing here is referenced
+// from production code.
 
 import SwiftUI
 

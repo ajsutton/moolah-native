@@ -2,9 +2,7 @@
 
 import Foundation
 
-// Profile-matching and column-mapping-rebuild helpers extracted from
-// `ImportStore` so the main body stays under SwiftLint's `type_body_length`
-// threshold.
+// Profile-matching and column-mapping-rebuild helpers for `ImportStore`.
 extension ImportStore {
 
   // MARK: - Profile resolution

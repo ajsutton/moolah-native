@@ -1,8 +1,7 @@
 import Foundation
 import GRDB
 
-// Upsert helpers split out of `UITestSeedHydrator` so the main enum body stays
-// under SwiftLint's `type_body_length` threshold. Every helper is idempotent:
+// Upsert helpers for `UITestSeedHydrator`. Every helper is idempotent:
 // re-running the same seed (e.g. after a UI-testing re-launch) doesn't
 // double-insert records.
 //
@@ -12,9 +11,8 @@ import GRDB
 extension UITestSeedHydrator {
   // MARK: - Specs
   //
-  // Struct wrappers bundle the per-record fields callers provide. They keep
-  // the upsert call sites self-documenting while holding each helper's
-  // parameter count under SwiftLint's threshold.
+  // Struct wrappers bundle the per-record fields callers provide,
+  // keeping the upsert call sites self-documenting.
 
   struct AccountSpec {
     let id: UUID

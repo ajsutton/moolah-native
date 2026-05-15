@@ -18,7 +18,7 @@ extension Transaction {
   /// - Exactly one `.transfer` leg (the value-bearing leg). Any number
   ///   of additional `.expense` legs in a different instrument from the
   ///   value-bearing leg are permitted (fees: gas, broker fees, …).
-  /// - Exactly one `.income` or `.expense` leg (legacy single-leg cash).
+  /// - Exactly one `.income` or `.expense` leg (single-leg cash).
   ///   Any number of additional `.expense` legs in a different instrument
   ///   from the value-bearing leg are permitted.
   ///

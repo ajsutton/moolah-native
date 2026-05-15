@@ -2,7 +2,7 @@
 /// balance display, totals, and reports.
 ///
 /// - `recordedValue`: the latest user-entered `InvestmentValue` snapshot
-///   drives the displayed value. Snapshots are edited via the legacy
+///   drives the displayed value. Snapshots are edited via the
 ///   investment-account view.
 /// - `calculatedFromTrades`: the value is computed by summing positions
 ///   (derived from trade transactions) at current instrument prices.

@@ -3,8 +3,7 @@ import GRDB
 
 @testable import Moolah
 
-// Transaction-seeding helpers split out of `BenchmarkFixtures+Seeding.swift`
-// so the original file stays under SwiftLint's `file_length` threshold.
+// Transaction-seeding helpers for `BenchmarkFixtures`.
 extension BenchmarkFixtures {
 
   static func seedTransactions(
@@ -33,8 +32,7 @@ extension BenchmarkFixtures {
     }
   }
 
-  /// Bundles the inputs to `makeTransactionSpec` so the helper stays
-  /// under SwiftLint's `function_parameter_count` threshold.
+  /// Bundles the inputs to `makeTransactionSpec`.
   private struct TransactionSpecInputs {
     let scale: BenchmarkScale
     let ids: SeedIds

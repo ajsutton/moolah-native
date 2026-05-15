@@ -56,9 +56,7 @@ extension SyncCoordinator {
   }
 
   /// Applies fetched changes for a single zone, wrapping the per-kind dispatch
-  /// in a signpost and slow-zone log. Extracted so
-  /// `handleFetchedRecordZoneChangesAsync` stays under the complexity / body
-  /// length limits.
+  /// in a signpost and slow-zone log.
   nonisolated private func applyFetchedZoneChanges(
     zoneID: CKRecordZone.ID,
     saved: [CKRecord],
@@ -254,8 +252,6 @@ extension SyncCoordinator {
 
   /// Runs one zone's sent-change results through the appropriate handler and
   /// handles any zone-not-found failures by creating the zone and re-queuing.
-  /// Extracted so `handleSentRecordZoneChanges` stays under the complexity /
-  /// body length limits.
   @MainActor
   private func processSentZone(
     zoneID: CKRecordZone.ID,

@@ -7,18 +7,15 @@ extension GRDBInstrumentRegistryRepository: InstrumentMapResolving {
   /// Returns the memoised `[String: Instrument]` snapshot, rebuilding it
   /// from the database only when a mutation has invalidated the cache.
   ///
-  /// The cutover routes every per-profile instrument resolution through
-  /// this single shared method on the serial profile-index queue (shared
-  /// across all profiles, the price caches, and sync apply). A per-call
+  /// Every per-profile instrument resolution routes through this single
+  /// shared method on the serial profile-index queue (shared across all
+  /// profiles, the price caches, and sync apply). A per-call
   /// `database.read` + full-map rebuild (incl. ~150 `Instrument.fiat`
   /// constructions) on the cold-launch burst (~1400 calls/sec) would
-  /// serialise on that queue and regress badly. Steady state here is a
-  /// cached dictionary read behind one unfair-lock acquisition — cheaper
-  /// than today's per-call per-profile fetch.
+  /// serialise on that queue and regress badly. Steady state is a
+  /// cached dictionary read behind one unfair-lock acquisition.
   ///
-  /// Stored rows first, ambient ISO fiat supplemented after — preserving
-  /// the ordering callers will see post-cutover so no read path changes
-  /// behaviour when it switches from per-profile to shared resolution.
+  /// Stored rows first, ambient ISO fiat supplemented after.
   /// **Stale-read safety (bounded loop, not recursion).** The cold path
   /// captures the invalidation generation, drops the lock, then
   /// `await`s `database.read`. On commit it only adopts the rebuilt

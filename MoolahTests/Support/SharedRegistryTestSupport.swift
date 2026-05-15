@@ -10,15 +10,10 @@ import GRDB
 ///
 /// This is the test-side mirror of how production wires the
 /// shared registry (`MoolahApp.makeSharedInstrumentRegistry` over
-/// `ProfileContainerManager.profileIndexDatabase`). It replaces the
-/// retired per-profile `PerProfileInstrumentMapResolver` /
-/// `PerProfileInstrumentRegistrar` shims at every repository / sync /
-/// rollback test seam: those shims read and wrote the per-profile
-/// `instrument` table that the `v10_drop_shared_instrument_legacy`
-/// migration removes. Resolution semantics are unchanged for the
-/// suites that use it — none seeds the shared registry, so reads fall
-/// through to the same `Instrument.fiat(code:)` path the per-profile
-/// shim produced on an empty per-profile table, while the per-profile
+/// `ProfileContainerManager.profileIndexDatabase`). It is the instrument
+/// resolver / registrar seam for every repository / sync / rollback
+/// test. Suites that use it do not seed the shared registry, so reads
+/// fall through to the `Instrument.fiat(code:)` path; the per-profile
 /// rows those suites insert for FK / cascade structure stay untouched.
 enum SharedRegistryTestSupport {
   /// A fresh shared registry over its own in-memory profile-index DB.

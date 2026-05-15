@@ -9,11 +9,7 @@ import GRDB
 // context. `DatabaseWriter.write { db in … }` has both async and sync
 // overloads; the sync form blocks the calling thread until the queue's
 // serial executor admits the closure. Never call these from
-// `@MainActor`.
-//
-// Extracted from `GRDBAccountRepository.swift` so the main type body
-// stays under SwiftLint's `file_length` budget — mirrors
-// `GRDBTransactionRepository+Sync.swift`.
+// `@MainActor`. Mirrors `GRDBTransactionRepository+Sync.swift`.
 
 extension GRDBAccountRepository {
   func applyRemoteChangesSync(saved rows: [AccountRow], deleted ids: [UUID]) throws {

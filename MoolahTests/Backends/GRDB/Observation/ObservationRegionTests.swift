@@ -151,8 +151,6 @@ struct ObservationRegionTests {
   }
 
   /// Inserts a single bank account row into an empty profile database.
-  /// Extracted so `fetchClosureDoesNotRefireOnSystemFieldsWrite` stays
-  /// under SwiftLint's `function_body_length`.
   private func seedAccount(id accountId: UUID, in databaseQueue: DatabaseQueue) async throws {
     let recordName = "AccountRecord|\(accountId.uuidString.lowercased())"
     try await databaseQueue.write { database in

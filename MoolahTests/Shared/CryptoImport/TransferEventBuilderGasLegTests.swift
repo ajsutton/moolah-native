@@ -4,7 +4,7 @@ import Testing
 
 @testable import Moolah
 
-/// Behavioural coverage for the gas-leg construction added in #762.
+/// Behavioural coverage for the gas-leg construction.
 /// Lives in its own suite because the receipt-fetch coalescing is a
 /// distinct concern from transfer-leg construction (covered by
 /// `TransferEventBuilderTests`). All tests here use

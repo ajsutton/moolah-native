@@ -4,13 +4,10 @@ import OSLog
 
 /// Namespace anchor matching the filename so SwiftLint's `file_name`
 /// rule stays satisfied alongside the loose top-level wire-format
-/// types declared below. Mirrors the pattern used in
-/// `WalletSyncTestDoubles.swift` etc.
+/// types declared below.
 enum AlchemyJSONRPCWireFormat {}
 
 /// JSON-RPC envelope and wire-format payloads used by `LiveAlchemyClient`.
-/// Lifted out of `AlchemyClient.swift` so the main client file stays
-/// inside SwiftLint's `file_length` / `type_body_length` budgets.
 ///
 /// Visibility: every type here is module-internal but unused outside
 /// `AlchemyClient.swift` and the test files. Keeping them at the file
@@ -93,8 +90,7 @@ struct AlchemyTransferResult: Decodable {
 
 /// HTTP response validator for `LiveAlchemyClient`. Maps status codes
 /// to `WalletSyncError` cases and parses `Retry-After` for the 429
-/// path. Lifted out of `AlchemyClient.swift` so the main client struct
-/// stays inside SwiftLint's `type_body_length` budget.
+/// path.
 enum AlchemyResponseValidator {
   /// Validates the HTTP response, throwing the appropriate
   /// `WalletSyncError` on non-2xx status. `logger` is the per-instance

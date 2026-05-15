@@ -131,8 +131,7 @@ struct SyncCoordinatorTestsExtra {
 
   /// Registers a profile in the GRDB index and seeds its per-profile
   /// data DB via `seed`. Used by
-  /// `queueUnsyncedRecordsForAllProfilesSkipsSyncedRecords` to keep the
-  /// test body under SwiftLint's `function_body_length` cap.
+  /// `queueUnsyncedRecordsForAllProfilesSkipsSyncedRecords`.
   private func seedProfile(
     in manager: ProfileContainerManager,
     profile: Profile,
@@ -245,7 +244,6 @@ struct SyncCoordinatorTestsExtra {
     #expect(second.isEmpty)
   }
 
-  // (Sign-out / encryptedDataReset / zone-deleted backfill-flag tests
-  // live in `SyncCoordinatorBackfillFlagTests.swift` to keep the type
-  // body under the SwiftLint threshold.)
+  // Sign-out / encryptedDataReset / zone-deleted backfill-flag tests
+  // live in `SyncCoordinatorBackfillFlagTests.swift`.
 }

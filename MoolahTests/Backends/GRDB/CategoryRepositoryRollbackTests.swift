@@ -6,12 +6,11 @@ import Testing
 
 @testable import Moolah
 
-/// Rollback contract tests for `GRDBCategoryRepository.delete(id:withReplacement:)`
-/// — split out of `CoreFinancialGraphRollbackTests` so each file stays
-/// under SwiftLint's `file_length` ceiling. The repository's delete path
-/// touches three tables (categories, transaction legs, budget items)
-/// inside a single write transaction; these tests force a mid-write
-/// failure and assert the prior state survives byte-equal.
+/// Rollback contract tests for `GRDBCategoryRepository.delete(id:withReplacement:)`.
+/// The repository's delete path touches three tables (categories,
+/// transaction legs, budget items) inside a single write transaction;
+/// these tests force a mid-write failure and assert the prior state
+/// survives byte-equal.
 @Suite("Category repository rollback contracts")
 @MainActor
 struct CategoryRepositoryRollbackTests {

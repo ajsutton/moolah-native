@@ -1,8 +1,6 @@
 import Foundation
 
-// Reactive observation pipeline for `AccountStore`. Lives in an
-// extension so the main type body stays under SwiftLint's
-// `type_body_length` and `file_length` budgets.
+// Reactive observation pipeline for `AccountStore`.
 //
 // Three independent surfaces feed `AccountStore`:
 //   1. `repository.observeAll()` / `observeErrors()` — the accounts
@@ -11,18 +9,13 @@ import Foundation
 //      ticks that drive a balance recompute (no DB re-fetch needed).
 //   3. `investmentRepository.observeAllValues()` / `observeErrors()` —
 //      a tick stream over the `investment_value` table that drives a
-//      cache refresh + recompute. Replaces the cross-store
-//      `onInvestmentValueChanged` callback that previously lived on
-//      `InvestmentStore`.
+//      cache refresh + recompute.
 //
 // A fourth surface, the shared instrument registry's
 // `observeChanges()` stream, is owned by `instrumentChangeObservationTask`
 // (spawned from `init`) and drained by `observeInstrumentRegistryChanges`
 // below — kept separate from the always-on `TaskGroup` for the same
 // reason as the other stores.
-//
-// All `addTask` bodies are deliberately one-line so the enclosing
-// closure body stays under SwiftLint's `closure_body_length`.
 extension AccountStore {
 
   /// Subscribes to every reactive stream in parallel via a `TaskGroup`.

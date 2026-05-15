@@ -66,10 +66,10 @@ struct ProfileSessionTests {
 
   // MARK: - setUp() — async SwiftData → GRDB migration entry point (#575)
 
-  /// `ProfileSession.init` no longer runs the SwiftData → GRDB
-  /// migration; that work moved into `setUp()` so the eight per-type
-  /// `database.write` calls dispatch to GRDB's writer queue rather than
-  /// blocking `@MainActor`. Calling `await session.setUp()` is
+  /// The SwiftData → GRDB migration runs in `setUp()`, not
+  /// `ProfileSession.init`, so the eight per-type `database.write`
+  /// calls dispatch to GRDB's writer queue rather than blocking
+  /// `@MainActor`. Calling `await session.setUp()` is
   /// idempotent — multiple awaits coalesce on the same in-flight task,
   /// which keeps view-side and caller-side awaits cheap and lets
   /// `SessionManager.session(for:)` fire-and-forget the first call

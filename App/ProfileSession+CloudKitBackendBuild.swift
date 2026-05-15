@@ -4,9 +4,8 @@ import GRDB
 
 extension ProfileSession {
   /// Bundle of the three market-data services consumed by the CloudKit
-  /// backend's `FullConversionService`. Lets `makeCloudKitBackend` take a
-  /// single value instead of three separate parameters so it stays at
-  /// SwiftLint's parameter-count policy.
+  /// backend's `FullConversionService`. Lets `makeCloudKitBackend` take
+  /// a single value instead of three separate parameters.
   struct CloudKitMarketDataServices {
     let exchangeRates: ExchangeRateService
     let stockPrices: StockPriceService
@@ -41,9 +40,8 @@ extension ProfileSession {
       registry = shared
     } else {
       // Preview / test fallback. The registry is built over a
-      // profile-index database — never the per-profile `data.sqlite`:
-      // the `v10_drop_shared_instrument_legacy` migration removed the
-      // per-profile `instrument` table, so instrument identity lives
+      // profile-index database — never the per-profile `data.sqlite`,
+      // which has no `instrument` table; instrument identity lives
       // solely on the profile-index registry. When a coordinator is
       // present its container manager's profile-index DB is reused;
       // otherwise a fresh in-memory profile-index DB stands in.
@@ -136,12 +134,10 @@ extension ProfileSession {
 
   /// Builds the preview/test-only `GRDBInstrumentRegistryRepository`,
   /// wiring its mutation hooks to the sync coordinator's per-zone queue
-  /// helpers. Extracted from `makeCloudKitBackend` so the per-mutation
-  /// closure definitions don't bloat its body length.
+  /// helpers.
   ///
   /// The registry is backed by a profile-index database, never the
-  /// per-profile `data.sqlite` (whose `instrument` table the
-  /// `v10_drop_shared_instrument_legacy` migration removed): the
+  /// per-profile `data.sqlite` (which has no `instrument` table): the
   /// coordinator's container-manager profile-index DB when a coordinator
   /// is present, otherwise a fresh in-memory profile-index DB. This
   /// branch is unreachable in production — see `makeCloudKitBackend` —

@@ -4,19 +4,16 @@ import Foundation
 import GRDB
 
 /// Computes account-level daily cumulative balances from transaction
-/// legs for `GRDBInvestmentRepository.fetchDailyBalances`. Lifted out
-/// of the main repository file so the class body stays under the
-/// SwiftLint `type_body_length` budget.
+/// legs for `GRDBInvestmentRepository.fetchDailyBalances`.
 ///
 /// Returns one `AccountDailyBalance` per (calendar-day, instrument)
-/// tuple — multi-instrument legacy investment accounts no longer
-/// conflate quantities of different instruments under a single label
-/// (issue #579). The consuming `InvestmentStore` aggregates these into
-/// the host currency via `InstrumentConversionService`.
+/// tuple, so multi-instrument investment accounts do not conflate
+/// quantities of different instruments under a single label (issue
+/// #579). The consuming `InvestmentStore` aggregates these into the
+/// host currency via `InstrumentConversionService`.
 enum DailyBalanceCompute {
   /// One leg paired with its parent transaction's date — the unit of
-  /// work fed to `aggregateByInstrument`. Replaces an inline 3-tuple
-  /// (`large_tuple` SwiftLint violation).
+  /// work fed to `aggregateByInstrument`.
   private struct LegEntry {
     let date: Date
     let instrumentId: String

@@ -25,10 +25,8 @@ extension ProfileDataSyncHandler {
     return recordIDs
   }
 
-  // `queueUnsyncedInstrumentRecords` was removed alongside
-  // `SyncCoordinator.queueUnsyncedInstrumentsForAllProfiles`. Auto-
-  // inserted non-fiat instruments now publish through the shared registry
-  // on the profile-index zone: the create path calls
+  // Auto-inserted non-fiat instruments publish through the shared
+  // registry on the profile-index zone: the create path calls
   // `instrumentRegistrar.registerResolvable` (production = the shared
   // `GRDBInstrumentRegistryRepository`) → `registerStock`/`registerCrypto`
   // → `fireOnRecordChanged` → `queueSave(recordName:zoneID:)` on the
@@ -211,14 +209,12 @@ extension ProfileDataSyncHandler {
     // to leaving local data in an inconsistent state.
     var clearedAll = true
     let wipes: [(String, () throws -> Void)] = [
-      // No per-profile `instrument` wipe. Instrument data no longer
-      // lives in a per-profile table: it is owned by the shared,
-      // iCloud-account-scoped profile-index registry, and a
+      // No per-profile `instrument` wipe. Instrument data is owned by
+      // the shared, iCloud-account-scoped profile-index registry, and a
       // single-profile purge (sign-out / account-switch / zone purge)
-      // must NOT wipe instruments shared by every other profile. The
-      // per-profile `instrument` table was also removed by the
-      // `v10_drop_shared_instrument_legacy` migration, so a
-      // `deleteAllSync` against it would throw `no such table`.
+      // must NOT wipe instruments shared by every other profile. There
+      // is no per-profile `instrument` table, so a `deleteAllSync`
+      // against it would throw `no such table`.
       (CategoryRow.recordType, { try self.grdbRepositories.categories.deleteAllSync() }),
       (AccountRow.recordType, { try self.grdbRepositories.accounts.deleteAllSync() }),
       (EarmarkRow.recordType, { try self.grdbRepositories.earmarks.deleteAllSync() }),

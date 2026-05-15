@@ -11,12 +11,11 @@ import OSLog
 /// **Header + legs together.** Every write path (`create`, `update`,
 /// `delete`) inserts/deletes the `TransactionRow` and its
 /// `TransactionLegRow`s inside a single `database.write { … }`. On any
-/// throw the entire mutation rolls back. After
-/// `v5_drop_foreign_keys` the schema no longer enforces FK CASCADE on
-/// `transaction_leg.transaction_id`; `delete(id:)` and the sync
-/// `applyRemoteChangesSync` in `+Sync.swift` therefore delete legs
-/// explicitly before the parent, in the same write transaction, so a
-/// partially committed header cannot leave orphaned legs. Rollback
+/// throw the entire mutation rolls back. The schema does not enforce
+/// FK CASCADE on `transaction_leg.transaction_id`; `delete(id:)` and
+/// the sync `applyRemoteChangesSync` in `+Sync.swift` therefore delete
+/// legs explicitly before the parent, in the same write transaction,
+/// so a partially committed header cannot leave orphaned legs. Rollback
 /// test mandatory; see `guides/DATABASE_CODE_GUIDE.md`.
 ///
 /// **Instrument resolution.** Each leg's `instrument` is resolved via

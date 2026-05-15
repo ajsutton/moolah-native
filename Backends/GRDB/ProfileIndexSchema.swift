@@ -21,18 +21,16 @@ import GRDB
 /// `v1_initial`                    — the `profile` table.
 /// `v2_data_format_version`        — adds `data_format_version INTEGER NOT NULL DEFAULT 0`.
 /// `v3_shared_instrument_registry` — adds the shared `instrument` table
-///   (mirrors the per-profile post-v8 shape) plus the six rate-cache
-///   tables — moved here from per-profile so spam decisions,
-///   discovered-token resolutions, and price-cache rows propagate
-///   across every profile on the same iCloud account. See
+///   plus the six rate-cache tables, so spam decisions, discovered-token
+///   resolutions, and price-cache rows propagate across every profile on
+///   the same iCloud account. See
 ///   `ProfileIndexSchema+SharedInstrumentRegistry.swift`.
 ///
 /// Each migration body is registered here. Once shipped, migration IDs
 /// are frozen forever; splitting later is fine, merging post-ship is
-/// not. As the schema grows, future migration bodies will move into
-/// sibling `ProfileIndexSchema+<Name>.swift` extension files — matching
-/// the convention `ProfileSchema` evolved into — so this file stays a
-/// small index of registered migrations.
+/// not. Migration bodies live in sibling
+/// `ProfileIndexSchema+<Name>.swift` extension files so this file stays
+/// a small index of registered migrations.
 ///
 /// See `guides/DATABASE_SCHEMA_GUIDE.md` for the rules this schema
 /// follows.

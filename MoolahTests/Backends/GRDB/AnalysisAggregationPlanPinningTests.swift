@@ -7,9 +7,8 @@ import Testing
 /// `EXPLAIN QUERY PLAN`-pinning tests for the analysis aggregations and
 /// the still-intentional full-table reads on the analysis hot path.
 ///
-/// Split out of `AnalysisPlanPinningTests` so each file stays under the
-/// SwiftLint `type_body_length` budget. Same `EXPLAIN QUERY PLAN`
-/// methodology as the parent suite (see its file header).
+/// Same `EXPLAIN QUERY PLAN` methodology as `AnalysisPlanPinningTests`
+/// (see its file header).
 ///
 /// **Temp B-tree GROUP/ORDER lines are accepted across this whole
 /// file.** Aggregations group and order by `day = DATE(t.date)` — a
@@ -163,10 +162,10 @@ struct AnalysisAggregationPlanPinningTests {
     // `GRDBAnalysisRepository.fetchCategoryBalances(...)` with no
     // optional filters set: GROUP BY `(DATE(t.date), category_id,
     // instrument_id)` restricted to non-scheduled categorised legs of
-    // a given type in a date range. The aggregation no longer joins
+    // a given type in a date range. The aggregation does not join
     // to `account` — investment-account legs are intentionally
     // included alongside the rest (matches
-    // `fetchIncomeAndExpense`'s contract). With the LEFT JOIN gone
+    // `fetchIncomeAndExpense`'s contract). Without the LEFT JOIN
     // the plan resolves to `USING COVERING INDEX` on
     // `leg_analysis_by_type_category` because every leg column
     // touched (`type`, `category_id`, `instrument_id`,

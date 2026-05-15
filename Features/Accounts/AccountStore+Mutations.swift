@@ -1,8 +1,7 @@
 import Foundation
 import OSLog
 
-// Mutation surface for `AccountStore`. Hoisted out of `AccountStore.swift`
-// so that file stays under SwiftLint's `file_length` threshold.
+// Mutation surface for `AccountStore`.
 //
 // Mutations are pass-through under the reactive design: every method
 // calls the repository, the GRDB write commits, and

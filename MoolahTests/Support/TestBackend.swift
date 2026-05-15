@@ -44,8 +44,7 @@ enum TestBackend {
   /// call constructs a fresh registry against its own in-memory
   /// profile-index DB (`SharedRegistryTestSupport.makeSharedRegistry()`)
   /// — the test-time analogue of production's shared registry. It is
-  /// never pointed at the per-profile `ProfileDatabase`: the
-  /// `v10_drop_shared_instrument_legacy` migration removes the
+  /// never pointed at the per-profile `ProfileDatabase`: there is no
   /// per-profile `instrument` table, so instrument identity lives only
   /// on the profile-index registry.
   ///
@@ -63,12 +62,10 @@ enum TestBackend {
     let rateClient = FixedRateClient(rates: exchangeRates)
     // The per-profile `data.sqlite` carries domain rows and the two
     // synced csv-import tables. Instrument identity and the rate /
-    // price caches no longer live here: the
-    // `v10_drop_shared_instrument_legacy` migration removed the
-    // per-profile `instrument` + six rate-cache tables, so they live
-    // solely on the shared profile-index DB. This mirrors production,
-    // where `SyncCoordinator.sharedMarketData` and the shared registry
-    // are both pointed at `ProfileContainerManager.profileIndexDatabase`.
+    // price caches live solely on the shared profile-index DB, not
+    // here. This mirrors production, where
+    // `SyncCoordinator.sharedMarketData` and the shared registry are
+    // both pointed at `ProfileContainerManager.profileIndexDatabase`.
     let database = try ProfileDatabase.openInMemory()
     let registry =
       try sharedRegistry
@@ -97,12 +94,12 @@ enum TestBackend {
   ///
   /// `seed(transactions:)` and friends materialise FK / cascade
   /// structure by writing raw Rows; they cannot write a non-fiat
-  /// `instrument` row because the `v10_drop_shared_instrument_legacy`
-  /// migration removed the per-profile `instrument` table. Instrument
-  /// identity now lives solely on the profile-index registry, so a test
-  /// that seeds a stock / crypto leg must register its denomination here
-  /// — the same `InstrumentRegistering` seam production's create path
-  /// uses. Fiat is ambient (resolved from ISO data) and a no-op here.
+  /// `instrument` row because there is no per-profile `instrument`
+  /// table. Instrument identity lives solely on the profile-index
+  /// registry, so a test that seeds a stock / crypto leg must register
+  /// its denomination here — the same `InstrumentRegistering` seam
+  /// production's create path uses. Fiat is ambient (resolved from ISO
+  /// data) and a no-op here.
   static func register(
     _ instrument: Instrument,
     in backend: CloudKitBackend
@@ -199,8 +196,8 @@ enum TestBackend {
   /// Seeds transactions into the in-memory store.
   ///
   /// Non-fiat denominations are NOT auto-registered: instrument identity
-  /// lives on the profile-index registry (the per-profile `instrument`
-  /// table was removed by `v10_drop_shared_instrument_legacy`). A test
+  /// lives on the profile-index registry (there is no per-profile
+  /// `instrument` table). A test
   /// seeding a stock / crypto leg must register it via
   /// `TestBackend.register(_:in:)` so the resolver resolves it on
   /// read-back; fiat is ambient and needs no registration.
@@ -236,16 +233,15 @@ enum TestBackend {
   /// `earmark`) referenced by a single leg, if any of them are missing
   /// in the test database.
   ///
-  /// Convenience for SwiftData-era tests that rarely pre-seed parents
-  /// before legs that reference them. Under v5 the schema no longer
-  /// enforces FKs (`v5_drop_foreign_keys`); the helper continues to
-  /// exist so those tests can read back fully-resolved domain
-  /// `Transaction` values with non-trivial parent rows for assertion
-  /// purposes. Tests that care about a specific parent shape seed it
-  /// explicitly; the `ensurePlaceholder*` helpers respect existing rows.
+  /// Convenience for tests that rarely pre-seed parents before legs
+  /// that reference them. The schema does not enforce FKs
+  /// (`v5_drop_foreign_keys`); the helper lets those tests read back
+  /// fully-resolved domain `Transaction` values with non-trivial parent
+  /// rows for assertion purposes. Tests that care about a specific
+  /// parent shape seed it explicitly; the `ensurePlaceholder*` helpers
+  /// respect existing rows.
   ///
-  /// It does **not** materialise an `instrument` row: the
-  /// `v10_drop_shared_instrument_legacy` migration removed the
+  /// It does **not** materialise an `instrument` row: there is no
   /// per-profile `instrument` table, so instrument identity lives only
   /// on the profile-index registry. A test that seeds a non-fiat leg
   /// must register its denomination via `TestBackend.register(_:in:)`

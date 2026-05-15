@@ -31,10 +31,10 @@ final class GRDBInstrumentRegistryRepository:
   InstrumentRegistryRepository, @unchecked Sendable
 {
   // `database` is `internal` rather than `private` so the sibling
-  // extension file `GRDBInstrumentRegistryRepository+Lookup.swift` (which
-  // hosts `cryptoRegistration(byId:)` to keep this file under SwiftLint's
-  // length budgets) can read from it. The other stored properties remain
-  // private — only the database handle is shared across files.
+  // extension file `GRDBInstrumentRegistryRepository+Lookup.swift`
+  // (which hosts `cryptoRegistration(byId:)`) can read from it. The
+  // other stored properties remain private — only the database handle
+  // is shared across files.
   /// Holds the post-init hook closures so they can be swapped in
   /// atomically by `attachSyncHooks`. Mirrors the pattern used by
   /// `GRDBProfileIndexRepository` — the shared registry is constructed
@@ -58,10 +58,9 @@ final class GRDBInstrumentRegistryRepository:
 
   /// Lock-guarded memoised instrument-map snapshot. The
   /// `MapCacheState` type and the invalidation / test-accessor helpers
-  /// live in the sibling `+SyncHooks` extension file so this file stays
-  /// under SwiftLint's `file_length` / `type_body_length` thresholds;
-  /// only the stored property itself must be declared in the class
-  /// body. Guarded by the same `OSAllocatedUnfairLock` primitive the
+  /// live in the sibling `+SyncHooks` extension file; only the stored
+  /// property itself must be declared in the class body. Guarded by
+  /// the same `OSAllocatedUnfairLock` primitive the
   /// type already uses for `hooks` — deliberately not a second,
   /// divergent synchronisation mechanism. `internal` (default) so the
   /// sibling `+InstrumentMapResolving` / `+SyncEntryPoints` extensions
@@ -98,10 +97,9 @@ final class GRDBInstrumentRegistryRepository:
   // `attachSyncHooks` and the `fireOnRecord*` helpers live in
   // `GRDBInstrumentRegistryRepository+SyncHooks.swift`, and the row-level
   // upsert helpers (`upsertCrypto`, `upsertStock`) live in
-  // `GRDBInstrumentRegistryRepository+Upsert.swift`, so this file stays
-  // under SwiftLint's `file_length` / `type_body_length` thresholds. They
-  // access `hooks` / are called as `Self.upsert…` via the `internal`
-  // visibility implied by Swift's same-module-extension scope.
+  // `GRDBInstrumentRegistryRepository+Upsert.swift`. They access `hooks`
+  // / are called as `Self.upsert…` via the `internal` visibility implied
+  // by Swift's same-module-extension scope.
 
   // MARK: - InstrumentRegistryRepository conformance
 
@@ -130,8 +128,7 @@ final class GRDBInstrumentRegistryRepository:
   }
 
   // `cryptoRegistration(byId:)` lives in
-  // `GRDBInstrumentRegistryRepository+Lookup.swift` to keep this file
-  // under SwiftLint's `file_length` and `type_body_length` thresholds.
+  // `GRDBInstrumentRegistryRepository+Lookup.swift`.
 
   func registerCrypto(
     _ instrument: Instrument, mapping: CryptoProviderMapping
@@ -340,7 +337,6 @@ final class GRDBInstrumentRegistryRepository:
   // (`setEncodedSystemFieldsSync`, `clearAllSystemFieldsSync`,
   // `unsyncedRowIdsSync`, `allRowIdsSync`, `fetchRowSync`,
   // `fetchRowsSync`, `deleteAllSync`) live in the sibling
-  // `+SyncEntryPoints` extension file so this file stays under
-  // SwiftLint's length thresholds.
+  // `+SyncEntryPoints` extension file.
   // `unsyncedNonFiatRowIdsSync` similarly lives in `+Lookup`.
 }

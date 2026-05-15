@@ -5,9 +5,7 @@ import GRDB
 
 // MARK: - ExchangeRateService prefetch
 
-// `prefetchLatest` lives in its own file so the main actor body stays
-// under SwiftLint's `type_body_length` and `file_length` thresholds.
-// Best-effort warm-up of the latest rates for a base instrument; called
+// `prefetchLatest`: best-effort warm-up of the latest rates for a base instrument; called
 // on app start / profile open. Targets yesterday-UTC rather than today
 // (see `Shared/PriceCacheCap.swift`) and overlaps the existing latest
 // cached date by one day so a stale value gets re-validated.

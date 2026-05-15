@@ -72,13 +72,14 @@ struct AccountStoreConversionTestsMoreExtra {
 
   // MARK: - computeConvertedInvestmentTotal single-pass conversion
 
-  /// Issue #96: `computeConvertedInvestmentTotal` previously routed positions
-  /// through two conversions — positions → account instrument → target. For
-  /// asymmetric rates (which all real-world rates are), chaining conversions
-  /// compounds rounding error and produces a different result than summing
-  /// positions directly to `target`. This test uses an asymmetric rate table
-  /// where double-conversion and single-pass conversion produce distinct
-  /// numerical answers and asserts the single-pass answer is returned.
+  /// Issue #96: `computeConvertedInvestmentTotal` must convert positions
+  /// directly to `target` in a single pass, not chain positions → account
+  /// instrument → target. For asymmetric rates (which all real-world rates
+  /// are), chaining conversions compounds rounding error and produces a
+  /// different result than summing positions directly to `target`. This
+  /// test uses an asymmetric rate table where double-conversion and
+  /// single-pass conversion produce distinct numerical answers and asserts
+  /// the single-pass answer is returned.
   @Test
   func computeConvertedInvestmentTotalSumsPositionsDirectlyToTarget()
     async throws

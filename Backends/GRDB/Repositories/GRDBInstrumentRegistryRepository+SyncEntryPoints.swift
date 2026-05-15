@@ -4,9 +4,7 @@ import Foundation
 import GRDB
 
 /// Synchronous entry points consumed by `ProfileIndexSyncHandler` and
-/// the coordinator's startup self-heal scan. Extracted from the main
-/// repository file so it stays under SwiftLint's `file_length` and
-/// `type_body_length` thresholds.
+/// the coordinator's startup self-heal scan.
 ///
 /// These methods are called from the CKSyncEngine delegate executor
 /// on a non-MainActor context. `DatabaseWriter.write { db in … }` has

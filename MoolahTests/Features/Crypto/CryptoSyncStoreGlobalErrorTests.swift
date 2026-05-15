@@ -10,13 +10,11 @@ import Testing
 /// build phase produces a process-wide failure (`.missingApiKey` /
 /// `.invalidApiKey`) — either of those means no account can sync, so
 /// the user needs the global affordance, not a per-account caption —
-/// and clear once a sync cycle runs without one. The "clear on apply
-/// success" behaviour the store originally shipped with cleared the
-/// banner even when every account failed in the build phase (because
-/// the apply pass succeeds with empty input), which left the user
-/// staring at a per-row error caption with no global affordance to
-/// fix the underlying problem. These tests pin the corrected
-/// contract.
+/// and clear once a sync cycle runs without one. It must NOT clear on
+/// apply success when every account failed in the build phase (the
+/// apply pass succeeds with empty input); doing so would leave the
+/// user staring at a per-row error caption with no global affordance
+/// to fix the underlying problem. These tests pin that contract.
 @Suite("CryptoSyncStore — globalError banner")
 @MainActor
 struct CryptoSyncStoreGlobalErrorTests {

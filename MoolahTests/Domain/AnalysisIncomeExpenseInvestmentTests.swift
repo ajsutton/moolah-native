@@ -8,9 +8,7 @@ import Testing
 /// in the monthly `income` / `expense` totals rather than silently
 /// dropped.
 ///
-/// Split out of `AnalysisIncomeExpenseTests` as a dedicated suite so the
-/// parent file stays under SwiftLint's `type_body_length` budget. The
-/// expected behaviour: `.income` / `.expense` legs only guard on
+/// The expected behaviour: `.income` / `.expense` legs only guard on
 /// `hasAccount` — there is NO investment-account exclusion. A backend
 /// that filtered investment-account income/expense legs out of the
 /// main totals would silently under-count user income.

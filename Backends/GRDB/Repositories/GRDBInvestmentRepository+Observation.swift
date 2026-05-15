@@ -3,11 +3,7 @@
 import Foundation
 import GRDB
 
-// Reactive observation surface for `InvestmentRepository`. Split out of
-// the main class file to keep `GRDBInvestmentRepository.swift` under
-// SwiftLint's `file_length` warning threshold and to mirror the established
-// `+Observation.swift` companion-file pattern (account, earmark, category,
-// transaction, import-rule).
+// Reactive observation surface for `InvestmentRepository`.
 //
 // `observeValues(accountId:page:pageSize:)` mirrors the projection of
 // `fetchValues(accountId:page:pageSize:)`. `observeDailyBalances(accountId:)`
@@ -32,7 +28,8 @@ import GRDB
 // `observeDailyBalances(accountId:)` resolves the map once via
 // `instrumentResolver` when the stream's worker task starts, captures it
 // into the tracking closure, and drops `InstrumentRow.observableRegion`
-// from the tracked regions (those rows are no longer in this DB). An
+// from the tracked regions (those rows live on the separate
+// profile-index DB). An
 // instrument-metadata edit therefore does not live-refresh an already-
 // open chart until the next refetch (re-subscribe). `observeValues` and
 // `observeAllValues` don't consult the instrument map, so they keep the
@@ -99,7 +96,7 @@ extension GRDBInvestmentRepository {
         // `encoded_system_fields` writes on the tables
         // `DailyBalanceCompute` reads (transaction, transaction_leg) do
         // not re-fire this observation. See issue #865. `InstrumentRow`
-        // is no longer tracked here — those rows live on the separate
+        // is not tracked here — those rows live on the separate
         // profile-index database; the map is the captured `instruments`
         // snapshot.
         .tracking(

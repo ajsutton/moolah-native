@@ -2,8 +2,8 @@ import XCTest
 
 /// Smoke test for the `--ui-testing` launch path: launches the app under
 /// the `.tradeBaseline` seed and verifies the main window appears.
-/// Originally added in PR #4; migrated to `MoolahUITestCase` in PR #5 so
-/// the failure-artefact regime kicks in if the launch ever stops working.
+/// Uses `MoolahUITestCase` so the failure-artefact regime kicks in if
+/// the launch ever stops working.
 ///
 /// `MoolahApp.launch(seed:)` itself runs `expectMainWindowVisible()` and
 /// fails the test if the window does not appear within 5 s, so the test

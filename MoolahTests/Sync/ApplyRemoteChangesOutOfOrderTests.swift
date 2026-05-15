@@ -9,9 +9,9 @@ import Testing
 
 /// Reproduces the v1.1.0-rc.12 incident as a unit test: a single
 /// CKRecord for an `InvestmentValueRow` whose parent `account` row
-/// doesn't exist locally must succeed at apply time. Under v4 (FK
-/// enforced) the insert tripped SQLite-19 → `.saveFailed(...)` →
-/// infinite re-fetch loop. v5 dropped the FK; the row lands cleanly.
+/// doesn't exist locally must succeed at apply time. The schema does
+/// not enforce the FK, so the row lands cleanly instead of tripping
+/// SQLite-19 → `.saveFailed(...)` → an infinite re-fetch loop.
 @Suite("Sync apply tolerates out-of-order CKRecord delivery")
 struct ApplyRemoteChangesOutOfOrderTests {
 
@@ -65,11 +65,11 @@ struct ApplyRemoteChangesOutOfOrderTests {
     #expect(count == 1)
   }
 
-  /// Symmetric coverage for the `transaction_leg.transaction_id ON DELETE
-  /// CASCADE` FK that v3 enforced. Under v4 a `TransactionLegRow` arriving
-  /// before its parent `TransactionRow` would have produced the same
-  /// SQLite-19 error rc.12 produced for investment values. v5 dropped the
-  /// FK; the leg lands cleanly even with no parent transaction in GRDB.
+  /// Symmetric coverage for the `transaction_leg.transaction_id`
+  /// relationship. The schema does not enforce the FK, so a
+  /// `TransactionLegRow` arriving before its parent `TransactionRow`
+  /// lands cleanly instead of tripping the SQLite-19 error rc.12 seen
+  /// for investment values.
   @Test("TransactionLeg CKRecord landing before its parent transaction succeeds")
   func transactionLegArrivesBeforeTransaction() async throws {
     let harness = try await MainActor.run {

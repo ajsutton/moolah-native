@@ -41,8 +41,8 @@
         if let resolved = resolvedProfile {
           sessionContent(for: resolved)
         } else if profileID != nil {
-          // This window was opened for a specific profile that no longer
-          // exists. Close it — the user will land on whichever window
+          // This window was opened for a specific profile that does not
+          // exist. Close it — the user will land on whichever window
           // SwiftUI brings forward next.
           Color.clear
             .onAppear {
@@ -92,9 +92,9 @@
         // Register in-process entry points for AppleScript/App Intents so
         // `NavigateCommand` / `OpenAccountIntent` don't need to round-trip
         // through `NSWorkspace.shared.open(moolah://…)` — SwiftUI's
-        // auto-spawn of a stray window on URL events (issue #378) — and
-        // since the URL scheme itself has been removed (issue #386),
-        // in-process is the only remaining path.
+        // auto-spawn of a stray window on URL events (issue #378). The
+        // URL scheme does not exist (issue #386), so in-process is the
+        // only path.
         let openAction = openWindow
         let pendingBinding = pendingNavigationBinding
         NavigationBridge.openProfile = { id in openAction(value: id) }
@@ -106,8 +106,7 @@
 
     /// Renders the per-session content area: the live session, the
     /// stop-the-world incompatible-profile screen, or a brief progress
-    /// indicator while the open is in flight. Extracted so the `body`
-    /// closure stays under the SwiftLint `closure_body_length` cap.
+    /// indicator while the open is in flight.
     @ViewBuilder
     private func sessionContent(for resolved: Profile) -> some View {
       switch sessionResult {

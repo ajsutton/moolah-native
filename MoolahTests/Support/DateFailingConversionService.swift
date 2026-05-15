@@ -18,8 +18,8 @@ struct DateFailingConversionService: InstrumentConversionService {
   /// Entries must be `Calendar.current.startOfDay`-normalised so
   /// they line up with how production callers compute their
   /// `dayKey` (`applyInvestmentValues`,
-  /// `applyTradesModePositionValuations`). The service no longer
-  /// re-normalises the `on:` argument inside `convert(...)` — a
+  /// `applyTradesModePositionValuations`). The service does not
+  /// re-normalise the `on:` argument inside `convert(...)` — a
   /// second `startOfDay` call with a non-Gregorian calendar would
   /// silently disagree with the caller's `Calendar.current`-keyed
   /// `failingDates`, turning Rule 10 regressions into false-greens.

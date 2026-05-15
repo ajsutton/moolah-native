@@ -1,8 +1,6 @@
 import Foundation
 
-// Reactive observation pipeline for `EarmarkStore`. Lives in an
-// extension so the main type body stays under SwiftLint's
-// `type_body_length` and `file_length` budgets. `observe()` owns the
+// Reactive observation pipeline for `EarmarkStore`. `observe()` owns the
 // always-on streams (`repository.observeAll()` +
 // `conversionService.observeRates()`); the shared-registry change
 // stream is owned by `instrumentChangeObservationTask` and drained by

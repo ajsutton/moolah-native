@@ -110,8 +110,8 @@ struct InstrumentRecordCryptoFieldsTests {
 
   @Test
   func decodingPreMigrationCKRecordLeavesMappingFieldsNil() throws {
-    // Simulate a record saved by an older version that didn't know about
-    // the three new fields. Only the legacy keys are present.
+    // A record saved by an older app version: only the pre-migration
+    // keys are present, none of the three mapping fields.
     let zoneID = CKRecordZone.ID(zoneName: "test", ownerName: CKCurrentUserDefaultName)
     let recordID = CKRecord.ID(recordName: "AUD", zoneID: zoneID)
     let ckRecord = CKRecord(recordType: "InstrumentRecord", recordID: recordID)

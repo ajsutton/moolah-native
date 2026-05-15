@@ -58,7 +58,7 @@ struct InstrumentPickerSheetCore: View {
       .task(id: ObjectIdentifier(store)) { await store.start() }
       .defaultFocus($focusedField, .search, priority: .userInitiated)
       .onChange(of: store.results.count) { _, _ in
-        // Drop the highlight if the result it pointed at is no longer visible.
+        // Drop the highlight if the result it pointed at is not in the results.
         if let current = highlightedID,
           !store.results.contains(where: { $0.instrument.id == current })
         {

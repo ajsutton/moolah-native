@@ -5,9 +5,8 @@ import OSLog
 import os
 
 // Pipeline-stage helpers (tokenize, parser selection, parse, dedup, persist)
-// extracted from the main `ImportStore` body so it stays under SwiftLint's
-// `type_body_length` threshold. Every helper is file-scoped to the store and
-// only mutates shared state via the public staging/backend accessors.
+// for `ImportStore`. Every helper is file-scoped to the store and only
+// mutates shared state via the public staging/backend accessors.
 extension ImportStore {
 
   // MARK: - Pipeline

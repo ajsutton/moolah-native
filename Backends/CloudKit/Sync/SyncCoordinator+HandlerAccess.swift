@@ -48,9 +48,8 @@ extension SyncCoordinator {
     let database = try containerManager.database(for: profileId)
     // Production CloudKit sync always carries `sharedInstrumentRegistry`
     // (the profile-index registry); the apply bundle's resolver /
-    // registrar must therefore target it, never the per-profile
-    // `instrument` table that `v10_drop_shared_instrument_legacy`
-    // removed. Tests that build a `SyncCoordinator` without injecting a
+    // registrar must therefore target it. There is no per-profile
+    // `instrument` table. Tests that build a `SyncCoordinator` without injecting a
     // shared registry fall back to a registry over the container's own
     // profile-index DB — still the shared, account-scoped table, never
     // the per-profile one. The apply path never invokes the

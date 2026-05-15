@@ -4,9 +4,7 @@ import Foundation
 
 // MARK: - CryptoPriceService live (current) prices
 
-// `currentPrices` lives in its own file so the main actor body stays
-// under SwiftLint's `type_body_length` and `file_length` thresholds.
-// This is the live / spot endpoint — distinct from the historical daily
+// `currentPrices`: the live / spot endpoint — distinct from the historical daily
 // bars handled in `CryptoPriceService.swift`'s `price(for:mapping:on:)`
 // path. The result is intentionally not persisted via the cap-at-yesterday
 // cache; `prefetchLatest` writes a single best-effort yesterday-tagged row

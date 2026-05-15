@@ -14,8 +14,7 @@ import SwiftUI
 ///   `AddTokenSheet` where there's no pre-existing selection to bind.
 ///
 /// The actual rendering lives in `InstrumentPickerSheetCore`; this file
-/// dispatches between the two modes. The split keeps either file under the
-/// SwiftLint `file_length` ceiling.
+/// dispatches between the two modes.
 struct InstrumentPickerSheet: View {
   private let mode: Mode
 

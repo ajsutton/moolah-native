@@ -5,9 +5,7 @@ import GRDB
 
 // MARK: - ExchangeRateService SQL persistence
 
-// SQL persistence for `ExchangeRateService`. Lives in its own file so the
-// main actor body stays under SwiftLint's `type_body_length` and
-// `file_length` thresholds.
+// SQL persistence for `ExchangeRateService`.
 
 extension ExchangeRateService {
   /// Hydrates `caches[base]` from the GRDB-backed `exchange_rate` /

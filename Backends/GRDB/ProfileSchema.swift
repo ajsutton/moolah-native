@@ -48,26 +48,24 @@ import GRDB
 /// `v10_drop_shared_instrument_legacy` — drops the seven legacy
 /// per-profile tables (`instrument`, `exchange_rate`,
 /// `exchange_rate_meta`, `stock_price`, `stock_ticker_meta`,
-/// `crypto_price`, `crypto_token_meta`). Every device has completed
-/// the one-time union into the shared profile-index registry, so the
-/// per-profile copies have no remaining reader. Permitted per
-/// `guides/DATABASE_SCHEMA_GUIDE.md` §1 rule 3 / §6 rule 7. See
-/// `ProfileSchema+DropSharedInstrumentLegacy.swift` for the full
-/// rationale.
+/// `crypto_price`, `crypto_token_meta`). Their data lives in the
+/// shared profile-index registry, so the per-profile copies have no
+/// reader. Permitted per `guides/DATABASE_SCHEMA_GUIDE.md` §1 rule 3 /
+/// §6 rule 7. See `ProfileSchema+DropSharedInstrumentLegacy.swift` for
+/// the full rationale.
 ///
 /// **Retention policy for the cache tables.** The six rate-cache
-/// tables originally created by `v1_initial` are kept forever — needed
-/// for historic-conversion correctness on reports older than the
-/// upstream rate APIs can serve (see `guides/DATABASE_SCHEMA_GUIDE.md`
-/// §9). As of `v10` that retained copy lives on the **shared**
-/// `profile-index.sqlite` DB, not per-profile; the per-profile copies
-/// are dropped because they are now duplicated derived caches.
+/// tables are kept forever — needed for historic-conversion
+/// correctness on reports older than the upstream rate APIs can serve
+/// (see `guides/DATABASE_SCHEMA_GUIDE.md` §9). The retained copy lives
+/// on the **shared** `profile-index.sqlite` DB, not per-profile; the
+/// per-profile copies are dropped as duplicated derived caches.
 ///
 /// Each migration body lives in its own sibling-extension file so
 /// `ProfileSchema.swift` stays a small index of registered migrations.
-/// New migrations get a new sibling file, registered here. Once
-/// shipped, migration IDs are frozen forever; splitting later is
-/// fine, merging post-ship is not.
+/// New migrations get a new sibling file, registered here. Migration
+/// IDs are frozen forever once shipped; splitting later is fine,
+/// merging post-ship is not.
 ///
 /// See `guides/DATABASE_SCHEMA_GUIDE.md` for the rules this schema
 /// follows.

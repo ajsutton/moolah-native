@@ -1,8 +1,6 @@
 import Foundation
 
-// Reactive observation pipeline for `InvestmentStore`. Lives in an
-// extension so the main type body stays under SwiftLint's
-// `type_body_length` and `file_length` budgets.
+// Reactive observation pipeline for `InvestmentStore`.
 //
 // Two observation surfaces participate:
 //   1. Always-on streams subscribed in `init`: `repository.observeErrors()`,

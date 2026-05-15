@@ -8,9 +8,8 @@ import GRDB
 import OSLog
 import SwiftUI
 
-// Launch-time container/sync/automation configuration extracted from the main
-// `MoolahApp` body so it stays under SwiftLint's `type_body_length` threshold.
-// All members are static and referenced from `MoolahApp.init()`.
+// Launch-time container/sync/automation configuration. All members are
+// static and referenced from `MoolahApp.init()`.
 extension MoolahApp {
 
   struct ContainerSetup {
@@ -108,9 +107,8 @@ extension MoolahApp {
     // No launch-time data migration gates the engine start: the local
     // profile index is hydrated synchronously by `ProfileIndexDatabase.open`
     // before the coordinator exists, so `start()` can run immediately.
-    // `startAfter(profileIndexMigration: nil)` keeps the established
-    // launch path (the coordinator owns the spawned `launchTask` so
-    // `stop()` can still cancel a pending start on early teardown).
+    // The coordinator owns the spawned `launchTask` so `stop()` can
+    // cancel a pending start on early teardown.
     coordinator.startAfter(profileIndexMigration: nil)
     // Clean up the legacy CloudKit zone from SwiftData's automatic sync.
     LegacyZoneCleanup.performIfNeeded()
@@ -166,15 +164,12 @@ extension MoolahApp {
   // Shared-registry plumbing (`bootstrapSyncCoordinator`,
   // `makeSharedInstrumentRegistry`, `makeSharedInstrumentScope`,
   // `attachSharedInstrumentRegistrySyncHooks`) lives in the sibling
-  // `MoolahApp+SharedInstrumentScope.swift` file so this one stays
-  // under SwiftLint's `file_length` threshold.
+  // `MoolahApp+SharedInstrumentScope.swift` file.
 
   /// Build the `SessionManager` and wire its `onProfileRemoved` cleanup
-  /// hook. Extracted from `MoolahApp.init` so the initializer body
-  /// stays under SwiftLint's `function_body_length` threshold; the
-  /// hook closure captures the manager and coordinator weakly so a
-  /// cleanup hop after profile deletion doesn't keep them alive past
-  /// the app's lifetime.
+  /// hook. The hook closure captures the manager and coordinator weakly
+  /// so a cleanup hop after profile deletion doesn't keep them alive
+  /// past the app's lifetime.
   static func makeSessionManager(
     setup: ContainerSetup, store: ProfileStore, coordinator: SyncCoordinator
   ) -> SessionManager {
@@ -219,8 +214,8 @@ extension MoolahApp {
     #endif
   }
 
-  /// One-shot cleanup: removes the legacy gzipped JSON rate caches that
-  /// shipped before rate persistence moved to per-profile SQLite. Gated by
+  /// One-shot cleanup: removes the obsolete gzipped JSON rate caches
+  /// (rate persistence lives in per-profile SQLite). Gated by
   /// the `v2.rates.cache.cleared` `UserDefaults` flag so it runs at most
   /// once per install. Best-effort — failures are silent and the rate
   /// services repopulate from network on demand.
@@ -257,9 +252,9 @@ extension MoolahApp {
     defaults.set(true, forKey: key)
   }
 
-  /// One-shot cleanup: removes the legacy SwiftData profile-index and
-  /// per-profile data stores left behind after Phase A migrated every
-  /// record type to GRDB. Gated by the `v4.swiftDataStores.cleared`
+  /// One-shot cleanup: removes the obsolete SwiftData profile-index and
+  /// per-profile data stores (all record types live in GRDB). Gated by
+  /// the `v4.swiftDataStores.cleared`
   /// `UserDefaults` flag so it runs at most once per install. Best
   /// effort — a missing file is silent; other failures log at
   /// `.warning` and the flag is still set so we don't retry forever.

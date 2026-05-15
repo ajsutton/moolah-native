@@ -138,8 +138,8 @@ struct CrossAccountTransferMergerTests {
     #expect(merged.count == 1)
     let result = try #require(merged.first)
     // Filter by the `:gas` `externalId` suffix; value-bearing
-    // outbound legs are now `.expense` too, so type alone no longer
-    // disambiguates fee from value.
+    // outbound legs are `.expense` too, so type alone does not
+    // disambiguate fee from value.
     let feeLegs = result.transaction.legs.filter {
       $0.externalId?.hasSuffix(":gas") == true
     }

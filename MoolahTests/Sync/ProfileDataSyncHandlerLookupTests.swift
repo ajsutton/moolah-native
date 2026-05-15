@@ -86,13 +86,11 @@ struct ProfileDataSyncHandlerLookupTests {
     #expect(result?["name"] as? String == "Found")
   }
 
-  // `recordToSaveFindsInstrumentByStringID` was removed when the
-  // shared-instrument-registry rollout decommissioned the per-profile
-  // `InstrumentRecord` upload path. `ProfileDataSyncHandler.recordToSave`
-  // now traps in DEBUG (logs+returns nil in release) for any
-  // InstrumentRecord routed to a per-profile zone — see
-  // `ProfileDataSyncHandler+RecordLookup.swift`. The replacement
-  // upload path is exercised by
+  // There is no per-profile `InstrumentRecord` upload path:
+  // `ProfileDataSyncHandler.recordToSave` traps in DEBUG (logs+returns
+  // nil in release) for any InstrumentRecord routed to a per-profile
+  // zone — see `ProfileDataSyncHandler+RecordLookup.swift`. The
+  // instrument upload path is exercised by
   // `ProfileIndexInstrumentDispatchTests`.
 
   @Test

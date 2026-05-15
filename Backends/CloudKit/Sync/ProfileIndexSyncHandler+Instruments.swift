@@ -4,10 +4,8 @@
 import Foundation
 import OSLog
 
-/// Instrument-specific helpers for the profile-index zone. Hosts
-/// the partitioning, build, and conflict-merge shapes so the main
-/// `ProfileIndexSyncHandler` file stays under SwiftLint's
-/// `file_length` and `type_body_length` thresholds.
+/// Instrument-specific helpers for the profile-index zone: the
+/// partitioning, build, and conflict-merge shapes for instrument records.
 extension ProfileIndexSyncHandler {
 
   /// Partitions the fetched batch into `(profileRows, instrumentRows)`.
@@ -52,8 +50,8 @@ extension ProfileIndexSyncHandler {
   /// tombstones) and a bare string id (instrument tombstones; see
   /// `InstrumentRow+CloudKit.swift` — instruments use the bare-id
   /// recordName form on purpose). Anything else (an unknown prefixed
-  /// record type, or a hypothetical legacy bare-UUID profile tombstone
-  /// from a pre-prefix peer) is dropped with a logged warning so a
+  /// record type, or a bare-UUID profile tombstone from a peer on a
+  /// build without the prefix) is dropped with a logged warning so a
   /// future record type added to this zone can't silently misroute
   /// into the instrument bucket.
   static func partitionDeleted(
@@ -92,7 +90,7 @@ extension ProfileIndexSyncHandler {
 
   /// Looks up an `InstrumentRow` by string-keyed `recordID` and builds
   /// a CKRecord for upload. Returns `nil` when no `instrumentRepository`
-  /// is wired or the row no longer exists.
+  /// is wired or the row does not exist.
   func instrumentRecordToSave(for recordID: CKRecord.ID) -> CKRecord? {
     guard let instrumentRepository else { return nil }
     do {

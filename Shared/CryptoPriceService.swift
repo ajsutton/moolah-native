@@ -80,8 +80,8 @@ actor CryptoPriceService {
 
   /// Drops any cached price data for the given instrument id — removes both
   /// the in-memory cache entry and the on-disk rows. Called when an
-  /// instrument is un-registered so we don't retain stale prices for
-  /// something the user no longer cares about.
+  /// instrument is un-registered so we don't retain stale prices for a
+  /// deregistered instrument.
   func purgeCache(instrumentId: String) async {
     caches.removeValue(forKey: instrumentId)
     hydratedTokenIds.remove(instrumentId)
@@ -294,8 +294,7 @@ actor CryptoPriceService {
   }
 
   // `currentPrices(for:)` (the live / spot endpoint) lives in
-  // `CryptoPriceService+Live.swift` so the main actor body stays under
-  // SwiftLint's `type_body_length` and `file_length` thresholds.
+  // `CryptoPriceService+Live.swift`.
 
   // MARK: - Prefetch
 
@@ -390,7 +389,5 @@ extension CryptoPriceService {
   }
 
   // `mergeReturningDelta` lives in `CryptoPriceService+Merge.swift` and
-  // `NoOpTokenResolutionClient` lives in its own sibling file so the
-  // main actor body stays under SwiftLint's `type_body_length` and
-  // `file_length` thresholds.
+  // `NoOpTokenResolutionClient` lives in its own sibling file.
 }

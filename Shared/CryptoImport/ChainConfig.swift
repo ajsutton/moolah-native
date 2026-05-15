@@ -3,10 +3,9 @@ import Foundation
 
 /// Per-chain config for the crypto wallet importer.
 ///
-/// v1 covers Ethereum, OP Mainnet, Base, and Polygon. Extending to other EVM
+/// Covers Ethereum, OP Mainnet, Base, and Polygon. Extending to other EVM
 /// chains (Arbitrum, Avalanche, …) is purely additive — add a new entry to
-/// `all`. See `plans/2026-05-05-crypto-wallet-import-design.md` for the
-/// open question on `internal` transfer-category support across chains.
+/// `all`.
 struct ChainConfig: Sendable, Hashable {
   /// EVM chain identifier (e.g. 1 for Ethereum mainnet).
   let chainId: Int

@@ -184,8 +184,7 @@ struct StockPriceServiceTests {
   }
 
   // SQL persistence tests (round-trip + rollback + delta-write contracts)
-  // live in `StockPriceServicePersistenceTests` so this suite stays under
-  // SwiftLint's `type_body_length` cap.
+  // live in `StockPriceServicePersistenceTests`.
 
   // MARK: - Cap-at-yesterday rule
 

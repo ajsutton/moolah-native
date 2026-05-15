@@ -8,8 +8,7 @@ import Testing
 /// trigger cases (2-token swap, 3-leg basket, LP add) and the non-
 /// trigger cases (pure inbound, pure outbound, same instrument both
 /// sides, empty input). Field and order preservation, plus self-send
-/// co-existence, live in `SwapDetectorPreservationTests` to keep this
-/// file under SwiftLint's `type_body_length` budget.
+/// co-existence, live in `SwapDetectorPreservationTests`.
 @Suite("IntraAccountSwapDetector")
 struct IntraAccountSwapDetectorTests {
   private static let accountId = makeUUID("AAAAAAAA-0000-0000-0000-000000000001")

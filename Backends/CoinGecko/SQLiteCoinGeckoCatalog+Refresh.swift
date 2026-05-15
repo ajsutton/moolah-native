@@ -135,8 +135,7 @@ extension SQLiteCoinGeckoCatalog {
 
 // MARK: - JSON parsing
 
-/// Wire shape for one row of CoinGecko's `/coins/list` response. Top-level
-/// to keep SwiftLint's `nesting` rule (max one level deep) satisfied.
+/// Wire shape for one row of CoinGecko's `/coins/list` response.
 private struct CoinWire: Decodable {
   let id: String
   let symbol: String

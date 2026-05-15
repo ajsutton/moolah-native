@@ -2,10 +2,8 @@ import Foundation
 import GRDB
 
 // Filesystem layout helpers and the `DatabaseQueue` opener for a
-// profile session. Extracted from `ProfileSession.swift` so the main
-// file stays under SwiftLint's `file_length` threshold; every helper
-// here is `nonisolated static` and reaches none of the session's
-// private state.
+// profile session. Every helper here is `nonisolated static` and
+// reaches none of the session's private state.
 
 extension ProfileSession {
   /// Per-profile directory under Application Support where CSV import staging

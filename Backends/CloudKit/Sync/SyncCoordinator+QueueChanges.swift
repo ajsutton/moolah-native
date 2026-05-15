@@ -1,11 +1,9 @@
 import CloudKit
 import Foundation
 
-// `queueSave` / `queueDeletion` overloads extracted from
-// `SyncCoordinator+Lifecycle.swift` so that file stays under SwiftLint's
-// 400-line `file_length` threshold. Same per-method behaviour: append a
-// `pendingRecordZoneChange` to the engine's state and refresh the
-// sidebar mirror so the pending-uploads counter stays in sync.
+// `queueSave` / `queueDeletion` overloads for `SyncCoordinator`. Each
+// appends a `pendingRecordZoneChange` to the engine's state and refreshes
+// the sidebar mirror so the pending-uploads counter stays in sync.
 extension SyncCoordinator {
 
   // MARK: - Pending Changes

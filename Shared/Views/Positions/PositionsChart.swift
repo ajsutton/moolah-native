@@ -120,10 +120,8 @@ struct PositionsChart: View {
     }
   }
 
-  /// Per-row mark emission. Factored out of `chartBody` so the
-  /// outer SwiftUI closure stays under SwiftLint's
-  /// `closure_body_length` threshold; pure presentational logic, no
-  /// state mutation.
+  /// Per-row mark emission. Pure presentational logic, no state
+  /// mutation.
   @ChartContentBuilder
   private func chartMarks(for row: PositionsChartRenderRow) -> some ChartContent {
     if let baseline = row.baseline {
@@ -133,9 +131,8 @@ struct PositionsChart: View {
       // zero height at every point on the wrong side of the
       // baseline. Without the `series:` discriminator, Swift Charts
       // groups all AreaMarks into a single shape and fills the
-      // entire region one colour — which is what the original
-      // gated emission produced (the bug visible in PR #743 review:
-      // green shading even where value < invested).
+      // entire region one colour (green shading even where
+      // value < invested).
       AreaMark(
         x: .value("Date", row.date),
         yStart: .value(

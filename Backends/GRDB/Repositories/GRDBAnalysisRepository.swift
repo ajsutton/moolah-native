@@ -45,7 +45,6 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
   //
   // `+IncomeAndExpenseAggregation.swift` — `fetchIncomeAndExpenseAggregation`,
   // `mapAggregationRow`, file-private `incomeAndExpenseAggregationSQL`.
-  // Split out of `+IncomeAndExpense.swift` for `file_length` budget.
   //
   // `+DailyBalances.swift` — types (`DailyBalanceAccountRow`,
   // `DailyBalanceEarmarkRow`, `DailyBalancesAggregation`,

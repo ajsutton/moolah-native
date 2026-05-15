@@ -2,9 +2,8 @@
   import SwiftUI
   import UniformTypeIdentifiers
 
-  // iOS NavigationStack layout extracted from `SettingsView` so the main
-  // struct body stays under SwiftLint's `type_body_length` threshold. Every
-  // member is view composition over the main struct's shared state.
+  // iOS NavigationStack layout for `SettingsView`. Every member is view
+  // composition over the main struct's shared state.
   extension SettingsView {
 
     // MARK: - iOS: NavigationStack layout

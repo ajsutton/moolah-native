@@ -6,8 +6,7 @@ import Testing
 
 /// Pins the per-leg multi-type hook contract for `GRDBTransactionRepository`
 /// `update(_:)` and `delete(id:)`. The header tests for `create(_:)` live
-/// in `RepositoryHookRecordTypeTests`; these are split out so neither
-/// file exceeds SwiftLint's 250-line `type_body_length` budget.
+/// in `RepositoryHookRecordTypeTests`.
 ///
 /// A regression that hard-coded `TransactionRow.recordType` on the leg
 /// emits in `update` / `delete` would upload leg records under the wrong

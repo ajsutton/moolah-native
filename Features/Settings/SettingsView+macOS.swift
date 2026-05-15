@@ -2,9 +2,8 @@
   import SwiftUI
   import UniformTypeIdentifiers
 
-  // macOS HSplitView/TabView layout extracted from `SettingsView` so the main
-  // struct body stays under SwiftLint's `type_body_length` threshold. Every
-  // member is view composition over the main struct's shared state.
+  // macOS HSplitView/TabView layout for `SettingsView`. Every member is view
+  // composition over the main struct's shared state.
   extension SettingsView {
 
     // MARK: - macOS: HSplitView / TabView layout

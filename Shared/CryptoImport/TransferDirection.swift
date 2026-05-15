@@ -3,10 +3,6 @@ import Foundation
 
 /// Direction a single Alchemy transfer takes relative to the synced
 /// wallet. Computed from the lowercased `from` / `to` fields.
-///
-/// Lives in its own file so `TransferEventBuilder.swift` stays under
-/// SwiftLint's `file_length` budget after the merge of issues #754
-/// (`SignAndCounterparty`) and #762 (`BuilderServices`).
 enum TransferDirection: Sendable {
   case outbound
   case inbound

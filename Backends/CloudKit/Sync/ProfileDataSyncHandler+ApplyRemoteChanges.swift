@@ -65,9 +65,9 @@ extension ProfileDataSyncHandler {
       signpostID: signpostID)
   }
 
-  /// Bundles per-batch timing markers so `reportSuccess` stays under
-  /// the SwiftLint parameter budget. Both fields are populated up front
-  /// in `applyRemoteChanges`; treat as an inline value, not shared state.
+  /// Bundles per-batch timing markers passed to `reportSuccess`. Both
+  /// fields are populated up front in `applyRemoteChanges`; treat as an
+  /// inline value, not shared state.
   nonisolated struct BatchTiming {
     let batchStart: ContinuousClock.Instant
     let upsertDuration: Duration
@@ -124,8 +124,7 @@ extension ProfileDataSyncHandler {
   }
 
   /// Records timings, fires the instrument-touched observer, and
-  /// returns the success outcome. Splitting this out keeps
-  /// `applyRemoteChanges` inside the SwiftLint body-length budget.
+  /// returns the success outcome.
   nonisolated private func reportSuccess(
     saved: [CKRecord],
     deleted: [(CKRecord.ID, String)],
@@ -139,13 +138,12 @@ extension ProfileDataSyncHandler {
       deleteCount: deleted.count)
     let changedTypes = Set(saved.map(\.recordType) + deleted.map(\.1))
     // No `onInstrumentRemoteChange()` fan-out from the per-profile
-    // path: every `InstrumentRecord` now flows through the shared
-    // registry on the profile-index zone. Any straggler delivery here
-    // from a not-yet-upgraded peer device is silently logged and
-    // skipped by `applyBatchSaveInstrument` / `applyGRDBBatchDeletion`
-    // — never applied to the per-profile `instrument` table that the
-    // `v10_drop_shared_instrument_legacy` migration removed. No UI
-    // consumer reads from that table anymore.
+    // path: every `InstrumentRecord` flows through the shared registry
+    // on the profile-index zone. Any straggler delivery here from a
+    // peer device on an older build is silently logged and skipped by
+    // `applyBatchSaveInstrument` / `applyGRDBBatchDeletion`. There is
+    // no per-profile `instrument` table, and no UI consumer reads from
+    // one.
     return .success(changedTypes: changedTypes)
   }
 

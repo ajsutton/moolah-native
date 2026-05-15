@@ -1,9 +1,7 @@
 import Foundation
 import OSLog
 
-// Reactive observation pipeline for `TransactionStore`. Lives in an
-// extension so the main type body stays under SwiftLint's
-// `type_body_length` budget.
+// Reactive observation pipeline for `TransactionStore`.
 //
 // Two observation surfaces participate:
 //   1. `repository.observe(filter:page:pageSize:)` — the per-filter

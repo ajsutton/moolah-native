@@ -3,8 +3,7 @@
 import Foundation
 import OSLog
 
-// Transaction-construction and staging helpers extracted from `ImportStore`
-// so the main body stays under SwiftLint's `type_body_length` threshold.
+// Transaction-construction and staging helpers for `ImportStore`.
 // `importStoreBackgroundLogger` is defined on the main `ImportStore.swift`
 // file; the delete helper references it via file-private visibility (same
 // module, so `static private` + sibling extension still works through
@@ -13,9 +12,9 @@ extension ImportStore {
 
   // MARK: - Transaction construction
 
-  /// Per-session fields that every candidate in an ingest run shares. Bundled
-  /// into a struct so `buildTransaction` stays under SwiftLint's parameter
-  /// limit and call sites don't repeat them once per candidate.
+  /// Per-session fields that every candidate in an ingest run shares.
+  /// Bundled into a struct so call sites don't repeat them once per
+  /// candidate.
   struct ImportBuildContext {
     let routedAccountId: UUID
     let accountInstrument: Instrument

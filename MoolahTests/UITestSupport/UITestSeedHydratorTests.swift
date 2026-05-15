@@ -259,9 +259,8 @@ final class UITestSeedHydratorTests: XCTestCase {
     _ = try XCTUnwrap(
       try UITestSeedHydrator.hydrate(.tradeReady, into: containerManager))
 
-    // Instrument identity lives on the shared profile-index registry
-    // post-`v10_drop_shared_instrument_legacy`; the per-profile
-    // `instrument` table no longer exists.
+    // Instrument identity lives on the shared profile-index registry;
+    // there is no per-profile `instrument` table.
     let instruments = try containerManager.profileIndexDatabase.read { database in
       try InstrumentRow.fetchAll(database)
     }

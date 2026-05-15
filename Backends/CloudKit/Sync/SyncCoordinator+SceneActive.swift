@@ -1,7 +1,6 @@
 import Foundation
 
-// Scene-active scheduling extracted from `SyncCoordinator+Lifecycle.swift`
-// so each file stays under SwiftLint's `file_length` threshold. Owns the
+// Scene-active scheduling for `SyncCoordinator`. Owns the
 // cancel-and-replace pattern that `MoolahApp+Lifecycle` uses on
 // `.active` to avoid stacking concurrent fetches.
 extension SyncCoordinator {

@@ -58,7 +58,7 @@ final class InvestmentStore {
   var perAccountObservationTask: Task<Void, Never>?
 
   /// Narrow seam onto the shared instrument registry's change stream.
-  /// The per-account values observation no longer tracks the
+  /// The per-account values observation does not track the
   /// `instrument` table (identity / valuation resolved via the shared
   /// registry), so a metadata edit there does not re-fire
   /// `observeValues(...)`. When wired,
@@ -212,5 +212,4 @@ final class InvestmentStore {
 //
 // `chartDataPoints` and the other pure-read computed properties live in
 // `InvestmentStore+ComputedProperties.swift`. `InvestmentChartData` (merge +
-// forward-fill helpers) lives in `InvestmentChartData.swift`. Both are
-// extracted so this file stays under the file_length budget.
+// forward-fill helpers) lives in `InvestmentChartData.swift`.

@@ -4,11 +4,8 @@ import Foundation
 import os.signpost
 
 // File-scope helpers used by every reactive store's Layer 7 signpost /
-// main-thread-time instrumentation. Originally lived in
-// `Features/Accounts/AccountStore+Signposts.swift`; lifted to `Shared/`
-// once a second reactive store (`EarmarkStore`) needed the same
-// primitives. Keeps each store's `+Signposts.swift` companion file from
-// duplicating the same five-line helper.
+// main-thread-time instrumentation. Shared so each store's
+// `+Signposts.swift` companion file doesn't duplicate the same helper.
 //
 // Pairs with `Shared/Signposts.swift`, which declares the
 // `Signposts.reactiveStore` `OSLog` consumed by `withReactiveStoreSignpost`.

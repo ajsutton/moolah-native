@@ -2,9 +2,8 @@ import SwiftUI
 
 // Sheets presented by `RecentlyAddedView` — the read-only transaction
 // summary for the "Open" context-menu action and the search-to-rule
-// shortcut. Extracted from `RecentlyAddedView.swift` so the primary view
-// file stays under SwiftLint's `file_length` threshold. Both types are
-// file-visible to this feature and referenced only from `RecentlyAddedView`.
+// shortcut. Both types are file-visible to this feature and referenced
+// only from `RecentlyAddedView`.
 
 /// Thin read-only transaction summary for the Recently Added context-menu
 /// "Open" action. Shows date, amount, legs, and the raw import origin so

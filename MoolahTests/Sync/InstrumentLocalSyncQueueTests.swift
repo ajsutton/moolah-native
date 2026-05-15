@@ -16,8 +16,8 @@ import os
 /// `Instrument.fiat(code: id)` in `fetchInstrumentMap`, and route stock
 /// conversions through Frankfurter, which 404s.
 ///
-/// The write cutover routes that registration through the injected
-/// `InstrumentRegistering` seam, awaited *before* the per-profile write.
+/// Registration routes through the injected `InstrumentRegistering`
+/// seam, awaited *before* the per-profile write.
 /// Production injects the shared `GRDBInstrumentRegistryRepository`;
 /// these tests use the production-shaped wiring (shared registry as
 /// `instrumentRegistrar`) and assert the instrument is now both
