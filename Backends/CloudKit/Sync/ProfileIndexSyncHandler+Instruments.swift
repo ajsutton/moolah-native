@@ -136,7 +136,7 @@ extension ProfileIndexSyncHandler {
   func queueUnsyncedSharedInstrumentRecords() -> [CKRecord.ID] {
     guard let instrumentRepository else { return [] }
     do {
-      let ids = try instrumentRepository.unsyncedRowIdsSync()
+      let ids = try instrumentRepository.unsyncedNonFiatRowIdsSync()
       return ids.map { CKRecord.ID(recordName: $0, zoneID: zoneID) }
     } catch {
       logger.error(
