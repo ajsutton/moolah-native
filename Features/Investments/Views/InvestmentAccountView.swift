@@ -35,7 +35,11 @@ struct InvestmentAccountView: View {
     let mode: ValuationMode
   }
 
-  private static let logger = Logger(
+  // Properties accessed by the sibling `InvestmentAccountView+Loading.swift`
+  // extension are `internal` (no `private`) — Swift's `private` is
+  // file-scoped, so a cross-file extension can't reach a `private` member
+  // even on the same type.
+  static let logger = Logger(
     subsystem: "com.moolah.app", category: "InvestmentAccountView")
 
   let account: Account
@@ -45,13 +49,13 @@ struct InvestmentAccountView: View {
   let investmentStore: InvestmentStore
   let transactionStore: TransactionStore
 
-  @Environment(ProfileSession.self) private var session
+  @Environment(ProfileSession.self) var session
   @State private var showingAddValue = false
   @State private var selectedTransaction: Transaction?
-  @State private var positionsInput = PositionsViewInput(
+  @State var positionsInput = PositionsViewInput(
     title: "", hostCurrency: .AUD, positions: [], historicalValue: nil)
-  @State private var positionsRange: PositionsTimeRange = .threeMonths
-  @State private var isLoadingPositions = false
+  @State var positionsRange: PositionsTimeRange = .threeMonths
+  @State var isLoadingPositions = false
   /// Tracks whether `loadAllData` has run at least once for this account.
   /// Gates the body so `legacyValuationsLayout` vs `positionTrackedLayout`
   /// is chosen *after* `investmentStore.values` is known — otherwise the
@@ -89,14 +93,17 @@ struct InvestmentAccountView: View {
   /// Three branches:
   ///   - Positions exist (or are still loading): show the full
   ///     `PositionsView` with header, optional chart, and table.
-  ///   - Positions empty (or all in host currency) but historic series
-  ///     has points: show a chart-only surface so the user can review
-  ///     prior performance.
-  ///   - Positions empty and no history: collapse to the bare transaction
-  ///     list, the same as today.
+  ///   - Positions empty (or all in host currency) but the account has
+  ///     historical investment activity: show a chart-only surface so
+  ///     the user can review prior performance. Gating uses
+  ///     `hasAnyHistoricalActivity` (range-independent) rather than
+  ///     `hasHistoricalSeries` (range-scoped) so an account whose last
+  ///     trade pre-dates the active range still surfaces the chart.
+  ///   - Positions empty and no historical activity: collapse to the
+  ///     bare transaction list, the same as today.
   @ViewBuilder private var positionTrackedLayout: some View {
     if positionsInput.shouldHide && !isLoadingPositions {
-      if positionsInput.hasHistoricalSeries {
+      if positionsInput.hasAnyHistoricalActivity {
         chartOnlySplit
       } else {
         makeAccountTransactionList()
@@ -244,6 +251,7 @@ struct InvestmentAccountView: View {
     .task(id: LoadKey(id: account.id, mode: account.valuationMode)) {
       initialLoadComplete = false
       await reloadPositions()
+      await maybeAutoWidenRange()
       initialLoadComplete = true
       // Move VoiceOver focus to the now-rendered content layout once the
       // initial-load gate flips. Mirrored on layout-mode flips below.
@@ -362,36 +370,5 @@ struct InvestmentAccountView: View {
   }
 }
 
-// MARK: - Private helpers
-
-extension InvestmentAccountView {
-  /// The profile's reporting currency — used for valuing positions and the
-  /// chart series. NOT the account's own instrument: an investment account
-  /// can be denominated in a non-fiat instrument (e.g., a crypto wallet),
-  /// but valuations should always roll up into the user's fiat currency.
-  private var profileCurrencyInstrument: Instrument {
-    session.profile.instrument
-  }
-
-  /// Drives the full `loadAllData → positionsViewInput` rebuild used by
-  /// both `.task(id:)` and `.refreshable`. Sets `isLoadingPositions`
-  /// across the work so progress UI binds correctly.
-  private func reloadPositions() async {
-    isLoadingPositions = true
-    defer { isLoadingPositions = false }
-    do {
-      positionsInput = try await investmentStore.loadAndBuildPositionsInput(
-        account: account,
-        profileCurrency: profileCurrencyInstrument,
-        range: positionsRange)
-    } catch is CancellationError {
-      return
-    } catch {
-      Self.logger.error(
-        "Unexpected error from positionsViewInput: \(error.localizedDescription, privacy: .public)"
-      )
-    }
-  }
-}
-
-// Preview seeds and `#Preview` blocks live in InvestmentAccountView+Previews.swift
+// Private load/rebuild helpers live in `InvestmentAccountView+Loading.swift`.
+// Preview seeds and `#Preview` blocks live in `InvestmentAccountView+Previews.swift`.
