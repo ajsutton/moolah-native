@@ -78,13 +78,15 @@
         }
       }
       .onChange(of: resolvedProfile?.label) { _, _ in
-        // Label edits flow through `rebuildSession(for:)` so the cached
-        // session picks up the new value (and the gate re-fires in case
-        // a remote profile-version bump arrived alongside the rename).
+        // A rename updates the cached session's profile in place — no
+        // teardown, no data reload. `ProfileSession.profile` is
+        // `@Observable`, so label-bound UI refreshes off that single
+        // assignment. Remote `dataFormatVersion` bumps that could make
+        // the profile incompatible are handled separately by
+        // `SessionManager`'s index observer, so the rename path must
+        // not rebuild the session.
         guard let profile = resolvedProfile else { return }
-        Task {
-          sessionResult = await sessionManager.rebuildSession(for: profile)
-        }
+        sessionManager.refreshProfile(profile)
       }
       .task {
         // Register in-process entry points for AppleScript/App Intents so
