@@ -28,12 +28,12 @@ extension GRDBInstrumentRegistryRepository {
   /// `encoded_system_fields` is `NULL`. Used by the per-startup
   /// targeted reconciliation in `SyncCoordinator+Backfill` (which runs
   /// unconditionally — *not* gated by the per-profile backfill flag) so
-  /// rows inserted by a build that predated the `onInstrumentChanged`
-  /// plumbing eventually reach CloudKit. Fiat is filtered out because
-  /// synthetic fiat rows shouldn't normally be persisted — they're
-  /// synthesised at read time via `Locale.Currency.isoCurrencies` —
-  /// and a stale one slipping into the table must not be uploaded as
-  /// if user-registered.
+  /// rows inserted by a build that predated the shared-registry
+  /// `registerResolvable` path eventually reach CloudKit. Fiat is
+  /// filtered out because synthetic fiat rows shouldn't normally be
+  /// persisted — they're synthesised at read time via
+  /// `Locale.Currency.isoCurrencies` — and a stale one slipping into
+  /// the table must not be uploaded as if user-registered.
   func unsyncedNonFiatRowIdsSync() throws -> [String] {
     let fiatKind = Instrument.Kind.fiatCurrency.rawValue
     return try database.read { database in

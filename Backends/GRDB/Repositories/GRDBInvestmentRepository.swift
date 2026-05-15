@@ -51,7 +51,8 @@ final class GRDBInvestmentRepository: InvestmentRepository, @unchecked Sendable 
   /// is impossible. Instrument identity is immutable lookup data.
   /// Every caller — production, preview, test, and the sync apply path
   /// — injects the shared `GRDBInstrumentRegistryRepository`; nothing
-  /// reads the soon-to-be-dropped per-profile `instrument` table.
+  /// reads the per-profile `instrument` table
+  /// `v10_drop_shared_instrument_legacy` removed.
   let instrumentResolver: any InstrumentMapResolving
   private let onRecordChanged: @Sendable (String, UUID) -> Void
   private let onRecordDeleted: @Sendable (String, UUID) -> Void

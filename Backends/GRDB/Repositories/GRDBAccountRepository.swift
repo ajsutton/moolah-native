@@ -35,8 +35,8 @@ import GRDB
 /// access). `instrumentResolver` is a `Sendable` protocol
 /// (`InstrumentMapResolving`) and immutable post-init.
 /// `instrumentRegistrar` is a `Sendable` protocol
-/// (`InstrumentRegistering`) and immutable post-init. `onRecordChanged`,
-/// `onRecordDeleted`, and `onInstrumentChanged` are `@Sendable` closures
+/// (`InstrumentRegistering`) and immutable post-init. `onRecordChanged`
+/// and `onRecordDeleted` are `@Sendable` closures
 /// captured at init. Nothing mutates post-init, so the reference can be shared across
 /// actor boundaries without a data race; `@unchecked` only waives
 /// Swift's structural check that `final class` types meet `Sendable`'s
@@ -57,8 +57,8 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   /// data. Every caller — production, preview, test, and the sync
   /// apply path — injects the shared `GRDBInstrumentRegistryRepository`
   /// (the profile-index registry). Nothing reads the per-profile
-  /// `instrument` table any more, ahead of the
-  /// `v10_drop_shared_instrument_legacy` migration.
+  /// `instrument` table any more; `v10_drop_shared_instrument_legacy`
+  /// removed it.
   let instrumentResolver: any InstrumentMapResolving
   /// Registers a non-fiat account denomination so it becomes resolvable
   /// by `instrumentResolver` before `create` returns. Awaited *before*
@@ -69,8 +69,8 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   /// per-profile placeholder `instrument` insert. Every caller —
   /// production, preview, test, and the sync apply path — injects the
   /// shared `GRDBInstrumentRegistryRepository`, so registration always
-  /// lands on the profile-index registry, never the soon-to-be-dropped
-  /// per-profile `instrument` table.
+  /// lands on the profile-index registry, never the per-profile
+  /// `instrument` table `v10_drop_shared_instrument_legacy` removed.
   private let instrumentRegistrar: any InstrumentRegistering
   /// Receives `(recordType, id)` so the opening-balance create path can
   /// tag its txn and leg writes with `TransactionRow.recordType` /
@@ -78,16 +78,6 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   /// see `RepositoryHookRecordTypeTests`.
   private let onRecordChanged: @Sendable (String, UUID) -> Void
   private let onRecordDeleted: @Sendable (String, UUID) -> Void
-  /// Legacy hook fired when a non-fiat account denomination was
-  /// auto-inserted by the removed per-profile placeholder path. The
-  /// write cutover routes registration through `instrumentRegistrar`
-  /// (`registerResolvable`) instead — for production the shared
-  /// `GRDBInstrumentRegistryRepository`, whose register methods already
-  /// invalidate the map cache and drive the CloudKit upload fan-out, so
-  /// this hook is no longer fired from `create`. Retained (plumbed but
-  /// unused here) to avoid touching the surrounding sync wiring in this
-  /// change; a follow-up can remove the now-dead hook end to end.
-  private let onInstrumentChanged: @Sendable (Instrument) -> Void
   /// Single shared error channel for every `observeAll()` subscription
   /// returned by this repo instance. The bridge in
   /// `Backends/GRDB/Observation/AsyncValueObservation+AsyncStream.swift`
@@ -102,15 +92,13 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
     instrumentResolver: any InstrumentMapResolving,
     instrumentRegistrar: any InstrumentRegistering,
     onRecordChanged: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
-    onRecordDeleted: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
-    onInstrumentChanged: @escaping @Sendable (Instrument) -> Void = { _ in }
+    onRecordDeleted: @escaping @Sendable (String, UUID) -> Void = { _, _ in }
   ) {
     self.database = database
     self.instrumentResolver = instrumentResolver
     self.instrumentRegistrar = instrumentRegistrar
     self.onRecordChanged = onRecordChanged
     self.onRecordDeleted = onRecordDeleted
-    self.onInstrumentChanged = onInstrumentChanged
   }
 
   // MARK: - AccountRepository conformance

@@ -28,7 +28,7 @@ struct GRDBInstrumentRegistryUpsertMergeTests {
         cryptocompareSymbol: "ETH",
         binanceSymbol: "ETHUSDT"))
 
-    // Simulates publishToSharedRegistry's all-nil publish for the same id.
+    // Simulates `registerResolvable`'s all-nil crypto publish for the same id.
     try await registry.registerCrypto(
       eth,
       mapping: CryptoProviderMapping(
@@ -160,7 +160,7 @@ struct GRDBInstrumentRegistryUpsertMergeTests {
         binanceSymbol: nil))
     let blob = Data([0xCA, 0xFE, 0xBA, 0xBE])
     _ = try registry.setEncodedSystemFieldsSync(id: eth.id, data: blob)
-    // All-nil publish (the publishToSharedRegistry pattern) must not blank it.
+    // All-nil publish (the `registerResolvable` crypto pattern) must not blank it.
     try await registry.registerCrypto(
       eth,
       mapping: CryptoProviderMapping(

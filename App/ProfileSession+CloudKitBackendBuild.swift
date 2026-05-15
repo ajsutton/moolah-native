@@ -1,7 +1,6 @@
 import CloudKit
 import Foundation
 import GRDB
-import OSLog
 
 extension ProfileSession {
   /// Bundle of the three market-data services consumed by the CloudKit
@@ -103,80 +102,8 @@ extension ProfileSession {
         onTransactionChanged: hooks.changed,
         onTransactionDeleted: hooks.deleted,
         onTransactionLegChanged: hooks.changed,
-        onTransactionLegDeleted: hooks.deleted,
-        onInstrumentChanged: makeInstrumentChangedHook(
-          syncCoordinator: syncCoordinator))
+        onTransactionLegDeleted: hooks.deleted)
     )
-  }
-
-  /// Builds the closure `GRDBTransactionRepository` /
-  /// `GRDBAccountRepository` fire whenever they auto-insert a non-fiat
-  /// `InstrumentRow` to satisfy a leg or account denomination. Routes
-  /// through the **shared** registry's `registerStock` /
-  /// `registerCrypto`, which writes to the profile-index DB and queues
-  /// the upload to the profile-index zone — never to a per-profile
-  /// zone. Without this, an instrument introduced by SelfWealth import
-  /// or a stock-account create would live only on the device that
-  /// wrote it (sibling devices fall back to `Instrument.fiat(code:
-  /// id)` and stock conversions 404 against the fiat-only Frankfurter
-  /// API). Returns a no-op closure when no shared registry is wired
-  /// (preview / legacy-test backends without `SharedInstrumentScope`).
-  private static func makeInstrumentChangedHook(
-    syncCoordinator: SyncCoordinator?
-  ) -> @Sendable (Instrument) -> Void {
-    { [weak syncCoordinator] instrument in
-      // Fiat doesn't go through the registry; defensively no-op even
-      // though `ensureInstrumentReadable` already filters fiat out.
-      guard instrument.kind != .fiatCurrency else { return }
-      Task { [weak syncCoordinator] in
-        guard let registry = syncCoordinator?.sharedInstrumentRegistry else { return }
-        await Self.publishToSharedRegistry(instrument: instrument, registry: registry)
-      }
-    }
-  }
-
-  /// Publishes an auto-inserted `Instrument` to the shared registry.
-  /// Stocks go through `registerStock`; crypto rows go through
-  /// `registerCrypto` with an empty provider mapping (the discovery
-  /// service fills the mapping in later via `resolveOrLoad`). Both
-  /// register methods are idempotent — they upsert by id and preserve
-  /// existing system fields, so a redundant publish from
-  /// `ensureInstrumentReadable` after the row already reached the
-  /// shared zone is a no-op merge.
-  private static func publishToSharedRegistry(
-    instrument: Instrument,
-    registry: GRDBInstrumentRegistryRepository
-  ) async {
-    do {
-      switch instrument.kind {
-      case .stock:
-        try await registry.registerStock(instrument)
-      case .cryptoToken:
-        try await registry.registerCrypto(
-          instrument,
-          mapping: CryptoProviderMapping(
-            instrumentId: instrument.id,
-            coingeckoId: nil,
-            cryptocompareSymbol: nil,
-            binanceSymbol: nil))
-      case .fiatCurrency:
-        // Filtered out at the call site; defensive no-op.
-        return
-      }
-    } catch {
-      // Best-effort publish — a failure here leaves the per-profile
-      // copy intact and the next session boot's self-heal scan
-      // (`SyncCoordinator.queueUnsyncedSharedInstruments`) re-attempts
-      // upload. Logging keeps the failure observable without breaking
-      // the surrounding write.
-      Logger(subsystem: "com.moolah.app", category: "ProfileSession")
-        .warning(
-          """
-          Shared-registry publish failed for \(instrument.id, privacy: .public): \
-          \(error.localizedDescription, privacy: .public)
-          """
-        )
-    }
   }
 
   /// Bundle of the change/delete closures the GRDB repos call on each

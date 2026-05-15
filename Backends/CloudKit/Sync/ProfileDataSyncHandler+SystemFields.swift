@@ -26,8 +26,8 @@ extension ProfileDataSyncHandler {
     // `queueAllExistingRecords()` no longer enumerates them — clearing
     // the field on encrypted-data-reset would leave the table in a
     // spuriously "unsynced" state with no upload path to resolve it.
-    // The follow-up `v10_drop_shared_instrument_legacy` migration
-    // drops the table entirely.
+    // The `v10_drop_shared_instrument_legacy` migration has since
+    // dropped the table entirely.
     [
       (CategoryRow.recordType, grdbRepositories.categories.clearAllSystemFieldsSync),
       (AccountRow.recordType, grdbRepositories.accounts.clearAllSystemFieldsSync),

@@ -144,8 +144,8 @@ extension ProfileDataSyncHandler {
     // from a not-yet-upgraded peer device is silently logged and
     // skipped by `applyBatchSaveInstrument` / `applyGRDBBatchDeletion`
     // — never applied to the per-profile `instrument` table that the
-    // follow-up `v10_drop_shared_instrument_legacy` migration will
-    // drop. No UI consumer reads from that table anymore.
+    // `v10_drop_shared_instrument_legacy` migration removed. No UI
+    // consumer reads from that table anymore.
     return .success(changedTypes: changedTypes)
   }
 

@@ -99,8 +99,8 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
   /// aggregation snapshot is safe and intended. Every caller —
   /// production, preview, test, and the sync apply path — injects the
   /// shared `GRDBInstrumentRegistryRepository`; nothing reads the
-  /// soon-to-be-dropped per-profile `instrument` table. Mirrors
-  /// `GRDBTransactionRepository`.
+  /// per-profile `instrument` table `v10_drop_shared_instrument_legacy`
+  /// removed. Mirrors `GRDBTransactionRepository`.
   private let instrumentResolver: any InstrumentMapResolving
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "GRDBAnalysisRepository")

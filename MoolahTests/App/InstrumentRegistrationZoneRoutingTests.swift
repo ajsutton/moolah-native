@@ -1,4 +1,4 @@
-// MoolahTests/App/InstrumentChangedHookZoneRoutingTests.swift
+// MoolahTests/App/InstrumentRegistrationZoneRoutingTests.swift
 
 import CloudKit
 import Foundation
@@ -7,8 +7,9 @@ import Testing
 
 @testable import Moolah
 
-/// Pins that the auto-publish path for `ensureInstrumentReadable`'s
-/// non-fiat instruments routes through the **shared registry** and
+/// Pins that registering a non-fiat instrument through the **shared
+/// registry** (the `registerResolvable` path the create / update /
+/// account writes take before their per-profile `database.write`)
 /// emits its `onRecordChanged` hook with a string-keyed recordName
 /// destined for the **profile-index zone** — never a `profile-<UUID>`
 /// zone. The legacy per-profile-zone instrument upload path is
@@ -16,9 +17,9 @@ import Testing
 /// catches regressions); this test pins the positive contract
 /// end-to-end so a future refactor that loses the shared-registry
 /// routing fails here before hitting the trap in CI.
-@Suite("Instrument auto-publish hook routes to the profile-index zone")
+@Suite("Instrument registration routes to the profile-index zone")
 @MainActor
-struct InstrumentChangedHookZoneRoutingTests {
+struct InstrumentRegistrationZoneRoutingTests {
 
   @Test(
     "registerStock on the shared registry fires onRecordChanged with the bare instrument id"
@@ -42,9 +43,9 @@ struct InstrumentChangedHookZoneRoutingTests {
       },
       onRecordDeleted: { _ in })
 
-    // Register a stock instrument — the same call the auto-publish
-    // hook in `ProfileSession+CloudKitBackendBuild.publishToSharedRegistry`
-    // makes when `ensureInstrumentReadable` auto-inserts a non-fiat row.
+    // Register a stock instrument — the same call `registerResolvable`
+    // makes (via `registerStock`) when a create / update / account write
+    // registers a non-fiat denomination before its per-profile write.
     let bhp = Instrument.stock(
       ticker: "BHP.AX", exchange: "ASX", name: "BHP Group")
     try await registry.registerStock(bhp)
