@@ -143,29 +143,88 @@ build-ios: generate
         CODE_SIGNING_ALLOWED=NO
 
 # Regenerate the CloudKit wire-struct layer from CloudKit/schema.ckdb,
-# then regenerate Moolah.xcodeproj from project.yml.
+# then regenerate Moolah.xcodeproj from project.yml. Stamp-gated: each
+# sub-step is skipped when its inputs are unchanged since the last
+# successful run, so `just test` / `just build-mac` don't pay the
+# xcodegen + swift-run cost on every invocation. Force a full regen
+# with `rm -rf .build/stamps`.
 generate:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    swift run --package-path tools/CKDBSchemaGen ckdb-schema-gen generate \
-        --input CloudKit/schema.ckdb \
-        --output Backends/CloudKit/Sync/Generated
+    STAMP_DIR=".build/stamps"
+    SCHEMA_STAMP="$STAMP_DIR/ckdb-schema-gen.stamp"
+    XCODEGEN_MODE_FILE="$STAMP_DIR/xcodegen.mode"
+    mkdir -p "$STAMP_DIR"
+
+    # ---- ckdb-schema-gen ----
+    # Regenerate when the schema, the generator's sources, or the output
+    # directory itself has gone missing. The output dir is gitignored, so
+    # a fresh checkout always misses the stamp and regenerates.
+    needs_schema_gen=0
+    if [ ! -f "$SCHEMA_STAMP" ]; then
+        needs_schema_gen=1
+    elif [ ! -d "Backends/CloudKit/Sync/Generated" ] \
+        || [ -z "$(ls -A Backends/CloudKit/Sync/Generated 2>/dev/null)" ]; then
+        needs_schema_gen=1
+    elif [ "CloudKit/schema.ckdb" -nt "$SCHEMA_STAMP" ]; then
+        needs_schema_gen=1
+    elif find tools/CKDBSchemaGen/Sources -type f -name '*.swift' \
+        -newer "$SCHEMA_STAMP" 2>/dev/null | grep -q .; then
+        needs_schema_gen=1
+    fi
+
+    if [ "$needs_schema_gen" -eq 1 ]; then
+        swift run --package-path tools/CKDBSchemaGen ckdb-schema-gen generate \
+            --input CloudKit/schema.ckdb \
+            --output Backends/CloudKit/Sync/Generated
+        touch "$SCHEMA_STAMP"
+    fi
 
     # Provide default
     export CODE_SIGN_STYLE="${CODE_SIGN_STYLE:-Automatic}"
 
+    # ---- xcodegen ----
     # Optionally inject Debug-config entitlements for local CloudKit development.
     # Set ENABLE_ENTITLEMENTS=1 to make `just build-mac` / `just run-mac` produce
     # a Debug binary signed with the test container's iCloud entitlement. Release
     # builds are produced by fastlane lanes (no entitlement injection here) and
     # shipped via the GitHub release artefact — there is no local Release path.
+    #
+    # Both modes are cached. Regenerate when `project.yml` (or, in the
+    # injection path, `scripts/inject-entitlements.sh`) is newer than
+    # `Moolah.xcodeproj/project.pbxproj`, when the project file is
+    # missing, or when the mode flipped between injected and non-injected
+    # since the last successful run (so the project picks up / drops the
+    # entitlement keys).
+    last_mode="$(cat "$XCODEGEN_MODE_FILE" 2>/dev/null || echo "")"
     if [ "${ENABLE_ENTITLEMENTS:-}" = "1" ]; then
-        SPEC=$(bash scripts/inject-entitlements.sh)
-        trap "rm -f $SPEC" EXIT
-        xcodegen generate --spec "$SPEC"
+        current_mode="1"
     else
-        xcodegen generate
+        current_mode="0"
+    fi
+
+    needs_xcodegen=0
+    if [ ! -f "Moolah.xcodeproj/project.pbxproj" ]; then
+        needs_xcodegen=1
+    elif [ "project.yml" -nt "Moolah.xcodeproj/project.pbxproj" ]; then
+        needs_xcodegen=1
+    elif [ "$last_mode" != "$current_mode" ]; then
+        needs_xcodegen=1
+    elif [ "$current_mode" = "1" ] \
+        && [ "scripts/inject-entitlements.sh" -nt "Moolah.xcodeproj/project.pbxproj" ]; then
+        needs_xcodegen=1
+    fi
+
+    if [ "$needs_xcodegen" -eq 1 ]; then
+        if [ "$current_mode" = "1" ]; then
+            SPEC=$(bash scripts/inject-entitlements.sh)
+            trap "rm -f $SPEC" EXIT
+            xcodegen generate --spec "$SPEC"
+        else
+            xcodegen generate
+        fi
+        echo "$current_mode" > "$XCODEGEN_MODE_FILE"
     fi
 
 # Verify CloudKit/schema.ckdb is additive over the committed Production
