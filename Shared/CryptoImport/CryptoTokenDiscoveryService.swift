@@ -151,19 +151,17 @@ actor CryptoTokenDiscoveryService {
       mapping: mapping,
       pricingStatus: status)
 
-    // `registerCrypto` upserts the mapping but preserves the prior
-    // `pricingStatus` on an existing row (default `.priced` only on
-    // insert). When the resolved status differs from what the upsert
-    // would leave behind, follow up with `update(_:)` to enforce this
-    // discovery pass's decision. Read the prior row once so the check is
-    // a single registry round-trip rather than two.
-    let priorStatus = try await registry.cryptoRegistration(
-      byId: instrument.id)?.pricingStatus
-    try await registry.registerCrypto(instrument, mapping: mapping)
-    let upsertedStatus: TokenPricingStatus = priorStatus ?? .priced
-    if upsertedStatus != status {
-      try await registry.update(registration)
-    }
+    // Land the mapping and this discovery pass's status decision in a
+    // single registry write. The plain `registerCrypto(_:mapping:)`
+    // preserves an existing row's `pricingStatus` (default `.priced`
+    // only on insert), so enforcing a freshly-computed status used to
+    // need a follow-up `update(_:)` — two writes, two `onRecordChanged`
+    // fan-outs, and a narrow window where CKSyncEngine could upload the
+    // row with a stale status. `forcingStatus:` collapses that to one
+    // write that fires the hook exactly once against the final state
+    // (issue #895).
+    try await registry.registerCrypto(
+      instrument, mapping: mapping, forcingStatus: status)
 
     return registration
   }

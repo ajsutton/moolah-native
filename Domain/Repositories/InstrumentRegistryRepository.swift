@@ -45,6 +45,29 @@ protocol InstrumentRegistryRepository: InstrumentChangeObserving {
     _ instrument: Instrument, mapping: CryptoProviderMapping
   ) async throws
 
+  /// Registers (or upserts) a crypto instrument with its provider
+  /// mapping **and** sets `pricingStatus` to `status` — all in a single
+  /// backing-store write, so the implementation's sync-queue hook fires
+  /// exactly once against the final committed state.
+  ///
+  /// Differs from `registerCrypto(_:mapping:)`, which preserves an
+  /// existing row's `pricingStatus` (defaulting to `.priced` only on
+  /// insert) and therefore needs a follow-up `update(_:)` whenever the
+  /// caller has a freshly-computed status to enforce. The
+  /// discovery/resolution path (`CryptoTokenDiscoveryService`
+  /// `.performResolution`) routes through this overload so a newly
+  /// discovered token never produces two `onRecordChanged` fan-outs and
+  /// never exposes the narrow window where CKSyncEngine could upload the
+  /// row carrying a stale status. See issue #895.
+  ///
+  /// - Precondition: `instrument.kind == .cryptoToken`. Passing any other
+  ///   kind is a programmer error and traps.
+  func registerCrypto(
+    _ instrument: Instrument,
+    mapping: CryptoProviderMapping,
+    forcingStatus status: TokenPricingStatus
+  ) async throws
+
   /// Registers (or upserts) a stock instrument. Stock rows carry no
   /// provider-mapping fields; Yahoo's lookup key is the instrument's own
   /// ticker. Invokes the implementation's sync-queue hook after a

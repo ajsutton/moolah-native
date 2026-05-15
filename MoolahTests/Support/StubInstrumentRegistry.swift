@@ -19,6 +19,11 @@ final class StubInstrumentRegistry: InstrumentRegistryRepository, Sendable {
     var registeredCryptos: [CryptoRegistration]
     var removedIds: [String]
     var shouldThrowOnRegister: Bool
+    /// Number of `update(_:)` calls. Lets tests assert that a flow
+    /// reached the registry in a single write (e.g. #895's
+    /// `performResolution` routing through `registerCrypto(forcingStatus:)`
+    /// instead of `registerCrypto` + `update`).
+    var updateCallCount: Int = 0
   }
 
   /// Errors thrown by the stub when `shouldThrowOnRegister` is set. Lets
@@ -82,6 +87,23 @@ extension StubInstrumentRegistry {
     }
   }
 
+  func registerCrypto(
+    _ instrument: Instrument,
+    mapping: CryptoProviderMapping,
+    forcingStatus status: TokenPricingStatus
+  ) async throws {
+    try state.withLock { state in
+      if state.shouldThrowOnRegister { throw RegisterError.cryptoFailed }
+      let registration = CryptoRegistration(
+        instrument: instrument, mapping: mapping, pricingStatus: status)
+      state.registeredCryptos.append(registration)
+      state.cryptoRegistrations.removeAll { $0.id == registration.id }
+      state.cryptoRegistrations.append(registration)
+      state.instruments.removeAll { $0.id == instrument.id }
+      state.instruments.append(instrument)
+    }
+  }
+
   func registerStock(_ instrument: Instrument) async throws {
     try state.withLock { state in
       if state.shouldThrowOnRegister { throw RegisterError.stockFailed }
@@ -94,6 +116,7 @@ extension StubInstrumentRegistry {
   func update(_ registration: CryptoRegistration) async throws {
     try state.withLock { state in
       if state.shouldThrowOnRegister { throw RegisterError.updateFailed }
+      state.updateCallCount += 1
       guard
         let index = state.cryptoRegistrations.firstIndex(where: { $0.id == registration.id })
       else { return }

@@ -150,6 +150,11 @@ private struct FailingRegistry: InstrumentRegistryRepository, @unchecked Sendabl
   func registerCrypto(
     _ instrument: Instrument, mapping: CryptoProviderMapping
   ) async throws { throw BoomError() }
+  func registerCrypto(
+    _ instrument: Instrument,
+    mapping: CryptoProviderMapping,
+    forcingStatus status: TokenPricingStatus
+  ) async throws { throw BoomError() }
   func registerStock(_ instrument: Instrument) async throws { throw BoomError() }
   func update(_ registration: CryptoRegistration) async throws { throw BoomError() }
   func remove(id: String) async throws { throw BoomError() }

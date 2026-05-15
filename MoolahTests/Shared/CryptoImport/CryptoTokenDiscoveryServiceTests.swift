@@ -38,6 +38,34 @@ struct CryptoTokenDiscoveryServiceTests {
     #expect(stored?.mapping.coingeckoId == "usd-coin")
   }
 
+  @Test("performResolution persists the final state in a single registry write (#895)")
+  func performResolutionSingleWrite() async throws {
+    let subject = makeDiscoverySubject()
+    // Scripting the resolver to fail yields `.unpriced`, which differs
+    // from the upsert's would-be default (`.priced`) — the exact
+    // condition that drove the old `registerCrypto` + `update`
+    // double-write.
+    struct ProviderFailed: Error {}
+    subject.resolver.script(
+      .init(chainId: 1, contractAddress: Self.usdcAddress.lowercased()),
+      .failure(ProviderFailed()))
+
+    let registration = try await subject.service.resolveOrLoad(
+      chain: .ethereum,
+      contractAddress: Self.usdcAddress,
+      symbol: "USDC",
+      name: "USD Coin",
+      decimals: 6)
+
+    #expect(registration.pricingStatus == .unpriced)
+    let snapshot = subject.registry.snapshot()
+    // Exactly one registry write, carrying the final status — never a
+    // follow-up `update(_:)`.
+    #expect(snapshot.registeredCryptos.count == 1)
+    #expect(snapshot.registeredCryptos.first?.pricingStatus == .unpriced)
+    #expect(snapshot.updateCallCount == 0)
+  }
+
   @Test("isSpam metadata wins over a successful provider resolution")
   func spamWinsOverResolution() async throws {
     let subject = makeDiscoverySubject()

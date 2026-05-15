@@ -128,7 +128,8 @@ struct DiscoveredTokensInboxView: View {
       }
       do {
         _ = try await tokenDiscovery.reResolve(registration, chain: chain)
-        // The actor's `reResolve` calls `registry.update(_:)` on the
+        // The actor's `reResolve` calls
+        // `registry.registerCrypto(_:mapping:forcingStatus:)` on the
         // shared repository, but the store's in-memory copy doesn't
         // see those mutations. Refresh the local cache so the row
         // disappears from the inbox once the status flips.
