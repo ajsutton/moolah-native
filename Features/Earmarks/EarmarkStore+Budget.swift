@@ -1,7 +1,6 @@
 import Foundation
 
-// Budget CRUD extracted from the main `EarmarkStore` body so it stays under
-// SwiftLint's `type_body_length` threshold. All methods use the same
+// Budget CRUD for `EarmarkStore`. All methods use the same
 // optimistic-update-then-rollback pattern as the rest of the store.
 extension EarmarkStore {
 

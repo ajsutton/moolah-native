@@ -3,10 +3,8 @@
 import Foundation
 import GRDB
 
-// Position-computation helpers for `GRDBEarmarkRepository`. Split out of
-// the main file so the class body stays under SwiftLint's
-// `type_body_length` threshold. Three lists per earmark map the
-// SwiftData-era `CloudKitEarmarkRepository.computeEarmarkPositions`:
+// Position-computation helpers for `GRDBEarmarkRepository`. Three lists
+// per earmark, matching `CloudKitEarmarkRepository.computeEarmarkPositions`:
 // every leg contributes to `positions`; income/openingBalance/trade
 // legs contribute to `savedPositions`; expense/transfer legs
 // contribute to `spentPositions` (sign-flipped).

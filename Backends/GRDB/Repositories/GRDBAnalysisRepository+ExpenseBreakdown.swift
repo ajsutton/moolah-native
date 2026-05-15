@@ -3,12 +3,11 @@ import GRDB
 
 /// SQL aggregation + Swift assembly helpers for `fetchExpenseBreakdown`.
 ///
-/// Lifted out of the main `GRDBAnalysisRepository` body to keep its
-/// `type_body_length` budget intact. Mirrors the
-/// `GRDBAccountRepository+Positions.swift` shape: every helper is `static`
-/// and takes its dependencies (database, instruments, conversion service)
-/// as parameters so it doesn't need access to the main class's `private`
-/// stored properties from a sibling-file extension.
+/// Mirrors the `GRDBAccountRepository+Positions.swift` shape: every
+/// helper is `static` and takes its dependencies (database,
+/// instruments, conversion service) as parameters so this sibling-file
+/// extension doesn't reach into the main class's `private` stored
+/// properties.
 extension GRDBAnalysisRepository {
   /// One row of the SQL aggregation that drives `fetchExpenseBreakdown`.
   /// `day` is the ISO-8601 `YYYY-MM-DD` string returned by `DATE(t.date)`
@@ -43,9 +42,8 @@ extension GRDBAnalysisRepository {
   }
 
   /// Bundle of per-row diagnostic callbacks used by
-  /// `assembleExpenseBreakdown`. Grouped into a struct so the function
-  /// signature stays under SwiftLint's `function_parameter_count`
-  /// budget, and so future analysis methods can share the same
+  /// `assembleExpenseBreakdown`, so its signature takes one parameter
+  /// instead of several and other analysis methods can share the same
   /// handler shape.
   struct ExpenseBreakdownHandlers: Sendable {
     let handleUnparseableDay: @Sendable (String) -> Void
@@ -183,8 +181,8 @@ extension GRDBAnalysisRepository {
   }
 
   /// Emits one `ExpenseBreakdown` per non-empty `(month, category)` bucket
-  /// and sorts months descending — matching the SwiftData-era contract
-  /// pinned by `AnalysisExpenseBreakdownTests.expenseBreakdownSortOrder`.
+  /// and sorts months descending — the contract pinned by
+  /// `AnalysisExpenseBreakdownTests.expenseBreakdownSortOrder`.
   private static func flattenExpenseBreakdownBuckets(
     _ buckets: [String: [UUID?: InstrumentAmount]]
   ) -> [ExpenseBreakdown] {

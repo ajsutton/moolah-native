@@ -20,13 +20,12 @@ enum CKRecordIDRecordName {
 
   /// Returns `true` when a cached recordName is safe to reuse for upload.
   ///
-  /// Cached system fields produced by a build that pre-dated the
-  /// `<recordType>|<UUID>` prefix (issue #416) carry a bare-UUID recordID.
-  /// Reusing them would re-upload the record under the legacy recordName,
-  /// which the rest of the pipeline now treats as non-UUID and drops on
-  /// downlink — so a remote update would never round-trip back. Bare-UUID
-  /// caches are ignored so the next upload reissues a fresh prefixed
-  /// recordID. Instrument recordNames (e.g. `"AUD"`, `"ASX:BHP"`) are
+  /// Cached system fields from a build without the `<recordType>|<UUID>`
+  /// prefix (issue #416) carry a bare-UUID recordID. Reusing one would
+  /// re-upload the record under that bare recordName, which the rest of
+  /// the pipeline treats as non-UUID and drops on downlink — so a remote
+  /// update would never round-trip back. Bare-UUID caches are ignored so
+  /// the next upload reissues a fresh prefixed recordID. Instrument recordNames (e.g. `"AUD"`, `"ASX:BHP"`) are
   /// not UUID-shaped and pass through unchanged.
   static func isUsableCachedRecordName(_ recordName: String) -> Bool {
     if recordName.contains("|") { return true }

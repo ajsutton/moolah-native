@@ -19,7 +19,7 @@ import Testing
 /// 2. The plan does **not** include a `SCAN` of the table — a SCAN is the
 ///    canonical regression signature when an index becomes unusable
 ///    (column rename, predicate drift, partial-index WHERE clause that
-///    no longer matches the predicate).
+///    fails to match the predicate).
 @Suite("Core financial graph plan-pinning")
 struct AnalysisPlanPinningTests {
 

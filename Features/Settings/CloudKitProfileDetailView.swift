@@ -1,9 +1,8 @@
 import SwiftUI
 
-// Profile detail views extracted from `SettingsView.swift` so the main
-// settings file stays under SwiftLint's `file_length` threshold.
-// `SettingsView.profileDetailView(for:)` routes here; each view maintains
-// its own form state and persists changes back through `ProfileStore`.
+// Profile detail views. `SettingsView.profileDetailView(for:)` routes
+// here; each view maintains its own form state and persists changes back
+// through `ProfileStore`.
 
 /// Settings detail for an iCloud profile. Shows label, currency, and financial year start.
 struct CloudKitProfileDetailView: View {

@@ -22,8 +22,7 @@ import Testing
 /// a miss, resolution provably came from the injected resolver.
 @Suite("Earmark reads resolve instruments from the shared registry")
 struct EmkRepoSharedInstrumentResolutionTests {
-  /// Bundle returned by `makeSeededRepo` — replaces a 3-tuple to satisfy
-  /// SwiftLint's `large_tuple` policy.
+  /// Bundle returned by `makeSeededRepo`.
   private struct SeededRepo {
     let repo: GRDBEarmarkRepository
     let earmarkId: UUID

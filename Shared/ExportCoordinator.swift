@@ -89,9 +89,8 @@ final class ExportCoordinator {
   ///     are queued for upload so the profile syncs to CloudKit and other devices.
   ///   - instrumentRegistrar: The registry every non-fiat denomination is
   ///     registered into before the per-profile write — instrument
-  ///     identity lives on the shared profile-index registry
-  ///     (`v10_drop_shared_instrument_legacy` removed the per-profile
-  ///     `instrument` table). Defaults to the coordinator's shared
+  ///     identity lives on the shared profile-index registry, not a
+  ///     per-profile `instrument` table. Defaults to the coordinator's shared
   ///     registry; an explicit value lets coordinator-less callers
   ///     (some tests) supply a shared test registry.
   /// - Returns: The import result with counts of imported records
@@ -145,9 +144,8 @@ final class ExportCoordinator {
 
     state = .importing(step: "saving", progress: 0.3)
 
-    // Instrument identity lives on the shared profile-index registry —
-    // the per-profile `instrument` table was removed by
-    // `v10_drop_shared_instrument_legacy`. Production always has a
+    // Instrument identity lives on the shared profile-index registry,
+    // not a per-profile `instrument` table. Production always has a
     // coordinator carrying the shared registry; the importer registers
     // every non-fiat denomination there before the per-profile write.
     let importer = CloudKitDataImporter(

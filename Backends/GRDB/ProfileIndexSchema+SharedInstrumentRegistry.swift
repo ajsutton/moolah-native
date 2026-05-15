@@ -4,16 +4,16 @@ import Foundation
 import GRDB
 
 /// Body of the `v3_shared_instrument_registry` migration. Creates the
-/// `instrument` table (mirrors the post-v8 per-profile shape from
-/// `ProfileSchema+CoreFinancialGraph.swift` + `ProfileSchema+CryptoWalletFields.swift`)
-/// plus the six rate-cache tables (mirrors the post-v4 per-profile
-/// shape from `ProfileSchema+RateCaches.swift` and
+/// `instrument` table (same shape as the per-profile one in
+/// `ProfileSchema+CoreFinancialGraph.swift` +
+/// `ProfileSchema+CryptoWalletFields.swift`) plus the six rate-cache
+/// tables (same shape as the per-profile ones in
+/// `ProfileSchema+RateCaches.swift` and
 /// `ProfileSchema+RateCacheWithoutRowid.swift`).
 ///
 /// **Verbatim semantics.** Each `CREATE TABLE` reflects the table's
-/// current (post-v8 for `instrument`; post-v4 for rate caches) shape
-/// in a single statement; the historical per-profile evolution is not
-/// replayed here — fresh-table creation does not need it.
+/// final shape in a single statement; fresh-table creation does not
+/// replay per-profile migration steps.
 ///
 /// **`WITHOUT ROWID` decisions.**
 /// * `instrument` — **not** `WITHOUT ROWID`. The `encoded_system_fields`

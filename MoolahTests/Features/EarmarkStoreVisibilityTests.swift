@@ -74,10 +74,10 @@ struct EarmarkStoreVisibilityTests {
 
   @Test("convertedBalance is populated for hidden earmarks even when showHidden is false")
   func hiddenEarmarkConvertedBalancePopulated() async throws {
-    // Regression: toggling "Show Hidden" used to surface a permanent spinner
-    // on hidden earmark rows because runConversionAttempt only iterated
-    // visibleEarmarks. The store should populate convertedBalances for every
-    // earmark regardless of visibility — the filter is for what to display.
+    // The store must populate convertedBalances for every earmark
+    // regardless of visibility — the filter is only for what to display.
+    // If runConversionAttempt iterated only visibleEarmarks, toggling
+    // "Show Hidden" would surface a permanent spinner on hidden rows.
     let visible = Earmark(name: "Visible", instrument: .defaultTestInstrument)
     let hidden = Earmark(
       name: "Hidden", instrument: .defaultTestInstrument, isHidden: true)

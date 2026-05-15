@@ -6,10 +6,9 @@ extension ProfileDataSyncHandler {
   // MARK: - Per-Record-Type Save Helpers
 
   /// Inputs to the per-record-type save helpers. Bundling them keeps
-  /// each helper signature compact and below SwiftLint's
-  /// `function_parameter_count` threshold; the underlying `mapRows`
-  /// dispatch uses the typed `Row` argument to recover the CKRecord
-  /// decoder and the per-row id key.
+  /// each helper signature compact; the underlying `mapRows` dispatch
+  /// uses the typed `Row` argument to recover the CKRecord decoder and
+  /// the per-row id key.
   struct GRDBBatchSaveContext {
     let ckRecords: [CKRecord]
     let systemFields: [String: Data]
@@ -53,13 +52,10 @@ extension ProfileDataSyncHandler {
   }
 
   /// **Decommissioned per-profile-zone apply path.** Every
-  /// `InstrumentRecord` save now lives on the profile-index zone (the
-  /// shared registry). A delivery on a per-profile zone is either
-  /// straggler state from a not-yet-upgraded peer device or a
-  /// pre-`v10_drop_shared_instrument_legacy` migration replay; either
-  /// way, applying it would write into the per-profile `instrument`
-  /// table that the v10 follow-up release deletes outright. Spec
-  /// §"Per-profile handler decommissioning" requires we silently log
+  /// `InstrumentRecord` save lives on the profile-index zone (the
+  /// shared registry). A delivery on a per-profile zone is straggler
+  /// state from a peer device on an older build; there is no
+  /// per-profile `instrument` table to apply it to, so silently log
   /// and skip — never apply.
   nonisolated func applyBatchSaveInstrument(
     ckRecords: [CKRecord], systemFields: [String: Data], in database: Database

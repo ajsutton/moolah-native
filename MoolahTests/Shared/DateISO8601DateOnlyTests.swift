@@ -5,9 +5,7 @@ import Testing
 
 /// Tests for the `Date.iso8601DateOnly` format style extension.
 ///
-/// The shared formatter previously used `nonisolated(unsafe)` on a non-`Sendable`
-/// `ISO8601DateFormatter`. It has been replaced with a `Sendable`
-/// `Date.ISO8601FormatStyle`. These tests verify the output matches what
+/// Verifies the `Sendable` `Date.ISO8601FormatStyle` output matches what
 /// `ISO8601DateFormatter` with `[.withFullDate]` produces.
 @Suite("Date -- ISO8601 Date-Only")
 struct DateISO8601DateOnlyTests {

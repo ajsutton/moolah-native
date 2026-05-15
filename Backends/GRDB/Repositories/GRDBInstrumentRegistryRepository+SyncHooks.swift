@@ -5,9 +5,7 @@ import os
 
 /// Sync-hook plumbing for `GRDBInstrumentRegistryRepository`.
 ///
-/// Extracted from the main file so it stays under SwiftLint's
-/// `file_length` and `type_body_length` thresholds. The shared
-/// instrument registry is constructed at app boot before
+/// The shared instrument registry is constructed at app boot before
 /// `SyncCoordinator` exists; the coordinator rotates real hooks in
 /// via `attachSyncHooks` once both objects are available. Mirrors
 /// the lock-guarded `HookState` shape used by

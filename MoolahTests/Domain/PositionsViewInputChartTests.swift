@@ -4,9 +4,7 @@ import Testing
 @testable import Moolah
 
 /// Tests for the chart-visibility predicates on `PositionsViewInput`
-/// (`showsChart`, `showsAggregateChart`, `hasHistoricalSeries`). Split
-/// from `PositionsViewInputTests` to keep each suite under SwiftLint's
-/// `type_body_length` budget.
+/// (`showsChart`, `showsAggregateChart`, `hasHistoricalSeries`).
 @Suite("PositionsViewInput chart visibility")
 struct PositionsViewInputChartTests {
   let aud = Instrument.AUD

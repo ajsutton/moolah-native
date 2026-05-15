@@ -162,8 +162,8 @@ final class SyncCoordinator {
   /// service, and the conversion service all read from this shared
   /// instance rather than per-profile registries.
   ///
-  /// `nil` for legacy callers (e.g. tests) that don't pass a shared
-  /// registry — those continue with the per-profile registry path.
+  /// `nil` for callers (e.g. tests) that don't pass a shared
+  /// registry — those use the per-profile registry path.
   nonisolated let sharedInstrumentRegistry: GRDBInstrumentRegistryRepository?
 
   /// App-level shared `MarketDataServices` (exchange / stock / crypto
@@ -183,7 +183,7 @@ final class SyncCoordinator {
   /// hold a reference and proxy data reads to this store; per-
   /// session UI state (`error`, `isLoading`) stays on the per-session
   /// store so a transient failure in one session doesn't leak onto
-  /// every Settings screen. `nil` for legacy callers (preview /
+  /// every Settings screen. `nil` for callers (preview /
   /// tests) that don't construct a shared store.
   ///
   /// Not `nonisolated`: `SharedRegistryStore` is `@MainActor
@@ -197,8 +197,7 @@ final class SyncCoordinator {
   // files (Lifecycle / Zones / Backfill / RecordChanges / Delegate) touch are
   // `internal` rather than `private`. Swift does not treat extensions in
   // separate files as part of the same scope, so `private` would make them
-  // unreachable. Public API surface is unchanged; no member here is reachable
-  // outside the module that wasn't already reachable before the split.
+  // unreachable. None is reachable outside the module.
 
   /// User defaults used to persist per-profile "backfill scan complete" flags so the
   /// scan runs at most once per profile across app launches. Injected for testing.

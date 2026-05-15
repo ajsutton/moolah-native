@@ -4,9 +4,8 @@ import GRDB
 /// SQL-side helpers for the `fetchDailyBalances` aggregation. Holds
 /// the four query strings, the row decoders, scheduled-transaction
 /// loader, accounts/instrument-map fetch, and the `database.read`
-/// entry point — split out of `+DailyBalances.swift` so that file's
-/// Swift assembly path (the per-day position-book walk + forecast
-/// fold) stays under the SwiftLint `file_length` budget.
+/// entry point. The Swift assembly path (the per-day position-book
+/// walk + forecast fold) lives in `+DailyBalances.swift`.
 extension GRDBAnalysisRepository {
 
   // MARK: - Public read entry point

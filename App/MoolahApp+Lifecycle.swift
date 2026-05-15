@@ -2,8 +2,7 @@ import Foundation
 import GRDB
 import SwiftUI
 
-// Scene-phase sync flushing and URL-scheme routing extracted from the main
-// `MoolahApp` body so it stays under SwiftLint's `type_body_length` threshold.
+// Scene-phase sync flushing and URL-scheme routing.
 extension MoolahApp {
 
   // MARK: - Background Sync

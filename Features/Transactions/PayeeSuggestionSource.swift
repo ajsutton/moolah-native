@@ -4,8 +4,7 @@ import Observation
 
 /// Debounced autocomplete source for payee input. Owns a single in-flight
 /// fetch task so consecutive keystrokes cancel pending queries instead of
-/// racing them. Extracted from `TransactionStore` because the concern is
-/// input-field autocomplete — distinct from transaction CRUD — with its own
+/// racing them. A concern distinct from transaction CRUD, with its own
 /// state (`suggestions`) and lifecycle (debounce task).
 ///
 /// `@Observable` so views can bind to `suggestions` through

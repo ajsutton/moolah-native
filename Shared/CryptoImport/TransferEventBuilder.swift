@@ -370,8 +370,7 @@ struct TransferEventBuilder: Sendable {
 
 }
 
-/// Per-call context bundle so `TransferEventBuilder`'s helpers stay
-/// inside SwiftLint's parameter-count budget while still getting at the
+/// Per-call context bundle giving `TransferEventBuilder`'s helpers the
 /// account, chain, discovery actor, and import audit fields. Built once
 /// in `build(...)` and passed by value down the call tree.
 private struct BuildContext: Sendable {
@@ -383,8 +382,7 @@ private struct BuildContext: Sendable {
 }
 
 /// Result of mapping a transfer's direction onto a leg's sign + the
-/// other-party address. Lives outside the builder so the helper that
-/// produces it stays small enough for SwiftLint's body-length budget.
+/// other-party address.
 private struct SignAndCounterparty {
   let signedQuantity: Decimal
   let counterpartyAddress: String?

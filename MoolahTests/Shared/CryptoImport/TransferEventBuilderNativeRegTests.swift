@@ -4,11 +4,7 @@ import Testing
 
 @testable import Moolah
 
-/// Coverage for the chain native-gas pre-registration introduced for
-/// issue #791. Lives in its own suite (split from
-/// `TransferEventBuilderTests`) so the parent file stays inside
-/// SwiftLint's `type_body_length` budget — the same split rationale
-/// used by `TransferEventBuilderGasLegTests`.
+/// Coverage for the chain native-gas pre-registration. See issue #791.
 @Suite("TransferEventBuilder — native instrument registration")
 struct TransferEventBuilderNativeRegTests {
   private static let wallet = "0x1111111111111111111111111111111111111111"

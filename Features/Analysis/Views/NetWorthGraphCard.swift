@@ -31,8 +31,7 @@ struct NetWorthGraphCard: View {
   let balances: [DailyBalance]
 
   @State private var selectedDate: Date?
-  // Internal so the chart-content builders in `+Marks.swift` can read
-  // it without the file going over `type_body_length`.
+  // Internal so the chart-content builders in `+Marks.swift` can read it.
   @State var visibleSeries: Set<ChartSeries> = Set(
     ChartSeries.allCases.filter(\.enabledByDefault))
 

@@ -28,8 +28,7 @@ struct CryptoTokenStoreSetStatusTests {
   /// Bundle returned from `makeStore` so tests can reach the registry
   /// (for direct read-back of persisted values) and the recording
   /// conversion service (for invalidation assertions) alongside the
-  /// store under test. Keeps the helper signature under SwiftLint's
-  /// `large_tuple` ceiling.
+  /// store under test.
   private struct Fixture {
     let store: CryptoTokenStore
     let registry: GRDBInstrumentRegistryRepository
@@ -39,7 +38,7 @@ struct CryptoTokenStoreSetStatusTests {
   /// Builds a fresh store backed by an in-memory GRDB database with
   /// `count` built-in presets registered so the store has rows to mutate.
   private func makeStore(presetCount: Int = 1) async throws -> Fixture {
-    // Registry + price cache live on the profile-index DB post-v10.
+    // Registry + price cache live on the profile-index DB.
     let database = try ProfileIndexDatabase.openInMemory()
     let registry = GRDBInstrumentRegistryRepository(database: database)
     for preset in CryptoRegistration.builtInPresets.prefix(presetCount) {

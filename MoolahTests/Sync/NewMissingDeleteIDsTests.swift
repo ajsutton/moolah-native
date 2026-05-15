@@ -8,12 +8,10 @@ import Testing
 
 /// Pure-helper tests for `SyncCoordinator.newMissingDeleteIDs(among:pendingChanges:)`.
 ///
-/// This is the fix for the O(candidates × pending) scan in the old
-/// per-record `handleMissingRecordToSave` path: the helper builds the
-/// `Set<CKRecord.ID>` from pending `.deleteRecord` entries once and
-/// filters every candidate against the set, so the main thread can
-/// drain a queue with tens of thousands of stale records in linear
-/// time without re-scanning per record.
+/// The helper builds the `Set<CKRecord.ID>` from pending
+/// `.deleteRecord` entries once and filters every candidate against the
+/// set, so the main thread can drain a queue with tens of thousands of
+/// stale records in linear time rather than O(candidates × pending).
 @Suite("SyncCoordinator.newMissingDeleteIDs")
 struct NewMissingDeleteIDsTests {
 

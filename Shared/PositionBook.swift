@@ -109,7 +109,7 @@ struct PositionBook: Equatable, Sendable {
   /// - Parameter asStartingBalance: Pass `true` for transactions that predate
   ///   the analysis window (`date < after`). This ensures the
   ///   `.investmentTransfersOnly` read rule sees the historical position as a
-  ///   baseline, matching the legacy `investmentTransfersOnly: false` behaviour
+  ///   baseline, matching the `investmentTransfersOnly: false` behaviour
   ///   for pre-`after` priors. Use `false` (the default) for transactions
   ///   inside the analysis window — only `.transfer` legs on investment
   ///   accounts contribute to the transfers-only view.
@@ -171,9 +171,8 @@ struct PositionBook: Equatable, Sendable {
   /// Per-pipeline inputs that stay constant across a sequence of
   /// `dailyBalance(on:context:isForecast:)` calls: which accounts are
   /// investments, the profile's instrument, the accumulation rule, and the
-  /// conversion service. Grouping them into a struct keeps the call's
-  /// parameter count under SwiftLint's threshold and hoists one allocation
-  /// outside the per-day loop at each caller.
+  /// conversion service. Grouping them into a struct hoists one
+  /// allocation outside the per-day loop at each caller.
   struct BalanceContext {
     let investmentAccountIds: Set<UUID>
     let profileInstrument: Instrument

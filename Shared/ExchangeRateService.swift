@@ -216,9 +216,7 @@ actor ExchangeRateService {
     return InstrumentAmount(quantity: converted, instrument: instrument)
   }
 
-  // `prefetchLatest(base:)` lives in `ExchangeRateService+Prefetch.swift`
-  // so the main actor body stays under SwiftLint's `type_body_length`
-  // and `file_length` thresholds.
+  // `prefetchLatest(base:)` lives in `ExchangeRateService+Prefetch.swift`.
 
   // MARK: - Private helpers
 
@@ -341,6 +339,5 @@ actor ExchangeRateService {
   }
 
   // SQL persistence (`loadCache` / `persistDelta`) lives in
-  // `ExchangeRateService+Persistence.swift` so this file stays under
-  // SwiftLint's `type_body_length` and `file_length` thresholds.
+  // `ExchangeRateService+Persistence.swift`.
 }

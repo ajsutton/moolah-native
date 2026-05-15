@@ -2,11 +2,8 @@ import Foundation
 
 @testable import Moolah
 
-/// Shared helpers for the trades-mode position-valuation fold tests.
-/// Hoisted out of `GRDBDailyBalancesTradesModeTests` so the suite can be
-/// split across multiple files (SwiftLint `file_length` /
-/// `type_body_length`) while keeping the helper definitions in a
-/// single place.
+/// Shared helpers for the trades-mode position-valuation fold tests
+/// (`GRDBDailyBalancesTradesModeTests` and its sibling suites).
 enum TradesModeFoldTestSupport {
 
   /// Build the standard `DailyBalancesHandlers` for fold-contract

@@ -1,8 +1,6 @@
 import Foundation
 
-// Mutation surface for `TransactionStore`. Hoisted out of
-// `TransactionStore.swift` so that file stays under SwiftLint's
-// `file_length` threshold.
+// Mutation surface for `TransactionStore`.
 //
 // Mutations are pass-through under the reactive design: every method
 // calls the repository, the GRDB write commits, and

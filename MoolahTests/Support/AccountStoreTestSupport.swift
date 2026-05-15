@@ -4,10 +4,8 @@ import os
 
 @testable import Moolah
 
-/// Shared helpers for the split AccountStore test suites. Extracted from the
-/// original monolithic `AccountStoreTests.swift` so the focused suites
-/// (`AccountStoreLoadingTests`, `AccountStoreApplyDeltaTests`, etc.) can share
-/// fixtures without duplicating private helpers across files.
+/// Shared fixtures for the AccountStore test suites
+/// (`AccountStoreLoadingTests`, `AccountStoreApplyDeltaTests`, etc.).
 @MainActor
 enum AccountStoreTestSupport {
   static func seedAccount(

@@ -1,10 +1,9 @@
 import Foundation
 
 // Private helpers driving the load/rebuild lifecycle of
-// `InvestmentAccountView`. Hoisted out of the main view file so it
-// stays under SwiftLint's `file_length` budget; the methods stay
-// `private` and remain part of the view's API surface only — they
-// continue to be testable indirectly through the view's behaviour.
+// `InvestmentAccountView`. The methods stay `private` and are part of
+// the view's API surface only — testable indirectly through the view's
+// behaviour.
 extension InvestmentAccountView {
   /// The profile's reporting currency — used for valuing positions and the
   /// chart series. NOT the account's own instrument: an investment account

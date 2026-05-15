@@ -3,11 +3,7 @@ import GRDB
 
 @testable import Moolah
 
-// Bulk transaction-leg seeding for the sync-reactivity benchmarks. Lives
-// in a dedicated extension file (rather than `TestBackend.swift`) to keep
-// the parent enum body under SwiftLint's `type_body_length` threshold and
-// to mirror the existing `TestBackend+SeedEarmarkTransactions.swift`
-// pattern.
+// Bulk transaction-leg seeding for the sync-reactivity benchmarks.
 extension TestBackend {
 
   /// Seeds `count` transactions, each with one leg, distributed
@@ -48,8 +44,6 @@ extension TestBackend {
   }
 
   /// Inserts one transaction + one leg row for the bulk-seed loop.
-  /// Extracted from `seedBulkTransactionLegs` so the closure passed to
-  /// `database.write` stays under SwiftLint's `closure_body_length`.
   private static func insertBulkLeg(
     index i: Int,
     accountId: UUID,

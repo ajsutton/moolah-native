@@ -7,9 +7,6 @@ extension GRDBInstrumentRegistryRepository {
   /// Looks up a single crypto registration by id. Mirrors the row-shape
   /// projection in `allCryptoRegistrations()` — see `project(row:)`
   /// below for the rule set.
-  ///
-  /// Lives in a sibling extension file so the main repository class body
-  /// stays under SwiftLint's `type_body_length` and `file_length` budgets.
   func cryptoRegistration(byId id: String) async throws -> CryptoRegistration? {
     try await database.read { database in
       let cryptoKind = Instrument.Kind.cryptoToken.rawValue

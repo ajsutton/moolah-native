@@ -108,9 +108,8 @@ protocol InstrumentRegistryRepository: InstrumentChangeObserving {
   // `registerStock`, `update`, `remove`) fan out synchronously inside
   // the corresponding method; remote-arriving rows from
   // `ProfileIndexSyncHandler.applyRemoteChanges` (the profile-index
-  // zone carries `InstrumentRecord` after the shared-instrument-
-  // registry rollout) fan out via the handler's injected
-  // `onInstrumentRemoteChange` closure, which calls
+  // zone carries `InstrumentRecord`) fan out via the handler's
+  // injected `onInstrumentRemoteChange` closure, which calls
   // `notifyExternalChange()` on the @MainActor-confined repository.
   // Subscribers see both directions through the single stream — no
   // second per-profile `SyncCoordinator` subscription is required.

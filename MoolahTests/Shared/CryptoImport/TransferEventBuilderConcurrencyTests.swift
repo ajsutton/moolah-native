@@ -6,10 +6,8 @@ import Testing
 
 /// Concurrency-focused coverage for the parallel paths inside
 /// `TransferEventBuilder`: the token-discovery coalescer (verified by
-/// the 100-concurrent-builders test moved out of
-/// `TransferEventBuilderTests` to keep that suite under SwiftLint's
-/// `type_body_length` budget). The receipt-coalescing path lives in
-/// `TransferEventBuilderGasCoalescingTests`.
+/// the 100-concurrent-builders test). The receipt-coalescing path lives
+/// in `TransferEventBuilderGasCoalescingTests`.
 @Suite("TransferEventBuilder — concurrency")
 struct TransferEventBuilderConcurrencyTests {
   private static let wallet = "0x1111111111111111111111111111111111111111"

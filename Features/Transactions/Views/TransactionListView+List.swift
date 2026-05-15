@@ -198,9 +198,8 @@ extension TransactionListView {
     }
   }
 
-  /// Cached set of overdue transaction ids, hoisted out of
-  /// `scheduledRowConfig(for:)` so it's computed once per body evaluation
-  /// rather than per row. Empty for any non-scheduled grouping.
+  /// Cached set of overdue transaction ids, computed once per body
+  /// evaluation rather than per row. Empty for any non-scheduled grouping.
   private var overdueTransactionIds: Set<Transaction.ID> {
     Set(transactionStore.scheduledOverdueTransactions.map(\.transaction.id))
   }
@@ -269,10 +268,9 @@ private struct ScheduledRowConfig {
 }
 
 /// Groups the CSV-import-specific modifiers (create-rule sheet + drop
-/// target) so the main `body` chain stays within the Swift type checker's
-/// complexity budget. Extracting a modifier was the minimal change that
-/// kept these affordances without triggering a `too complex` compile
-/// error on the long `.onReceive` / `.sheet` chain.
+/// target) so the main `body` chain stays within the Swift type
+/// checker's complexity budget on the long `.onReceive` / `.sheet`
+/// chain.
 struct TransactionListCSVImportAddons: ViewModifier {
   @Binding var createRuleFromTransaction: Transaction?
   let corpusProvider: () -> [String]

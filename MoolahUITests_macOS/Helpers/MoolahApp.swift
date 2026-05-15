@@ -162,7 +162,7 @@ final class MoolahApp {
   /// whose teardown lags behind the SwiftUI sheet view's accessibility
   /// unmount: `application.popovers.firstMatch.exists` returns `false`
   /// only once the host NSWindow has fully closed, which is the
-  /// deterministic signal that residual modal state can no longer
+  /// deterministic signal that residual modal state cannot
   /// block hit-testing on the parent window. Routing the lookup
   /// through here preserves the single-resolver invariant
   /// (UI_TEST_GUIDE §3 #5).
@@ -203,9 +203,9 @@ final class MoolahApp {
   /// before SwiftUI's launcher → profile-window handoff completes (issue
   /// #493). The deterministic part of the fix is in
   /// `UITestingLauncherView`: keeping the launcher around eliminates the
-  /// open/dismiss race that previously left the app windowless. This
-  /// timeout is then the upper bound on launch-plus-render, not on a
-  /// race recovery window.
+  /// open/dismiss race that can leave the app windowless. This timeout
+  /// is then the upper bound on launch-plus-render, not on a race
+  /// recovery window.
   func expectMainWindowVisible(timeout: TimeInterval = 30) {
     if !application.windows.firstMatch.waitForExistence(timeout: timeout) {
       Trace.recordFailure("main window did not appear within \(timeout)s")

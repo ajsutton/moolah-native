@@ -2,10 +2,7 @@ import Foundation
 
 extension UITestIdentifiers {
   /// Identifier namespace for `WalletAccountHeaderView` — the bar that
-  /// renders above the transaction list on a `.crypto` account. Lives
-  /// in its own file (rather than alongside the rest of
-  /// `UITestIdentifiers`) so the parent file stays under SwiftLint's
-  /// `file_length` threshold.
+  /// renders above the transaction list on a `.crypto` account.
   public enum WalletAccountHeader {
     /// Container of the `WalletAccountHeaderView` bar shown above the
     /// transaction list on a `.crypto` account. Sentinel for "the

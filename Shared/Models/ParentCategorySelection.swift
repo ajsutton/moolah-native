@@ -53,7 +53,7 @@ struct ParentCategorySelection: Equatable {
   /// - Empty/whitespace text clears `id` — the picker treats an empty
   ///   field as "no parent → top-level category".
   /// - Anything else falls back to restoring the canonical path for
-  ///   `id`, or clearing both fields if `id` no longer resolves to a
+  ///   `id`, or clearing both fields if `id` doesn't resolve to a
   ///   live category.
   mutating func commitHighlightedOrNormalise(
     highlighted: CategorySuggestion?, in categories: Categories

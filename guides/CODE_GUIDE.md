@@ -503,6 +503,18 @@ These rules concern Swift-language patterns in SwiftUI code. Layout, colour, and
 - **Attach doc comments directly to the declaration they describe.** SwiftLint's [`orphaned_doc_comment`](https://realm.github.io/SwiftLint/orphaned_doc_comment.html) rule flags `///` blocks separated from the next declaration by a blank line or an intervening `//` comment — the compiler treats those as orphans and drops them from DocC / Xcode Quick Help. If a doc comment isn't documenting the declaration that immediately follows, demote it to `//` (it's narrative, not API docs) or move it adjacent to the declaration it's actually describing. Never leave a blank line between `///` and the `func` / `var` / `let` / `class` it documents.
 - **No block comments** (`/* */`). SwiftLint's `NoBlockComments` rule enforces this.
 - **No commented-out code.** Delete it — `git log` has the history. Commented-out code rots, lies about intent, and triggers false-positive diffs.
+- **Succinct.** A comment earns its place by saying something the code can't. Cut filler that restates the next line (`// increment i`, `// return the result`). Tighten prose to the minimum that conveys the rationale.
+- **Present tense — describe the situation as it is now, never how it changed.** A comment is read by someone looking at today's code, not the diff that produced it. Strip time-travel framing (`no longer`, `previously`, `used to be`, `formerly`, `now that we`, `renamed from`) and state the current fact. Keep the explanatory value — *why* the code does or doesn't do something a reader would expect — without narrating the transition.
+
+  ```swift
+  // Avoid: The per-profile `instrument` table no longer exists post-v10,
+  //        so fiat is resolved via the shared registry.
+  // Prefer: There is no per-profile `instrument` table; fiat resolves
+  //         via the shared registry.
+  ```
+
+- **No PR or plan archaeology.** Don't reference PR numbers as history, plan slice numbers, or "as part of the X rollout/cutover". `git blame` carries that. Tracked-issue references (`See issue #865`, `TODO(#N)` per §20) are the exception and stay.
+- **Split-out file headers state purpose, not surgery.** A file carved off a larger one for §3 size reasons documents what it now holds, not the extraction or the threshold. `// Budget CRUD extracted from EarmarkStore so it stays under type_body_length` → `// Budget CRUD for \`EarmarkStore\`.`
 - **`// MARK:` for sections** inside files longer than 300 lines (cross-ref §2).
 
 ---

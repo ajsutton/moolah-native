@@ -1,9 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-// Import / export handlers and delete-alert chrome extracted from
-// `SettingsView` so the main struct body stays under SwiftLint's
-// `type_body_length` threshold.
+// Import / export handlers and delete-alert chrome for `SettingsView`.
 extension SettingsView {
 
   // MARK: - Import

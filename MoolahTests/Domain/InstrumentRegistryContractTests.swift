@@ -27,11 +27,10 @@ struct InstrumentRegistryContractTests {
 
   @MainActor
   func makeSubject() throws -> Subject {
-    // The registry's canonical store is the profile-index DB — the
-    // per-profile `instrument` table was removed by
-    // `v10_drop_shared_instrument_legacy`. `subject.database` is the
-    // registry's own DB, so direct `InstrumentRow` seeding still
-    // observes exactly what the registry reads.
+    // The registry's canonical store is the profile-index DB; there is
+    // no per-profile `instrument` table. `subject.database` is the
+    // registry's own DB, so direct `InstrumentRow` seeding observes
+    // exactly what the registry reads.
     let database = try ProfileIndexDatabase.openInMemory()
     let hooks = HookCapture()
     let repo = GRDBInstrumentRegistryRepository(

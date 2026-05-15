@@ -8,12 +8,9 @@ import OSLog
 private let valuationMigrationLogger = Logger(
   subsystem: "com.moolah.app", category: "ProfileSession")
 
-// `ValuationModeMigration` per-profile bootstrap. Lives here rather
-// than in the main `ProfileSession` body so the latter stays under
-// SwiftLint's `file_length` threshold. The migration itself is
-// non-fatal — auto-detect read sites are still in place at this
-// rollout stage, so a thrown error gets logged but never surfaces to
-// the caller.
+// `ValuationModeMigration` per-profile bootstrap. The migration is
+// non-fatal — auto-detect read sites remain in place, so a thrown
+// error gets logged but never surfaces to the caller.
 extension ProfileSession {
   /// Runs `ValuationModeMigration` for this profile. Called from
   /// `setUp()` after the SwiftData → GRDB migration so the account /

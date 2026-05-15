@@ -11,9 +11,8 @@ actor FiatConversionService: InstrumentConversionService {
   /// subscription and `observeErrors()` returns an empty stream.
   private let database: (any DatabaseWriter)?
   /// Shared with every `observeRates()` subscription returned by this
-  /// instance. Per the Stage 1/3 convention, the channel is single-shot:
-  /// once `surfaceAndFinish(_:)` is called every observation surfaces
-  /// the same terminal error.
+  /// instance. The channel is single-shot: once `surfaceAndFinish(_:)`
+  /// is called every observation surfaces the same terminal error.
   private let errorChannel: ObservationErrorChannel?
 
   init(
@@ -81,7 +80,7 @@ actor FiatConversionService: InstrumentConversionService {
   }
 
   /// Reactive rate-tick stream. See protocol docs for the contract.
-  /// When constructed without a database (legacy test sites that don't
+  /// When constructed without a database (test sites that don't
   /// observe), emits a single tick on subscription and never again —
   /// stores subscribing fire `recomputeConvertedTotals` once and stop,
   /// which is harmless.

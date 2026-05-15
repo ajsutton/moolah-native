@@ -1,9 +1,7 @@
 import SwiftUI
 
-/// Legend row + swatch helpers for `PositionsChart`. Lives in its own
-/// file so the parent view stays under SwiftLint's `file_length`
-/// budget; the helpers are private to the legend's rendering and do
-/// not need to be reused elsewhere.
+/// Legend row + swatch helpers for `PositionsChart`. Private to the
+/// legend's rendering; not reused elsewhere.
 struct PositionsChartLegendRow: View {
   let rows: [PositionsChartRenderRow]
   let mode: PositionsChartMode

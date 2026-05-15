@@ -1,8 +1,8 @@
 import Foundation
 
-/// Pure-logic resolver for ``WelcomeView``'s state machine. Extracted
-/// so every branch is unit-testable without SwiftUI. Inputs are value
-/// types so this can stay nonisolated.
+/// Pure-logic resolver for ``WelcomeView``'s state machine, so every
+/// branch is unit-testable without SwiftUI. Inputs are value types so
+/// this can stay nonisolated.
 enum WelcomeStateResolver {
   enum ResolvedState: Equatable {
     case heroChecking

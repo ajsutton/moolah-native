@@ -251,8 +251,7 @@ public enum UITestIdentifiers {
   }
 
   // The `WalletAccountHeader` namespace lives in
-  // `UITestIdentifiers+WalletAccountHeader.swift` so this file stays
-  // under SwiftLint's `file_length` budget.
+  // `UITestIdentifiers+WalletAccountHeader.swift`.
 
   public enum CryptoSettings {
     /// Root container of the `CryptoSettingsView` Form. Sentinel for the

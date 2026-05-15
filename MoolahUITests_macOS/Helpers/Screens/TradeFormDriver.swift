@@ -316,12 +316,12 @@ struct TradeFormDriver {
   /// while it is alive its residual modal state can block hit-testing
   /// on the parent window — even for fields far from the popover
   /// anchor (e.g. the Received amount field after dismissing the Paid
-  /// instrument popover). Earlier revisions relied on the anchor being
-  /// hittable as a proxy, but the anchor sits adjacent to the popover
-  /// and can come back to life before the rest of the form does on
-  /// slow CI runners, leaving subsequent `setAmountField` calls with a
-  /// field that is in the AX tree but not yet hittable (observed on
-  /// GitHub macos-26 runners). Waiting for the host NSWindow itself to
+  /// instrument popover). The popover anchor is not a reliable proxy:
+  /// it sits adjacent to the popover and can come back to life before
+  /// the rest of the form does on slow CI runners, leaving subsequent
+  /// `setAmountField` calls with a field that is in the AX tree but
+  /// not yet hittable (observed on GitHub macos-26 runners). Waiting
+  /// for the host NSWindow itself to
   /// leave the application's window list — the positive signal — is
   /// what makes the form deterministically interactive again.
   ///

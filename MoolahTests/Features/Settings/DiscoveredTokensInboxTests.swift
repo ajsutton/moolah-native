@@ -33,7 +33,7 @@ struct DiscoveredTokensInboxTests {
   /// in-memory GRDB database, so a write through any of them is visible
   /// to the others — the same coupling the production wiring has.
   private func makeFixture() async throws -> Fixture {
-    // Registry + price cache live on the profile-index DB post-v10.
+    // Registry + price cache live on the profile-index DB.
     let database = try ProfileIndexDatabase.openInMemory()
     let registry = GRDBInstrumentRegistryRepository(database: database)
     let priceService = CryptoPriceService(

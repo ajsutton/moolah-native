@@ -50,8 +50,8 @@ extension ProfileGRDBRepositories {
   /// real values for user-mutation paths.
   ///
   /// `sharedRegistry` (production CloudKit sync always passes
-  /// `SyncCoordinator.sharedInstrumentRegistry`; tests / previews now
-  /// pass an in-memory shared registry too) is injected as the
+  /// `SyncCoordinator.sharedInstrumentRegistry`; tests / previews
+  /// pass an in-memory shared registry) is injected as the
   /// `instrumentResolver` / `instrumentRegistrar` for every repo that
   /// takes one. The apply path never invokes either seam today —
   /// `applyRemoteChangesSync` writes raw Rows and never calls
@@ -59,20 +59,16 @@ extension ProfileGRDBRepositories {
   /// `create` / `createMany` / `update`, so `registerResolvable` is
   /// never reached — but pointing the seams at the shared profile-index
   /// registry guarantees that any future apply-time resolution can
-  /// never read or write the per-profile `instrument` table that the
-  /// `v10_drop_shared_instrument_legacy` migration removed.
-  /// There is no longer a per-profile fallback: the `PerProfile*`
-  /// shims have been removed because no production or test path may
-  /// read the now-removed per-profile `instrument` table.
+  /// never read or write a per-profile `instrument` table, which does
+  /// not exist. There is no per-profile fallback: no production or test
+  /// path may read a per-profile `instrument` table.
   ///
   /// The bundle's `instruments` member stays a per-profile
   /// `GRDBInstrumentRegistryRepository(database:)` deliberately: its
   /// only sync caller is `ProfileDataSyncHandler` system-fields
   /// clearing on zone purge / sign-out / account-switch. Pointing it
   /// at the shared, iCloud-account-scoped registry would let one
-  /// profile's zone purge mutate every profile's instruments. The
-  /// `v10_drop_shared_instrument_legacy` migration has since removed
-  /// the per-profile table.
+  /// profile's zone purge mutate every profile's instruments.
   static func makeForApply(
     database: any GRDB.DatabaseWriter,
     sharedRegistry: GRDBInstrumentRegistryRepository

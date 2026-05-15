@@ -5,8 +5,8 @@ import OSLog
 /// One-time cleanup of the legacy `com.apple.coredata.cloudkit.zone` zone.
 ///
 /// SwiftData's automatic CloudKit sync used this hardcoded zone for all data.
-/// Since we've migrated to CKSyncEngine with per-profile zones, this old zone
-/// contains stale data that should be removed.
+/// CKSyncEngine uses per-profile zones, so this zone holds only stale data
+/// that should be removed.
 ///
 /// This is safe for a pre-release app — no backward compatibility needed.
 enum LegacyZoneCleanup {

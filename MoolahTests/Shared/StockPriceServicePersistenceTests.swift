@@ -5,9 +5,7 @@ import Testing
 
 @testable import Moolah
 
-/// Persistence tests live in their own suite so the main behavioural
-/// suite (`StockPriceServiceTests`) stays under SwiftLint's
-/// `type_body_length` and `file_length` caps. Covers the SQL save/load
+/// Persistence tests for `StockPriceService`. Covers the SQL save/load
 /// round-trip, the rollback contract for `StockPriceService.persistDelta`,
 /// and the delta-write semantics that keep chart renders off the GRDB
 /// serial queue.

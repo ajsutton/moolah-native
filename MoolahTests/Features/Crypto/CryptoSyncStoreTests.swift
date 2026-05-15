@@ -49,8 +49,8 @@ struct CryptoSyncStoreTests {
     let (backend, database) = try TestBackend.create()
     let alchemy = RecordingAlchemyClientStub()
     alchemy.setTransfersResponse(.transfers([]))
-    // Resolve through the backend's shared profile-index registry
-    // (per-profile `instrument` table removed by v10).
+    // Resolve through the backend's shared profile-index registry;
+    // there is no per-profile `instrument` table.
     let registry = backend.grdbInstruments
     let discovery = CryptoTokenDiscoveryService(
       registry: registry,
@@ -328,8 +328,7 @@ struct CryptoSyncStoreTests {
   }
 
   // The global-error-banner tests live in
-  // `CryptoSyncStoreGlobalErrorTests.swift` so this file stays under
-  // SwiftLint's `file_length` and `type_body_length` budgets.
+  // `CryptoSyncStoreGlobalErrorTests.swift`.
 
   // MARK: - No background tasks
   //

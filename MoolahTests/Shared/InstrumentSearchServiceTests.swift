@@ -136,9 +136,8 @@ struct InstrumentSearchServiceTests {
     // CSV import landed it before the picker had a chance to resolve(). On
     // the catalog path that case must surface as `isRegistered: false,
     // requiresResolution: true` — the picker will then run resolve() and
-    // promote it to a fully registered row. The legacy code marked it as
-    // `isRegistered: true` while still asking for resolution, which is a
-    // contradictory state.
+    // promote it to a fully registered row. Marking it `isRegistered:
+    // true` while still asking for resolution is a contradictory state.
     let preMappingInst = Instrument.crypto(
       chainId: 1,
       contractAddress: "0xfoo",

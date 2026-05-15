@@ -45,7 +45,6 @@ enum SyncErrorRecovery {
   }
 
   /// Route one failed save into the appropriate `ClassifiedFailures` bucket.
-  /// Kept separate so `classify` stays below the cyclomatic-complexity threshold.
   private static func classifySaveFailure(
     _ failure: CKSyncEngine.Event.SentRecordZoneChanges.FailedRecordSave,
     into result: inout ClassifiedFailures,

@@ -99,9 +99,7 @@ extension URLSession {
   /// Records the `gate` and `failureCache` side effects for an HTTP
   /// response. Throws `RateLimitGateError.cooldown` for rate-limit
   /// responses; returns normally for everything else (including non-2xx
-  /// statuses that don't trip the gate). Extracted from the main
-  /// function to keep both inside SwiftLint's `function_body_length`
-  /// budget.
+  /// statuses that don't trip the gate).
   private static func classify(
     response: URLResponse,
     request: URLRequest,
@@ -146,9 +144,7 @@ extension URLSession {
     }
   }
 
-  /// Bundle of the per-response inputs `tripGate` needs, kept as a
-  /// nested struct so the surrounding function stays under SwiftLint's
-  /// `function_parameter_count` budget (5).
+  /// Bundle of the per-response inputs `tripGate` needs.
   private struct RateLimitOutcome {
     let retryAfter: TimeInterval?
     let statusCode: Int

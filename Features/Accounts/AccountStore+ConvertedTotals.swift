@@ -1,9 +1,8 @@
 import Foundation
 
-// On-demand total computations. Hoisted out of `AccountStore.swift` so
-// that file stays under `file_length` / `type_body_length`. These are
-// pure pass-throughs to the calculator and need no privileged access to
-// the store's `private(set)` setters.
+// On-demand total computations for `AccountStore`. Pure pass-throughs to
+// the calculator that need no privileged access to the store's
+// `private(set)` setters.
 extension AccountStore {
   /// Total value of `accountList` in `target`, summing positions directly.
   func computeConvertedTotal(for accountList: [Account], in target: Instrument) async throws

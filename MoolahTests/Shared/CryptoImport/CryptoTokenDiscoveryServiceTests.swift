@@ -5,8 +5,7 @@ import Testing
 @testable import Moolah
 
 /// Behavioural tests for `CryptoTokenDiscoveryService`. The in-flight
-/// coalescer / stress assertions live in `CryptoTokenDiscoveryCoalescerTests`
-/// to keep this file under SwiftLint's length thresholds.
+/// coalescer / stress assertions live in `CryptoTokenDiscoveryCoalescerTests`.
 @Suite("CryptoTokenDiscoveryService — Resolution")
 struct CryptoTokenDiscoveryServiceTests {
   // Reusable USDC-like contract for the ERC-20 paths.

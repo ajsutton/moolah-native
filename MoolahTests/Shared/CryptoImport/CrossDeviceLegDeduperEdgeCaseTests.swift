@@ -5,10 +5,8 @@ import Testing
 @testable import Moolah
 
 /// Edge-case tests for `CrossDeviceLegDeduper`: mixed legs (one
-/// duplicate + one unique), determinism across input ordering. Split
-/// from `CrossDeviceLegDeduperTests` so each suite stays under
-/// SwiftLint's `type_body_length` threshold and convergence vs.
-/// edge-case scenarios remain independently scannable.
+/// duplicate + one unique), determinism across input ordering.
+/// Convergence tests live in `CrossDeviceLegDeduperTests`.
 @Suite("CrossDeviceLegDeduper — edge cases")
 @MainActor
 struct CrossDeviceLegDeduperEdgeCaseTests {

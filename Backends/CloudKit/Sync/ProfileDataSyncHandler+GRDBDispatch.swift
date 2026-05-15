@@ -104,8 +104,7 @@ extension ProfileDataSyncHandler {
 
   /// Returns the per-record-type UUID deleter as a curried function,
   /// or `nil` for record types not handled by the GRDB layer. Mirrors
-  /// the `saveHandler` shape so the dispatch table stays under
-  /// SwiftLint's `function_body_length` budget.
+  /// the `saveHandler` shape.
   nonisolated private func uuidDeleter(
     for recordType: String
   ) -> ((ProfileDataSyncHandler, [UUID], Database) throws -> Void)? {
@@ -198,7 +197,7 @@ extension ProfileDataSyncHandler {
   /// Companion to `applyGRDBBatchDeletion(recordType:ids:)` for record
   /// types keyed by string ID. `InstrumentRecord` lives on the
   /// profile-index zone only, so any per-profile-zone deletion is a
-  /// straggler from a pre-rollout peer device — we log and skip
+  /// straggler from a peer device on an older build — we log and skip
   /// rather than apply. The function returns `true` to claim the
   /// dispatch slot so the engine doesn't re-route the deletion
   /// through a fallback path.

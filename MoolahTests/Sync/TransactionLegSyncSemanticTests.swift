@@ -85,12 +85,12 @@ struct TransactionLegSyncSemanticTests {
         ]))
 
     // A server-side orphan with a UUID that the local row does NOT
-    // share. Under the new stable-id design this can only happen if
-    // the original "leg removed from transaction" delete-uplink failed
-    // and the orphan stays on the server with a uuid the device never
-    // owned. Stable ids make this less likely (re-queued deletes hit
-    // the right record) but do not make it impossible. The user
-    // resolves manually (design Section 7).
+    // share. Under the stable-id design this can only happen if a
+    // "leg removed from transaction" delete-uplink failed and the
+    // orphan stays on the server with a uuid the device never owned.
+    // Stable ids make this less likely (re-queued deletes hit the
+    // right record) but do not make it impossible. The user resolves
+    // manually (design Section 7).
     let orphanId = UUID()
     let orphanRow = TransactionLegRow(
       id: orphanId,

@@ -1,8 +1,7 @@
 import Foundation
 import GRDB
 
-// Trade-Ready seed helpers split out of `UITestSeedHydrator` so the main enum
-// body stays under SwiftLint's `type_body_length` threshold.
+// Trade-Ready seed helpers for `UITestSeedHydrator`.
 extension UITestSeedHydrator {
   // MARK: - Specs
 

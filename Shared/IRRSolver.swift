@@ -5,8 +5,7 @@ import Foundation
 /// bisection fallback for pathological multi-root cases.
 ///
 /// Day-precise: contribution exponents are `−tᵢ / 365` where `tᵢ` is days
-/// from the first flow. Replaces the legacy 30-day-month / monthly-rate-as-
-/// percent approximations from the prior monthly-rate-based binary search.
+/// from the first flow.
 ///
 /// **Returns `nil` when:**
 /// - `flows` is empty,

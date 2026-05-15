@@ -95,9 +95,8 @@ enum CSVDeduplicator {
     return CSVDedupResult(kept: kept, skipped: skipped)
   }
 
-  /// Precomputed lookup tables reused across every candidate. Grouping the
-  /// inputs into one value keeps the per-candidate classifier's parameter
-  /// count low enough for SwiftLint's `function_parameter_count` rule.
+  /// Precomputed lookup tables reused across every candidate, grouped into
+  /// one value to keep the per-candidate classifier's parameter list small.
   private struct DedupIndex {
     let byRef: [String: Transaction]
     let byDate: [DateComponents: [Transaction]]

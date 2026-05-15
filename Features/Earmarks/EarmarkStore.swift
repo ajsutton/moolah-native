@@ -43,7 +43,7 @@ final class EarmarkStore {
   private var observationTask: Task<Void, Never>?
 
   /// Narrow seam onto the shared instrument registry's change stream.
-  /// The earmarks observation no longer tracks the `instrument` table
+  /// The earmarks observation does not track the `instrument` table
   /// (identity resolved once per fetch via the shared registry), so a
   /// metadata edit there does not re-fire `observeAll()`. When wired,
   /// `instrumentChangeObservationTask` re-fetches earmarks and

@@ -12,9 +12,9 @@ import Testing
 /// account writes take before their per-profile `database.write`)
 /// emits its `onRecordChanged` hook with a string-keyed recordName
 /// destined for the **profile-index zone** — never a `profile-<UUID>`
-/// zone. The legacy per-profile-zone instrument upload path is
-/// decommissioned (DEBUG trap in `ProfileDataSyncHandler.recordToSave`
-/// catches regressions); this test pins the positive contract
+/// zone. There is no per-profile-zone instrument upload path (a DEBUG
+/// trap in `ProfileDataSyncHandler.recordToSave` catches regressions);
+/// this test pins the positive contract
 /// end-to-end so a future refactor that loses the shared-registry
 /// routing fails here before hitting the trap in CI.
 @Suite("Instrument registration routes to the profile-index zone")

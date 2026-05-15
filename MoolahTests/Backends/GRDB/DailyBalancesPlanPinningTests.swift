@@ -7,10 +7,9 @@ import Testing
 /// `EXPLAIN QUERY PLAN`-pinning tests for the four SQL fetches that
 /// drive `GRDBAnalysisRepository.fetchDailyBalances`: the per-day
 /// account-dimension SUM, the per-day earmark-dimension SUM, and the
-/// investment-value latest-as-of-day lookup. Split out of
-/// `AnalysisAggregationPlanPinningTests` so each file stays under the
-/// SwiftLint `type_body_length` and `file_length` budgets — same
-/// methodology, different aggregation surface.
+/// investment-value latest-as-of-day lookup. Same methodology as
+/// `AnalysisAggregationPlanPinningTests`, different aggregation
+/// surface.
 ///
 /// **Temp B-tree GROUP/ORDER lines are accepted across this whole
 /// file.** Every aggregation here groups and orders by

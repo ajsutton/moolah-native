@@ -44,9 +44,9 @@ struct ConversionObservationContractTests {
   @Test("write to cache table emits a tick", arguments: CacheTable.allCases)
   func writeEmitsTick(table: CacheTable) async throws {
     let (backend, _) = try TestBackend.create()
-    // The rate caches live on the registry's profile-index DB post-v10
-    // — the per-profile rate-cache tables were dropped. The conversion
-    // service observes that DB, so the fixture write must land there.
+    // The rate caches live on the registry's profile-index DB. The
+    // conversion service observes that DB, so the fixture write must
+    // land there.
     let cacheDatabase = backend.grdbInstruments.database
     var iterator = backend.conversionService.observeRates().makeAsyncIterator()
     _ = await iterator.next()  // initial tick on subscription

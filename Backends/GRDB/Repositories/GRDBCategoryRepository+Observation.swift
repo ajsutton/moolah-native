@@ -3,11 +3,7 @@
 import Foundation
 import GRDB
 
-// Reactive observation surface for `CategoryRepository`. Split out of
-// the main class file to keep `GRDBCategoryRepository.swift` under
-// SwiftLint's `file_length` warning threshold and to mirror the
-// established `GRDBAccountRepository+Observation.swift` /
-// `GRDBEarmarkRepository+Observation.swift` companion-file pattern.
+// Reactive observation surface for `CategoryRepository`.
 //
 // `observeAll()` returns the same domain projection as `fetchAll()`:
 // every `category` row, ordered by `name`, mapped through `toDomain()`.

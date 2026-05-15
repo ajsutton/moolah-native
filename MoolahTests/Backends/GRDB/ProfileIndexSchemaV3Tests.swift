@@ -7,7 +7,7 @@ import Testing
 @testable import Moolah
 
 /// Confirms `v3_shared_instrument_registry` creates the expected tables
-/// in their post-v8 / post-v4 final shape on `profile-index.sqlite`.
+/// in their final shape on `profile-index.sqlite`.
 @Suite("ProfileIndexSchema — v3_shared_instrument_registry")
 struct ProfileIndexSchemaV3Tests {
   private func makeMigratedDatabase() throws -> DatabaseQueue {

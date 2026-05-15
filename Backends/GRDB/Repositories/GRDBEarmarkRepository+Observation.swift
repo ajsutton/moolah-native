@@ -3,10 +3,7 @@
 import Foundation
 import GRDB
 
-// Reactive observation surface for `EarmarkRepository`. Split out of the
-// main class file to keep `GRDBEarmarkRepository.swift` under SwiftLint's
-// `file_length` warning threshold and to mirror the established
-// `+Positions.swift` companion-file pattern.
+// Reactive observation surface for `EarmarkRepository`.
 //
 // `observeAll()` returns the same domain projection as `fetchAll()`:
 // earmark rows ordered by `position`, each populated with their full
@@ -33,8 +30,8 @@ import GRDB
 // resolves the map once via `instrumentResolver` when the stream's
 // worker task starts, captures it into the tracking closure, and drops
 // `InstrumentRow.observableRegion` from the tracked regions (those rows
-// are no longer in this DB). An instrument-metadata edit therefore does
-// not live-refresh an already-open list until the next refetch
+// live on the separate profile-index DB). An instrument-metadata edit
+// therefore does not live-refresh an already-open list until the next refetch
 // (re-subscribe). `observeBudget(earmarkId:)` does not consult the
 // instrument map (it labels items from the parent earmark's own
 // `instrument_id`), so it keeps the plain synchronous shape. The
@@ -62,7 +59,7 @@ extension GRDBEarmarkRepository {
         // Explicit-region form: every joined table's `observableRegion`
         // excludes the sync-bookkeeping `encoded_system_fields` blob, so
         // CKSyncEngine's per-batch system-fields write does not re-fire
-        // this observation. See issue #865. `InstrumentRow` is no longer
+        // this observation. See issue #865. `InstrumentRow` is not
         // tracked here — those rows live on the separate profile-index
         // database; the map is the captured `instruments` snapshot.
         //

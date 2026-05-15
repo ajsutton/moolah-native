@@ -27,21 +27,17 @@ extension ProfileDataSyncHandler {
   /// treated as string IDs and routed to the Instrument lookup.
   ///
   /// **DEBUG trap for `InstrumentRecord` on per-profile zones.**
-  /// After the shared-instrument-registry rollout, every `InstrumentRecord`
-  /// upload routes through the shared registry on the profile-index
-  /// zone. A pending change for `InstrumentRecord` reaching this
-  /// per-profile handler is a programmer error: a callsite either
-  /// retained the legacy per-profile-zone queueing path or a regression
-  /// re-introduced one. The DEBUG `preconditionFailure` fails the test
-  /// suite immediately so the regression cannot land. Release builds
-  /// log the violation and return `nil`, letting CKSyncEngine drop the
-  /// change — the spec's audit-before-merge code-search is the primary
-  /// guard; this trap is the backstop.
+  /// Every `InstrumentRecord` upload routes through the shared registry
+  /// on the profile-index zone. A pending change for `InstrumentRecord`
+  /// reaching this per-profile handler is a programmer error: a callsite
+  /// queued it on the wrong zone. The DEBUG `preconditionFailure` fails
+  /// the test suite immediately so the regression cannot land. Release
+  /// builds log the violation and return `nil`, letting CKSyncEngine
+  /// drop the change.
   ///
-  /// String-keyed recordIDs (the bare `recordName` form previously
-  /// reserved for `InstrumentRecord`) are also caught here: they no
-  /// longer have a legitimate per-profile path either, so the same
-  /// trap applies symmetrically.
+  /// String-keyed recordIDs (the bare `recordName` form used for
+  /// `InstrumentRecord`) are also caught here: they have no legitimate
+  /// per-profile path, so the same trap applies symmetrically.
   func recordToSave(for recordID: CKRecord.ID) -> CKRecord? {
     if let recordType = recordID.prefixedRecordType, let uuid = recordID.uuid {
       if recordType == InstrumentRow.recordType {
@@ -218,11 +214,6 @@ extension ProfileDataSyncHandler {
   private func fetchInvestmentValueRow(id: UUID) -> InvestmentValueRow? {
     fetchRowOrLog { try grdbRepositories.investmentValues.fetchRowSync(id: id) }
   }
-
-  // `fetchInstrumentRow(id: String)` was the per-profile InstrumentRow
-  // string-keyed lookup. Removed when `recordToSave` swapped to a
-  // DEBUG trap on the per-profile zone — string-keyed instrument
-  // lookups no longer have a legitimate caller here.
 
   private func fetchCSVImportProfileRow(id: UUID) -> CSVImportProfileRow? {
     fetchRowOrLog { try grdbRepositories.csvImportProfiles.fetchRowSync(id: id) }

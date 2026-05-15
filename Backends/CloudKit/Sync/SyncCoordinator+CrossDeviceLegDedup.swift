@@ -4,11 +4,7 @@
 import Foundation
 import OSLog
 
-/// Cross-device leg dedup hook for the post-fetch path. Extracted from
-/// `SyncCoordinator+RecordChanges.swift` so each file stays under
-/// SwiftLint's `file_length` threshold and the dedup wiring sits next
-/// to its load-bearing comment instead of inside the apply-changes
-/// dispatcher.
+/// Cross-device leg dedup hook for the post-fetch path.
 ///
 /// Wiring contract:
 /// - `extractTouchedExternalIds(saved:)` runs **off-main** in the same

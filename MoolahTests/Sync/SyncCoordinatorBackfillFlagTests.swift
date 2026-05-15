@@ -8,9 +8,7 @@ import Testing
 /// Tests covering the lifecycle of the per-profile "backfill scan
 /// complete" `UserDefaults` flag — when sign-out, encrypted-data
 /// reset, and server-side zone deletion clear it so the next session
-/// re-runs the unsynced-record scan. Split out of
-/// `SyncCoordinatorTestsExtra` to keep type bodies under the SwiftLint
-/// `type_body_length` threshold.
+/// re-runs the unsynced-record scan.
 @Suite("SyncCoordinator backfill flag lifecycle")
 @MainActor
 struct SyncCoordinatorBackfillFlagTests {

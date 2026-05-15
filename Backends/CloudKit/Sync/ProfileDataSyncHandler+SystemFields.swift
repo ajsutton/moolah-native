@@ -20,14 +20,9 @@ extension ProfileDataSyncHandler {
   /// keeps a future maintainer from getting them out of step when a
   /// new record type is added.
   private func clearOperations() -> [(String, () throws -> Void)] {
-    // `InstrumentRow.recordType` intentionally omitted: the per-profile
-    // `instrument` table is decommissioned. System fields on those
-    // rows are never consulted by any upload path, and
-    // `queueAllExistingRecords()` no longer enumerates them — clearing
-    // the field on encrypted-data-reset would leave the table in a
-    // spuriously "unsynced" state with no upload path to resolve it.
-    // The `v10_drop_shared_instrument_legacy` migration has since
-    // dropped the table entirely.
+    // `InstrumentRow.recordType` intentionally omitted: there is no
+    // per-profile `instrument` table. No upload path consults system
+    // fields on instrument rows, so they have nothing to clear.
     [
       (CategoryRow.recordType, grdbRepositories.categories.clearAllSystemFieldsSync),
       (AccountRow.recordType, grdbRepositories.accounts.clearAllSystemFieldsSync),
@@ -123,10 +118,9 @@ extension ProfileDataSyncHandler {
 
   /// Groups `ckRecords` by recordType and runs one batch system-fields
   /// write per type. `InstrumentRecord` deliveries on a per-profile
-  /// zone are straggler state from before the shared-registry rollout
-  /// and are logged-and-skipped (the per-profile `instrument` table is
-  /// decommissioned). Records with non-UUID recordNames are also
-  /// skipped — same shape as the pre-batching per-record path.
+  /// zone are straggler state (there is no per-profile `instrument`
+  /// table) and are logged-and-skipped. Records with non-UUID
+  /// recordNames are also skipped.
   private func applySystemFieldsBatched(_ ckRecords: [CKRecord]) {
     var updatesByType: [String: [(id: UUID, data: Data?)]] = [:]
     for ckRecord in ckRecords {

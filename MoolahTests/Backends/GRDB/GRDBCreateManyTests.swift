@@ -54,11 +54,11 @@ struct GRDBCreateManyTests {
     try await Task.sleep(for: .milliseconds(50))
   }
 
-  /// Post-`v10_drop_shared_instrument_legacy` the per-profile
-  /// `instrument` table no longer exists, so the "create path must not
-  /// write a per-profile placeholder" contract is now the structural
-  /// fact that the table is absent — a strictly stronger guarantee than
-  /// "zero rows". Returns `true` when the table does not exist.
+  /// There is no per-profile `instrument` table, so the "create path
+  /// must not write a per-profile placeholder" contract is the
+  /// structural fact that the table is absent — a strictly stronger
+  /// guarantee than "zero rows". Returns `true` when the table does
+  /// not exist.
   private func perProfileInstrumentTableAbsent(
     _ database: any DatabaseWriter
   ) async throws -> Bool {

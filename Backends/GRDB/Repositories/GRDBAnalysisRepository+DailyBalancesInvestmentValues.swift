@@ -8,8 +8,6 @@ import GRDB
 /// driving the `investmentValue` and `netWorth` fields. Also owns the
 /// SQL fetches that produce the inputs to that fold-in
 /// (`fetchInvestmentAccountIds`, `fetchInvestmentValueSnapshots`).
-/// Split out of `+DailyBalances.swift` for the SwiftLint `file_length`
-/// budget.
 extension GRDBAnalysisRepository {
 
   // MARK: - SQL fetches

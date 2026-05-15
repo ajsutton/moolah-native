@@ -1,8 +1,6 @@
 // Reason: the apply() call sites and the per-day point emission both
-// pass enough labelled parameters to trigger SwiftLint's
-// multiline_arguments rule on layouts that fit within file_length, so
-// the disable is scoped to this file rather than reformatting every
-// call site to one-arg-per-line.
+// pass enough labelled parameters to trigger multiline_arguments;
+// scoped to this file rather than reformatting every call site.
 // swiftlint:disable multiline_arguments
 
 import Foundation

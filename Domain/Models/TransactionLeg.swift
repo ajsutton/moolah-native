@@ -13,8 +13,8 @@ struct TransactionLeg {
   ///
   /// Populated by `TransferEventBuilder` from the Alchemy transfer's
   /// `from` / `to` fields — whichever side is *not* this wallet. Decoded
-  /// with `decodeIfPresent` so legacy rows (pre-#754) round-trip with
-  /// `nil`.
+  /// with `decodeIfPresent` so rows persisted without the field
+  /// round-trip with `nil`.
   let counterpartyAddress: String?
   var type: TransactionType
   var categoryId: UUID?
@@ -69,8 +69,8 @@ extension TransactionLeg: Codable {
 
   init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    // Legacy rows (pre-stable-leg-id) round-trip with a freshly allocated id;
-    // newer rows persist a stable id assigned at creation time.
+    // Rows without a persisted id get a freshly allocated one; rows with a
+    // persisted id keep their stable id assigned at creation time.
     self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
     self.accountId = try container.decodeIfPresent(UUID.self, forKey: .accountId)
     self.instrument = try container.decode(Instrument.self, forKey: .instrument)

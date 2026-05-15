@@ -9,9 +9,6 @@ import OSLog
 /// sources have no future rates), and the converted instances feed a
 /// sequential `PositionBook` walk that emits one forecast
 /// `DailyBalance` per instance day.
-///
-/// Split out of `+DailyBalances.swift` for the SwiftLint
-/// `file_length` budget.
 extension GRDBAnalysisRepository {
   /// Generate the forecast tail by extrapolating scheduled
   /// transactions and feeding each instance into a fresh

@@ -5,10 +5,9 @@ import Testing
 
 /// Multi-day, Rule 11 failure-scoping, carry-forward, priors-seed, and
 /// end-to-end pipeline tests for
-/// `GRDBAnalysisRepository.applyTradesModePositionValuations`. Split
-/// out of `GRDBDailyBalancesTradesModeTests` for SwiftLint
-/// `file_length` / `type_body_length` budgets — same fold, same
-/// helpers (`TradesModeFoldTestSupport`), partitioned by topic.
+/// `GRDBAnalysisRepository.applyTradesModePositionValuations`. Same
+/// fold and helpers (`TradesModeFoldTestSupport`) as
+/// `GRDBDailyBalancesTradesModeTests`, partitioned by topic.
 @Suite("GRDBAnalysisRepository applyTradesModePositionValuations — Rule 11 / cross-day")
 struct GRDBDailyBalancesTradesModeRule11Tests {
 

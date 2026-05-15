@@ -21,16 +21,15 @@ struct ImportResult: Sendable {
 /// are queue-serialised inside `database.write`, so the importer itself
 /// does not need any actor isolation.
 ///
-/// Instrument identity is **not** written to `data.sqlite`: the
-/// `v10_drop_shared_instrument_legacy` migration removed the per-profile
-/// `instrument` table. Every non-fiat denomination the import
+/// Instrument identity is **not** written to `data.sqlite`: there is no
+/// per-profile `instrument` table. Every non-fiat denomination the import
 /// references is registered through the injected
 /// `InstrumentRegistering` (production = the shared profile-index
 /// registry) before the per-profile rows are written, so a read issued
 /// after the import resolves each leg / account instrument. Fiat is
 /// ambient (ISO fallback) and needs no registration. The registrar is
-/// optional only so legacy callers that never had a registry (a few
-/// older tests) still construct; production always injects one.
+/// optional only so callers without a registry (a few tests) still
+/// construct; production always injects one.
 struct CloudKitDataImporter {
   private let database: any DatabaseWriter
   private let currencyCode: String
@@ -90,9 +89,8 @@ struct CloudKitDataImporter {
   private func writeGRDB(data: ExportedData) async throws {
     // Register every non-fiat denomination on the shared registry
     // *before* the per-profile write so a read after import resolves
-    // each leg / account instrument. The per-profile `instrument` table
-    // no longer exists (`v10_drop_shared_instrument_legacy`); fiat is
-    // ambient and a no-op in `registerResolvable`.
+    // each leg / account instrument. There is no per-profile `instrument`
+    // table; fiat is ambient and a no-op in `registerResolvable`.
     try await registerInstruments(data: data)
     try await database.write { database in
       try Self.writeCategories(data: data, database: database)
@@ -178,8 +176,8 @@ struct CloudKitDataImporter {
       try TransactionRow(domain: txn).upsert(database)
       for (index, leg) in txn.legs.enumerated() {
         // Non-fiat denominations were registered on the shared registry
-        // by `registerInstruments` before this transaction; the
-        // per-profile `instrument` table no longer exists post-v10.
+        // by `registerInstruments` before this transaction; there is no
+        // per-profile `instrument` table.
         try TransactionLegRow(domain: leg, transactionId: txn.id, sortOrder: index)
           .upsert(database)
       }

@@ -1,9 +1,8 @@
 import SwiftUI
 
 // Action-editor row for `RuleEditorView`, with its supporting `ActionKind`
-// picker enum. Extracted from `RuleEditorView.swift` so the primary view
-// file stays under SwiftLint's `file_length` threshold. These types are
-// file-visible to this feature and referenced only from `RuleEditorView`.
+// picker enum. These types are file-visible to this feature and
+// referenced only from `RuleEditorView`.
 
 struct RuleEditorActionRow: View {
   @Binding var action: RuleAction

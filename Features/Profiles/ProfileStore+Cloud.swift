@@ -2,8 +2,7 @@ import CloudKit
 import Foundation
 
 // Cloud-profile loading, iCloud validation helpers, and UserDefaults
-// persistence extracted from the main `ProfileStore` body so it stays under
-// SwiftLint's `type_body_length` threshold. All members execute on the main
+// persistence for `ProfileStore`. All members execute on the main
 // actor (`ProfileStore` is `@MainActor`).
 extension ProfileStore {
 

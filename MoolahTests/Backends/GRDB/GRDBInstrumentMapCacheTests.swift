@@ -8,8 +8,8 @@ import Testing
 
 /// Verifies `GRDBInstrumentRegistryRepository.instrumentMap()` serves a
 /// memoised `[String: Instrument]` snapshot that is rebuilt from the
-/// database only when a registry mutation invalidates it. The cutover
-/// routes every per-profile instrument resolution through this single
+/// database only when a registry mutation invalidates it. Every
+/// per-profile instrument resolution routes through this single
 /// shared method on the serial profile-index queue; a per-call DB read
 /// would serialise and regress the cold-launch burst. The correctness
 /// invariant under test is that *every* mutation path (local writes,

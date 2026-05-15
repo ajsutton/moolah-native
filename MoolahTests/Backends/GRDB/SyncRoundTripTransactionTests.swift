@@ -67,14 +67,11 @@ struct SyncRoundTripTransactionTests {
   // MARK: - TransactionLegRow
 
   /// Seeds the `account` and `transaction` rows the leg references so
-  /// the test asserts a fully-resolved round-trip. Under v5 the schema
-  /// no longer enforces FKs (`v5_drop_foreign_keys`), so this seeding
-  /// is an *optional* setup detail — the apply path itself does not
-  /// require either parent to exist. New tests of leg sync apply
-  /// against missing parents live in
-  /// `MoolahTests/Sync/ApplyRemoteChangesOutOfOrderTests.swift`. Pulled
-  /// out of the test body to keep the test under the
-  /// function-body-length limit.
+  /// the test asserts a fully-resolved round-trip. The schema does not
+  /// enforce FKs, so this seeding is an *optional* setup detail — the
+  /// apply path itself does not require either parent to exist. Tests
+  /// of leg sync apply against missing parents live in
+  /// `MoolahTests/Sync/ApplyRemoteChangesOutOfOrderTests.swift`.
   private static func seedLegParents(
     database: any DatabaseWriter,
     txnId: UUID,

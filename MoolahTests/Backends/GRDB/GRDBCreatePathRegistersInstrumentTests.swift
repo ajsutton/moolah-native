@@ -6,14 +6,13 @@ import Testing
 
 @testable import Moolah
 
-/// Pins the cross-transaction atomicity boundary introduced by the write
-/// cutover: instrument registration commits in its OWN transaction BEFORE
-/// the per-profile write that inserts the transaction/leg rows. If the
-/// per-profile write later fails and rolls back, the instrument row
-/// persists — safe because `registerResolvable` is idempotent and a
-/// retry will succeed. No existing rollback test covers this asymmetric
-/// boundary because the existing fiat-only rollback tests go through
-/// `registerResolvable` as a no-op.
+/// Pins the cross-transaction atomicity boundary: instrument
+/// registration commits in its OWN transaction BEFORE the per-profile
+/// write that inserts the transaction/leg rows. If the per-profile
+/// write later fails and rolls back, the instrument row persists —
+/// safe because `registerResolvable` is idempotent and a retry will
+/// succeed. The fiat-only rollback tests don't cover this asymmetric
+/// boundary because they go through `registerResolvable` as a no-op.
 ///
 /// The in-transaction throw is forced by a `BEFORE INSERT ON "transaction"`
 /// SQLite trigger so the abort fires inside the per-profile write block,
@@ -100,11 +99,10 @@ struct GRDBInstrumentRegistrationRollbackTests {
   }
 }
 
-/// Pins the instrument write cutover: `create` (transaction and account) no
-/// longer plants a per-profile placeholder `instrument` row. Instead it
-/// awaits `InstrumentRegistering.registerResolvable` *before* the
-/// per-profile write, so an immediately-following read resolves the
-/// instrument.
+/// Pins that `create` (transaction and account) does not plant a
+/// per-profile placeholder `instrument` row. Instead it awaits
+/// `InstrumentRegistering.registerResolvable` *before* the per-profile
+/// write, so an immediately-following read resolves the instrument.
 ///
 /// Production-shaped wiring: a SHARED `GRDBInstrumentRegistryRepository`
 /// over `ProfileIndexDatabase.openInMemory()` is injected as BOTH the
@@ -119,15 +117,14 @@ struct GRDBInstrumentRegistrationRollbackTests {
 ///      `cryptoRegistration(byId:)` — that is the inbox projection — so
 ///      resolvability must be probed via the resolver the read paths
 ///      actually use.)
-///   2. the per-profile `instrument` table no longer exists at all
-///      (`v10_drop_shared_instrument_legacy` dropped it) — a strictly
+///   2. there is no per-profile `instrument` table at all — a strictly
 ///      stronger guarantee than "zero placeholder rows".
 @Suite("create registers the instrument via the shared registry, not a per-profile placeholder")
 struct GRDBCreatePathRegistersInstrumentTests {
-  /// Post-v10 the per-profile `instrument` table is dropped, so the
-  /// "no per-profile placeholder" contract is now the structural fact
-  /// that the table does not exist. Returns `true` when the table is
-  /// absent (the expected, stronger guarantee).
+  /// There is no per-profile `instrument` table, so the "no
+  /// per-profile placeholder" contract is the structural fact that the
+  /// table does not exist. Returns `true` when the table is absent
+  /// (the expected, stronger guarantee).
   private func perProfileInstrumentTableAbsent(
     _ database: any DatabaseWriter
   ) async throws -> Bool {

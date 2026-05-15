@@ -58,8 +58,7 @@ struct CryptoPriceServiceTestsMore {
   }
 
   // SQL round-trip + rollback + persistence-efficiency tests live in
-  // `CryptoPriceServicePersistenceTests` so this suite stays under
-  // SwiftLint's `type_body_length` cap.
+  // `CryptoPriceServicePersistenceTests`.
 
   // MARK: - Prefetch
 

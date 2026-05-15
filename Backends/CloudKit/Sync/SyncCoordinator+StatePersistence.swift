@@ -3,12 +3,10 @@
 @preconcurrency import CloudKit
 import Foundation
 
-/// CKSyncEngine state-serialization persistence helpers, extracted
-/// from `SyncCoordinator.swift` so the main file stays under
-/// SwiftLint's `file_length` budget. Load of the state serialization
-/// happens off-actor in `prepareEngine` on `+Lifecycle`; this file
-/// owns the write / delete paths invoked from `CKSyncEngineDelegate`
-/// callbacks.
+/// CKSyncEngine state-serialization persistence helpers. Load of the
+/// state serialization happens off-actor in `prepareEngine` on
+/// `+Lifecycle`; this file owns the write / delete paths invoked from
+/// `CKSyncEngineDelegate` callbacks.
 extension SyncCoordinator {
 
   /// Atomically writes the engine's serialised state to disk so a

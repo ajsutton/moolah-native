@@ -20,7 +20,7 @@ import GRDB
 /// `transaction_leg` rows grouped by instrument: every earmark-tagged
 /// leg contributes to `positions`; income/openingBalance/trade legs
 /// contribute to `savedPositions`; expense/transfer legs contribute to
-/// `spentPositions` (sign-flipped). Mirrors the SwiftData-era
+/// `spentPositions` (sign-flipped). Matches
 /// `CloudKitEarmarkRepository.computeEarmarkPositions`.
 ///
 /// **Instrument resolution.** Positions resolve their `instrument` via

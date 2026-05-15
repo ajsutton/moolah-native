@@ -2,10 +2,8 @@ import Foundation
 
 @testable import Moolah
 
-/// Shared helpers and fixtures for the split `TransactionDraft` test suites.
-/// Extracted from the original monolithic `TransactionDraftTests.swift` so the
-/// focused suites can share setup without re-declaring the same private helpers
-/// across files. Instantiate once per suite as `let support = TransactionDraftTestSupport()`.
+/// Shared helpers and fixtures for the `TransactionDraft` test suites.
+/// Instantiate once per suite as `let support = TransactionDraftTestSupport()`.
 struct TransactionDraftTestSupport {
   let instrument = Instrument.defaultTestInstrument
   let accountA = UUID()

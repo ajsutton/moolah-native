@@ -316,6 +316,5 @@ final class CryptoSyncStore {
   }
 
   // Implementation helpers (parallel build, apply pass, timer loop)
-  // live in `CryptoSyncStore+Internals.swift` so this file stays under
-  // SwiftLint's `file_length` and `type_body_length` budgets.
+  // live in `CryptoSyncStore+Internals.swift`.
 }

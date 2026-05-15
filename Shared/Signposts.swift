@@ -26,8 +26,7 @@ enum Signposts {
   /// via `BenchmarkGRDBCommitObserver.attach(to:)`). Marks the moment a
   /// GRDB write becomes observable to `ValueObservation`. Production code
   /// never attaches the observer, so the production app pays no cost
-  /// here. See `guides/BENCHMARKING_GUIDE.md` and Section 2 Layer 7 of
-  /// `plans/2026-05-06-reactive-sync-refresh-design.md`.
+  /// here. See `guides/BENCHMARKING_GUIDE.md`.
   static let grdbWrite = OSLog(subsystem: "com.moolah.app", category: "GRDBWrite")
   /// Begin/end pair around each value emitted by the
   /// `AsyncValueObservation → AsyncStream` bridge in
@@ -40,9 +39,8 @@ enum Signposts {
   static let grdbObservation = OSLog(
     subsystem: "com.moolah.app", category: "GRDBObservation")
   /// Begin/end pair around the work performed by a reactive store's
-  /// `apply(...)` / `recompute…` methods on `MainActor`. Stage 6 wires
-  /// this into `AccountStore` only; subsequent reactive store
-  /// migrations (Earmark, Transaction, …) follow the same pattern.
+  /// `apply(...)` / `recompute…` methods on `MainActor`. Each reactive
+  /// store (Account, Earmark, Transaction, …) wires this in the same way.
   /// Intervals here are the `mainThreadMs` cost measured by
   /// `SyncReactivityBenchmarks` against the `< 50 ms cumulative`
   /// acceptance criterion.

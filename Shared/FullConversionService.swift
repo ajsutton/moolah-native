@@ -258,7 +258,7 @@ actor FullConversionService: InstrumentConversionService {
   // MARK: - Observation
 
   /// Reactive rate-tick stream. See protocol docs for the contract.
-  /// When constructed without a database (legacy test sites that don't
+  /// When constructed without a database (test sites that don't
   /// observe), emits a single tick on subscription and never again —
   /// stores subscribing fire `recomputeConvertedTotals` once and stop,
   /// which is harmless.

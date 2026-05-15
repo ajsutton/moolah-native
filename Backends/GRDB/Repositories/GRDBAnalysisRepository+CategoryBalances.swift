@@ -3,12 +3,10 @@ import GRDB
 
 /// SQL aggregation + Swift assembly helpers for `fetchCategoryBalances`.
 ///
-/// Lifted out of the main `GRDBAnalysisRepository` body to keep its
-/// `type_body_length` budget intact, mirroring the
-/// `+ExpenseBreakdown.swift` shape: every helper is `static` and takes
-/// its dependencies (database, instruments, conversion service) as
-/// parameters so it doesn't need access to the main class's `private`
-/// stored properties from a sibling-file extension.
+/// Mirrors the `+ExpenseBreakdown.swift` shape: every helper is
+/// `static` and takes its dependencies (database, instruments,
+/// conversion service) as parameters so this sibling-file extension
+/// doesn't reach into the main class's `private` stored properties.
 ///
 /// The SQL groups by `(DATE(t.date), category_id, instrument_id)` and
 /// the per-row conversion runs in Swift so the per-day rate-cache
@@ -52,20 +50,18 @@ extension GRDBAnalysisRepository {
   }
 
   /// Bundle of per-row diagnostic callbacks used by
-  /// `assembleCategoryBalances`. Grouped into a struct so the function
-  /// signature stays under SwiftLint's `function_parameter_count`
-  /// budget, matching `ExpenseBreakdownHandlers` on
-  /// `+ExpenseBreakdown.swift`.
+  /// `assembleCategoryBalances`, so `assembleCategoryBalances` takes
+  /// one parameter instead of several. Matches `ExpenseBreakdownHandlers`
+  /// on `+ExpenseBreakdown.swift`.
   struct CategoryBalancesHandlers: Sendable {
     let handleUnparseableDay: @Sendable (String) -> Void
     let handleConversionFailure: @Sendable (Error, CategoryBalancesFailureContext) -> Void
   }
 
   /// Bundle of optional filter values passed from the public
-  /// `fetchCategoryBalances` entry point down to the SQL composer. Keeps
-  /// the static helper's parameter count under SwiftLint's budget while
-  /// allowing each caller to surface its own `TransactionFilter`
-  /// projection.
+  /// `fetchCategoryBalances` entry point down to the SQL composer,
+  /// collapsing the static helper's parameter list while allowing each
+  /// caller to surface its own `TransactionFilter` projection.
   struct CategoryBalancesFilterArgs: Sendable {
     let dateRange: ClosedRange<Date>
     let transactionType: TransactionType

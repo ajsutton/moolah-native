@@ -46,7 +46,7 @@ public enum UITestSeed: String, CaseIterable, Sendable {
   case welcomeMultipleCloudProfiles
 
   /// Forces the Welcome screen into `.heroDownloading(received: 1234)` so
-  /// the new "Found data on iCloud · 1,234 records downloaded" copy and
+  /// the "Found data on iCloud · 1,234 records downloaded" copy and
   /// the de-emphasized "Create a new profile" button can be verified.
   case welcomeDownloading
 

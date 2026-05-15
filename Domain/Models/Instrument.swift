@@ -187,7 +187,7 @@ extension Instrument {
   }
 
   /// Factory for cryptocurrency token instruments.
-  /// Uses the same `chainId:address` ID scheme as the legacy CryptoToken type.
+  /// Uses a `chainId:address` ID scheme.
   static func crypto(
     chainId: Int,
     contractAddress: String?,

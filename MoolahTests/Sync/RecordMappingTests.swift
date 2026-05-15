@@ -261,10 +261,7 @@ struct RecordMappingTests {
 }
 
 /// Wire-format round-trip + boundary coverage for the GRDB `ProfileRow`
-/// `CloudKitRecordConvertible` conformance. Lives in its own suite so
-/// `RecordMappingTests`'s body stays under SwiftLint's
-/// `type_body_length` threshold; it would be a natural sibling section
-/// otherwise.
+/// `CloudKitRecordConvertible` conformance.
 @Suite("ProfileRowMapping")
 struct ProfileRowMappingTests {
 

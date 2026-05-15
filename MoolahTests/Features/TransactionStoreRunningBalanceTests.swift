@@ -3,10 +3,7 @@ import Testing
 
 @testable import Moolah
 
-/// Running-balance update tests for `TransactionStore`. Split from
-/// `TransactionStoreCRUDTests` to keep both files under SwiftLint's
-/// `type_body_length` budget once the reactive migration's
-/// emission-await calls were added inline.
+/// Running-balance update tests for `TransactionStore`.
 @Suite("TransactionStore/Running Balances")
 @MainActor
 struct TransactionStoreRunningBalanceTests {

@@ -76,9 +76,7 @@ final class SyncReactivityBenchmarks: XCTestCase {
   /// observer, seed accounts, drive an `AccountStore` through the
   /// bulk-write window, and return the cumulative MainActor nanoseconds
   /// the store spent inside `apply(accounts:)` over the bulk-sync slice.
-  /// Hoisted out of the `measure` closure so the latter stays under
-  /// SwiftLint's `closure_body_length` ceiling and so the per-iteration
-  /// teardown is trivially obvious.
+  /// A single helper so the per-iteration teardown is trivially obvious.
   @MainActor
   private static func runOneBulkSyncIteration() async throws -> UInt64 {
     let (backend, database) = try TestBackend.create()

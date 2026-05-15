@@ -171,8 +171,8 @@ enum UITestSeedHydrator {
     instrument: Instrument, in database: Database
   ) throws {
     // Instruments are registered on the shared profile-index DB by the
-    // caller (`hydrateTradeBaseline`); the per-profile `instrument`
-    // table no longer exists post-v10.
+    // caller (`hydrateTradeBaseline`); the per-profile DB has no
+    // `instrument` table.
     let fixtures = UITestFixtures.TradeBaseline.self
     try upsertAccount(
       AccountSpec(

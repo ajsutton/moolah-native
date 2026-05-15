@@ -13,8 +13,8 @@ extension Accounts {
   ///     counterpart picker to remove the from-account from the
   ///     candidate list.
   ///   - alwaysInclude: Account id to keep visible even when hidden.
-  ///     Used by pickers so a previously-selected account that has
-  ///     since been hidden stays in the dropdown.
+  ///     Used by pickers so an already-selected account that is
+  ///     hidden stays in the dropdown.
   /// - Returns: Two arrays — `current` (bank, asset, credit card) and
   ///   `investment` — each sorted ascending by `Account.position`.
   /// - Note: When `excluding` and `alwaysInclude` reference the same

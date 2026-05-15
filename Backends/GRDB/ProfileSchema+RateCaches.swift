@@ -5,13 +5,12 @@ import GRDB
 
 // MARK: - v1 migration body
 //
-// The three `*_meta` tables ship here as ROWID tables — the shape
-// originally chosen because GRDB 7's `PersistableRecord.upsert(_:)`
-// hard-codes `RETURNING "rowid"` and trips on `WITHOUT ROWID` tables.
-// `v4_rate_cache_without_rowid` rebuilds them as `WITHOUT ROWID`
-// (single-TEXT-PK lookup tables per
-// `guides/DATABASE_SCHEMA_GUIDE.md` §3) once the writers switched
-// away from `upsert` to `insert(onConflict: .replace)`. Editing this
+// The three `*_meta` tables ship here as ROWID tables because GRDB 7's
+// `PersistableRecord.upsert(_:)` hard-codes `RETURNING "rowid"` and
+// trips on `WITHOUT ROWID` tables. `v4_rate_cache_without_rowid`
+// rebuilds them as `WITHOUT ROWID` (single-TEXT-PK lookup tables per
+// `guides/DATABASE_SCHEMA_GUIDE.md` §3); writers use
+// `insert(onConflict: .replace)` rather than `upsert`. Editing this
 // body in place would violate §6 (frozen migrations).
 //
 // **`WITHOUT ROWID` and `ValueObservation`.** The three rate tables

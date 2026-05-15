@@ -24,8 +24,8 @@ final class TransactionStore {
   // pass-through writes.
   let repository: TransactionRepository
   /// Owns the payee-autocomplete debounce/fetch state and the autofill
-  /// lookup. Exposed directly so views bind through the dedicated type;
-  /// `TransactionStore` no longer mirrors its surface.
+  /// lookup. Exposed directly so views bind through the dedicated type
+  /// rather than a mirrored surface on `TransactionStore`.
   let payeeSuggestionSource: PayeeSuggestionSource
   // internal so the `+Observation` extension can prefetch rates for the
   // running-balance recompute on each emission.
@@ -98,7 +98,7 @@ final class TransactionStore {
   private var rateObservationTask: Task<Void, Never>?
 
   /// Narrow seam onto the shared instrument registry's change stream.
-  /// Per-profile list observations no longer track the `instrument`
+  /// Per-profile list observations do not track the `instrument`
   /// table (identity is resolved once per fetch via the shared
   /// registry), so a metadata edit there does not re-fire the data
   /// observation. When wired, `instrumentChangeObservationTask`

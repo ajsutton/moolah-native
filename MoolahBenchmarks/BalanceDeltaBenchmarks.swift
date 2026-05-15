@@ -161,15 +161,13 @@ final class BalanceDeltaBenchmarks: XCTestCase {
     }
   }
 
-  // The legacy `testAccountReloadFromSync` benchmark was deleted along
-  // with `AccountStore.reloadFromSync()` in the reactive-sync migration.
-  // Equivalent observation-driven measurement lives in Stage 6 of
+  // `AccountStore` refresh is observation-driven; the equivalent
+  // measurement lives in
   // `plans/2026-05-06-reactive-sync-refresh-implementation.md`.
 
   // MARK: - Earmark Store
 
-  // The legacy `testEarmarkReloadFromSync` benchmark was deleted along
-  // with `EarmarkStore.reloadFromSync()` in the reactive-sync migration.
-  // Equivalent observation-driven measurement lives alongside the
-  // AccountStore reactivity benchmark in `SyncReactivityBenchmarks`.
+  // `EarmarkStore` refresh is observation-driven; the equivalent
+  // measurement lives alongside the AccountStore reactivity benchmark
+  // in `SyncReactivityBenchmarks`.
 }

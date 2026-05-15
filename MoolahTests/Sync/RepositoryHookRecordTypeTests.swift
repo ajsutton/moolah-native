@@ -245,9 +245,8 @@ struct RepositoryHookRecordTypeTests {
   }
 
   /// Seeds a fixture covering every record type the category-delete
-  /// cascade fans out to. Splits the writes across small per-topic
-  /// transactions to keep the closure body under SwiftLint's length
-  /// budget; correctness only requires that all rows are present
+  /// cascade fans out to. Writes are split across small per-topic
+  /// transactions; correctness only requires that all rows are present
   /// before the test drives `delete`, not that they share a write.
   private func seedCategoryDeleteFixture(
     in database: any DatabaseWriter, ids: CategoryDeleteFixtureIds

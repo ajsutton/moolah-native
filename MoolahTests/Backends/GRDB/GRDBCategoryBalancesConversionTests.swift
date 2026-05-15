@@ -178,7 +178,7 @@ struct GRDBCategoryBalancesConversionTests {
   @Test("category balances include categorised legs without an account")
   func categoryBalancesIncludeAccountlessCategorisedLegs() async throws {
     // A categorised expense leg with `accountId == nil` is included.
-    // The SQL aggregation no longer joins to `account`, so account-less
+    // The SQL aggregation does not join to `account`, so account-less
     // legs naturally fall through the `leg.category_id IS NOT NULL`
     // guard and contribute to the breakdown.
     let day = try AnalysisTestHelpers.utcDate(year: 2025, month: 8, day: 12, hour: 12)

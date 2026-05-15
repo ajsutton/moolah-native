@@ -1,8 +1,7 @@
 import Foundation
 
-// Hoisted out of `InvestmentStore.swift` so that file stays under the
-// `file_length` budget. The computed properties are pure reads and need no
-// privileged access to `private(set)` setters.
+// Computed read-only properties for `InvestmentStore`. Pure reads that
+// need no privileged access to `private(set)` setters.
 extension InvestmentStore {
   /// Investment values filtered by the selected time period.
   var filteredValues: [InvestmentValue] {

@@ -5,11 +5,10 @@ import SwiftUI
 /// from an `AccountPerformance`: Current Value, Profit / Loss (with %),
 /// and Annualised Return (with "since [first-flow-date]" subtitle).
 ///
-/// Replaces both the position-tracked single-row `PositionsHeader` (when
-/// a performance is supplied via `PositionsViewInput.performance`) and
-/// the legacy manual-valuation summary view. Each tile
-/// shows "—" / "Unavailable" rather than a partial sum when its source
-/// field is `nil` — see Rule 11 in
+/// Used for both position-tracked accounts (performance supplied via
+/// `PositionsViewInput.performance`) and manual-valuation accounts. Each
+/// tile shows "—" / "Unavailable" rather than a partial sum when its
+/// source field is `nil` — see Rule 11 in
 /// `guides/INSTRUMENT_CONVERSION_GUIDE.md`.
 struct AccountPerformanceTiles: View {
   let title: String

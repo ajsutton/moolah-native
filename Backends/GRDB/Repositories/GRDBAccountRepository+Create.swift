@@ -3,15 +3,14 @@
 import Foundation
 import GRDB
 
-// `performAccountInsert` + `OpeningBalanceInserts` extracted from
-// `GRDBAccountRepository` so the main type body stays under SwiftLint's
-// `type_body_length` and `file_length` budgets.
+// Account-insert support (`performAccountInsert`,
+// `OpeningBalanceInserts`) for `GRDBAccountRepository`.
 extension GRDBAccountRepository {
   /// Captures the ids written by `create(_:openingBalance:)` so the
   /// caller can fan out hook fires after the write transaction commits.
   /// Non-fiat instrument registration is done by `create` itself via
   /// `instrumentRegistrar.registerResolvable` *before* this write — it
-  /// is no longer part of the per-profile insert.
+  /// is not part of the per-profile insert.
   struct OpeningBalanceInserts: Sendable {
     let transactionId: UUID?
     let legId: UUID?

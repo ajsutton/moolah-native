@@ -4,10 +4,8 @@ import Testing
 
 @testable import Moolah
 
-/// Shared helpers for the split TransactionStore test suites. Extracted from the
-/// original monolithic `TransactionStoreTests.swift` so the focused suites
-/// (`TransactionStoreLoadingTests`, `TransactionStoreCRUDTests`, etc.) can share
-/// fixtures without duplicating private helpers across files.
+/// Shared fixtures for the TransactionStore test suites
+/// (`TransactionStoreLoadingTests`, `TransactionStoreCRUDTests`, etc.).
 @MainActor
 enum TransactionStoreTestSupport {
   /// A seeded account paired with its opening balance. Used by `makeStores` to

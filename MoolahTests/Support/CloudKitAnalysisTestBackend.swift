@@ -28,8 +28,8 @@ struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable {
 
   /// The shared profile-index instrument registry every repository
   /// resolves and registers through. Pointed at its own in-memory
-  /// profile-index DB, never the per-profile `instrument` table the
-  /// `v10_drop_shared_instrument_legacy` migration removes. Exposed so
+  /// profile-index DB; there is no per-profile `instrument` table.
+  /// Exposed so
   /// `fetchAggregationForTesting` resolves the exact instrument map the
   /// repositories built during seeding.
   let instrumentRegistry: GRDBInstrumentRegistryRepository
@@ -52,9 +52,8 @@ struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable {
       conversion = customConversion
     } else {
       let rateClient = FixedRateClient()
-      // The rate cache lives on the registry's profile-index DB — the
-      // per-profile rate-cache tables were removed by
-      // `v10_drop_shared_instrument_legacy`.
+      // The rate cache lives on the registry's profile-index DB;
+      // there are no per-profile rate-cache tables.
       let exchangeRates = ExchangeRateService(
         client: rateClient, database: registry.database)
       conversion = FiatConversionService(exchangeRates: exchangeRates)

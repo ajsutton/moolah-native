@@ -60,7 +60,7 @@ final class CSVImportSetupStore {
   /// `columnRoles` is seeded from the detected mapping in `regeneratePreview`,
   /// so this function derives the mapping purely from the roles array — a
   /// role set to `.ignore` (or simply left `nil`) means the column is unused,
-  /// even if the detector had originally picked it.
+  /// even if the detector picked it.
   ///
   /// Missing `.date` / `.description` columns resolve to `-1`; the parser's
   /// `safe(row:_:)` helper returns `""` for out-of-bounds indices, which is
@@ -285,7 +285,7 @@ final class CSVImportSetupStore {
     return columnRoles.map { $0?.rawValue }
   }
 
-  /// Pure seeding logic extracted so `regeneratePreview` and
+  /// Pure seeding logic shared so `regeneratePreview` and
   /// `columnRoleRawValuesForPersistence` stay in sync. Mirrors whatever
   /// the detector returned from `inferMapping`.
   static func seedColumnRoles(

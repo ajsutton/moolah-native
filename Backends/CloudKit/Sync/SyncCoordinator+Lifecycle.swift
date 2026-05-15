@@ -106,11 +106,10 @@ extension SyncCoordinator {
   /// The body's heavy synchronous work (`NSKeyedUnarchiver` inside
   /// `CKSyncEngine.init`) must not run on the main thread. The
   /// `nonisolated async` hop from the `@MainActor`-originating `Task {}`
-  /// in `start()` is sufficient on current toolchain — verified empirically
-  /// (issue #565) by logging `Thread.isMainThread` at entry and observing
-  /// `false`, plus a different OS TID from the surrounding `@MainActor`
-  /// `completeStart`. Earlier toolchains required `Task.detached` here as
-  /// a waiver; that's no longer the case.
+  /// in `start()` is sufficient on the current toolchain — verified
+  /// empirically (issue #565) by logging `Thread.isMainThread` at entry
+  /// and observing `false`, plus a different OS TID from the surrounding
+  /// `@MainActor` `completeStart`. `Task.detached` is not required here.
   nonisolated static func prepareEngine(
     stateFileURL: URL,
     delegate: any CKSyncEngineDelegate & Sendable
@@ -130,7 +129,7 @@ extension SyncCoordinator {
   }
 
   /// Back-on-MainActor half of `start()`: installs the engine and kicks off
-  /// zone setup. Split from `start()` so the heavy init can run off-actor.
+  /// zone setup. Separate from `start()` so the heavy init can run off-actor.
   private func completeStart(
     prepared: PreparedEngine, signpostID: OSSignpostID
   ) {
@@ -156,12 +155,12 @@ extension SyncCoordinator {
     // below).
     purgeStaleBareUUIDPendingChanges()
     // Drop any leftover `InstrumentRecord` pending changes routed to a
-    // per-profile zone. Post-PR #861 the only legitimate path for an
-    // instrument write is the shared registry on the `profile-index`
-    // zone, and `ProfileDataSyncHandler.recordToSave` traps in DEBUG
-    // when one reaches the per-profile handler — left in the queue,
-    // a single such entry crashes the process the next time
-    // CKSyncEngine asks for the next batch. See
+    // per-profile zone. The only legitimate path for an instrument
+    // write is the shared registry on the `profile-index` zone, and
+    // `ProfileDataSyncHandler.recordToSave` traps in DEBUG when one
+    // reaches the per-profile handler — left in the queue, a single
+    // such entry crashes the process the next time CKSyncEngine asks
+    // for the next batch. See
     // `SyncCoordinator+LegacyInstrumentDrain.swift`.
     purgeLegacyInstrumentPendingChanges()
 
@@ -309,9 +308,8 @@ extension SyncCoordinator {
     syncEngine.state.remove(pendingRecordZoneChanges: stale)
   }
 
-  // The four `queueSave` / `queueDeletion` overloads have moved to
-  // `SyncCoordinator+QueueChanges.swift` — extracted to keep this file
-  // under SwiftLint's 400-line `file_length` threshold.
+  // The four `queueSave` / `queueDeletion` overloads live in
+  // `SyncCoordinator+QueueChanges.swift`.
 
   func sendChanges() async {
     guard let syncEngine, isRunning else { return }

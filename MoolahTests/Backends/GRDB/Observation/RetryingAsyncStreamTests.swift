@@ -7,9 +7,9 @@ import os
 
 // Unit tests for the retry-loop driver shared by every
 // `toRetryingAsyncStream(...)` caller. We exercise the loop through
-// `makeRetryingAsyncStream(makeAttempt:policy:)` — the test seam
-// pulled out of `ValueObservation.toRetryingAsyncStream`
-// — by passing a synthetic factory that emits canned errors. This lets
+// `makeRetryingAsyncStream(makeAttempt:policy:)` — the test seam for
+// `ValueObservation.toRetryingAsyncStream` — by passing a synthetic
+// factory that emits canned errors. This lets
 // us verify retry counting, backoff, budget exhaustion, and emission-
 // resets-counter behaviour without standing up a real GRDB
 // `ValueObservation` (injecting `SQLITE_FULL` into a live DB is

@@ -7,15 +7,14 @@
 import Foundation
 
 // `PositionsViewInput` assembly + trade-based cost-basis snapshotting
-// extracted from the main `InvestmentStore` body so it stays under
-// SwiftLint's `type_body_length` threshold.
+// for `InvestmentStore`.
 extension InvestmentStore {
   // MARK: - PositionsView Input
 
   /// Coordinates the two-step "load then build positions input" sequence
   /// that the `InvestmentAccountView` runs from its `.task` and
-  /// `.refreshable` modifiers. Hoisted out of the view so the view bodies
-  /// stay free of multi-step async coordination.
+  /// `.refreshable` modifiers, keeping the view bodies free of
+  /// multi-step async coordination.
   ///
   /// Errors from `positionsViewInput` propagate; `loadAllData` swallows
   /// its own errors into `self.error` so it never throws here.

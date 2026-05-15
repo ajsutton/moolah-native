@@ -1,9 +1,7 @@
 import Foundation
 
-// Earmark / category / investment / analysis / refresh handlers extracted
-// from the main `AutomationService` body so it stays under SwiftLint's
-// `type_body_length` threshold. All members are `@MainActor` via the
-// containing class.
+// Earmark / category / investment / analysis / refresh handlers. All
+// members are `@MainActor` via the containing class.
 extension AutomationService {
 
   // MARK: - Earmark Operations
@@ -232,10 +230,9 @@ extension AutomationService {
   /// `AccountStore`, `EarmarkStore`, and `CategoryStore` are all
   /// reactive — they self-load via `observeAll()` from `init`, so this
   /// method has no work to dispatch beyond resolving the session
-  /// (which still validates the identifier). Kept as part of the
-  /// AutomationService surface for backward compatibility with
-  /// scripts that call `refresh` defensively before reading store
-  /// state.
+  /// (which validates the identifier). Part of the AutomationService
+  /// surface for scripts that call `refresh` defensively before
+  /// reading store state.
   func refresh(profileIdentifier: String) async throws {
     _ = try resolveSession(for: profileIdentifier)
   }

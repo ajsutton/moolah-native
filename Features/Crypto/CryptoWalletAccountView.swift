@@ -5,21 +5,19 @@ import SwiftUI
 /// (full address, chain, last-synced state, Sync now button) above the
 /// transaction list as siblings in a `VStack(spacing: 0)`.
 ///
-/// This composition no longer goes through `TransactionListView`'s
-/// removed `topAccessory` slot — the leaf is its own `NavigationStack`
-/// (provided by `ContentView.detail`'s `.id(selection)` wrap), so the
-/// wallet header and the transaction list are structurally local to
-/// this leaf and cannot race against another leaf's `.toolbar` /
-/// `.searchable` registrations.
+/// The leaf is its own `NavigationStack` (provided by
+/// `ContentView.detail`'s `.id(selection)` wrap), so the wallet header
+/// and the transaction list are structurally local to this leaf and
+/// cannot race against another leaf's `.toolbar` / `.searchable`
+/// registrations.
 ///
 /// The header renders only when `chainId`, the chain config, AND a
 /// `cryptoSyncStore` all resolve; otherwise the `@ViewBuilder` returns
 /// `EmptyView`. Within this leaf's `NavigationStack` a
-/// `VStack(spacing: 0) { EmptyView; TransactionListView }` is safe —
-/// the previously-observed `safeAreaInset+EmptyView+NSHostingView`
-/// zero-size collapse fired only when the EmptyView-bearing layout
-/// crossed an `NSHostingView` column boundary (the
-/// `ResizableVSplit`'s arranged subviews used by
+/// `VStack(spacing: 0) { EmptyView; TransactionListView }` is safe: the
+/// `safeAreaInset+EmptyView+NSHostingView` zero-size collapse fires only
+/// when the EmptyView-bearing layout crosses an `NSHostingView` column
+/// boundary (the `ResizableVSplit`'s arranged subviews used by
 /// `InvestmentAccountView.calculatedFromTrades`). Inside a SwiftUI-
 /// owned `NavigationStack` column there is no NSHostingView wrapping
 /// at this level, so the bug does not apply.

@@ -7,17 +7,14 @@ extension SyncCoordinator {
   /// Returns the subset of `changes` that are leftover legacy
   /// `InstrumentRecord` pending changes routed to a per-profile zone.
   ///
-  /// Two shapes can survive the shared-instrument-registry rollout
-  /// (PR #861):
-  /// - Prefixed `"InstrumentRecord|<UUID>"` recordNames queued by a
-  ///   pre-rollout build.
-  /// - Bare string-keyed recordNames (`"AUD"`, `"0:native"`) queued by
-  ///   the even-older `<scope>:<id>` instrument shape — these have no
-  ///   `|` separator and don't parse as a UUID.
+  /// Two shapes can appear, both only from an older build:
+  /// - Prefixed `"InstrumentRecord|<UUID>"` recordNames.
+  /// - Bare string-keyed recordNames (`"AUD"`, `"0:native"`) from the
+  ///   `<scope>:<id>` instrument shape — these have no `|` separator
+  ///   and don't parse as a UUID.
   ///
-  /// Both shapes can only have come from a pre-rollout build: post-
-  /// rollout, every instrument upload routes through the shared
-  /// registry on the `profile-index` zone, and the DEBUG trap in
+  /// Every instrument upload routes through the shared registry on the
+  /// `profile-index` zone, and the DEBUG trap in
   /// `ProfileDataSyncHandler.recordToSave` aborts the process if one
   /// reaches the per-profile handler. Dropping these from
   /// CKSyncEngine state at start lets upgraded peers self-heal on
@@ -29,9 +26,8 @@ extension SyncCoordinator {
   /// keeps this testable without spinning up a real `CKSyncEngine`.
   ///
   /// Companion to `purgeStaleBareUUIDPendingChanges` (issue #416),
-  /// which targets the orthogonal bare-UUID legacy shape on UUID-
-  /// keyed records — running both at start covers every leftover
-  /// shape we know about.
+  /// which targets the orthogonal bare-UUID shape on UUID-keyed
+  /// records — running both at start covers every leftover shape.
   nonisolated static func legacyInstrumentPendingChanges(
     in changes: some Sequence<CKSyncEngine.PendingRecordZoneChange>
   ) -> [CKSyncEngine.PendingRecordZoneChange] {

@@ -7,10 +7,9 @@ import os
 /// merge, per-leg dedup, persistence, import rules, and per-account
 /// `WalletSyncState` updates.
 ///
-/// Per design (`plans/2026-05-05-crypto-wallet-import-design.md`
-/// §"Sync engine"): merge → dedup → persist → rules → sync-state
-/// update. This is the single writer in the build → apply pipeline;
-/// every other type produces value-shaped data only.
+/// Order: merge → dedup → persist → rules → sync-state update. This is
+/// the single writer in the build → apply pipeline; every other type
+/// produces value-shaped data only.
 ///
 /// Construction is `Sendable` despite `@MainActor` because every stored
 /// property is itself a `Sendable` reference.
@@ -166,10 +165,7 @@ final class WalletApplyEngine {
   // MARK: - Pipeline steps
 
   /// Captures the repository in a `@Sendable` closure so the merger can
-  /// look up prior-cycle legs by `externalId`. Extracted so the closure
-  /// body is short enough that swift-format keeps it on one line —
-  /// inline closure syntax with a multi-line body conflicts with
-  /// SwiftLint's `closure_parameter_position` rule.
+  /// look up prior-cycle legs by `externalId`.
   private func makeExistingLegLookup()
     -> @Sendable (String) async throws -> [TransactionLeg]
   {

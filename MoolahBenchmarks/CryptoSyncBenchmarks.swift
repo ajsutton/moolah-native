@@ -286,5 +286,4 @@ final class CryptoSyncBenchmarks: XCTestCase {
 }
 
 // Benchmark wallets, fixtures and scripted Alchemy / resolver stubs live
-// in `CryptoSyncBenchmarkSupport.swift` so this file stays under the
-// SwiftLint `file_length` budget.
+// in `CryptoSyncBenchmarkSupport.swift`.

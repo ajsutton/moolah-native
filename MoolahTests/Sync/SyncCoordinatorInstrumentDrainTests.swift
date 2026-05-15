@@ -8,9 +8,9 @@ import Testing
 /// drain that runs at coordinator startup. Catches both the prefixed
 /// `"InstrumentRecord|<UUID>"` form and the bare string-keyed legacy
 /// shape (e.g. `"0:native"`, `"AUD"`) — the only legitimate path for
-/// instrument writes is the shared registry on the profile-index zone
-/// (PR #861), so any pending change for an instrument on a per-profile
-/// zone is leftover state that must be dropped before
+/// instrument writes is the shared registry on the profile-index zone,
+/// so any pending change for an instrument on a per-profile zone is
+/// leftover state that must be dropped before
 /// `nextRecordZoneChangeBatch` materialises it and trips the DEBUG
 /// `preconditionFailure` in `ProfileDataSyncHandler.recordToSave`.
 @Suite("SyncCoordinator legacy-instrument drain")

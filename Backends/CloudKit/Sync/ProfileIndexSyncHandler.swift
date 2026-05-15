@@ -21,8 +21,8 @@ import OSLog
 /// shared instrument registry). When an `instrumentRepository` is
 /// supplied, instrument-shaped records are applied / built /
 /// system-field-managed via the dispatched paths; when nil, every
-/// instrument-shaped recordID is silently ignored (legacy callers who
-/// don't yet wire the registry to this zone).
+/// instrument-shaped recordID is silently ignored (callers that don't
+/// wire the registry to this zone, e.g. some test fixtures).
 ///
 /// **Concurrency.** Nonisolated and `Sendable`. Every synchronous method
 /// calls into the repository's `*Sync(...)` helpers which block the
@@ -38,10 +38,10 @@ final class ProfileIndexSyncHandler: Sendable {
   let repository: GRDBProfileIndexRepository
 
   /// Set when this handler is constructed by the shared-instrument
-  /// scope; nil for legacy fixtures that pre-date the dispatch
-  /// extension. When nil, every instrument-shaped record is silently
-  /// dropped (the path is unreachable in production once the boot
-  /// path wires the scope, by Task 12 of the plan).
+  /// scope; nil for test fixtures that don't wire it. When nil, every
+  /// instrument-shaped record is silently dropped; the production boot
+  /// path always wires the scope, so that path is unreachable in
+  /// production.
   let instrumentRepository: GRDBInstrumentRegistryRepository?
 
   /// Fired synchronously after `applyRemoteChanges` writes one or
@@ -49,7 +49,7 @@ final class ProfileIndexSyncHandler: Sendable {
   /// `@MainActor` (this handler is nonisolated `Sendable`) and call
   /// `GRDBInstrumentRegistryRepository.notifyExternalChange()` so
   /// `observeChanges()` subscribers fan out the signal. Default is
-  /// `{}` so the handler stays usable in legacy fixtures.
+  /// `{}` so the handler stays usable in test fixtures.
   ///
   /// Mirrors `ProfileDataSyncHandler.onInstrumentRemoteChange`'s
   /// shape exactly — same `nonisolated let @Sendable () -> Void`

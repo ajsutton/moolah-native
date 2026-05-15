@@ -22,7 +22,7 @@ struct SpamTokensViewTests {
   }
 
   private func makeFixture() async throws -> Fixture {
-    // Registry + price cache live on the profile-index DB post-v10.
+    // Registry + price cache live on the profile-index DB.
     let database = try ProfileIndexDatabase.openInMemory()
     let registry = GRDBInstrumentRegistryRepository(database: database)
     let priceService = CryptoPriceService(

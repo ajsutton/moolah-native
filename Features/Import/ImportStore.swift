@@ -199,10 +199,10 @@ final class ImportStore {
     }
   }
 
-  /// Retry a previously-failed file: re-read the staged bytes, drop the
-  /// failed record, and send the bytes back through `ingest`. Works for
-  /// any file we staged (picker, drop, paste, folder-watch) because we
-  /// use the on-disk copy, not the original URL.
+  /// Retry a failed file: re-read the staged bytes, drop the failed
+  /// record, and send the bytes back through `ingest`. Works for any
+  /// file we staged (picker, drop, paste, folder-watch) because we use
+  /// the on-disk copy, not the original URL.
   @discardableResult
   func retryFailed(id: UUID) async -> ImportSessionResult {
     do {
@@ -234,7 +234,7 @@ final class ImportStore {
       }
       let originalFilename = pendingRecord?.originalFilename ?? "setup-\(pendingId.uuidString)"
       // Resolve the source bookmark (if any) so delete-after-import still
-      // works on the file the user originally picked.
+      // works on the file the user picked.
       let bookmark = pendingRecord?.sourceBookmark
       let sourceURL: URL? = {
         guard let bookmark else { return nil }

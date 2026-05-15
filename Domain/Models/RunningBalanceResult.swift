@@ -39,9 +39,9 @@ struct TransactionWithBalance: Sendable, Identifiable {
   /// all legs when unfiltered). Empty when conversion failed (paired with
   /// `displayAmount == nil`). See design §4.2.
   let displayAmounts: [InstrumentAmount]
-  /// Single scalar in the running-balance target instrument. Retained for
-  /// backwards-compatible diagnostics and any consumer that wants the
-  /// converted total; the row no longer reads it for rendering.
+  /// Single scalar in the running-balance target instrument. Used for
+  /// diagnostics and any consumer that wants the converted total; the
+  /// row does not read it for rendering.
   let displayAmount: InstrumentAmount?
   let balance: InstrumentAmount?
 

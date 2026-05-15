@@ -4,19 +4,18 @@ import XCTest
 
 @testable import Moolah
 
-/// Benchmarks the cold-launch instrument-resolution burst that the
-/// shared-registry cutover routes through
-/// `GRDBInstrumentRegistryRepository.instrumentMap()`.
+/// Benchmarks the cold-launch instrument-resolution burst that routes
+/// through `GRDBInstrumentRegistryRepository.instrumentMap()`.
 ///
-/// Post-cutover every per-profile instrument resolution resolves against
-/// this single shared method on the serial profile-index queue (shared
-/// across all profiles, the price caches, and sync apply). The #868
-/// cold-launch path issues a burst on the order of ~1400 resolutions/sec.
-/// Before memoisation each call did a `database.read` + a full-map
+/// Every per-profile instrument resolution resolves against this single
+/// shared method on the serial profile-index queue (shared across all
+/// profiles, the price caches, and sync apply). The #868 cold-launch
+/// path issues a burst on the order of ~1400 resolutions/sec. Without
+/// memoisation each call would do a `database.read` + a full-map
 /// rebuild — including ~150 `Instrument.fiat(code:)` constructions (each
 /// spinning up a `NumberFormatter`) over `Locale.Currency.isoCurrencies`
-/// — and serialised on the shared queue. With the memoised,
-/// change-invalidated snapshot the steady-state cost is a single
+/// — serialised on the shared queue. The memoised,
+/// change-invalidated snapshot makes the steady-state cost a single
 /// unfair-lock-guarded dictionary read.
 ///
 /// `testColdLaunchBurst` measures 1400 sequential `instrumentMap()`

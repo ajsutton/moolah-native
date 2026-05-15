@@ -72,7 +72,7 @@ extension CKRecord {
     return coder.encodedData
   }
 
-  /// Creates a CKRecord from previously cached system fields.
+  /// Creates a CKRecord from cached system fields.
   /// Returns nil if the data is invalid.
   static func fromEncodedSystemFields(_ data: Data) -> CKRecord? {
     guard let coder = try? NSKeyedUnarchiver(forReadingFrom: data) else { return nil }

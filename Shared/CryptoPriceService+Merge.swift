@@ -4,10 +4,8 @@ import Foundation
 
 // MARK: - CryptoPriceService merge / delta computation
 
-// In-memory merge for `CryptoPriceService`. Lives in its own file so the
-// main actor body stays under SwiftLint's `type_body_length` and
-// `file_length` thresholds. The persistence-side companion is in
-// `CryptoPriceService+Persistence.swift`.
+// In-memory merge for `CryptoPriceService`. The persistence-side companion
+// is in `CryptoPriceService+Persistence.swift`.
 
 extension CryptoPriceService {
   /// Merges `newPrices` into `caches[tokenId]` and returns the rows that

@@ -245,9 +245,8 @@ struct TransactionStorePayScheduledTests {
 
   // MARK: - Helpers
 
-  /// Builds a fully-populated scheduled transfer for the "preserves all fields"
-  /// assertion. Extracted so the test body stays under the function length
-  /// policy and the test reads top-down.
+  /// Builds a fully-populated scheduled transfer for the "preserves all
+  /// fields" assertion.
   private func makeScheduledTransfer(
     toAccountId: UUID,
     categoryId: UUID,

@@ -6,20 +6,19 @@ import Testing
 
 /// Cross-database refresh coverage for the reactive `TransactionStore`.
 ///
-/// Per-profile list observations stopped tracking the `instrument`
-/// table once instrument identity moved to the shared registry: the
-/// repository resolves it once per fetch via the shared
-/// `instrumentMap()` snapshot rather than joining `InstrumentRow` into
-/// the per-profile observation region. An instrument-METADATA edit
-/// (rename, ticker, pricing-status) applied to the shared registry
-/// therefore no longer re-fired the per-profile observation, so an
-/// already-open transaction list rendered stale instrument metadata
-/// until the subscription was torn down and recreated.
+/// Per-profile list observations do not track the `instrument` table:
+/// instrument identity lives in the shared registry, and the repository
+/// resolves it once per fetch via the shared `instrumentMap()` snapshot
+/// rather than joining `InstrumentRow` into the per-profile observation
+/// region. An instrument-METADATA edit (rename, ticker, pricing-status)
+/// applied to the shared registry therefore does not re-fire the
+/// per-profile observation on its own, which would leave an already-open
+/// transaction list rendering stale instrument metadata.
 ///
-/// These tests pin the closing of that gap: the store additionally
-/// consumes the shared registry's `observeChanges()` stream and, on
-/// each tick, re-runs its existing fetch + recompute path so the open
-/// list live-refreshes across the DB boundary.
+/// These tests pin that the store additionally consumes the shared
+/// registry's `observeChanges()` stream and, on each tick, re-runs its
+/// fetch + recompute path so the open list live-refreshes across the
+/// DB boundary.
 @Suite("TransactionStore registry refresh", .serialized)
 @MainActor
 struct TransactionStoreRegistryRefreshTests {

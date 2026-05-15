@@ -81,14 +81,12 @@ struct AlchemyTransfer: Sendable, Hashable, Decodable {
 
 extension AlchemyTransfer.RawContract {
   /// Custom decoder so `rawValue` (the Swift property) reads from the
-  /// `value` JSON key (Alchemy's actual wire-format name). The earlier
-  /// auto-synthesised conformance read JSON key `rawValue`, which is
-  /// what `RawRepresentable` enums use but not what Alchemy emits — so
-  /// every real response decoded with `rawValue == nil` and the
-  /// importer dropped every transfer at
+  /// `value` JSON key (Alchemy's actual wire-format name). An
+  /// auto-synthesised conformance would read JSON key `rawValue`, which
+  /// Alchemy never emits, so every transfer would decode with
+  /// `rawValue == nil` and be dropped at
   /// `TransferEventBuilder.scaledQuantity`. Defined out-of-line so
-  /// `RawContractCodingKeys` lives at file scope and stays inside
-  /// SwiftLint's `nesting` budget (max one level deep).
+  /// `RawContractCodingKeys` lives at file scope.
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: RawContractCodingKeys.self)
     self.address = try container.decodeIfPresent(String.self, forKey: .address)
@@ -98,9 +96,7 @@ extension AlchemyTransfer.RawContract {
 }
 
 /// Coding keys for `AlchemyTransfer.RawContract`. Lives at file scope
-/// rather than nested inside the struct so the type-nesting depth
-/// stays at one — SwiftLint's `nesting` rule rejects two-deep nested
-/// types here.
+/// rather than nested inside the struct.
 private enum RawContractCodingKeys: String, CodingKey {
   case address
   case decimal

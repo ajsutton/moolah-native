@@ -5,9 +5,7 @@ import Testing
 @testable import Moolah
 
 /// Field-, order-, and self-send-preservation tests for
-/// `IntraAccountSwapDetector`. Lives in its own file so the predicate-
-/// logic suite (`IntraAccountSwapDetectorTests`) stays under SwiftLint's
-/// `type_body_length` budget. Asserts that the only field the detector
+/// `IntraAccountSwapDetector`. Asserts that the only field the detector
 /// rewrites is `type`, that input order survives a retype, and that
 /// self-send legs are never partitioned into the swap predicate.
 @Suite("IntraAccountSwapDetector — preservation")

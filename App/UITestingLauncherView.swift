@@ -12,13 +12,13 @@
   ///
   /// The launcher Window is `.defaultLaunchBehavior(.suppressed)` in
   /// production, so this view is never instantiated outside
-  /// `--ui-testing`. **Why we don't dismiss it:** earlier versions
-  /// dismissed the launcher immediately after `openWindow`, but on
-  /// cold-start CI runners the dismiss could race ahead of the
-  /// open's scene materialisation and leave the app windowless — the
-  /// launcher's Window goes away before the WindowGroup spawns its
-  /// own, and SwiftUI then has nothing to show (issue #493). Leaving
-  /// the launcher around eliminates the race deterministically: a
+  /// `--ui-testing`. **Why we don't dismiss it:** dismissing the
+  /// launcher immediately after `openWindow` lets the dismiss race
+  /// ahead of the open's scene materialisation on cold-start CI
+  /// runners and leave the app windowless — the launcher's Window
+  /// goes away before the WindowGroup spawns its own, and SwiftUI
+  /// then has nothing to show (issue #493). Leaving the launcher
+  /// around eliminates the race deterministically: a
   /// `Color.clear`/1×1 frame is invisible to users, and UI test
   /// drivers locate elements by accessibility identifier, so a second
   /// content-free window adds nothing to the tree they care about.

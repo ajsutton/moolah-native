@@ -215,6 +215,5 @@ struct CryptoSettingsView: View {
   }
 
   // The "Registered Tokens" + "CoinGecko API Key" sections live in
-  // `CryptoSettingsView+TokenList.swift` so this file stays under
-  // SwiftLint's `type_body_length` and `file_length` thresholds.
+  // `CryptoSettingsView+TokenList.swift`.
 }

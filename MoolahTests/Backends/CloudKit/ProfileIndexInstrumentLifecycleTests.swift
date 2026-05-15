@@ -7,10 +7,9 @@ import Testing
 
 @testable import Moolah
 
-/// Verifies the conflict-merge and lifecycle-wipe behaviour added to
-/// `ProfileIndexSyncHandler` for `InstrumentRecord`. Split from
-/// `ProfileIndexInstrumentDispatchTests` to keep both files under
-/// SwiftLint's `type_body_length` threshold.
+/// Verifies `ProfileIndexSyncHandler`'s conflict-merge and
+/// lifecycle-wipe behaviour for `InstrumentRecord`. Dispatch paths
+/// live in `ProfileIndexInstrumentDispatchTests`.
 @Suite("ProfileIndexSyncHandler — InstrumentRecord conflict + lifecycle")
 struct ProfileIndexInstrumentLifecycleTests {
   typealias Harness = ProfileIndexInstrumentTestSupport.Harness

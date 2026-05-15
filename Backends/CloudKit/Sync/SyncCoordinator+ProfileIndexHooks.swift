@@ -1,11 +1,9 @@
 import CloudKit
 import Foundation
 
-// Profile-index repository hook wiring split out of the main
-// `SyncCoordinator` body so it stays under SwiftLint's `file_length`
-// threshold. The single entry point is invoked from
-// `SyncCoordinator.init`, so this file's only responsibility is the
-// closure plumbing.
+// Profile-index repository hook wiring for `SyncCoordinator`. The single
+// entry point is invoked from `SyncCoordinator.init`; this file's only
+// responsibility is the closure plumbing.
 extension SyncCoordinator {
 
   /// Installs repository-side hooks so app-side mutations (`upsert` /

@@ -38,10 +38,9 @@ struct ProfileDataSyncHandlerQueueTests {
     // table — instrument data is owned by the shared,
     // iCloud-account-scoped profile-index registry and a single-profile
     // purge must not wipe instruments shared by every other profile.
-    // Post-`v10_drop_shared_instrument_legacy` the per-profile table is
-    // gone entirely, so a wipe against it would throw `no such table`;
-    // that the purge completes without error proves it leaves the
-    // (now-absent) per-profile instrument surface alone.
+    // The per-profile table does not exist, so a wipe against it would
+    // throw `no such table`; that the purge completes without error
+    // proves it leaves the absent per-profile instrument surface alone.
     let perProfileInstrumentAbsent = try await harness.database.read { database in
       try
         !(Bool.fetchOne(
@@ -122,8 +121,8 @@ struct ProfileDataSyncHandlerQueueTests {
     let recordIDs = handler.queueUnsyncedRecords()
     let recordNames = Set(recordIDs.map(\.recordName))
 
-    // The per-profile handler no longer enumerates instrument rows.
-    // The shared registry's
+    // The per-profile handler does not enumerate instrument rows; the
+    // shared registry's
     // `SyncCoordinator.queueUnsyncedSharedInstruments` covers them.
     #expect(
       recordNames.contains("\(AccountRow.recordType)|\(unsyncedAccountId.uuidString)"))
@@ -204,7 +203,7 @@ struct ProfileDataSyncHandlerQueueTests {
     let recordIDs = handler.queueUnsyncedRecords()
     let recordNames = Set(recordIDs.map(\.recordName))
 
-    // The per-profile handler no longer enumerates instrument rows
+    // The per-profile handler does not enumerate instrument rows
     // (count would be 8 if it did; the shared registry covers them).
     #expect(recordNames.count == 7)
     #expect(!recordNames.contains(seed.instrumentId))
@@ -260,10 +259,9 @@ struct ProfileDataSyncHandlerQueueTests {
 /// Per-table row counts for `deleteLocalDataRemovesAllRecordTypes`.
 /// Replaces a tuple to satisfy SwiftLint's `large_tuple` policy.
 ///
-/// No `instruments` count: the per-profile `instrument` table was
-/// removed by `v10_drop_shared_instrument_legacy`. Instrument identity
-/// lives solely on the shared profile-index registry, which a
-/// single-profile `deleteLocalData` must not wipe.
+/// No `instruments` count: there is no per-profile `instrument` table.
+/// Instrument identity lives solely on the shared profile-index
+/// registry, which a single-profile `deleteLocalData` must not wipe.
 private struct DeleteLocalDataCounts {
   let accounts: Int
   let transactions: Int

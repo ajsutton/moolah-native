@@ -4,13 +4,13 @@
 import Foundation
 
 /// Pairs a crypto instrument with its price provider mapping for persistence.
-/// Replaces the legacy CryptoToken type.
 struct CryptoRegistration: Codable, Sendable, Hashable, Identifiable {
   let instrument: Instrument
   let mapping: CryptoProviderMapping
   /// How aggregation should treat this token's fiat value. Distinct from
   /// "rate unavailable" — `.unpriced` and `.spam` are intentionally zero,
-  /// not errors. Defaults to `.priced` for legacy decode and built-in presets.
+  /// not errors. Defaults to `.priced` for rows decoded without the field
+  /// and for built-in presets.
   var pricingStatus: TokenPricingStatus
 
   init(

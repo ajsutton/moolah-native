@@ -8,8 +8,7 @@ import Testing
 /// happy-path, single-day, and no-op cases. Multi-day failure
 /// scoping, cumulative carry-forward, priors-seeding, and the
 /// end-to-end pipeline pin live in `GRDBDailyBalancesTradesModeRule11Tests`
-/// (split for SwiftLint `file_length` / `type_body_length` budgets;
-/// shared helpers are in `TradesModeFoldTestSupport`).
+/// (shared helpers are in `TradesModeFoldTestSupport`).
 ///
 /// Tests construct `DailyBalancesAggregation` directly and seed
 /// `dailyBalances` with placeholder entries so the fold can be

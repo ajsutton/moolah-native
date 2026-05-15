@@ -3,12 +3,11 @@
 import Foundation
 import GRDB
 
-// Position-computation helpers split out of `GRDBAccountRepository` so
-// the main class body stays under SwiftLint's `type_body_length`
-// threshold. The SQL groups non-scheduled, account-bound legs by
+// Position-computation helpers for `GRDBAccountRepository`. The SQL
+// groups non-scheduled, account-bound legs by
 // `(account_id, instrument_id)`; rows resolve their full `Instrument`
 // value via the supplied lookup table (with ambient ISO fiat as a
-// fallback). Mirrors the SwiftData-era
+// fallback). Matches
 // `CloudKitAccountRepository.computePositions(from:instruments:)`.
 extension GRDBAccountRepository {
   /// Computes per-account, per-instrument position sums from the

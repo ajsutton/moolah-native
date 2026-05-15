@@ -2,13 +2,10 @@
 import Foundation
 import OSLog
 
-/// Receipt coalescing + gas-leg construction helpers, factored out of
-/// `TransferEventBuilder.swift` so the main builder file stays inside
-/// SwiftLint's `file_length` / `type_body_length` budgets. Internal to
-/// the module — only the builder calls these — but file-private would
-/// hide them from `TransferEventBuilder.swift`. All functions are
-/// `Sendable`-pure (no captured state) so they're safe to call from
-/// inside the parallel build path.
+/// Receipt coalescing + gas-leg construction helpers for
+/// `TransferEventBuilder`. Module-internal — only the builder calls
+/// these. All functions are `Sendable`-pure (no captured state) so
+/// they're safe to call from inside the parallel build path.
 enum TransferReceiptCoalescer {
   /// Shared static `Logger`; matches the builder's pattern so receipt
   /// failures appear under the same subsystem in Console.app.

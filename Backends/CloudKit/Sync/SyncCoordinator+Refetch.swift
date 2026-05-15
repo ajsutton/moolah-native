@@ -68,7 +68,7 @@ extension SyncCoordinator {
 
   /// Resets the re-fetch attempt counter and cancels any pending long-retry task.
   /// Called on every successful apply of fetched changes — a single successful apply
-  /// proves local writes are working, so the slow recovery timer is no longer needed.
+  /// proves local writes are working, so the slow recovery timer is unnecessary.
   func resetRefetchAttempts() {
     refetchAttempts = 0
     longRetryTask?.cancel()

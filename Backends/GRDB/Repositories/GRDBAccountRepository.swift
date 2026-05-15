@@ -10,8 +10,8 @@ import GRDB
 /// per-instrument `positions` populated. Positions are summed from
 /// non-scheduled `transaction_leg` rows grouped by
 /// `(account_id, instrument_id)` and resolved against the `instrument`
-/// registry (with ambient ISO fiat as a fallback). Mirrors the
-/// SwiftData-era `CloudKitAccountRepository.computePositions`.
+/// registry (with ambient ISO fiat as a fallback). Matches
+/// `CloudKitAccountRepository.computePositions`.
 ///
 /// **Opening balance.** `create(_:openingBalance:)` performs the account
 /// insert and the optional opening-balance transaction (one
@@ -165,8 +165,7 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   }
 
   // `performAccountInsert` and `OpeningBalanceInserts` live in
-  // `GRDBAccountRepository+Create.swift` to keep this file under
-  // SwiftLint's `type_body_length` and `file_length` budgets.
+  // `GRDBAccountRepository+Create.swift`.
 
   func update(_ account: Account) async throws -> Account {
     guard !account.name.trimmingCharacters(in: .whitespaces).isEmpty else {
@@ -239,7 +238,7 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   func delete(id: UUID) async throws {
     // Soft-delete: flip `is_hidden = true` on the matching row.
     // Rejects deletes against an account with non-zero positions —
-    // mirrors the SwiftData-era contract enforced by
+    // mirrors the contract enforced by
     // `CloudKitAccountRepository.delete(id:)`.
     // Hoisted ahead of the write snapshot for the same cross-database
     // reason as `fetchAll()`.
@@ -269,7 +268,6 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   //
   // The synchronous, GRDB-queue-blocking sync entry points
   // (`applyRemoteChangesSync`, `setEncodedSystemFieldsSync` and
-  // siblings) live in `GRDBAccountRepository+Sync.swift` to keep this
-  // file under SwiftLint's `file_length` budget — mirrors
+  // siblings) live in `GRDBAccountRepository+Sync.swift`, mirroring
   // `GRDBTransactionRepository+Sync.swift`.
 }

@@ -10,8 +10,6 @@ import Testing
 struct RepositorySyncCascadeTests {
   /// Builds a `GRDBTransactionRepository` with the shared-registry
   /// resolver / registrar wiring shared by every test in this suite.
-  /// Factored out so the repeated construction doesn't push the type
-  /// body over SwiftLint's `type_body_length` budget.
   private func makeTxnRepo(
     _ database: any DatabaseWriter
   ) throws -> GRDBTransactionRepository {
@@ -198,9 +196,9 @@ struct RepositorySyncCascadeTests {
     }
   }
 
-  /// After v5, `performSetBudget` must NOT insert a stub `category` row
-  /// when the category doesn't exist yet — the FK that required the
-  /// workaround was dropped in v5_drop_foreign_keys.
+  /// `performSetBudget` must NOT insert a stub `category` row when the
+  /// category doesn't exist yet — the schema enforces no FK that would
+  /// require it.
   @Test
   func setBudgetToleratesUnknownCategoryWithoutStubInsert() async throws {
     let database = try ProfileDatabase.openInMemory()
@@ -255,8 +253,8 @@ struct RepositorySyncCascadeTests {
     let orphanEarmarkId = UUID()
 
     // No instrument seed: `.AUD` is an ambient fiat instrument resolved
-    // via the shared registry / fiat fallback, and the per-profile
-    // `instrument` table no longer exists post-v10.
+    // via the shared registry / fiat fallback, and there is no
+    // per-profile `instrument` table.
     let txId = UUID()
     let leg = TransactionLeg(
       accountId: orphanAccountId,

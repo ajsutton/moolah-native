@@ -175,12 +175,10 @@ struct ProfileStoreTests {
 
   // MARK: - Initial-load race
 
-  /// Regression for the missing first-paint population: previously the
-  /// SwiftData profile-index fetch in `init` was synchronous, so
-  /// `profiles` was non-empty before any view rendered. After the GRDB
-  /// migration the load became async, leaving `profiles` empty for the
-  /// first scene tick — `ProfileWindowView.resolvedProfile` then fell
-  /// through to `WelcomeView` even though a profile existed on disk,
+  /// `init` must populate `profiles` synchronously from GRDB before any
+  /// await, so it is non-empty on the first scene tick. If `profiles`
+  /// were empty there, `ProfileWindowView.resolvedProfile` would fall
+  /// through to `WelcomeView` even though a profile exists on disk,
   /// breaking every UI test seed that relies on the seeded profile
   /// being immediately resolvable.
   @Test("init populates profiles synchronously from GRDB before any await")

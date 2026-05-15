@@ -60,9 +60,8 @@ struct CoreFinancialGraphSyncRoundTripTests {
       Issue.record("applyRemoteChanges reported saveFailed: \(message)")
     }
 
-    // Post-`v10_drop_shared_instrument_legacy` the per-profile
-    // `instrument` table no longer exists, so an apply to it is
-    // structurally impossible — a strictly stronger guarantee than
+    // There is no per-profile `instrument` table, so an apply to it
+    // is structurally impossible — a strictly stronger guarantee than
     // "the row wasn't written". Assert the table is absent.
     let perProfileInstrumentAbsent = try await harness.database.read { database in
       try

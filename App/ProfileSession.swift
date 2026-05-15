@@ -194,8 +194,7 @@ final class ProfileSession: Identifiable {
     finishInit()
   }
 
-  /// Tail of the initialiser — kept as a separate method so `init`
-  /// stays under SwiftLint's `function_body_length` threshold. Wires
+  /// Tail of the initialiser. Wires
   /// the crypto-wallet sync stores and starts the hourly
   /// `PRAGMA optimize` tick (issue #576). Reads everything it needs
   /// from `self` (every stored property is fully initialised by the
@@ -204,9 +203,9 @@ final class ProfileSession: Identifiable {
   /// Cross-store propagation is handled reactively: every store
   /// subscribes to its repository's GRDB `ValueObservation` stream in
   /// `init`, so remote-sync writes (and local writes) reach views
-  /// without an explicit reload step. The session no longer needs a
-  /// reference to `SyncCoordinator` here — apply still drives GRDB
-  /// writes and the observation streams take it from there.
+  /// without an explicit reload step. The session needs no reference
+  /// to `SyncCoordinator` here — apply drives GRDB writes and the
+  /// observation streams take it from there.
   private func finishInit() {
     let cryptoWiring = Self.makeCryptoSyncWiring(
       backend: backend,
@@ -243,9 +242,8 @@ final class ProfileSession: Identifiable {
   /// re-valuates so the spam position drops out of `valuedPositions`
   /// without the user having to navigate away and back. Issue #790.
   ///
-  /// The investment-store -> account-store fan-out (formerly
-  /// `onInvestmentValueChanged`) was removed when AccountStore
-  /// migrated to reactive observation: AccountStore now subscribes to
+  /// The investment-store -> account-store fan-out is reactive:
+  /// AccountStore subscribes to
   /// `investmentRepository.observeAllValues()` and refreshes its cache
   /// directly, so a write to `investment_value` reaches the sidebar
   /// without a callback. The spawned crypto-token Task is tracked in
@@ -292,8 +290,8 @@ final class ProfileSession: Identifiable {
   /// re-running anything.
   ///
   /// `ValuationModeMigration` is non-fatal: errors are logged but do
-  /// not propagate, because read sites still auto-detect at this
-  /// rollout stage and the next launch will retry.
+  /// not propagate, because read sites auto-detect and the next launch
+  /// will retry.
   func setUp() async throws {
     if let existing = setUpTask {
       return try await existing.value
@@ -306,6 +304,5 @@ final class ProfileSession: Identifiable {
   }
 
   // `runValuationModeMigration` lives in
-  // `ProfileSession+ValuationMigration.swift` so this file stays under
-  // SwiftLint's `file_length` threshold.
+  // `ProfileSession+ValuationMigration.swift`.
 }

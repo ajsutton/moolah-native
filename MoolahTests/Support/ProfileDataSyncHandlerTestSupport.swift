@@ -20,9 +20,9 @@ enum ProfileDataSyncHandlerTestSupport {
     try makeHandlerAndDatabase()
   }
 
-  /// Same as `makeHandlerWithDatabase()` — retained as a separate name
-  /// for callers that historically distinguished "I only need the
-  /// handler" from "I need to verify GRDB state".
+  /// Same as `makeHandlerWithDatabase()` — a separate name for callers
+  /// that distinguish "I only need the handler" from "I need to verify
+  /// GRDB state".
   @MainActor
   static func makeHandlerAndDatabase() throws -> HandlerHarness {
     let database = try ProfileDatabase.openInMemory()
@@ -57,8 +57,7 @@ enum ProfileDataSyncHandlerTestSupport {
   // MARK: - Row builders
   //
   // Compact constructors for the most common per-record-type rows the
-  // sync-handler tests seed. Each builder mirrors the small fixture
-  // shape these tests previously inserted via SwiftData — name +
+  // sync-handler tests seed. Each builder is a small fixture — name +
   // type/instrument, with sensible defaults for the audit columns.
 
   static func accountRow(
@@ -236,9 +235,8 @@ enum ProfileDataSyncHandlerTestSupport {
   ) throws -> ProfileGRDBRepositories {
     let conversionService = FixedConversionService(rates: [:])
     // Shared profile-index registry over its own in-memory DB —
-    // mirrors production wiring and never touches the per-profile
-    // `instrument` table the `v10_drop_shared_instrument_legacy`
-    // migration removes.
+    // mirrors production wiring; there is no per-profile `instrument`
+    // table (dropped by `v10_drop_shared_instrument_legacy`).
     let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     return ProfileGRDBRepositories(
       csvImportProfiles: GRDBCSVImportProfileRepository(database: database),

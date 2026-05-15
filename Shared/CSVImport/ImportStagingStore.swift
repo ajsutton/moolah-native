@@ -16,7 +16,7 @@ struct PendingSetupFile: Codable, Sendable, Hashable, Identifiable {
   var detectedParserIdentifier: String?
   var detectedHeaders: [String]
   var parsedAt: Date
-  /// Bookmark to the source file the user originally picked. Used when
+  /// Bookmark to the source file the user picked. Used when
   /// `deleteAfterImport` is on and the user wants to retire the source after
   /// a successful import.
   var sourceBookmark: Data?
@@ -53,9 +53,9 @@ struct FailedImportFile: Codable, Sendable, Hashable, Identifiable {
     self.parsedAt = parsedAt
   }
 
-  /// Legacy-compatible decoder: older on-disk indexes stored
-  /// `offendingRow` as `[String]?`. Normalise `nil` to `[]` on read so
-  /// callers can treat the field as a plain `[String]`.
+  /// Some on-disk indexes store `offendingRow` as `[String]?`. Normalise
+  /// `nil` to `[]` on read so callers can treat the field as a plain
+  /// `[String]`.
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     self.id = try container.decode(UUID.self, forKey: .id)
@@ -153,7 +153,7 @@ actor ImportStagingStore {
     try save(index)
   }
 
-  /// Load the raw bytes of a previously staged pending file — used when the
+  /// Load the raw bytes of a staged pending file — used when the
   /// user confirms the setup and the pipeline re-runs.
   func data(for pendingId: UUID) throws -> Data {
     let index = try load()
@@ -163,7 +163,7 @@ actor ImportStagingStore {
     return try Data(contentsOf: match.stagingPath)
   }
 
-  /// Load the raw bytes of a previously staged failed file — used for the
+  /// Load the raw bytes of a staged failed file — used for the
   /// Retry action in the Failed Files panel.
   func data(forFailedId failedId: UUID) throws -> Data {
     let index = try load()

@@ -34,9 +34,8 @@ protocol CrossAccountTransferMerger: Sendable {
 
 /// Live cross-account merger. Pure / `Sendable` — no repository writes;
 /// no shared state. The single source of truth for the same-`externalId`
-/// channel from `plans/2026-04-18-transfer-detection-design.md`
-/// (Extension B): when the transfer-detection engine eventually runs, it
-/// shares this same merger rather than reimplementing the predicate.
+/// merge predicate; the transfer-detection engine shares this merger
+/// rather than reimplementing the predicate.
 struct LiveCrossAccountTransferMerger: CrossAccountTransferMerger {
 
   func merge(

@@ -5,9 +5,9 @@ import Foundation
 /// (`ProfileWindowView` on macOS, `ProfileRootView` on iOS) as soon as its
 /// `.task` runs, so callers can open a profile or set a pending navigation
 /// without firing a URL event — which on macOS triggers SwiftUI's
-/// `WindowGroup(for:)` auto-spawn (issue #378), and since the
-/// `moolah://` URL scheme has been removed (issue #386) can no longer be
-/// routed back to the app at all.
+/// `WindowGroup(for:)` auto-spawn (issue #378). The `moolah://` URL
+/// scheme does not exist (issue #386), so a URL event cannot be routed
+/// back to the app at all.
 @MainActor
 enum NavigationBridge {
   /// Opens or focuses the window / session for the given profile. On macOS

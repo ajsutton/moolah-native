@@ -3,12 +3,7 @@
 import Foundation
 import GRDB
 
-// Reactive observation surface for `ImportRuleRepository`. Split out of
-// the main class file to keep `GRDBImportRuleRepository.swift` under
-// SwiftLint's `file_length` warning threshold and to mirror the
-// established `GRDBAccountRepository+Observation.swift` /
-// `GRDBEarmarkRepository+Observation.swift` /
-// `GRDBCategoryRepository+Observation.swift` companion-file pattern.
+// Reactive observation surface for `ImportRuleRepository`.
 //
 // `observeAll()` returns the same domain projection as `fetchAll()`:
 // every `import_rule` row, ordered by `position`, mapped through

@@ -229,8 +229,6 @@ struct TransactionStoreEarmarkTests {
     #expect(balance.quantity == Decimal(500))
   }
 
-  // `testRunningBalancesUpdateAfterAmountChange` was moved to
-  // `TransactionStoreRunningBalanceTests.swift` so this file's
-  // type body stays under the SwiftLint length budget after the
-  // reactive migration's emission-await call was added.
+  // Running-balance update tests live in
+  // `TransactionStoreRunningBalanceTests.swift`.
 }

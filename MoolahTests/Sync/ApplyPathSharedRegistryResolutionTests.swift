@@ -10,21 +10,16 @@ import Testing
 /// and registers instruments against the SHARED profile-index registry,
 /// not the per-profile `instrument` table.
 ///
-/// Earlier work moved every `InstrumentRecord` apply onto the
-/// profile-index zone (`ProfileIndexSyncHandler` + the shared registry);
-/// the per-profile `ProfileDataSyncHandler` traps/skips them. The
-/// remaining per-profile-`instrument`-table seam reachable from the
-/// apply bundle was the `instrumentResolver` / `instrumentRegistrar`
-/// injected into the txn/account/earmark/investment repos by
-/// `makeForApply`. The apply path never invokes them today (it writes
-/// raw Rows via `applyRemoteChangesSync`), but they were per-profile
-/// `PerProfile*` shims pointed at the per-profile `instrument` table —
-/// which the `v10_drop_shared_instrument_legacy` migration has now
-/// dropped. After the cutover the per-profile `instrument` table no
-/// longer exists at all, so when a shared registry is supplied the
-/// bundle's resolver/registrar are the shared registry and any
-/// apply-time instrument resolution lands against the profile-index
-/// DB — the per-profile table is structurally unreachable.
+/// Every `InstrumentRecord` apply lands on the profile-index zone
+/// (`ProfileIndexSyncHandler` + the shared registry); the per-profile
+/// `ProfileDataSyncHandler` traps/skips them. The
+/// `instrumentResolver` / `instrumentRegistrar` injected into the
+/// txn/account/earmark/investment repos by `makeForApply` are the
+/// shared registry. The apply path never invokes them (it writes raw
+/// Rows via `applyRemoteChangesSync`), and there is no per-profile
+/// `instrument` table, so any apply-time instrument resolution lands
+/// against the profile-index DB — the per-profile table is
+/// structurally unreachable.
 @MainActor
 @Suite("Apply-path bundle resolves via the shared registry")
 struct ApplyPathSharedRegistryResolutionTests {
@@ -32,8 +27,8 @@ struct ApplyPathSharedRegistryResolutionTests {
   @Test(
     "makeForApply resolver reads instruments from the shared registry, not the per-profile table")
   func resolverUsesSharedRegistry() async throws {
-    // Two distinct databases: the per-profile DB (whose `instrument`
-    // table v10 has dropped) and the shared profile-index DB.
+    // Two distinct databases: the per-profile DB (which has no
+    // `instrument` table) and the shared profile-index DB.
     let perProfile = try ProfileDatabase.openInMemory()
     let sharedDB = try ProfileIndexDatabase.openInMemory()
     let sharedRegistry = GRDBInstrumentRegistryRepository(database: sharedDB)
@@ -68,9 +63,9 @@ struct ApplyPathSharedRegistryResolutionTests {
     #expect(earmarkMap[crypto.id]?.kind == .cryptoToken)
     #expect(investmentMap[crypto.id]?.kind == .cryptoToken)
 
-    // Post-v10 the per-profile `instrument` table no longer exists —
-    // resolution through it is structurally impossible, a strictly
-    // stronger guarantee than "the table is empty".
+    // The per-profile `instrument` table does not exist — resolution
+    // through it is structurally impossible, a strictly stronger
+    // guarantee than "the table is empty".
     let perProfileTableExists = try await perProfile.read { database in
       try Bool.fetchOne(
         database,
@@ -89,9 +84,9 @@ struct ApplyPathSharedRegistryResolutionTests {
     let bundle = ProfileGRDBRepositories.makeForApply(
       database: perProfile, sharedRegistry: sharedRegistry)
 
-    // Post-v10 the per-profile `instrument` table is dropped, so it is
+    // The per-profile `instrument` table does not exist, so it is
     // structurally impossible for the bundle's resolver to fall back to
-    // a per-profile crypto row: the table simply does not exist.
+    // a per-profile crypto row.
     let perProfileTableExists = try await perProfile.read { database in
       try Bool.fetchOne(
         database,
@@ -103,7 +98,7 @@ struct ApplyPathSharedRegistryResolutionTests {
     #expect(perProfileTableExists == false)
 
     // A crypto id present in neither the per-profile DB nor the shared
-    // registry resolves to nothing — resolution is shared-only now.
+    // registry resolves to nothing — resolution is shared-only.
     let map = try await bundle.transactions.instrumentResolver.instrumentMap()
     #expect(
       map["1:native"] == nil,

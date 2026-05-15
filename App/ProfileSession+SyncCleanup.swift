@@ -1,11 +1,9 @@
 import Foundation
 
-// Sync teardown and the `updateProfile` mutator. Extracted from
-// `ProfileSession.swift` so the main file stays under SwiftLint's
-// `file_length` threshold. Reaches the session's module-internal task
-// state (`catalogRefreshTask`, `setUpTask`, etc.) — those properties
-// are deliberately module-internal in `ProfileSession.swift` so this
-// file can manage their lifecycle.
+// Sync teardown and the `updateProfile` mutator. Reaches the session's
+// module-internal task state (`catalogRefreshTask`, `setUpTask`, etc.) —
+// those properties are deliberately module-internal in
+// `ProfileSession.swift` so this file can manage their lifecycle.
 
 extension ProfileSession {
   // MARK: - Sync Cleanup

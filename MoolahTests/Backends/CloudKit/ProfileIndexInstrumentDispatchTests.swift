@@ -7,12 +7,10 @@ import Testing
 
 @testable import Moolah
 
-/// Verifies the InstrumentRecord dispatch added to
-/// `ProfileIndexSyncHandler`: downlink apply, uplink build,
-/// `queueAllExistingRecords`, and the system-fields write path.
-/// Conflict and lifecycle paths live in
-/// `ProfileIndexInstrumentLifecycleTests` to keep this file under
-/// SwiftLint's `type_body_length` threshold.
+/// Verifies `ProfileIndexSyncHandler`'s InstrumentRecord dispatch:
+/// downlink apply, uplink build, `queueAllExistingRecords`, and the
+/// system-fields write path. Conflict and lifecycle paths live in
+/// `ProfileIndexInstrumentLifecycleTests`.
 @Suite("ProfileIndexSyncHandler — InstrumentRecord dispatch")
 struct ProfileIndexInstrumentDispatchTests {
   typealias Harness = ProfileIndexInstrumentTestSupport.Harness
