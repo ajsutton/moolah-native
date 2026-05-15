@@ -114,6 +114,112 @@ struct InstrumentRegistryContractTests {
     #expect(regs.first?.mapping.binanceSymbol == "ETHUSDT")
   }
 
+  @Test("registerCrypto(forcingStatus:) inserts a new row with the forced status + mapping")
+  func registerCryptoForcingStatusInserts() async throws {
+    let subject = try makeSubject()
+    let repo = subject.repo
+    let hooks = subject.hooks
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH",
+      name: "Ethereum", decimals: 18)
+    let mapping = CryptoProviderMapping(
+      instrumentId: eth.id,
+      coingeckoId: "ethereum", cryptocompareSymbol: nil, binanceSymbol: nil)
+
+    try await repo.registerCrypto(eth, mapping: mapping, forcingStatus: .unpriced)
+
+    let regs = try await repo.allCryptoRegistrations()
+    let reg = try #require(regs.first { $0.id == eth.id })
+    // The forced status must win over the column default (`.priced`),
+    // and the mapping must round-trip in the same write.
+    #expect(reg.pricingStatus == .unpriced)
+    #expect(reg.mapping.coingeckoId == "ethereum")
+
+    // The whole point of #895: exactly one onRecordChanged fan-out for
+    // the single backing-store write — never two. The count-of-one
+    // assertion below is the test of record for the issue.
+    //
+    // Drain pending @MainActor hops from the sync-queue hook closures.
+    // Not strictly deterministic — the closure dispatches via
+    // `Task { @MainActor … }`, so the 50ms is a best-effort drain, not a
+    // barrier. If CI flakes, make the hooks async/awaitable so this can
+    // `await` them directly rather than tightening the sleep.
+    try await Task.sleep(for: .milliseconds(50))
+    #expect(hooks.changedIds == [eth.id])
+  }
+
+  @Test("registerCrypto(forcingStatus:) overwrites an existing row's mapping + status in one write")
+  func registerCryptoForcingStatusUpserts() async throws {
+    let subject = try makeSubject()
+    let repo = subject.repo
+    let hooks = subject.hooks
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH",
+      name: "Ethereum", decimals: 18)
+    // Seed an existing row via the plain upsert (defaults to `.priced`).
+    try await repo.registerCrypto(
+      eth,
+      mapping: CryptoProviderMapping(
+        instrumentId: eth.id, coingeckoId: "old", cryptocompareSymbol: nil,
+        binanceSymbol: nil))
+    try await Task.sleep(for: .milliseconds(50))
+    hooks.changedIds.removeAll()
+
+    try await repo.registerCrypto(
+      eth,
+      mapping: CryptoProviderMapping(
+        instrumentId: eth.id, coingeckoId: "new", cryptocompareSymbol: "ETH",
+        binanceSymbol: nil),
+      forcingStatus: .spam)
+
+    let regs = try await repo.allCryptoRegistrations()
+    #expect(regs.count == 1)
+    let reg = try #require(regs.first { $0.id == eth.id })
+    #expect(reg.pricingStatus == .spam)
+    #expect(reg.mapping.coingeckoId == "new")
+    #expect(reg.mapping.cryptocompareSymbol == "ETH")
+
+    // Still exactly one fan-out for the upsert call — the stale-status
+    // window the issue describes cannot exist. Not strictly
+    // deterministic (see `registerCryptoForcingStatusInserts` for the
+    // same @MainActor-hop drain caveat); make the hooks awaitable if CI
+    // flakes here.
+    try await Task.sleep(for: .milliseconds(50))
+    #expect(hooks.changedIds == [eth.id])
+  }
+
+  @Test("plain registerCrypto(_:mapping:) preserves an existing row's pricingStatus")
+  func registerCryptoPreservesStatusOnUpsert() async throws {
+    // Load-bearing invariant: `registerCrypto(_:mapping:forcingStatus:)`
+    // exists precisely because the plain overload must NOT change a
+    // stored status. If a future `mergeResolvedFields` refactor started
+    // writing `pricingStatus`, the discovery path's status decision
+    // would silently leak into unrelated mapping-only re-registers.
+    let repo = try makeSubject().repo
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH",
+      name: "Ethereum", decimals: 18)
+    // Establish a non-default stored status via the forcing overload.
+    try await repo.registerCrypto(
+      eth,
+      mapping: CryptoProviderMapping(
+        instrumentId: eth.id, coingeckoId: "ethereum",
+        cryptocompareSymbol: nil, binanceSymbol: nil),
+      forcingStatus: .spam)
+
+    // A plain mapping-only re-register must leave `.spam` intact.
+    try await repo.registerCrypto(
+      eth,
+      mapping: CryptoProviderMapping(
+        instrumentId: eth.id, coingeckoId: "ethereum",
+        cryptocompareSymbol: "ETH", binanceSymbol: nil))
+
+    let regs = try await repo.allCryptoRegistrations()
+    let reg = try #require(regs.first { $0.id == eth.id })
+    #expect(reg.pricingStatus == .spam)
+    #expect(reg.mapping.cryptocompareSymbol == "ETH")
+  }
+
   @Test("allCryptoRegistrations skips rows whose three mapping fields are all nil")
   func allCryptoSkipsMissingMapping() async throws {
     let subject = try makeSubject()

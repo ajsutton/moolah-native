@@ -86,4 +86,99 @@ struct GRDBInstrumentRegistryRollbackTests {
     #expect(try registry.fetchRowSync(id: "___FAIL___") == nil)
     #expect(try registry.allRowIdsSync() == [priorId])
   }
+
+  /// `registerCrypto(_:mapping:forcingStatus:)` does a fetch + UPDATE (or
+  /// INSERT) inside one `database.write`. A `BEFORE UPDATE` trigger that
+  /// aborts the existing-row UPDATE forces the throw mid-transaction, so
+  /// the pre-seeded status and mapping must survive byte-equal. The
+  /// post-write side effects (`fireOnRecordChanged` / `notifySubscribers`)
+  /// cannot run because `try await database.write` rethrows first — that
+  /// is what keeps a failed write from queuing a CKSyncEngine save.
+  @Test
+  func registerCryptoForcingStatusRollsBackOnFailure() async throws {
+    let database = try ProfileIndexDatabase.openInMemory()
+    let registry = GRDBInstrumentRegistryRepository(database: database)
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum",
+      decimals: 18)
+    try await registry.registerCrypto(
+      eth,
+      mapping: CryptoProviderMapping(
+        instrumentId: eth.id, coingeckoId: "ethereum",
+        cryptocompareSymbol: nil, binanceSymbol: nil),
+      forcingStatus: .spam)
+
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER fail_instrument_update
+          BEFORE UPDATE ON instrument
+          WHEN NEW.id = '\(eth.id)'
+          BEGIN
+              SELECT RAISE(ABORT, 'forced failure for rollback test');
+          END;
+          """)
+    }
+
+    do {
+      try await registry.registerCrypto(
+        eth,
+        mapping: CryptoProviderMapping(
+          instrumentId: eth.id, coingeckoId: "MUST-NOT-LAND",
+          cryptocompareSymbol: "MUST-NOT-LAND", binanceSymbol: nil),
+        forcingStatus: .priced)
+      Issue.record("registerCrypto(forcingStatus:) should have thrown")
+    } catch {
+      // Expected — trigger raises ABORT mid-transaction.
+    }
+
+    let surviving = try #require(try registry.fetchRowSync(id: eth.id))
+    #expect(surviving.pricingStatus == TokenPricingStatus.spam.rawValue)
+    #expect(surviving.coingeckoId == "ethereum")
+  }
+
+  /// Same rollback contract for the plain `registerCrypto(_:mapping:)`
+  /// overload — it shares the same fetch + UPDATE upsert path, so a
+  /// failed write must leave the prior status and mapping unchanged.
+  @Test
+  func registerCryptoPlainRollsBackOnFailure() async throws {
+    let database = try ProfileIndexDatabase.openInMemory()
+    let registry = GRDBInstrumentRegistryRepository(database: database)
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum",
+      decimals: 18)
+    try await registry.registerCrypto(
+      eth,
+      mapping: CryptoProviderMapping(
+        instrumentId: eth.id, coingeckoId: "ethereum",
+        cryptocompareSymbol: nil, binanceSymbol: nil),
+      forcingStatus: .spam)
+
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER fail_instrument_update
+          BEFORE UPDATE ON instrument
+          WHEN NEW.id = '\(eth.id)'
+          BEGIN
+              SELECT RAISE(ABORT, 'forced failure for rollback test');
+          END;
+          """)
+    }
+
+    do {
+      try await registry.registerCrypto(
+        eth,
+        mapping: CryptoProviderMapping(
+          instrumentId: eth.id, coingeckoId: "MUST-NOT-LAND",
+          cryptocompareSymbol: "MUST-NOT-LAND", binanceSymbol: nil))
+      Issue.record("registerCrypto(_:mapping:) should have thrown")
+    } catch {
+      // Expected — trigger raises ABORT mid-transaction.
+    }
+
+    let surviving = try #require(try registry.fetchRowSync(id: eth.id))
+    #expect(surviving.pricingStatus == TokenPricingStatus.spam.rawValue)
+    #expect(surviving.coingeckoId == "ethereum")
+  }
 }

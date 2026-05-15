@@ -96,9 +96,11 @@ final class GRDBInstrumentRegistryRepository:
   // MARK: - Cross-extension internals
   //
   // `attachSyncHooks` and the `fireOnRecord*` helpers live in
-  // `GRDBInstrumentRegistryRepository+SyncHooks.swift` so this file
-  // stays under SwiftLint's `file_length` / `type_body_length`
-  // thresholds. They access `hooks` directly via the `internal`
+  // `GRDBInstrumentRegistryRepository+SyncHooks.swift`, and the row-level
+  // upsert helpers (`upsertCrypto`, `upsertStock`) live in
+  // `GRDBInstrumentRegistryRepository+Upsert.swift`, so this file stays
+  // under SwiftLint's `file_length` / `type_body_length` thresholds. They
+  // access `hooks` / are called as `Self.upsert…` via the `internal`
   // visibility implied by Swift's same-module-extension scope.
 
   // MARK: - InstrumentRegistryRepository conformance
@@ -144,6 +146,27 @@ final class GRDBInstrumentRegistryRepository:
     await notifySubscribers()
   }
 
+  /// Single-write overload. See
+  /// `InstrumentRegistryRepository.registerCrypto(_:mapping:forcingStatus:)`
+  /// for the contract (one transaction, one `onRecordChanged`, issue #895).
+  func registerCrypto(
+    _ instrument: Instrument,
+    mapping: CryptoProviderMapping,
+    forcingStatus status: TokenPricingStatus
+  ) async throws {
+    precondition(instrument.kind == .cryptoToken)
+    try await database.write { database in
+      try Self.upsertCrypto(
+        database: database,
+        instrument: instrument,
+        mapping: mapping,
+        forcingStatus: status)
+    }
+    invalidateInstrumentMapCache()
+    fireOnRecordChanged(instrument.id)
+    await notifySubscribers()
+  }
+
   func registerStock(_ instrument: Instrument) async throws {
     precondition(instrument.kind == .stock)
     try await database.write { database in
@@ -172,89 +195,15 @@ final class GRDBInstrumentRegistryRepository:
     await notifySubscribers()
   }
 
-  // MARK: - Upsert helpers
-
-  /// Inserts a new crypto row or updates the existing one in-place,
-  /// preserving `recordName` and `encodedSystemFields`. Mirrors
-  /// `CloudKitInstrumentRegistryRepository.upsertCrypto`.
-  private static func upsertCrypto(
-    database: Database,
-    instrument: Instrument,
-    mapping: CryptoProviderMapping
-  ) throws {
-    if var existing =
-      try InstrumentRow
-      .filter(InstrumentRow.Columns.id == instrument.id)
-      .fetchOne(database)
-    {
-      mergeResolvedFields(into: &existing, from: instrument, mapping: mapping)
-      try existing.update(database)
-    } else {
-      var row = InstrumentRow(domain: instrument)
-      row.coingeckoId = mapping.coingeckoId
-      row.cryptocompareSymbol = mapping.cryptocompareSymbol
-      row.binanceSymbol = mapping.binanceSymbol
-      try row.insert(database)
-    }
-  }
-
-  /// Upgrade-only field merge: a nil/empty incoming column must never
-  /// downgrade a populated stored column.
-  ///
-  /// A thin ensureInstrument-style publish carries all-nil / empty identity
-  /// fields; allowing it to overwrite would destroy a richer
-  /// discovery-resolved row (e.g. Trust Wallet's ensureInstrument for
-  /// Ethereum clobbering the coingecko-resolved ticker/exchange). Every
-  /// identity column therefore requires a non-empty / non-zero incoming
-  /// value before overwriting; `kind` and `decimals` are always
-  /// authoritative and are updated unconditionally.
-  ///
-  /// Provider mapping columns are also merged: a nil incoming column must
-  /// not downgrade a populated stored column. See the shared-registry
-  /// clobber bug (Trust - Ethereum 1:native).
-  private static func mergeResolvedFields(
-    into existing: inout InstrumentRow,
-    from instrument: Instrument,
-    mapping: CryptoProviderMapping
-  ) {
-    existing.kind = instrument.kind.rawValue
-    if !instrument.name.isEmpty { existing.name = instrument.name }
-    existing.decimals = instrument.decimals
-    if let ticker = instrument.ticker, !ticker.isEmpty { existing.ticker = ticker }
-    if let exchange = instrument.exchange, !exchange.isEmpty { existing.exchange = exchange }
-    if let chainId = instrument.chainId, chainId != 0 { existing.chainId = chainId }
-    if let contractAddress = instrument.contractAddress, !contractAddress.isEmpty {
-      existing.contractAddress = contractAddress
-    }
-    existing.coingeckoId = mapping.coingeckoId ?? existing.coingeckoId
-    existing.cryptocompareSymbol = mapping.cryptocompareSymbol ?? existing.cryptocompareSymbol
-    existing.binanceSymbol = mapping.binanceSymbol ?? existing.binanceSymbol
-  }
-
-  /// Inserts a new stock row or updates the existing one in-place. Stock
-  /// upserts never touch the provider-mapping columns — they are written
-  /// only by `registerCrypto`. Mirrors
-  /// `CloudKitInstrumentRegistryRepository.upsertStock`.
-  private static func upsertStock(
-    database: Database,
-    instrument: Instrument
-  ) throws {
-    if var existing =
-      try InstrumentRow
-      .filter(InstrumentRow.Columns.id == instrument.id)
-      .fetchOne(database)
-    {
-      existing.kind = instrument.kind.rawValue
-      existing.name = instrument.name
-      existing.decimals = instrument.decimals
-      existing.ticker = instrument.ticker
-      existing.exchange = instrument.exchange
-      try existing.update(database)
-    } else {
-      let row = InstrumentRow(domain: instrument)
-      try row.insert(database)
-    }
-  }
+  // MARK: - Upsert helpers (see GRDBInstrumentRegistryRepository+Upsert.swift)
+  //
+  // The row-level upsert helpers (`upsertCrypto`, `mergeResolvedFields`,
+  // `upsertStock`) live in the sibling
+  // `GRDBInstrumentRegistryRepository+Upsert.swift` extension file so this
+  // file stays under SwiftLint's `file_length` budget. They are `static`
+  // and module-scoped so the `register…` methods above can call
+  // `Self.upsertCrypto` / `Self.upsertStock` across the extension
+  // boundary — same split rationale as `+SyncHooks` / `+Lookup`.
 
   // MARK: - Change fan-out
 

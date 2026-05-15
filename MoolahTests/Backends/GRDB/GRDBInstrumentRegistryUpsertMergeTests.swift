@@ -168,4 +168,32 @@ struct GRDBInstrumentRegistryUpsertMergeTests {
         binanceSymbol: nil))
     #expect(try registry.fetchRowSync(id: eth.id)?.encodedSystemFields == blob)
   }
+
+  @Test("registerCrypto(forcingStatus:) preserves encodedSystemFields on the UPDATE path")
+  func forcingStatusPreservesEncodedSystemFields() async throws {
+    // The forcing overload's UPDATE branch fetches the full stored row,
+    // merges resolved fields, sets `pricingStatus`, and writes it back.
+    // The CloudKit change-tag (`encodedSystemFields`) must ride through
+    // untouched — otherwise every discovery-driven status flip would
+    // provoke a `serverRecordChanged` conflict on the next upload.
+    let registry = try makeRegistry()
+    try await registry.registerCrypto(
+      eth,
+      mapping: CryptoProviderMapping(
+        instrumentId: eth.id, coingeckoId: "ethereum", cryptocompareSymbol: nil,
+        binanceSymbol: nil))
+    let blob = Data([0xCA, 0xFE, 0xBA, 0xBE])
+    _ = try registry.setEncodedSystemFieldsSync(id: eth.id, data: blob)
+
+    try await registry.registerCrypto(
+      eth,
+      mapping: CryptoProviderMapping(
+        instrumentId: eth.id, coingeckoId: "ethereum", cryptocompareSymbol: "ETH",
+        binanceSymbol: nil),
+      forcingStatus: .spam)
+
+    let row = try #require(try registry.fetchRowSync(id: eth.id))
+    #expect(row.encodedSystemFields == blob)
+    #expect(row.pricingStatus == TokenPricingStatus.spam.rawValue)
+  }
 }
