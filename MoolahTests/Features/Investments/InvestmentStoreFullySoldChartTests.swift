@@ -15,8 +15,10 @@ struct InvestmentStoreFullySoldChartTests {
   let buyDate = Date(timeIntervalSinceReferenceDate: 599_616_000)  // 2020-01-01
   let sellDate = Date(timeIntervalSinceReferenceDate: 601_430_400)  // 2020-01-21
 
-  @Test("fully-sold account still surfaces the historical chart")
-  func fullySoldAccountSurfacesChart() async throws {
+  /// Builds a position-tracked account that bought then fully sold 100
+  /// BHP (a buy @ 40 AUD then sell-all @ 50 AUD, both in 2020). Returns
+  /// the store + account ready for a `loadAndBuildPositionsInput` call.
+  private func makeFullySoldAccount() async throws -> (InvestmentStore, Account) {
     let (backend, _) = try TestBackend.create()
     let conversionService = FixedConversionService(rates: [bhp.id: Decimal(50)])
     let store = InvestmentStore(
@@ -29,8 +31,6 @@ struct InvestmentStoreFullySoldChartTests {
       valuationMode: .calculatedFromTrades)
     _ = try await backend.accounts.create(
       account, openingBalance: InstrumentAmount(quantity: 0, instrument: aud))
-
-    // Buy 100 BHP @ 40 AUD on 2020-01-01.
     _ = try await backend.transactions.create(
       Transaction(
         date: buyDate,
@@ -38,7 +38,6 @@ struct InvestmentStoreFullySoldChartTests {
           TransactionLeg(accountId: account.id, instrument: bhp, quantity: 100, type: .trade),
           TransactionLeg(accountId: account.id, instrument: aud, quantity: -4_000, type: .trade),
         ]))
-    // Sell all 100 BHP @ 50 AUD on 2020-01-21.
     _ = try await backend.transactions.create(
       Transaction(
         date: sellDate,
@@ -46,13 +45,18 @@ struct InvestmentStoreFullySoldChartTests {
           TransactionLeg(accountId: account.id, instrument: bhp, quantity: -100, type: .trade),
           TransactionLeg(accountId: account.id, instrument: aud, quantity: 5_000, type: .trade),
         ]))
+    return (store, account)
+  }
 
+  @Test("fully-sold account still surfaces the historical chart")
+  func fullySoldAccountSurfacesChart() async throws {
+    let (store, account) = try await makeFullySoldAccount()
     let input = try await store.loadAndBuildPositionsInput(
       account: account, profileCurrency: aud, range: .all)
 
     // A sell-for-profit leaves the net cash leg as a host-currency
-    // position; `loadPositions` keeps non-zero rows. `shouldHide`
-    // collapses this into the chart-only path.
+    // position; `loadPositions` keeps non-zero rows, so `shouldHide`
+    // stays true even though the full surface still renders.
     let nonHostPositions = input.positions.filter { $0.instrument != aud }
     #expect(
       nonHostPositions.isEmpty,
@@ -72,41 +76,21 @@ struct InvestmentStoreFullySoldChartTests {
     #expect(
       input.hasAnyHistoricalActivity,
       "non-host trade legs in the transaction set should set hasAnyHistoricalActivity")
+    #expect(
+      input.alwaysShowsFullSurface,
+      "trade-calculated investment accounts always render the full surface")
+    #expect(
+      !input.rendersNothing,
+      "the full surface must render even though shouldHide is true")
   }
 
   @Test("fully-sold account reports hasAnyHistoricalActivity even on a narrow range")
   func fullySoldAccountReportsActivityOnNarrowRange() async throws {
     // Regression for the production bug: the user's last sale predates the
     // default `.threeMonths` window, so `hasHistoricalSeries` is false. The
-    // view layer needs a range-independent signal to still take the
-    // chart-only branch — `hasAnyHistoricalActivity`.
-    let (backend, _) = try TestBackend.create()
-    let conversionService = FixedConversionService(rates: [bhp.id: Decimal(50)])
-    let store = InvestmentStore(
-      repository: backend.investments,
-      transactionRepository: backend.transactions,
-      conversionService: conversionService
-    )
-    let account = Account(
-      name: "Brokerage", type: .investment, instrument: aud,
-      valuationMode: .calculatedFromTrades)
-    _ = try await backend.accounts.create(
-      account, openingBalance: InstrumentAmount(quantity: 0, instrument: aud))
-    _ = try await backend.transactions.create(
-      Transaction(
-        date: buyDate,
-        legs: [
-          TransactionLeg(accountId: account.id, instrument: bhp, quantity: 100, type: .trade),
-          TransactionLeg(accountId: account.id, instrument: aud, quantity: -4_000, type: .trade),
-        ]))
-    _ = try await backend.transactions.create(
-      Transaction(
-        date: sellDate,
-        legs: [
-          TransactionLeg(accountId: account.id, instrument: bhp, quantity: -100, type: .trade),
-          TransactionLeg(accountId: account.id, instrument: aud, quantity: 5_000, type: .trade),
-        ]))
-
+    // view layer needs a range-independent signal to keep the chart
+    // populated on a narrow range — `hasAnyHistoricalActivity`.
+    let (store, account) = try await makeFullySoldAccount()
     let input = try await store.loadAndBuildPositionsInput(
       account: account, profileCurrency: aud, range: .threeMonths)
 
@@ -119,6 +103,10 @@ struct InvestmentStoreFullySoldChartTests {
     #expect(
       input.hasAnyHistoricalActivity,
       "the non-host trade legs make the account chart-worthy even on a narrow range")
+    #expect(
+      input.alwaysShowsFullSurface,
+      "trade-calculated investment accounts always render the full surface")
+    #expect(!input.rendersNothing)
   }
 
   @Test("empty account with no trade history hides the chart")
@@ -145,5 +133,11 @@ struct InvestmentStoreFullySoldChartTests {
     #expect(
       !input.hasAnyHistoricalActivity,
       "no transactions at all means no historical activity to surface")
+    #expect(
+      input.alwaysShowsFullSurface,
+      "even a trade-calculated account with no trades renders the full surface")
+    #expect(
+      !input.rendersNothing,
+      "the surface (tiles + empty table) renders for consistency")
   }
 }

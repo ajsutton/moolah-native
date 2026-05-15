@@ -32,20 +32,29 @@ struct PositionsViewInput: Sendable, Hashable {
   /// render. `hasAnyHistoricalActivity` survives that.
   let hasAnyHistoricalActivity: Bool
 
+  /// `true` for position-tracked investment-account hosts, where the full
+  /// surface (performance tiles, chart, positions table) is always shown
+  /// for layout consistency — even with no open positions — rather than
+  /// collapsing to a chart-only or transaction-only fallback. Other hosts
+  /// (the transaction-list embedding, previews) leave this `false` and
+  /// keep the `shouldHide` collapse.
+  let alwaysShowsFullSurface: Bool
+
   /// Single designated init with defaults so non-investment callers
   /// (the transaction list, all previews) only have to fill in the
   /// fields they care about. The investment-account path opts in to
-  /// `performance` and `hasAnyHistoricalActivity` explicitly. Declared
-  /// inside the struct body so it replaces Swift's synthesised
-  /// memberwise init rather than co-existing with it (which would make
-  /// every call ambiguous).
+  /// `performance`, `hasAnyHistoricalActivity`, and
+  /// `alwaysShowsFullSurface` explicitly. Declared inside the struct
+  /// body so it replaces Swift's synthesised memberwise init rather
+  /// than co-existing with it (which would make every call ambiguous).
   init(
     title: String,
     hostCurrency: Instrument,
     positions: [ValuedPosition],
     historicalValue: HistoricalValueSeries?,
     performance: AccountPerformance? = nil,
-    hasAnyHistoricalActivity: Bool = false
+    hasAnyHistoricalActivity: Bool = false,
+    alwaysShowsFullSurface: Bool = false
   ) {
     self.title = title
     self.hostCurrency = hostCurrency
@@ -53,6 +62,7 @@ struct PositionsViewInput: Sendable, Hashable {
     self.historicalValue = historicalValue
     self.performance = performance
     self.hasAnyHistoricalActivity = hasAnyHistoricalActivity
+    self.alwaysShowsFullSurface = alwaysShowsFullSurface
   }
 
   /// Sum of per-row values. `nil` if any row's `value` is `nil` — per the
@@ -137,5 +147,14 @@ struct PositionsViewInput: Sendable, Hashable {
       positions.lazy.filter { $0.quantity != 0 }.map(\.instrument)
     )
     return nonZeroInstruments == [hostCurrency]
+  }
+
+  /// `true` when `PositionsView` collapses to `EmptyView`. `shouldHide`
+  /// marks the positions list redundant with the host surface's balance,
+  /// but position-tracked investment-account hosts
+  /// (`alwaysShowsFullSurface`) override that and always render the full
+  /// tiles/chart/table surface for layout consistency.
+  var rendersNothing: Bool {
+    shouldHide && !alwaysShowsFullSurface
   }
 }

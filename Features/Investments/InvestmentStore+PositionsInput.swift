@@ -47,7 +47,8 @@ extension InvestmentStore {
         hostCurrency: hostCurrency,
         positions: valuedPositions,
         historicalValue: nil,
-        performance: accountPerformance)
+        performance: accountPerformance,
+        alwaysShowsFullSurface: true)
     }
 
     let txns: [Transaction]
@@ -66,17 +67,7 @@ extension InvestmentStore {
     let hostCurrency = loadedHostCurrency ?? valuedPositions.first?.value?.instrument ?? .AUD
     let costSnapshot = await costBasisSnapshot(
       transactions: txns, hostCurrency: hostCurrency)
-    let rowsWithCost: [ValuedPosition] = valuedPositions.map { row in
-      ValuedPosition(
-        instrument: row.instrument,
-        quantity: row.quantity,
-        unitPrice: row.unitPrice,
-        costBasis: costSnapshot[row.instrument.id].map {
-          InstrumentAmount(quantity: $0, instrument: hostCurrency)
-        },
-        value: row.value
-      )
-    }
+    let rowsWithCost = applyingCostBasis(costSnapshot, hostCurrency: hostCurrency)
 
     let series = await PositionsHistoryBuilder(conversionService: conversionService).build(
       transactions: txns,
@@ -92,12 +83,33 @@ extension InvestmentStore {
       historicalValue: series,
       performance: accountPerformance,
       hasAnyHistoricalActivity: Self.hasAnyTradeLeg(
-        in: txns, accountId: loadedAccountId, hostCurrency: hostCurrency))
+        in: txns, accountId: loadedAccountId, hostCurrency: hostCurrency),
+      alwaysShowsFullSurface: true)
+  }
+
+  /// Overlays a per-instrument cost-basis snapshot onto the already-loaded
+  /// `valuedPositions`, leaving quantity / unit price / value untouched.
+  /// An instrument absent from `costSnapshot` keeps a `nil` cost basis
+  /// (cost unavailable, not zero — see `costBasisSnapshot`).
+  func applyingCostBasis(
+    _ costSnapshot: [String: Decimal], hostCurrency: Instrument
+  ) -> [ValuedPosition] {
+    valuedPositions.map { row in
+      ValuedPosition(
+        instrument: row.instrument,
+        quantity: row.quantity,
+        unitPrice: row.unitPrice,
+        costBasis: costSnapshot[row.instrument.id].map {
+          InstrumentAmount(quantity: $0, instrument: hostCurrency)
+        },
+        value: row.value
+      )
+    }
   }
 
   /// Range-independent "did this account ever hold a non-host-currency
-  /// position" check used to gate the chart-only branch on accounts
-  /// whose last trade pre-dates the active range.
+  /// position" check used to keep the chart populated on accounts whose
+  /// last trade pre-dates the active range.
   static func hasAnyTradeLeg(
     in transactions: [Transaction], accountId: UUID?, hostCurrency: Instrument
   ) -> Bool {

@@ -34,13 +34,13 @@ extension InvestmentAccountView {
     }
   }
 
-  /// If the account just loaded into a chart-only state but the active
+  /// If the account loaded with no remaining positions but the active
   /// range carries no points (the last trade pre-dates it), default the
   /// range to `.all` so the historic chart populates on first paint
   /// instead of stranding the user on "No chart data yet" with no
-  /// indication that widening the range would help. The chart-only
-  /// branch's range picker stays bound to `positionsRange`, so the user
-  /// can still narrow back to `.threeMonths` if they want.
+  /// indication that widening the range would help. The chart's range
+  /// picker stays bound to `positionsRange`, so the user can still
+  /// narrow back to `.threeMonths` if they want.
   ///
   /// Rebuilds `positionsInput` inline rather than waiting for
   /// `.task(id: positionsRange)` to land — flipping `positionsRange`

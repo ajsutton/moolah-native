@@ -86,4 +86,24 @@ struct PositionsViewInputShouldHideTests {
       title: "x", hostCurrency: aud, positions: [], historicalValue: nil)
     #expect(input.shouldHide)
   }
+
+  @Test("rendersNothing mirrors shouldHide when alwaysShowsFullSurface is false")
+  func rendersNothingMirrorsShouldHideByDefault() {
+    let input = PositionsViewInput(
+      title: "x", hostCurrency: aud, positions: [], historicalValue: nil)
+    #expect(input.shouldHide)
+    #expect(input.rendersNothing)
+  }
+
+  @Test("rendersNothing is false when alwaysShowsFullSurface overrides an empty surface")
+  func alwaysShowsFullSurfaceForcesRender() {
+    // A position-tracked investment account whose holdings are all sold:
+    // shouldHide stays true (the list is redundant) but the view must
+    // still render the full tiles/chart/table surface.
+    let input = PositionsViewInput(
+      title: "x", hostCurrency: aud, positions: [], historicalValue: nil,
+      alwaysShowsFullSurface: true)
+    #expect(input.shouldHide)
+    #expect(!input.rendersNothing)
+  }
 }
