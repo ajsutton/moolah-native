@@ -52,7 +52,8 @@ struct TxnRepoSharedInstrumentResolutionTests {
       database: perProfile,
       defaultInstrument: Instrument.fiat(code: "USD"),
       conversionService: FixedConversionService(),
-      instrumentResolver: registry)
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
 
     let account = Account(
       name: "Trust - Ethereum", type: .crypto, instrument: eth,
@@ -92,7 +93,8 @@ struct TxnRepoSharedInstrumentResolutionTests {
       database: perProfile,
       defaultInstrument: Instrument.fiat(code: "USD"),
       conversionService: FixedConversionService(),
-      instrumentResolver: AlwaysThrowingInstrumentMapResolver())
+      instrumentResolver: AlwaysThrowingInstrumentMapResolver(),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: perProfile))
 
     // Start consuming errors before subscribing so the single-shot
     // channel emission cannot be missed.

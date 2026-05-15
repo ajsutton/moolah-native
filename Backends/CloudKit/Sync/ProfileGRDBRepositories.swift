@@ -52,9 +52,12 @@ extension ProfileGRDBRepositories {
   /// The `instrumentResolver` injected into each repository here is a fresh
   /// `PerProfileInstrumentMapResolver` that is likewise never invoked by the
   /// apply path: `applyRemoteChangesSync` writes raw Rows directly and never
-  /// calls `instrumentMap()`. Do NOT rewire these resolvers to the shared
-  /// registry without first auditing every apply-path caller — the apply path
-  /// currently carries no observation and assumes the resolver is a no-op.
+  /// calls `instrumentMap()`. The `instrumentRegistrar` is a fresh
+  /// `PerProfileInstrumentRegistrar` for the same reason — the apply path
+  /// never calls `create` / `createMany` / `update`, so `registerResolvable`
+  /// is never invoked. Do NOT rewire these to the shared registry without
+  /// first auditing every apply-path caller — the apply path currently
+  /// carries no observation and assumes both seams are no-ops.
   static func makeForApply(database: any GRDB.DatabaseWriter) -> ProfileGRDBRepositories {
     // USD is a stable, locale-independent fiat that satisfies
     // `Instrument.fiat(code:)`'s `isoCurrencies` lookup. The choice is
@@ -67,7 +70,8 @@ extension ProfileGRDBRepositories {
       categories: GRDBCategoryRepository(database: database),
       accounts: GRDBAccountRepository(
         database: database,
-        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
+        instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+        instrumentRegistrar: PerProfileInstrumentRegistrar(database: database)),
       earmarks: GRDBEarmarkRepository(
         database: database,
         defaultInstrument: placeholderInstrument,
@@ -81,7 +85,8 @@ extension ProfileGRDBRepositories {
         database: database,
         defaultInstrument: placeholderInstrument,
         conversionService: ApplyPathConversionService(),
-        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
+        instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+        instrumentRegistrar: PerProfileInstrumentRegistrar(database: database)),
       transactionLegs: GRDBTransactionLegRepository(database: database),
       database: database)
   }

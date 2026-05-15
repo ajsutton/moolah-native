@@ -33,9 +33,11 @@ import GRDB
 /// `let`. `database` (`any DatabaseWriter`) is itself `Sendable` (GRDB
 /// protocol guarantee — the queue's serial executor mediates concurrent
 /// access). `instrumentResolver` is a `Sendable` protocol
-/// (`InstrumentMapResolving`) and immutable post-init. `onRecordChanged`
-/// and `onRecordDeleted` are `@Sendable` closures captured at init.
-/// Nothing mutates post-init, so the reference can be shared across
+/// (`InstrumentMapResolving`) and immutable post-init.
+/// `instrumentRegistrar` is a `Sendable` protocol
+/// (`InstrumentRegistering`) and immutable post-init. `onRecordChanged`,
+/// `onRecordDeleted`, and `onInstrumentChanged` are `@Sendable` closures
+/// captured at init. Nothing mutates post-init, so the reference can be shared across
 /// actor boundaries without a data race; `@unchecked` only waives
 /// Swift's structural check that `final class` types meet `Sendable`'s
 /// requirements automatically.
@@ -58,21 +60,35 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   /// DB so their behaviour is unchanged until the per-profile
   /// `instrument` table is dropped.
   let instrumentResolver: any InstrumentMapResolving
+  /// Registers a non-fiat account denomination so it becomes resolvable
+  /// by `instrumentResolver` before `create` returns. Awaited *before*
+  /// the per-profile `database.write` that inserts the account row (the
+  /// registry lives on a separate database — a cross-database
+  /// transaction is impossible, and the registration must be durable
+  /// before a reader can observe the new account). Replaces the old
+  /// per-profile placeholder `instrument` insert. Production sessions
+  /// inject the shared `GRDBInstrumentRegistryRepository`;
+  /// preview / test / apply callers inject
+  /// `PerProfileInstrumentRegistrar` over the same per-profile DB, which
+  /// performs the exact idempotent per-profile insert the removed
+  /// `ensureNonFiatInstrumentRow` did so their behaviour is unchanged
+  /// until the per-profile `instrument` table is dropped.
+  private let instrumentRegistrar: any InstrumentRegistering
   /// Receives `(recordType, id)` so the opening-balance create path can
   /// tag its txn and leg writes with `TransactionRow.recordType` /
   /// `TransactionLegRow.recordType` instead of the account's own type —
   /// see `RepositoryHookRecordTypeTests`.
   private let onRecordChanged: @Sendable (String, UUID) -> Void
   private let onRecordDeleted: @Sendable (String, UUID) -> Void
-  /// `Instrument` value of any non-fiat instrument that
-  /// `performAccountInsert` had to auto-insert into the per-profile
-  /// `instrument` table to satisfy a stock / crypto account's
-  /// denomination. The wired closure publishes the value to the shared
-  /// registry on the profile-index zone so sibling devices see it; the
-  /// per-profile copy stays for read paths. Without this hook the new
-  /// row would never reach CloudKit and sibling devices would fall
-  /// back to `Instrument.fiat(code: id)` — see
-  /// `InstrumentLocalSyncQueueTests`.
+  /// Legacy hook fired when a non-fiat account denomination was
+  /// auto-inserted by the removed per-profile placeholder path. The
+  /// write cutover routes registration through `instrumentRegistrar`
+  /// (`registerResolvable`) instead — for production the shared
+  /// `GRDBInstrumentRegistryRepository`, whose register methods already
+  /// invalidate the map cache and drive the CloudKit upload fan-out, so
+  /// this hook is no longer fired from `create`. Retained (plumbed but
+  /// unused here) to avoid touching the surrounding sync wiring in this
+  /// change; a follow-up can remove the now-dead hook end to end.
   private let onInstrumentChanged: @Sendable (Instrument) -> Void
   /// Single shared error channel for every `observeAll()` subscription
   /// returned by this repo instance. The bridge in
@@ -86,12 +102,14 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   init(
     database: any DatabaseWriter,
     instrumentResolver: any InstrumentMapResolving,
+    instrumentRegistrar: any InstrumentRegistering,
     onRecordChanged: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
     onRecordDeleted: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
     onInstrumentChanged: @escaping @Sendable (Instrument) -> Void = { _ in }
   ) {
     self.database = database
     self.instrumentResolver = instrumentResolver
+    self.instrumentRegistrar = instrumentRegistrar
     self.onRecordChanged = onRecordChanged
     self.onRecordDeleted = onRecordDeleted
     self.onInstrumentChanged = onInstrumentChanged
@@ -130,6 +148,14 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
       throw BackendError.validationFailed("Account name cannot be empty")
     }
 
+    // Register a non-fiat account denomination so a read issued
+    // immediately after this method returns resolves it. Awaited
+    // *before* the per-profile write: the registry lives on a separate
+    // database (a cross-database transaction is impossible) and the
+    // registration must be durable before the account becomes
+    // observable. Replaces the old per-profile placeholder insert.
+    try await instrumentRegistrar.registerResolvable(account.instrument)
+
     // Capture the wall clock outside the write block so the closure body
     // doesn't read `Date()` while holding the GRDB queue's serial
     // executor.
@@ -148,9 +174,6 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
     }
     if let legId = inserts.legId {
       onRecordChanged(TransactionLegRow.recordType, legId)
-    }
-    if let instrument = inserts.instrument {
-      onInstrumentChanged(instrument)
     }
     return account
   }
@@ -256,141 +279,11 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
     onRecordChanged(AccountRow.recordType, id)
   }
 
-  // MARK: - Sync entry points (synchronous, GRDB-queue-blocking)
+  // MARK: - Sync entry points
   //
-  // Called from the CKSyncEngine delegate executor on a non-MainActor
-  // context. `DatabaseWriter.write { db in … }` has both async and sync
-  // overloads; the sync form blocks the calling thread until the queue's
-  // serial executor admits the closure. Never call these from
-  // `@MainActor`.
-
-  func applyRemoteChangesSync(saved rows: [AccountRow], deleted ids: [UUID]) throws {
-    try database.write { database in
-      try applyRemoteChangesSync(saved: rows, deleted: ids, in: database)
-    }
-  }
-
-  /// In-transaction variant — see `GRDBCSVImportProfileRepository.applyRemoteChangesSync(...:in:)`
-  /// for the rationale (one commit per `applyRemoteChanges` batch, issue #872).
-  func applyRemoteChangesSync(
-    saved rows: [AccountRow], deleted ids: [UUID], in database: Database
-  ) throws {
-    for row in rows {
-      try row.upsert(database)
-    }
-    for id in ids {
-      // Replicates the v3-era ON DELETE CASCADE on
-      // `investment_value.account_id` and ON DELETE SET NULL on
-      // `transaction_leg.account_id` after `v5_drop_foreign_keys`
-      // removed the FKs. Same write transaction so the cascade is
-      // atomic with the parent delete.
-      _ =
-        try InvestmentValueRow
-        .filter(InvestmentValueRow.Columns.accountId == id)
-        .deleteAll(database)
-      _ =
-        try TransactionLegRow
-        .filter(TransactionLegRow.Columns.accountId == id)
-        .updateAll(
-          database,
-          [TransactionLegRow.Columns.accountId.set(to: nil)])
-      _ = try AccountRow.deleteOne(database, id: id)
-    }
-  }
-
-  /// Writes (or clears) the cached system-fields blob on a single row.
-  /// Returns `true` when a row was found and updated.
-  @discardableResult
-  func setEncodedSystemFieldsSync(id: UUID, data: Data?) throws -> Bool {
-    try database.write { database in
-      try AccountRow
-        .filter(AccountRow.Columns.id == id)
-        .updateAll(database, [AccountRow.Columns.encodedSystemFields.set(to: data)])
-        > 0
-    }
-  }
-
-  /// Batch counterpart to `setEncodedSystemFieldsSync` — writes every
-  /// update in a single GRDB transaction so `databaseDidCommit` fires
-  /// once rather than once per row. See the doc on
-  /// `GRDBTransactionRepository.setEncodedSystemFieldsBatchSync` for
-  /// the rationale and issue #865 for the follow-up that drops the
-  /// observation-region dependency on this column.
-  func setEncodedSystemFieldsBatchSync(
-    _ updates: [(id: UUID, data: Data?)]
-  ) throws -> Int {
-    guard !updates.isEmpty else { return 0 }
-    return try database.write { database in
-      var updatedCount = 0
-      for (id, data) in updates {
-        updatedCount +=
-          try AccountRow
-          .filter(AccountRow.Columns.id == id)
-          .updateAll(
-            database,
-            [AccountRow.Columns.encodedSystemFields.set(to: data)])
-      }
-      return updatedCount
-    }
-  }
-
-  /// Clears `encoded_system_fields` on every row. Used after an
-  /// `encryptedDataReset`.
-  func clearAllSystemFieldsSync() throws {
-    try database.write { database in
-      _ =
-        try AccountRow
-        .updateAll(
-          database,
-          [AccountRow.Columns.encodedSystemFields.set(to: nil)])
-    }
-  }
-
-  /// Returns IDs of rows whose `encoded_system_fields` is `NULL`.
-  func unsyncedRowIdsSync() throws -> [UUID] {
-    try database.read { database in
-      try AccountRow
-        .filter(AccountRow.Columns.encodedSystemFields == nil)
-        .select(AccountRow.Columns.id, as: UUID.self)
-        .fetchAll(database)
-    }
-  }
-
-  /// Returns IDs of every row in the table.
-  func allRowIdsSync() throws -> [UUID] {
-    try database.read { database in
-      try AccountRow
-        .select(AccountRow.Columns.id, as: UUID.self)
-        .fetchAll(database)
-    }
-  }
-
-  /// Looks up a single row by id. Used by the per-record upload path in
-  /// the sync handler.
-  func fetchRowSync(id: UUID) throws -> AccountRow? {
-    try database.read { database in
-      try AccountRow
-        .filter(AccountRow.Columns.id == id)
-        .fetchOne(database)
-    }
-  }
-
-  /// Batch lookup by ids — used by the batch-build phase of the sync
-  /// handler.
-  func fetchRowsSync(ids: [UUID]) throws -> [AccountRow] {
-    let idSet = Set(ids)
-    return try database.read { database in
-      try AccountRow
-        .filter(idSet.contains(AccountRow.Columns.id))
-        .fetchAll(database)
-    }
-  }
-
-  /// Deletes every row in the table. Used by `deleteLocalData` after a
-  /// remote zone deletion.
-  func deleteAllSync() throws {
-    try database.write { database in
-      _ = try AccountRow.deleteAll(database)
-    }
-  }
+  // The synchronous, GRDB-queue-blocking sync entry points
+  // (`applyRemoteChangesSync`, `setEncodedSystemFieldsSync` and
+  // siblings) live in `GRDBAccountRepository+Sync.swift` to keep this
+  // file under SwiftLint's `file_length` budget — mirrors
+  // `GRDBTransactionRepository+Sync.swift`.
 }

@@ -124,6 +124,7 @@ Tests and previews use `CloudKitBackend` backed by an in-memory `ModelContainer`
 - Any mutable property is explicitly `@MainActor`-isolated (e.g. `subscribers` on `GRDBInstrumentRegistryRepository`) and only touched from `MainActor`-isolated methods.
 - The shared `database: any DatabaseWriter` is itself `Sendable` per GRDB's protocol guarantee — the queue's serial executor mediates concurrent access.
 - All callback closures are typed `@Sendable` and captured at init.
+- `Sendable` protocol existentials stored as `let` (e.g. `any InstrumentMapResolving`, `any InstrumentRegistering`, `any InstrumentConversionService`) are a covered property shape alongside the `@Sendable` closures and `DatabaseWriter`.
 
 `@unchecked` waives only Swift's structural check that a `final class` automatically satisfies `Sendable`; it does not introduce shared mutable state. The justification must be repeated as a doc-comment on the class itself, referencing this carve-out by name. New GRDB repositories follow the same pattern; do **not** invent new carve-outs without updating this section.
 

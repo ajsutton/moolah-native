@@ -38,7 +38,8 @@ struct AcctRepoSharedInstrumentResolutionTests {
         cryptocompareSymbol: "ETH", binanceSymbol: "ETHUSDT"))
 
     let repo = GRDBAccountRepository(
-      database: perProfile, instrumentResolver: registry)
+      database: perProfile, instrumentResolver: registry,
+      instrumentRegistrar: registry)
 
     let account = Account(
       name: "Trust - Ethereum", type: .crypto, instrument: eth,
@@ -82,7 +83,8 @@ struct AcctRepoSharedInstrumentResolutionTests {
         cryptocompareSymbol: "ETH", binanceSymbol: "ETHUSDT"))
 
     let repo = GRDBAccountRepository(
-      database: perProfile, instrumentResolver: registry)
+      database: perProfile, instrumentResolver: registry,
+      instrumentRegistrar: registry)
 
     let account = Account(
       name: "Trust - Ethereum", type: .crypto, instrument: eth,

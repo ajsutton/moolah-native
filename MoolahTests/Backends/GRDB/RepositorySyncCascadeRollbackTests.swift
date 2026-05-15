@@ -23,7 +23,8 @@ struct RepositorySyncCascadeRollbackTests {
     let database = try ProfileDatabase.openInMemory()
     let accountRepo = GRDBAccountRepository(
       database: database,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
     let fixture = try await Self.seedAccountScenario(in: database)
 
     do {

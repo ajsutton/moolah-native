@@ -58,6 +58,7 @@ struct TransactionHookUpdateDeleteTests {
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
       instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database),
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
 
@@ -108,6 +109,7 @@ struct TransactionHookUpdateDeleteTests {
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
       instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database),
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
 
@@ -156,6 +158,7 @@ struct TransactionHookUpdateDeleteTests {
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
       instrumentResolver: PerProfileInstrumentMapResolver(database: database),
+      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database),
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
 

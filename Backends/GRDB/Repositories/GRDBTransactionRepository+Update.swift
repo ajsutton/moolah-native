@@ -9,11 +9,6 @@ extension GRDBTransactionRepository {
   struct UpdateOutcome: Sendable {
     let deletedLegIds: [UUID]
     let upsertedLegIds: [UUID]
-    /// Non-fiat instruments `ensureInstrumentReadable` auto-inserted
-    /// while upserting legs — the caller fans these out via
-    /// `onInstrumentChanged` after the write commits so each new
-    /// `InstrumentRow` is published to the shared registry.
-    let insertedInstruments: [Instrument]
   }
 
   private struct LegDiff: Sendable {
@@ -96,15 +91,7 @@ extension GRDBTransactionRepository {
     // debugger snapshot.
     var upsertedLegIds: [UUID] = []
     upsertedLegIds.reserveCapacity(transaction.legs.count)
-    var insertedInstruments: [Instrument] = []
-    var seenInstrumentIds: Set<String> = []
     for (index, leg) in transaction.legs.enumerated() {
-      if let inserted = try Self.ensureInstrumentReadable(
-        database: database, leg: leg),
-        seenInstrumentIds.insert(inserted.id).inserted
-      {
-        insertedInstruments.append(inserted)
-      }
       var legRow = TransactionLegRow(
         id: leg.id,
         domain: leg,
@@ -122,8 +109,7 @@ extension GRDBTransactionRepository {
 
     return UpdateOutcome(
       deletedLegIds: diff.deletedIds,
-      upsertedLegIds: upsertedLegIds,
-      insertedInstruments: insertedInstruments)
+      upsertedLegIds: upsertedLegIds)
   }
 
   /// Mirrors `CloudKitTransactionRepository.applyMetadata`. Copies the
