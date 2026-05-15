@@ -239,16 +239,23 @@ enum ProfileDataSyncHandlerTestSupport {
       importRules: GRDBImportRuleRepository(database: database),
       instruments: GRDBInstrumentRegistryRepository(database: database),
       categories: GRDBCategoryRepository(database: database),
-      accounts: GRDBAccountRepository(database: database),
+      accounts: GRDBAccountRepository(
+        database: database,
+        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
       earmarks: GRDBEarmarkRepository(
-        database: database, defaultInstrument: instrument),
+        database: database,
+        defaultInstrument: instrument,
+        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
       earmarkBudgetItems: GRDBEarmarkBudgetItemRepository(database: database),
       investmentValues: GRDBInvestmentRepository(
-        database: database, defaultInstrument: instrument),
+        database: database,
+        defaultInstrument: instrument,
+        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
       transactions: GRDBTransactionRepository(
         database: database,
         defaultInstrument: instrument,
-        conversionService: conversionService),
+        conversionService: conversionService,
+        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
       transactionLegs: GRDBTransactionLegRepository(database: database),
       database: database)
   }

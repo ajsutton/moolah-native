@@ -101,6 +101,7 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
       database: database,
       instrument: instrument,
       conversionService: conversionService,
+      instrumentResolver: instrumentRegistry,
       hooks: hooks)
 
     self.grdbAccounts = repos.accounts
@@ -149,47 +150,38 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
     database: any DatabaseWriter,
     instrument: Instrument,
     conversionService: any InstrumentConversionService,
+    instrumentResolver: any InstrumentMapResolving,
     hooks: CloudKitBackendHooks
   ) -> GRDBRepositoryBundle {
-    GRDBRepositoryBundle(
-      accounts: GRDBAccountRepository(
-        database: database,
-        onRecordChanged: hooks.onAccountChanged,
-        onRecordDeleted: hooks.onAccountDeleted,
-        onInstrumentChanged: hooks.onInstrumentChanged),
-      transactions: GRDBTransactionRepository(
-        database: database,
-        defaultInstrument: instrument,
-        conversionService: conversionService,
-        onRecordChanged: hooks.onTransactionChanged,
-        onRecordDeleted: hooks.onTransactionDeleted,
-        onInstrumentChanged: hooks.onInstrumentChanged),
+    // The instrument-resolving read repos (accounts, transactions,
+    // earmarks, investments, analysis) all take `instrumentResolver`;
+    // the remaining record-type repos don't, so the two groups are
+    // built by separate helpers to keep this function body under
+    // SwiftLint's `function_body_length` budget.
+    let resolving = makeResolvingRepositories(
+      database: database,
+      instrument: instrument,
+      conversionService: conversionService,
+      instrumentResolver: instrumentResolver,
+      hooks: hooks)
+    return GRDBRepositoryBundle(
+      accounts: resolving.accounts,
+      transactions: resolving.transactions,
       categories: GRDBCategoryRepository(
         database: database,
         onRecordChanged: hooks.onCategoryChanged,
         onRecordDeleted: hooks.onCategoryDeleted),
-      earmarks: GRDBEarmarkRepository(
-        database: database,
-        defaultInstrument: instrument,
-        onRecordChanged: hooks.onEarmarkChanged,
-        onRecordDeleted: hooks.onEarmarkDeleted),
+      earmarks: resolving.earmarks,
       earmarkBudgetItems: GRDBEarmarkBudgetItemRepository(
         database: database,
         onRecordChanged: hooks.onEarmarkBudgetItemChanged,
         onRecordDeleted: hooks.onEarmarkBudgetItemDeleted),
-      investments: GRDBInvestmentRepository(
-        database: database,
-        defaultInstrument: instrument,
-        onRecordChanged: hooks.onInvestmentChanged,
-        onRecordDeleted: hooks.onInvestmentDeleted),
+      investments: resolving.investments,
       transactionLegs: GRDBTransactionLegRepository(
         database: database,
         onRecordChanged: hooks.onTransactionLegChanged,
         onRecordDeleted: hooks.onTransactionLegDeleted),
-      analysis: GRDBAnalysisRepository(
-        database: database,
-        instrument: instrument,
-        conversionService: conversionService),
+      analysis: resolving.analysis,
       csvImportProfiles: GRDBCSVImportProfileRepository(
         database: database,
         onRecordChanged: hooks.onCSVImportProfileChanged,
@@ -198,5 +190,61 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
         database: database,
         onRecordChanged: hooks.onImportRuleChanged,
         onRecordDeleted: hooks.onImportRuleDeleted))
+  }
+
+  /// The five repositories that resolve instruments via the injected
+  /// `InstrumentMapResolving`. Split out of `makeRepositories` so
+  /// neither function body exceeds SwiftLint's
+  /// `function_body_length` budget after the resolver cutover. The
+  /// grouping is also semantic: resolver-dependent repositories belong
+  /// together so a future repository that needs the resolver is added
+  /// here, not back into the main `makeRepositories` body.
+  private struct ResolvingRepositories {
+    let accounts: GRDBAccountRepository
+    let transactions: GRDBTransactionRepository
+    let earmarks: GRDBEarmarkRepository
+    let investments: GRDBInvestmentRepository
+    let analysis: GRDBAnalysisRepository
+  }
+
+  private static func makeResolvingRepositories(
+    database: any DatabaseWriter,
+    instrument: Instrument,
+    conversionService: any InstrumentConversionService,
+    instrumentResolver: any InstrumentMapResolving,
+    hooks: CloudKitBackendHooks
+  ) -> ResolvingRepositories {
+    ResolvingRepositories(
+      accounts: GRDBAccountRepository(
+        database: database,
+        instrumentResolver: instrumentResolver,
+        onRecordChanged: hooks.onAccountChanged,
+        onRecordDeleted: hooks.onAccountDeleted,
+        onInstrumentChanged: hooks.onInstrumentChanged),
+      transactions: GRDBTransactionRepository(
+        database: database,
+        defaultInstrument: instrument,
+        conversionService: conversionService,
+        instrumentResolver: instrumentResolver,
+        onRecordChanged: hooks.onTransactionChanged,
+        onRecordDeleted: hooks.onTransactionDeleted,
+        onInstrumentChanged: hooks.onInstrumentChanged),
+      earmarks: GRDBEarmarkRepository(
+        database: database,
+        defaultInstrument: instrument,
+        instrumentResolver: instrumentResolver,
+        onRecordChanged: hooks.onEarmarkChanged,
+        onRecordDeleted: hooks.onEarmarkDeleted),
+      investments: GRDBInvestmentRepository(
+        database: database,
+        defaultInstrument: instrument,
+        instrumentResolver: instrumentResolver,
+        onRecordChanged: hooks.onInvestmentChanged,
+        onRecordDeleted: hooks.onInvestmentDeleted),
+      analysis: GRDBAnalysisRepository(
+        database: database,
+        instrument: instrument,
+        conversionService: conversionService,
+        instrumentResolver: instrumentResolver))
   }
 }

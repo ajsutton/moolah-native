@@ -72,7 +72,8 @@ struct GRDBCreateManyTests {
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .AUD,
-      conversionService: FixedConversionService())
+      conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
     let accountId = UUID()
     let stub = Account(id: accountId, name: "Cash", type: .bank, instrument: .AUD)
     try await database.write { database in
@@ -130,6 +131,7 @@ struct GRDBCreateManyTests {
       database: database,
       defaultInstrument: .AUD,
       conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture),
       onInstrumentChanged: makeInstrumentHook(capture))

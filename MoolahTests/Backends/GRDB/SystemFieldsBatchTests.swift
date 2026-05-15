@@ -70,7 +70,8 @@ struct SystemFieldsBatchTests {
     let repo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
-      conversionService: conversionService)
+      conversionService: conversionService,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
     return (repo, database)
   }
 

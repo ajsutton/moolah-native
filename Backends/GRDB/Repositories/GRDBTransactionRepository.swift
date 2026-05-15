@@ -19,10 +19,14 @@ import OSLog
 /// partially committed header cannot leave orphaned legs. Rollback
 /// test mandatory; see `guides/DATABASE_CODE_GUIDE.md`.
 ///
-/// **Instrument resolution.** Each leg's `instrument` is resolved by
-/// reading the `instrument` table inside the same read transaction
-/// (matching `GRDBAccountRepository.fetchInstrumentMap`). Stored rows
-/// win over ambient fiat synthesised from `Locale.Currency.isoCurrencies`.
+/// **Instrument resolution.** Each leg's `instrument` is resolved via
+/// the injected `instrumentResolver`. The instrument map is fetched
+/// once, *before* opening the per-profile read snapshot, because the
+/// canonical registry lives on a different (profile-index) database —
+/// a cross-database transaction is impossible. Instrument identity is
+/// immutable lookup data, so a read that is not atomic with the
+/// transaction-row snapshot is safe and intended. Stored rows win over
+/// ambient fiat synthesised from `Locale.Currency.isoCurrencies`.
 /// Mirrors `CloudKitTransactionRepository.resolveInstrument(id:)`.
 ///
 /// **Running balance.** The repository does not compute running balances —
@@ -37,7 +41,9 @@ import OSLog
 /// `let`. `database` (`any DatabaseWriter`) is itself `Sendable` (GRDB
 /// protocol guarantee — the queue's serial executor mediates concurrent
 /// access). `defaultInstrument` is a value type. `conversionService` is
-/// a `Sendable` protocol. `onRecordChanged` and `onRecordDeleted` are
+/// a `Sendable` protocol. `instrumentResolver` is a `Sendable`
+/// protocol (`InstrumentMapResolving`) and immutable post-init.
+/// `onRecordChanged` and `onRecordDeleted` are
 /// `@Sendable` closures captured at init. Nothing mutates post-init, so
 /// the reference can be shared across actor boundaries without a data
 /// race; `@unchecked` only waives Swift's structural check that
@@ -45,9 +51,10 @@ import OSLog
 /// See `guides/CONCURRENCY_GUIDE.md` §2 "False Positives to Avoid",
 /// Carve-out 3 (GRDB repositories).
 final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendable {
-  // `database`, `defaultInstrument`, `conversionService`, and
-  // `errorChannel` are deliberately not `private` so the sibling
-  // `+Observation.swift` extension can reach them. Treat them as
+  // `database`, `defaultInstrument`, `conversionService`,
+  // `instrumentResolver`, and `errorChannel` are deliberately not
+  // `private` so the sibling `+Observation.swift` /
+  // `+ExternalIdLookup.swift` extensions can reach them. Treat them as
   // private-by-convention from elsewhere in the module.
   let database: any DatabaseWriter
   /// Profile instrument used to label the running balance for global
@@ -55,6 +62,19 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   /// `CloudKitTransactionRepository.instrument`.
   let defaultInstrument: Instrument
   let conversionService: any InstrumentConversionService
+  /// Resolves the `[String: Instrument]` lookup table from the
+  /// canonical instrument registry. Fetched once per read operation
+  /// *before* the per-profile `database.read` snapshot opens — the
+  /// registry lives on a separate (profile-index) database, so a
+  /// cross-database transaction is impossible. Instrument identity is
+  /// immutable lookup data; a read that is not atomic with the
+  /// transaction-row snapshot is safe and intended. Production sessions
+  /// inject the shared `GRDBInstrumentRegistryRepository`;
+  /// preview / test / apply callers inject
+  /// `PerProfileInstrumentMapResolver` over the same per-profile DB so
+  /// their behaviour is unchanged until the per-profile `instrument`
+  /// table is dropped.
+  let instrumentResolver: any InstrumentMapResolving
   /// Single shared error channel for every observation subscription
   /// returned by this repo instance. The bridge in
   /// `Backends/GRDB/Observation/AsyncValueObservation+AsyncStream.swift`
@@ -91,6 +111,7 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     database: any DatabaseWriter,
     defaultInstrument: Instrument,
     conversionService: any InstrumentConversionService,
+    instrumentResolver: any InstrumentMapResolving,
     onRecordChanged: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
     onRecordDeleted: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
     onInstrumentChanged: @escaping @Sendable (Instrument) -> Void = { _ in }
@@ -98,6 +119,7 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     self.database = database
     self.defaultInstrument = defaultInstrument
     self.conversionService = conversionService
+    self.instrumentResolver = instrumentResolver
     self.onRecordChanged = onRecordChanged
     self.onRecordDeleted = onRecordDeleted
     self.onInstrumentChanged = onInstrumentChanged
@@ -106,13 +128,21 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   // MARK: - TransactionRepository conformance
 
   func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> TransactionPage {
+    // Resolve the instrument lookup table before opening the per-profile
+    // snapshot: the canonical registry is a separate database, so the
+    // map cannot be joined into this transaction. Instrument identity is
+    // immutable lookup data — a read not atomic with the row snapshot is
+    // safe and intended.
+    let instruments = try await instrumentResolver.instrumentMap()
     let snapshot = try await database.read { database -> FetchSnapshot in
       try Self.buildFetchSnapshot(
         database: database,
-        filter: filter,
-        page: page,
-        pageSize: pageSize,
-        defaultInstrument: self.defaultInstrument)
+        input: FetchSnapshotInput(
+          filter: filter,
+          page: page,
+          pageSize: pageSize,
+          defaultInstrument: self.defaultInstrument,
+          instruments: instruments))
     }
     let priorBalance = await resolvePriorBalance(snapshot: snapshot)
     return TransactionPage(
@@ -123,8 +153,10 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   }
 
   func fetchAll(filter: TransactionFilter) async throws -> [Transaction] {
-    try await database.read { database in
-      let instruments = try Self.fetchInstrumentMap(database: database)
+    // Hoisted ahead of the snapshot for the same cross-database reason
+    // as `fetch(filter:page:pageSize:)`.
+    let instruments = try await instrumentResolver.instrumentMap()
+    return try await database.read { database in
       let candidateRows = try Self.candidateTransactionRows(
         database: database, filter: filter)
       let filteredRows = try Self.applyLegFilters(
@@ -349,7 +381,7 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   //     `GRDBTransactionRepository+Update.swift`
   //   `FetchSnapshot`, `buildFetchSnapshot(...)`,
   //   `candidateTransactionRows(...)`, `applyLegFilters(...)`,
-  //   `fetchLegs(...)`, `fetchInstrumentMap(...)` →
+  //   `fetchLegs(...)` →
   //     `GRDBTransactionRepository+Fetch.swift`
   //   `ensureInstrumentReadable(database:leg:)` →
   //     `GRDBTransactionRepository+FKEnsure.swift`

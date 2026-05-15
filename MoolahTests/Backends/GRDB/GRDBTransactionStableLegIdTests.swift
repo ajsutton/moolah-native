@@ -153,7 +153,8 @@ struct GRDBTransactionStableLegIdTests {
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
-      conversionService: FixedConversionService())
+      conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
     let accountId = UUID()
     let txn = try await txnRepo.create(
       Transaction(
@@ -225,7 +226,8 @@ struct GRDBTransactionStableLegIdTests {
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
-      conversionService: FixedConversionService())
+      conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
     let accountId = UUID()
     let txn = try await txnRepo.create(
       Transaction(
@@ -256,7 +258,8 @@ struct GRDBTransactionStableLegIdTests {
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
-      conversionService: FixedConversionService())
+      conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
     let accountId = UUID()
     let txn = try await txnRepo.create(
       Transaction(

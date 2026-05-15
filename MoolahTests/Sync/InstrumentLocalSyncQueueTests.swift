@@ -74,6 +74,7 @@ struct InstrumentLocalSyncQueueTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onInstrumentChanged: makeInstrumentChangedHook(capture))
 
     let stock = makeStockInstrument(ticker: "IFRA")
@@ -95,6 +96,7 @@ struct InstrumentLocalSyncQueueTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onInstrumentChanged: makeInstrumentChangedHook(capture))
 
     let txn = Transaction(
@@ -121,6 +123,7 @@ struct InstrumentLocalSyncQueueTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onInstrumentChanged: makeInstrumentChangedHook(capture))
 
     let txn = Transaction(
@@ -141,6 +144,7 @@ struct InstrumentLocalSyncQueueTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onInstrumentChanged: makeInstrumentChangedHook(capture))
 
     let stock = makeStockInstrument(ticker: "VGS")
@@ -170,6 +174,7 @@ struct InstrumentLocalSyncQueueTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onInstrumentChanged: makeInstrumentChangedHook(capture))
 
     // Seed a fiat-only transaction first.
@@ -204,6 +209,7 @@ struct InstrumentLocalSyncQueueTests {
     let capture = Capture()
     let repo = GRDBAccountRepository(
       database: database,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onInstrumentChanged: makeInstrumentChangedHook(capture))
 
     let stock = makeStockInstrument(ticker: "VAP")
@@ -221,6 +227,7 @@ struct InstrumentLocalSyncQueueTests {
     let capture = Capture()
     let repo = GRDBAccountRepository(
       database: database,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onInstrumentChanged: makeInstrumentChangedHook(capture))
 
     let account = Account(name: "Cash", type: .bank, instrument: .defaultTestInstrument)
@@ -240,6 +247,7 @@ struct InstrumentLocalSyncQueueTests {
     let capture = Capture()
     let repo = GRDBAccountRepository(
       database: database,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onInstrumentChanged: makeInstrumentChangedHook(capture))
 
     let account = Account(name: "VGS Holdings", type: .investment, instrument: stock)

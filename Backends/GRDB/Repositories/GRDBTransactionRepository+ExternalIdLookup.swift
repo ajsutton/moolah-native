@@ -9,8 +9,11 @@ import GRDB
 /// resolves the lookup in O(log n).
 extension GRDBTransactionRepository {
   func legs(matchingExternalId externalId: String) async throws -> [TransactionLeg] {
-    try await database.read { database in
-      let instruments = try Self.fetchInstrumentMap(database: database)
+    // Resolve the instrument map before the per-profile snapshot — the
+    // canonical registry is a separate database. See
+    // `GRDBTransactionRepository.instrumentResolver`.
+    let instruments = try await instrumentResolver.instrumentMap()
+    return try await database.read { database in
       let rows =
         try TransactionLegRow
         .filter(TransactionLegRow.Columns.externalId == externalId)
@@ -39,6 +42,10 @@ extension GRDBTransactionRepository {
     -> [Transaction]
   {
     guard !externalIds.isEmpty else { return [] }
+    // Resolve the instrument map before the per-profile snapshot — the
+    // canonical registry is a separate database. See
+    // `GRDBTransactionRepository.instrumentResolver`.
+    let instruments = try await instrumentResolver.instrumentMap()
     return try await database.read { database in
       let matchingTxnIds =
         try TransactionLegRow
@@ -47,7 +54,6 @@ extension GRDBTransactionRepository {
         .distinct()
         .fetchAll(database)
       guard !matchingTxnIds.isEmpty else { return [] }
-      let instruments = try Self.fetchInstrumentMap(database: database)
       let txnIdSet = Set(matchingTxnIds)
       let txnRows =
         try TransactionRow

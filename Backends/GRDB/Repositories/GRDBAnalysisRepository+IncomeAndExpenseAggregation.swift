@@ -27,6 +27,7 @@ extension GRDBAnalysisRepository {
   /// writer commits between them.
   static func fetchIncomeAndExpenseAggregation(
     database: any DatabaseReader,
+    instruments: [String: Instrument],
     after: Date?
   ) async throws -> IncomeAndExpenseAggregation {
     try await database.read { database -> IncomeAndExpenseAggregation in
@@ -34,8 +35,7 @@ extension GRDBAnalysisRepository {
       let sqlRows = try Row.fetchAll(
         database, sql: incomeAndExpenseAggregationSQL, arguments: arguments)
       let rows = sqlRows.compactMap(Self.mapAggregationRow(_:))
-      let instrumentMap = try InstrumentRow.fetchInstrumentMap(database: database)
-      return IncomeAndExpenseAggregation(rows: rows, instrumentMap: instrumentMap)
+      return IncomeAndExpenseAggregation(rows: rows, instrumentMap: instruments)
     }
   }
 

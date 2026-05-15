@@ -24,6 +24,21 @@ import GRDB
 // transient I/O restarts the observation with backoff (1 s, 5 s, 30 s,
 // capped at 5 retries); budget exhaustion surfaces the most recent
 // error. See `guides/DATABASE_CODE_GUIDE.md` §2 convention 5.
+//
+// **Instrument-map snapshot.** The canonical instrument registry lives
+// on a separate (profile-index) database, so its lookup table cannot be
+// joined into the per-profile `ValueObservation` (the synchronous
+// `tracking(regions:fetch:)` closure cannot `await`).
+// `observeDailyBalances(accountId:)` resolves the map once via
+// `instrumentResolver` when the stream's worker task starts, captures it
+// into the tracking closure, and drops `InstrumentRow.observableRegion`
+// from the tracked regions (those rows are no longer in this DB). An
+// instrument-metadata edit therefore does not live-refresh an already-
+// open chart until the next refetch (re-subscribe). `observeValues` and
+// `observeAllValues` don't consult the instrument map, so they keep the
+// plain synchronous shape. The async-resolve-then-observe bridge is
+// `resolvedInstrumentMapStream` (see
+// `Backends/GRDB/Observation/InstrumentMapObservationBridge.swift`).
 extension GRDBInvestmentRepository {
 
   /// Streams `InvestmentValuePage` snapshots whenever `investment_value`
@@ -62,37 +77,49 @@ extension GRDBInvestmentRepository {
   }
 
   /// Streams `[AccountDailyBalance]` snapshots whenever the underlying
-  /// `transaction`, `transaction_leg`, or `instrument` tables change.
-  /// Mirrors the projection of `fetchDailyBalances(accountId:)`: one
-  /// entry per (calendar-day, instrument) tuple, sorted by date
-  /// ascending. Captures `accountId` into the tracking closure.
+  /// `transaction` or `transaction_leg` tables change. Mirrors the
+  /// projection of `fetchDailyBalances(accountId:)`: one entry per
+  /// (calendar-day, instrument) tuple, sorted by date ascending.
+  /// Captures `accountId` into the tracking closure. Instrument
+  /// identity is resolved once at subscription start via
+  /// `instrumentResolver` and captured into the stream; an
+  /// instrument-metadata change does not re-fire this observation until
+  /// the subscription is cancelled and restarted.
   func observeDailyBalances(
     accountId: UUID
   ) -> AsyncStream<[AccountDailyBalance]> {
     let defaultInstrument = self.defaultInstrument
-    return
+    return resolvedInstrumentMapStream(
+      resolver: instrumentResolver,
+      errorChannel: errorChannel,
+      database: database
+    ) { instruments, errorChannel, database in
       ValueObservation
-      // Explicit-region form so the sync-bookkeeping
-      // `encoded_system_fields` writes on the tables `DailyBalanceCompute`
-      // reads (transaction, transaction_leg, instrument) do not re-fire
-      // this observation. See issue #865.
-      .tracking(
-        regions: [
-          InstrumentRow.observableRegion,
-          TransactionRow.observableRegion,
-          TransactionLegRow.observableRegion,
-        ],
-        fetch: { [accountId, defaultInstrument] database in
-          try DailyBalanceCompute.compute(
-            database: database,
-            accountId: accountId,
-            defaultInstrument: defaultInstrument)
-        }
-      )
-      .toRetryingAsyncStream(
-        in: database,
-        errorChannel: errorChannel,
-        repoMethod: "GRDBInvestmentRepository.observeDailyBalances")
+        // Explicit-region form so the sync-bookkeeping
+        // `encoded_system_fields` writes on the tables
+        // `DailyBalanceCompute` reads (transaction, transaction_leg) do
+        // not re-fire this observation. See issue #865. `InstrumentRow`
+        // is no longer tracked here — those rows live on the separate
+        // profile-index database; the map is the captured `instruments`
+        // snapshot.
+        .tracking(
+          regions: [
+            TransactionRow.observableRegion,
+            TransactionLegRow.observableRegion,
+          ],
+          fetch: { [accountId, defaultInstrument] database in
+            try DailyBalanceCompute.compute(
+              database: database,
+              accountId: accountId,
+              instruments: instruments,
+              defaultInstrument: defaultInstrument)
+          }
+        )
+        .toRetryingAsyncStream(
+          in: database,
+          errorChannel: errorChannel,
+          repoMethod: "GRDBInvestmentRepository.observeDailyBalances")
+    }
   }
 
   /// Tick stream over all `investment_value` rows. Used by

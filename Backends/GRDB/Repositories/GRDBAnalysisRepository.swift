@@ -90,17 +90,32 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
   private let database: any DatabaseWriter
   private let instrument: Instrument
   private let conversionService: any InstrumentConversionService
+  /// Resolves the `[String: Instrument]` lookup table from the
+  /// canonical instrument registry. Fetched once per aggregation
+  /// *before* the per-profile `database.read` snapshot opens — the
+  /// registry lives on a separate (profile-index) database, so a
+  /// cross-database transaction is impossible. Instrument identity is
+  /// immutable lookup data; a read that is not atomic with the
+  /// aggregation snapshot is safe and intended. Production sessions
+  /// inject the shared `GRDBInstrumentRegistryRepository`;
+  /// preview / test / apply callers inject
+  /// `PerProfileInstrumentMapResolver` over the same per-profile DB so
+  /// their behaviour is unchanged until the per-profile `instrument`
+  /// table is dropped. Mirrors `GRDBTransactionRepository`.
+  private let instrumentResolver: any InstrumentMapResolving
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "GRDBAnalysisRepository")
 
   init(
     database: any DatabaseWriter,
     instrument: Instrument,
-    conversionService: any InstrumentConversionService
+    conversionService: any InstrumentConversionService,
+    instrumentResolver: any InstrumentMapResolving
   ) {
     self.database = database
     self.instrument = instrument
     self.conversionService = conversionService
+    self.instrumentResolver = instrumentResolver
   }
 
   // MARK: - AnalysisRepository conformance
@@ -125,8 +140,18 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
     after: Date?,
     forecastUntil: Date?
   ) async throws -> [DailyBalance] {
+    // Resolve the instrument lookup table before opening the
+    // per-profile snapshot: the canonical registry is a separate
+    // database, so the map cannot be joined into this transaction.
+    // Instrument identity is immutable lookup data — a read not atomic
+    // with the aggregation snapshot is safe and intended. Mirrors
+    // `GRDBTransactionRepository.fetchAll(filter:)`.
+    let instruments = try await instrumentResolver.instrumentMap()
     let aggregation = try await Self.fetchDailyBalancesAggregation(
-      database: database, after: after, forecastUntil: forecastUntil)
+      database: database,
+      instruments: instruments,
+      after: after,
+      forecastUntil: forecastUntil)
     let logger = self.logger
     let handlers = DailyBalancesHandlers(
       handleUnparseableDay: { day in
@@ -165,8 +190,11 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
     monthEnd: Int,
     after: Date?
   ) async throws -> [ExpenseBreakdown] {
+    // Hoisted ahead of the snapshot for the same cross-database reason
+    // as `fetchDailyBalances(after:forecastUntil:)`.
+    let instruments = try await instrumentResolver.instrumentMap()
     let aggregation = try await Self.fetchExpenseBreakdownAggregation(
-      database: database, after: after)
+      database: database, instruments: instruments, after: after)
     let logger = self.logger
     let handlers = ExpenseBreakdownHandlers(
       handleUnparseableDay: { day in
@@ -194,8 +222,11 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
     monthEnd: Int,
     after: Date?
   ) async throws -> [MonthlyIncomeExpense] {
+    // Hoisted ahead of the snapshot for the same cross-database reason
+    // as `fetchDailyBalances(after:forecastUntil:)`.
+    let instruments = try await instrumentResolver.instrumentMap()
     let aggregation = try await Self.fetchIncomeAndExpenseAggregation(
-      database: database, after: after)
+      database: database, instruments: instruments, after: after)
     let logger = self.logger
     let handlers = IncomeAndExpenseHandlers(
       handleUnparseableDay: { day in
@@ -231,8 +262,11 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
       earmarkId: filters?.earmarkId,
       payee: filters?.payee,
       categoryIds: filters?.categoryIds ?? [])
+    // Hoisted ahead of the snapshot for the same cross-database reason
+    // as `fetchDailyBalances(after:forecastUntil:)`.
+    let instruments = try await instrumentResolver.instrumentMap()
     let aggregation = try await Self.fetchCategoryBalancesAggregation(
-      database: database, args: args)
+      database: database, instruments: instruments, args: args)
     let logger = self.logger
     let handlers = CategoryBalancesHandlers(
       handleUnparseableDay: { day in

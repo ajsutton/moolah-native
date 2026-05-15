@@ -11,12 +11,6 @@ import GRDB
 // fallback). Mirrors the SwiftData-era
 // `CloudKitAccountRepository.computePositions(from:instruments:)`.
 extension GRDBAccountRepository {
-  /// Forwards to the shared `InstrumentRow.fetchInstrumentMap` so every
-  /// repository observes the same stored-then-ambient ordering.
-  static func fetchInstrumentMap(database: Database) throws -> [String: Instrument] {
-    try InstrumentRow.fetchInstrumentMap(database: database)
-  }
-
   /// Computes per-account, per-instrument position sums from the
   /// `transaction_leg` table, excluding scheduled (recurring) parents
   /// and account-less legs (e.g. category-only legs on transfers).

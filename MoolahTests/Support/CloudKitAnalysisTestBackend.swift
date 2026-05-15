@@ -79,8 +79,15 @@ extension CloudKitAnalysisTestBackend {
   func fetchAggregationForTesting(
     after: Date?, forecastUntil: Date?
   ) async throws -> GRDBAnalysisRepository.DailyBalancesAggregation {
-    try await GRDBAnalysisRepository.fetchDailyBalancesAggregation(
+    // Behaviour-preserving: resolve the instrument map from the same
+    // per-profile DB the aggregation previously read inline, so this
+    // shim's contract is unchanged after the resolver cutover.
+    let instruments = try await PerProfileInstrumentMapResolver(
+      database: self.database
+    ).instrumentMap()
+    return try await GRDBAnalysisRepository.fetchDailyBalancesAggregation(
       database: self.database,
+      instruments: instruments,
       after: after,
       forecastUntil: forecastUntil)
   }

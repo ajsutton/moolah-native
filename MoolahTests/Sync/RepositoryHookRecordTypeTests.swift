@@ -67,6 +67,7 @@ struct RepositoryHookRecordTypeTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
     // Leg-level hooks are emitted via the txn repo's bundled write path;
@@ -108,6 +109,7 @@ struct RepositoryHookRecordTypeTests {
     let capture = HookCapture()
     let repo = GRDBAccountRepository(
       database: database,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
 
@@ -138,6 +140,7 @@ struct RepositoryHookRecordTypeTests {
     let earmarkRepo = GRDBEarmarkRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
     let earmark = try await earmarkRepo.create(

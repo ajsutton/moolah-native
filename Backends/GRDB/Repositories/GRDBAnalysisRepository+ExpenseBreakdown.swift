@@ -21,9 +21,13 @@ extension GRDBAnalysisRepository {
     let qty: Int64
   }
 
-  /// Pair of SQL output rows and the instrument lookup, fetched in a
-  /// single MVCC snapshot so a concurrent writer can't drop a row's
-  /// `instrument_id` between the two reads.
+  /// Pair of SQL output rows and the instrument lookup. The lookup is
+  /// resolved via the injected `InstrumentMapResolving` *before* the
+  /// per-profile read snapshot opens (the canonical registry is a
+  /// separate database, so it can't be joined into this transaction);
+  /// the SQL rows come from the snapshot. Instrument identity is
+  /// immutable lookup data, so the non-atomic pairing is safe and
+  /// intended. Mirrors `GRDBTransactionRepository`'s hoisted-map shape.
   struct ExpenseBreakdownAggregation: Sendable {
     let rows: [ExpenseBreakdownRow]
     let instrumentMap: [String: Instrument]
@@ -71,6 +75,7 @@ extension GRDBAnalysisRepository {
   ///    `USING COVERING INDEX` to plain `USING INDEX`.
   static func fetchExpenseBreakdownAggregation(
     database: any DatabaseReader,
+    instruments: [String: Instrument],
     after: Date?
   ) async throws -> ExpenseBreakdownAggregation {
     try await database.read { database -> ExpenseBreakdownAggregation in
@@ -101,8 +106,7 @@ extension GRDBAnalysisRepository {
           ExpenseBreakdownRow(
             day: day, categoryId: categoryId, instrumentId: instrumentId, qty: qty))
       }
-      let instrumentMap = try InstrumentRow.fetchInstrumentMap(database: database)
-      return ExpenseBreakdownAggregation(rows: rows, instrumentMap: instrumentMap)
+      return ExpenseBreakdownAggregation(rows: rows, instrumentMap: instruments)
     }
   }
 

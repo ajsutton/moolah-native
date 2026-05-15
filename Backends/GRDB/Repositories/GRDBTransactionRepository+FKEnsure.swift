@@ -33,8 +33,8 @@ extension GRDBTransactionRepository {
   /// returned `Instrument` through `registerStock` /
   /// `registerCrypto` so the row reaches CloudKit. Without the
   /// shared-registry fan-out, sibling devices would receive the leg
-  /// but no `InstrumentRecord`, `fetchInstrumentMap` would fall back
-  /// to `Instrument.fiat(code: id)`, and stock conversions would
+  /// but no `InstrumentRecord`, instrument-map resolution would fall
+  /// back to `Instrument.fiat(code: id)`, and stock conversions would
   /// route through the fiat-only Frankfurter API and 404.
   static func ensureInstrumentReadable(
     database: Database,
