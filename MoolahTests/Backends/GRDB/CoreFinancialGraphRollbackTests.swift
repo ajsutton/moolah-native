@@ -94,7 +94,8 @@ struct CoreFinancialGraphRollbackTests {
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .AUD,
-      conversionService: FixedConversionService())
+      conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
     let accountId = UUID()
     let stub = Account(id: accountId, name: "Cash", type: .bank, instrument: .AUD)
     try await database.write { database in
@@ -147,7 +148,8 @@ struct CoreFinancialGraphRollbackTests {
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .AUD,
-      conversionService: FixedConversionService())
+      conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
     let accountId = UUID()
     try await seedAccountStub(in: database, accountId: accountId)
 

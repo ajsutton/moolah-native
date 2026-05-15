@@ -35,22 +35,39 @@ import GRDB
 //
 // **Cost note for measurement.** Both observation closures re-run the
 // full fetch / leg join / candidate filtering on every commit to any of
-// the tracked tables (`transaction`, `transaction_leg`, `instrument`,
-// `account` for the resolved-target lookup). A profile with many
-// transactions will pay the candidate-filter cost on every write. The
-// design's measure-first policy applies — measure under load before
+// the tracked tables (`transaction`, `transaction_leg`, `account` for
+// the resolved-target lookup). A profile with many transactions will
+// pay the candidate-filter cost on every write. The design's
+// measure-first policy applies — measure under load before
 // pre-optimising here.
+//
+// **Instrument-map snapshot.** The canonical instrument registry lives
+// on a separate (profile-index) database, so its lookup table cannot be
+// joined into the per-profile `ValueObservation` (the synchronous
+// `tracking(regions:fetch:)` closure cannot `await`). Each observation
+// instead resolves the map once via `instrumentResolver` when the
+// stream's worker task starts, captures it into the tracking closure,
+// and drops `InstrumentRow.observableRegion` from the tracked regions
+// (those rows are no longer in this DB). An instrument-metadata edit
+// therefore does not live-refresh an already-open list until the next
+// refetch (re-subscribe); cross-database instrument-metadata
+// live-refresh is wired via the shared registry's change stream in a
+// follow-up.
 extension GRDBTransactionRepository {
 
   /// Streams `TransactionPage` snapshots whenever `transaction`,
-  /// `transaction_leg`, `instrument`, or `account` changes. Initial
-  /// value is the current DB state. `removeDuplicates()` (applied
-  /// inside the retry helper) coalesces re-fetches that produce the
-  /// same page (e.g. a write to a row outside `[page * pageSize ..< end]`
-  /// that didn't change `totalCount`). The supplied `filter`, `page`,
-  /// and `pageSize` are captured into the tracking closure — changing
-  /// any of them requires cancelling the prior subscription and
-  /// starting a new one with the new values.
+  /// `transaction_leg`, or `account` changes. Initial value is the
+  /// current DB state. Instrument identity is resolved once at
+  /// subscription start via `instrumentResolver` and captured into the
+  /// stream; an instrument-metadata change does not re-fire this
+  /// observation until the subscription is cancelled and restarted.
+  /// `removeDuplicates()` (applied inside the retry helper) coalesces
+  /// re-fetches that produce the same page (e.g. a write to a row
+  /// outside `[page * pageSize ..< end]` that didn't change
+  /// `totalCount`). The supplied `filter`, `page`, and `pageSize` are
+  /// captured into the tracking closure — changing any of them requires
+  /// cancelling the prior subscription and starting a new one with the
+  /// new values.
   ///
   /// `priorBalance` is set to `nil` in the emitted page: the
   /// conversion-service hop is async and runs on the consumer's actor,
@@ -64,81 +81,150 @@ extension GRDBTransactionRepository {
     filter: TransactionFilter, page: Int, pageSize: Int
   ) -> AsyncStream<TransactionPage> {
     let defaultInstrument = self.defaultInstrument
-    return
+    return withResolvedInstrumentMap(
+      repoMethod: "GRDBTransactionRepository.observe"
+    ) { instruments, errorChannel, database in
       ValueObservation
-      // Explicit-region form: every joined table's `observableRegion`
-      // excludes the sync-bookkeeping `encoded_system_fields` blob, so
-      // CKSyncEngine's per-batch system-fields write does not re-fire
-      // this observation. See issue #865.
-      .tracking(
-        regions: [
-          TransactionRow.observableRegion,
-          TransactionLegRow.observableRegion,
-          InstrumentRow.observableRegion,
-          AccountRow.observableRegion,
-        ],
-        fetch: { [filter, page, pageSize] database in
-          let snapshot = try Self.buildFetchSnapshot(
-            database: database,
-            filter: filter,
-            page: page,
-            pageSize: pageSize,
-            defaultInstrument: defaultInstrument)
-          return TransactionPage(
-            transactions: snapshot.pageTransactions,
-            targetInstrument: snapshot.resolvedTarget,
-            priorBalance: nil,
-            totalCount: snapshot.totalCount)
-        }
-      )
-      .toRetryingAsyncStream(
-        in: database,
-        errorChannel: errorChannel,
-        repoMethod: "GRDBTransactionRepository.observe")
+        // Explicit-region form: every joined table's `observableRegion`
+        // excludes the sync-bookkeeping `encoded_system_fields` blob, so
+        // CKSyncEngine's per-batch system-fields write does not re-fire
+        // this observation. See issue #865. `InstrumentRow` is no longer
+        // tracked here — those rows live on the separate profile-index
+        // database; the map is the captured `instruments` snapshot.
+        .tracking(
+          regions: [
+            TransactionRow.observableRegion,
+            TransactionLegRow.observableRegion,
+            AccountRow.observableRegion,
+          ],
+          fetch: { [filter, page, pageSize] database in
+            let snapshot = try Self.buildFetchSnapshot(
+              database: database,
+              input: FetchSnapshotInput(
+                filter: filter,
+                page: page,
+                pageSize: pageSize,
+                defaultInstrument: defaultInstrument,
+                instruments: instruments))
+            return TransactionPage(
+              transactions: snapshot.pageTransactions,
+              targetInstrument: snapshot.resolvedTarget,
+              priorBalance: nil,
+              totalCount: snapshot.totalCount)
+          }
+        )
+        .toRetryingAsyncStream(
+          in: database,
+          errorChannel: errorChannel,
+          repoMethod: "GRDBTransactionRepository.observe")
+    }
   }
 
-  /// Streams `[Transaction]` snapshots whenever `transaction`,
-  /// `transaction_leg`, or `instrument` changes. Mirrors the projection
-  /// of `fetchAll(filter:)`: every matching transaction with its full
-  /// leg payload, ordered the same way (`date DESC, id ASC`). Captures
-  /// `filter` into the tracking closure — changing it requires
-  /// cancelling the prior subscription.
+  /// Streams `[Transaction]` snapshots whenever `transaction` or
+  /// `transaction_leg` changes. Mirrors the projection of
+  /// `fetchAll(filter:)`: every matching transaction with its full leg
+  /// payload, ordered the same way (`date DESC, id ASC`). Instrument
+  /// identity is resolved once at subscription start via
+  /// `instrumentResolver` and captured into the stream; an
+  /// instrument-metadata change does not re-fire this observation until
+  /// the subscription is cancelled and restarted. Captures `filter`
+  /// into the tracking closure — changing it requires cancelling the
+  /// prior subscription.
   func observeAll(filter: TransactionFilter) -> AsyncStream<[Transaction]> {
-    ValueObservation
-      // Explicit-region form: every joined table's `observableRegion`
-      // excludes the sync-bookkeeping `encoded_system_fields` blob, so
-      // CKSyncEngine's per-batch system-fields write does not re-fire
-      // this observation. See issue #865.
-      .tracking(
-        regions: [
-          TransactionRow.observableRegion,
-          TransactionLegRow.observableRegion,
-          InstrumentRow.observableRegion,
-        ],
-        fetch: { [filter] database in
-          let instruments = try Self.fetchInstrumentMap(database: database)
-          let candidateRows = try Self.candidateTransactionRows(
-            database: database, filter: filter)
-          let filteredRows = try Self.applyLegFilters(
-            rows: candidateRows, filter: filter, database: database)
-          let legsByTxnId = try Self.fetchLegs(
-            database: database,
-            transactionIds: filteredRows.map(\.id),
-            instruments: instruments)
-          return try filteredRows.map { row in
-            try row.toDomain(legs: legsByTxnId[row.id] ?? [])
+    withResolvedInstrumentMap(
+      repoMethod: "GRDBTransactionRepository.observeAll"
+    ) { instruments, errorChannel, database in
+      ValueObservation
+        // Explicit-region form: every joined table's `observableRegion`
+        // excludes the sync-bookkeeping `encoded_system_fields` blob, so
+        // CKSyncEngine's per-batch system-fields write does not re-fire
+        // this observation. See issue #865. `InstrumentRow` is no longer
+        // tracked here — those rows live on the separate profile-index
+        // database; the map is the captured `instruments` snapshot.
+        .tracking(
+          regions: [
+            TransactionRow.observableRegion,
+            TransactionLegRow.observableRegion,
+          ],
+          fetch: { [filter] database in
+            let candidateRows = try Self.candidateTransactionRows(
+              database: database, filter: filter)
+            let filteredRows = try Self.applyLegFilters(
+              rows: candidateRows, filter: filter, database: database)
+            let legsByTxnId = try Self.fetchLegs(
+              database: database,
+              transactionIds: filteredRows.map(\.id),
+              instruments: instruments)
+            return try filteredRows.map { row in
+              try row.toDomain(legs: legsByTxnId[row.id] ?? [])
+            }
           }
-        }
-      )
-      .toRetryingAsyncStream(
-        in: database,
-        errorChannel: errorChannel,
-        repoMethod: "GRDBTransactionRepository.observeAll")
+        )
+        .toRetryingAsyncStream(
+          in: database,
+          errorChannel: errorChannel,
+          repoMethod: "GRDBTransactionRepository.observeAll")
+    }
   }
 
   /// Companion error stream — see protocol doc on `observeErrors()` and
   /// the channel's docstring for the surface-then-finish contract.
   func observeErrors() -> AsyncStream<any Error> {
     errorChannel.stream
+  }
+
+  /// Bridges the async instrument-map resolution into the synchronous
+  /// `ValueObservation` pipeline. The canonical registry is on a
+  /// separate database and the `tracking(regions:fetch:)` closure is
+  /// synchronous, so the map must be resolved *before* the observation
+  /// is constructed. The returned outer `AsyncStream`'s worker task is
+  /// the async setup point: it `await`s `instrumentResolver`, then
+  /// `build`s the inner retrying stream with the resolved map captured,
+  /// and forwards every emission. A resolver failure surfaces via the
+  /// shared `errorChannel` (matching the observation error contract)
+  /// and ends the stream. Re-resolution on a metadata change requires a
+  /// re-subscribe; cross-database instrument-metadata live-refresh via
+  /// the shared registry's change stream is a follow-up.
+  private func withResolvedInstrumentMap<Value: Sendable>(
+    repoMethod: String,
+    build:
+      @escaping @Sendable (
+        _ instruments: [String: Instrument],
+        _ errorChannel: ObservationErrorChannel,
+        _ database: any DatabaseWriter
+      ) -> AsyncStream<Value>
+  ) -> AsyncStream<Value> {
+    let resolver = instrumentResolver
+    let errorChannel = errorChannel
+    let database = database
+    return AsyncStream { continuation in
+      let task = Task {
+        let instruments: [String: Instrument]
+        do {
+          instruments = try await resolver.instrumentMap()
+        } catch {
+          // Only surface to the shared (single-shot) errorChannel if the
+          // consumer is still alive — a cancelled subscription's transient
+          // resolver error must not permanently finish the channel for a
+          // later re-subscriber.
+          if !Task.isCancelled {
+            await errorChannel.surfaceAndFinish(error)
+          }
+          continuation.finish()
+          return
+        }
+        guard !Task.isCancelled else {
+          continuation.finish()
+          return
+        }
+        let inner = build(instruments, errorChannel, database)
+        for await value in inner {
+          if Task.isCancelled { break }
+          continuation.yield(value)
+        }
+        continuation.finish()
+      }
+      continuation.onTermination = { _ in task.cancel() }
+    }
   }
 }

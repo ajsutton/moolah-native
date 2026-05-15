@@ -32,14 +32,26 @@ extension GRDBTransactionRepository {
     let amount: InstrumentAmount
   }
 
+  /// Query-side inputs for `buildFetchSnapshot`. Bundled (rather than
+  /// passed as positional parameters) so the builder stays at
+  /// SwiftLint's `function_parameter_count` ceiling now that the
+  /// instrument map is resolved by the caller and threaded in.
+  /// `database` stays a separate argument — it is the live GRDB
+  /// connection for the read transaction, not a query parameter.
+  struct FetchSnapshotInput: Sendable {
+    let filter: TransactionFilter
+    let page: Int
+    let pageSize: Int
+    let defaultInstrument: Instrument
+    let instruments: [String: Instrument]
+  }
+
   static func buildFetchSnapshot(
     database: Database,
-    filter: TransactionFilter,
-    page: Int,
-    pageSize: Int,
-    defaultInstrument: Instrument
+    input: FetchSnapshotInput
   ) throws -> FetchSnapshot {
-    let instruments = try fetchInstrumentMap(database: database)
+    let filter = input.filter
+    let instruments = input.instruments
     let candidateRows = try candidateTransactionRows(
       database: database, filter: filter)
     let filteredRows = try applyLegFilters(
@@ -49,10 +61,10 @@ extension GRDBTransactionRepository {
       database: database,
       filter: filter,
       instruments: instruments,
-      defaultInstrument: defaultInstrument)
+      defaultInstrument: input.defaultInstrument)
 
     let totalCount = filteredRows.count
-    let offset = page * pageSize
+    let offset = input.page * input.pageSize
     guard offset < totalCount else {
       return FetchSnapshot(
         pageTransactions: [],
@@ -62,7 +74,7 @@ extension GRDBTransactionRepository {
         isPastEnd: true,
         afterPageSubtotals: [])
     }
-    let end = min(offset + pageSize, totalCount)
+    let end = min(offset + input.pageSize, totalCount)
     let pageRows = Array(filteredRows[offset..<end])
     let pageLegs = try fetchLegs(
       database: database,
@@ -268,13 +280,5 @@ extension GRDBTransactionRepository {
     return
       instruments[accountRow.instrumentId]
       ?? Instrument.fiat(code: accountRow.instrumentId)
-  }
-
-  /// Forwards to the shared `InstrumentRow.fetchInstrumentMap` so every
-  /// repository observes the same stored-then-ambient ordering.
-  static func fetchInstrumentMap(
-    database: Database
-  ) throws -> [String: Instrument] {
-    try InstrumentRow.fetchInstrumentMap(database: database)
   }
 }

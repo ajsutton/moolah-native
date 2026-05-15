@@ -65,7 +65,8 @@ struct RepositorySyncCascadeTests {
     let txRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .AUD,
-      conversionService: FixedConversionService())
+      conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
     let txId = UUID()
     let leg1Id = UUID()
     let leg2Id = UUID()
@@ -105,7 +106,8 @@ struct RepositorySyncCascadeTests {
     let txRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .AUD,
-      conversionService: FixedConversionService())
+      conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
     let txId = UUID()
     let legId = UUID()
 
@@ -243,7 +245,8 @@ struct RepositorySyncCascadeTests {
     let txRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .AUD,
-      conversionService: FixedConversionService())
+      conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
 
     let orphanAccountId = UUID()
     let orphanCategoryId = UUID()

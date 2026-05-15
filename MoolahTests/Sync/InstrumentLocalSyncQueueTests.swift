@@ -74,6 +74,7 @@ struct InstrumentLocalSyncQueueTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onInstrumentChanged: makeInstrumentChangedHook(capture))
 
     let stock = makeStockInstrument(ticker: "IFRA")
@@ -95,6 +96,7 @@ struct InstrumentLocalSyncQueueTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onInstrumentChanged: makeInstrumentChangedHook(capture))
 
     let txn = Transaction(
@@ -121,6 +123,7 @@ struct InstrumentLocalSyncQueueTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onInstrumentChanged: makeInstrumentChangedHook(capture))
 
     let txn = Transaction(
@@ -141,6 +144,7 @@ struct InstrumentLocalSyncQueueTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onInstrumentChanged: makeInstrumentChangedHook(capture))
 
     let stock = makeStockInstrument(ticker: "VGS")
@@ -170,6 +174,7 @@ struct InstrumentLocalSyncQueueTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onInstrumentChanged: makeInstrumentChangedHook(capture))
 
     // Seed a fiat-only transaction first.

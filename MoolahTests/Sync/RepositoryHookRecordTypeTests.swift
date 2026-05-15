@@ -67,6 +67,7 @@ struct RepositoryHookRecordTypeTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
     // Leg-level hooks are emitted via the txn repo's bundled write path;

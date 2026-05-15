@@ -101,6 +101,7 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
       database: database,
       instrument: instrument,
       conversionService: conversionService,
+      instrumentResolver: instrumentRegistry,
       hooks: hooks)
 
     self.grdbAccounts = repos.accounts
@@ -149,6 +150,7 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
     database: any DatabaseWriter,
     instrument: Instrument,
     conversionService: any InstrumentConversionService,
+    instrumentResolver: any InstrumentMapResolving,
     hooks: CloudKitBackendHooks
   ) -> GRDBRepositoryBundle {
     GRDBRepositoryBundle(
@@ -161,6 +163,7 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
         database: database,
         defaultInstrument: instrument,
         conversionService: conversionService,
+        instrumentResolver: instrumentResolver,
         onRecordChanged: hooks.onTransactionChanged,
         onRecordDeleted: hooks.onTransactionDeleted,
         onInstrumentChanged: hooks.onInstrumentChanged),

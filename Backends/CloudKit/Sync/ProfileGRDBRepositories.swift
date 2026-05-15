@@ -67,7 +67,8 @@ extension ProfileGRDBRepositories {
       transactions: GRDBTransactionRepository(
         database: database,
         defaultInstrument: placeholderInstrument,
-        conversionService: ApplyPathConversionService()),
+        conversionService: ApplyPathConversionService(),
+        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
       transactionLegs: GRDBTransactionLegRepository(database: database),
       database: database)
   }
