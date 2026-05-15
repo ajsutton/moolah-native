@@ -14,6 +14,15 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
   let importRules: any ImportRuleRepository
   let instrumentRegistry: any InstrumentRegistryRepository
   let walletSyncState: any WalletSyncStateRepository
+
+  /// `BackendProvider` change-notification seam: the shared
+  /// `GRDBInstrumentRegistryRepository` exposed as the narrow
+  /// `InstrumentChangeObserving` surface. `InstrumentRegistryRepository`
+  /// already refines `InstrumentChangeObserving`, so this is the same
+  /// instance up-cast — no extra wiring.
+  var instrumentChangeObserver: (any InstrumentChangeObserving)? {
+    instrumentRegistry
+  }
   /// Concrete GRDB-backed repositories. Exposed alongside the
   /// protocol-typed properties so `ProfileSession` can register the
   /// concrete instances with `SyncCoordinator` (which needs the concrete

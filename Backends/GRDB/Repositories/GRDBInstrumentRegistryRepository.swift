@@ -261,7 +261,13 @@ final class GRDBInstrumentRegistryRepository:
   @MainActor
   func observeChanges() -> AsyncStream<Void> {
     let key = UUID()
-    return AsyncStream { [weak self] continuation in
+    // `.bufferingNewest(1)`: the payload is a signal, not a diff —
+    // consumers re-fetch + recompute after a tick. A burst of local
+    // instrument writes (bulk seed / CSV import registering N
+    // instruments) therefore collapses to ≤1 pending wake-up instead of
+    // N redundant `fetchAll` + recompute round-trips on the consuming
+    // store.
+    return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { [weak self] continuation in
       guard let self else {
         continuation.finish()
         return

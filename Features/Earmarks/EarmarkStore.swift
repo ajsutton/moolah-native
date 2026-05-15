@@ -42,6 +42,22 @@ final class EarmarkStore {
   /// `ProfileSession.cleanupSync`) or by `deinit` as a safety net.
   private var observationTask: Task<Void, Never>?
 
+  /// Narrow seam onto the shared instrument registry's change stream.
+  /// The earmarks observation no longer tracks the `instrument` table
+  /// (identity resolved once per fetch via the shared registry), so a
+  /// metadata edit there does not re-fire `observeAll()`. When wired,
+  /// `instrumentChangeObservationTask` re-fetches earmarks and
+  /// re-applies on each registry tick so an open earmark list
+  /// live-refreshes across the DB boundary. Nil in previews / legacy
+  /// tests.
+  private let instrumentChanges: (any InstrumentChangeObserving)?
+
+  /// Observes `instrumentChanges.observeChanges()` and refreshes the
+  /// earmarks list on each tick. Spawned from `init` only when a
+  /// registry seam is wired; torn down by `stopObserving()` / `deinit`
+  /// alongside `observationTask`.
+  private var instrumentChangeObservationTask: Task<Void, Never>?
+
   /// Background retry loop spawned by `recomputeConvertedTotals()` when
   /// a conversion pass reports any failure. Cancelled when a subsequent
   /// pass succeeds; otherwise continues until success or the store is
@@ -62,12 +78,14 @@ final class EarmarkStore {
     repository: EarmarkRepository,
     conversionService: any InstrumentConversionService,
     targetInstrument: Instrument,
-    retryDelay: Duration = .seconds(30)
+    retryDelay: Duration = .seconds(30),
+    instrumentChanges: (any InstrumentChangeObserving)? = nil
   ) {
     self.repository = repository
     self.conversionService = conversionService
     self.targetInstrument = targetInstrument
     self.retryDelay = retryDelay
+    self.instrumentChanges = instrumentChanges
     let pair = AsyncStream<Void>.makeStream()
     self.testObservationTickStream = pair.stream
     self.testObservationTickContinuation = pair.continuation
@@ -79,6 +97,12 @@ final class EarmarkStore {
     // preventing the retain — and `guard let self else { return }` would
     // mask cancellation-propagation bugs by silently exiting.
     observationTask = Task { await self.observe() }
+    if let instrumentChanges {
+      let changes = instrumentChanges.observeChanges()
+      instrumentChangeObservationTask = Task { [self] in
+        await self.observeInstrumentRegistryChanges(changes)
+      }
+    }
   }
 
   deinit {
@@ -93,47 +117,10 @@ final class EarmarkStore {
     // code (`ProfileSession`), so the assumption holds in practice.
     MainActor.assumeIsolated {
       observationTask?.cancel()
+      instrumentChangeObservationTask?.cancel()
       conversionTask?.cancel()
       showHiddenTask?.cancel()
       testObservationTickContinuation.finish()
-    }
-  }
-
-  /// Subscribes to the four reactive streams in parallel via a
-  /// `TaskGroup`. The child tasks run nonisolated; each per-emission
-  /// body awaits a `@MainActor`-isolated method on `self` so state
-  /// assignments happen on the main actor. Capturing the streams
-  /// locally (instead of `self.repository.observeAll()` inside the
-  /// `addTask` closure) lets the region-based isolation checker reason
-  /// about Sendable-ness.
-  private func observe() async {
-    let earmarksStream = repository.observeAll()
-    let earmarkErrors = repository.observeErrors()
-    let rateStream = conversionService.observeRates()
-    let rateErrors = conversionService.observeErrors()
-    await withTaskGroup(of: Void.self) { group in
-      group.addTask { [self] in
-        for await fresh in earmarksStream {
-          await self.apply(earmarks: fresh)
-        }
-      }
-      group.addTask { [self] in
-        for await error in earmarkErrors {
-          await self.surface(error: error)
-        }
-      }
-      group.addTask { [self] in
-        for await _ in rateStream {
-          await self.recomputeConvertedTotals()
-        }
-      }
-      group.addTask { [self] in
-        for await error in rateErrors {
-          await self.surface(error: error)
-        }
-      }
-      // Cancellation of `observationTask` cancels the group; the
-      // `for await` loops exit; the group returns naturally.
     }
   }
 
@@ -141,8 +128,10 @@ final class EarmarkStore {
   /// the Layer 7 signpost interval so benchmarks and Instruments traces
   /// can attribute `mainThreadMs` to this method. The nested
   /// `recomputeConvertedTotals` call has its own signpost; the outer
-  /// interval includes both bodies.
-  private func apply(earmarks fresh: [Earmark]) async {
+  /// interval includes both bodies. internal (default) so the sibling
+  /// `+Observation` extension file can drive it from the reactive
+  /// streams.
+  func apply(earmarks fresh: [Earmark]) async {
     await withReactiveStoreSignpost("earmark-store-apply") {
       self.earmarks = Earmarks(from: fresh)
       await recomputeConvertedTotals()
@@ -150,7 +139,10 @@ final class EarmarkStore {
     }
   }
 
-  private func surface(error: any Error) {
+  /// Surfaces an observation error onto `self.error`. internal (default)
+  /// so the sibling `+Observation` extension file can call it from the
+  /// per-stream error tasks.
+  func surface(error: any Error) {
     logger.error("EarmarkStore observation error: \(error.localizedDescription)")
     self.error = error
   }
@@ -169,6 +161,7 @@ final class EarmarkStore {
   /// determinism — no backend writes happen after teardown.
   func stopObserving() {
     observationTask?.cancel()
+    instrumentChangeObservationTask?.cancel()
     conversionTask?.cancel()
     showHiddenTask?.cancel()
   }
@@ -179,6 +172,8 @@ final class EarmarkStore {
   func awaitObservationTermination() async {
     await observationTask?.value
     observationTask = nil
+    await instrumentChangeObservationTask?.value
+    instrumentChangeObservationTask = nil
     await conversionTask?.value
     conversionTask = nil
     await showHiddenTask?.value
@@ -259,7 +254,7 @@ final class EarmarkStore {
   /// other earmarks' balances populated. The aggregate
   /// `convertedTotalBalance` is only published when *all* contributing
   /// earmarks succeed (an inaccurate total is worse than no total).
-  private func recomputeConvertedTotals() async {
+  func recomputeConvertedTotals() async {
     let anyFailed = await withReactiveStoreSignpost("earmark-store-recompute") {
       let failed = await runConversionAttempt()
       testObservationTickContinuation.yield(())

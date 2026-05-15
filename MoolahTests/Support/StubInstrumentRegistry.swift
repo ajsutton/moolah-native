@@ -109,6 +109,10 @@ extension StubInstrumentRegistry {
     }
   }
 
+  /// Immediately-finishing stream = "never notifies". The consuming
+  /// observation task ends naturally on the finish instead of hanging
+  /// until `stopObserving()` cancels it (a never-finishing `{ _ in }`
+  /// stream would leave the task parked indefinitely — a test footgun).
   @MainActor
-  func observeChanges() -> AsyncStream<Void> { AsyncStream { _ in } }
+  func observeChanges() -> AsyncStream<Void> { AsyncStream { $0.finish() } }
 }
