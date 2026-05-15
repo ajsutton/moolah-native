@@ -12,15 +12,35 @@ extension InstrumentRow {
   /// ordering, mirroring `CloudKitInstrumentRegistryRepository.all()`.
   static func fetchInstrumentMap(database: Database) throws -> [String: Instrument] {
     let rows = try InstrumentRow.fetchAll(database)
-    var map: [String: Instrument] = [:]
+    // Start from the ambient ISO-fiat snapshot, then overlay stored rows
+    // so a stored row always wins over its ambient synthesis — identical
+    // outcome and ordering to the previous stored-then-fill loop, because
+    // a stored id either replaces its ambient entry or adds a new one.
+    var map = Self.ambientFiat
     for row in rows {
       map[row.id] = try row.toDomain()
     }
-    for code in Locale.Currency.isoCurrencies.map(\.identifier) where map[code] == nil {
+    return map
+  }
+
+  /// ISO-4217 fiat instruments synthesised once at first use.
+  ///
+  /// `fetchInstrumentMap` previously rebuilt this on every call —
+  /// ~150 `Instrument.fiat(code:)` constructions (each spinning up a
+  /// `NumberFormatter` to derive the currency's decimal places) over
+  /// `Locale.Currency.isoCurrencies`. On the cold-launch resolution
+  /// burst that dominated the call. The inputs are process-stable:
+  /// `Locale.Currency.isoCurrencies` is a fixed ISO table for the
+  /// process lifetime, and `Instrument.fiat(code:)` derives decimals
+  /// from the currency *code* (not the user's locale), so the synthesis
+  /// is deterministic and safe to compute once into a `static let`.
+  private static let ambientFiat: [String: Instrument] = {
+    var map: [String: Instrument] = [:]
+    for code in Locale.Currency.isoCurrencies.map(\.identifier) {
       map[code] = Instrument.fiat(code: code)
     }
     return map
-  }
+  }()
 
   /// The CloudKit recordType on the wire for this record. Frozen contract;
   /// existing iCloud zones reference this exact string regardless of how

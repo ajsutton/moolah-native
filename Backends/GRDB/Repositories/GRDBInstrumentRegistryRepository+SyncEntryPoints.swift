@@ -19,12 +19,18 @@ extension GRDBInstrumentRegistryRepository {
   /// Returns `true` when a row was found and updated.
   @discardableResult
   func setEncodedSystemFieldsSync(id: String, data: Data?) throws -> Bool {
-    try database.write { database in
+    let updated = try database.write { database in
       try InstrumentRow
         .filter(InstrumentRow.Columns.id == id)
         .updateAll(database, [InstrumentRow.Columns.encodedSystemFields.set(to: data)])
         > 0
     }
+    // System-fields-only writes don't change the domain `Instrument`,
+    // but a blanket invalidate-on-any-write keeps the staleness
+    // invariant simple and provably correct — the cost is one extra
+    // rebuild, never stale data.
+    invalidateInstrumentMapCache()
+    return updated
   }
 
   /// Clears `encoded_system_fields` on every row. Used after an
@@ -37,6 +43,7 @@ extension GRDBInstrumentRegistryRepository {
           database,
           [InstrumentRow.Columns.encodedSystemFields.set(to: nil)])
     }
+    invalidateInstrumentMapCache()
   }
 
   /// Returns IDs of rows whose `encoded_system_fields` is `NULL`.
@@ -85,5 +92,6 @@ extension GRDBInstrumentRegistryRepository {
     try database.write { database in
       _ = try InstrumentRow.deleteAll(database)
     }
+    invalidateInstrumentMapCache()
   }
 }
