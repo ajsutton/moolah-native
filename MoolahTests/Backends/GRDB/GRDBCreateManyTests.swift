@@ -112,8 +112,8 @@ struct GRDBCreateManyTests {
       database: database,
       defaultInstrument: .AUD,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
+      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
     let accountId = UUID()
     let stub = Account(id: accountId, name: "Cash", type: .bank, instrument: .AUD)
     try await database.write { database in
@@ -167,12 +167,15 @@ struct GRDBCreateManyTests {
   func createManyHookFanOut() async throws {
     let database = try ProfileDatabase.openInMemory()
     let capture = HookCapture()
+    // One registry instance as BOTH seams so a registration is
+    // resolvable afterwards — mirrors production wiring.
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     let txnRepo = GRDBTransactionRepository(
       database: database,
       defaultInstrument: .AUD,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database),
+      instrumentResolver: registry,
+      instrumentRegistrar: registry,
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture),
       onInstrumentChanged: makeInstrumentHook(capture))
@@ -188,7 +191,8 @@ struct GRDBCreateManyTests {
     //   - 4 TransactionLegRow change emits (1 + 1 + 2)
     //   - BTC registered exactly once across the whole batch (the
     //     per-batch dedup in `registerNonFiatLegInstruments`), so the
-    //     per-profile registrar wrote a single `instrument` row for it.
+    //     shared registry holds a single resolvable BTC instrument and
+    //     the per-profile `instrument` table is never written.
     let btc = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8)
     let inputs = makeFanOutInputs(accountId: accountId, btc: btc)
@@ -207,11 +211,16 @@ struct GRDBCreateManyTests {
     // create path — registration now goes through the injected
     // registrar before the write.
     #expect(capture.instruments.isEmpty)
-    // Exactly one per-profile `instrument` row for BTC across the whole
+    // BTC is resolvable from the shared registry across the whole
     // batch even though two separate transactions reference it: the
     // per-batch dedup registered it once and the registrar is
-    // idempotent.
+    // idempotent. The per-profile `instrument` table was never written.
+    let resolvedBtc = try await registry.instrumentMap()[btc.id]
+    #expect(resolvedBtc == btc)
+    #expect(resolvedBtc?.kind == .cryptoToken)
     let btcRowCount = try await instrumentRowCount(database, id: btc.id)
-    #expect(btcRowCount == 1)
+    #expect(
+      btcRowCount == 0,
+      "createMany must not write the per-profile instrument table")
   }
 }

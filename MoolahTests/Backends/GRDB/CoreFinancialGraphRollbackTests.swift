@@ -25,8 +25,8 @@ struct CoreFinancialGraphRollbackTests {
     let database = try ProfileDatabase.openInMemory()
     let repo = GRDBAccountRepository(
       database: database,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
+      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
 
     // Pre-seed an account whose row must remain untouched after the
     // failed second-account create — its existence pins the "no torn
@@ -98,8 +98,8 @@ struct CoreFinancialGraphRollbackTests {
       database: database,
       defaultInstrument: .AUD,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
+      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
     let accountId = UUID()
     let stub = Account(id: accountId, name: "Cash", type: .bank, instrument: .AUD)
     try await database.write { database in
@@ -153,8 +153,8 @@ struct CoreFinancialGraphRollbackTests {
       database: database,
       defaultInstrument: .AUD,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
+      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
     let accountId = UUID()
     try await seedAccountStub(in: database, accountId: accountId)
 
@@ -246,8 +246,8 @@ struct CoreFinancialGraphRollbackTests {
     let database = try ProfileDatabase.openInMemory()
     let repo = GRDBAccountRepository(
       database: database,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
+      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
 
     let id = UUID()
     let original = Account(id: id, name: "Original", type: .bank, instrument: .AUD)
@@ -291,7 +291,7 @@ struct CoreFinancialGraphRollbackTests {
     let database = try ProfileDatabase.openInMemory()
     let earmarkRepo = GRDBEarmarkRepository(
       database: database, defaultInstrument: .AUD,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()))
     let categoryRepo = GRDBCategoryRepository(database: database)
 
     let earmarkId = UUID()

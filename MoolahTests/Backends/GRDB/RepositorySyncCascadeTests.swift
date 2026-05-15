@@ -8,19 +8,20 @@ import Testing
 
 @Suite("Repository sync delete cascades")
 struct RepositorySyncCascadeTests {
-  /// Builds a `GRDBTransactionRepository` with the per-profile
+  /// Builds a `GRDBTransactionRepository` with the shared-registry
   /// resolver / registrar wiring shared by every test in this suite.
   /// Factored out so the repeated construction doesn't push the type
   /// body over SwiftLint's `type_body_length` budget.
   private func makeTxnRepo(
     _ database: any DatabaseWriter
-  ) -> GRDBTransactionRepository {
-    GRDBTransactionRepository(
+  ) throws -> GRDBTransactionRepository {
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
+    return GRDBTransactionRepository(
       database: database,
       defaultInstrument: .AUD,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
   }
 
   /// `applyRemoteChangesSync(saved: [], deleted: [accountId])` must
@@ -32,8 +33,8 @@ struct RepositorySyncCascadeTests {
     let database = try ProfileDatabase.openInMemory()
     let accountRepo = GRDBAccountRepository(
       database: database,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
+      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
     let accountId = UUID()
     let legId = UUID()
     let txId = UUID()
@@ -80,7 +81,7 @@ struct RepositorySyncCascadeTests {
   @Test
   func transactionDomainDeleteRemovesLegs() async throws {
     let database = try ProfileDatabase.openInMemory()
-    let txRepo = makeTxnRepo(database)
+    let txRepo = try makeTxnRepo(database)
     let txId = UUID()
     let leg1Id = UUID()
     let leg2Id = UUID()
@@ -117,7 +118,7 @@ struct RepositorySyncCascadeTests {
   @Test
   func transactionSyncDeleteRemovesLegs() async throws {
     let database = try ProfileDatabase.openInMemory()
-    let txRepo = makeTxnRepo(database)
+    let txRepo = try makeTxnRepo(database)
     let txId = UUID()
     let legId = UUID()
 
@@ -156,7 +157,7 @@ struct RepositorySyncCascadeTests {
     let database = try ProfileDatabase.openInMemory()
     let earmarkRepo = GRDBEarmarkRepository(
       database: database, defaultInstrument: .AUD,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()))
     let earmarkId = UUID()
     let categoryId = UUID()
     let budgetId = UUID()
@@ -212,7 +213,7 @@ struct RepositorySyncCascadeTests {
     let database = try ProfileDatabase.openInMemory()
     let earmarkRepo = GRDBEarmarkRepository(
       database: database, defaultInstrument: .USD,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()))
     let earmarkId = UUID()
     let unknownCategoryId = UUID()
 
@@ -256,7 +257,7 @@ struct RepositorySyncCascadeTests {
   @Test
   func legUpsertWithMissingParentsDoesNotCreatePhantomRows() async throws {
     let database = try ProfileDatabase.openInMemory()
-    let txRepo = makeTxnRepo(database)
+    let txRepo = try makeTxnRepo(database)
 
     let orphanAccountId = UUID()
     let orphanCategoryId = UUID()

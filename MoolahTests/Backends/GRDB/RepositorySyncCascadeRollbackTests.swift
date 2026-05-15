@@ -23,8 +23,8 @@ struct RepositorySyncCascadeRollbackTests {
     let database = try ProfileDatabase.openInMemory()
     let accountRepo = GRDBAccountRepository(
       database: database,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
+      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
     let fixture = try await Self.seedAccountScenario(in: database)
 
     do {
@@ -42,7 +42,7 @@ struct RepositorySyncCascadeRollbackTests {
     let database = try ProfileDatabase.openInMemory()
     let earmarkRepo = GRDBEarmarkRepository(
       database: database, defaultInstrument: .AUD,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
+      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()))
     let fixture = try await Self.seedEarmarkScenario(in: database)
 
     do {

@@ -10,7 +10,7 @@ import Testing
 struct ProfileDataSyncHandlerQueueTests {
 
   @Test
-  func deleteLocalDataRemovesAllRecordTypes() async throws {
+  func deleteLocalDataWipesSurvivingTablesButNotPerProfileInstruments() async throws {
     let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerAndDatabase()
     let handler = harness.handler
 
@@ -37,7 +37,15 @@ struct ProfileDataSyncHandlerQueueTests {
     #expect(counts.accounts == 0)
     #expect(counts.transactions == 0)
     #expect(counts.categories == 0)
-    #expect(counts.instruments == 0)
+    // The per-profile `instrument` table is NOT wiped: instrument data
+    // is owned by the shared, iCloud-account-scoped profile-index
+    // registry, and a single-profile purge must not wipe instruments
+    // shared by every other profile. (The per-profile table is also
+    // about to be removed by `v10_drop_shared_instrument_legacy`, after
+    // which a wipe against it would throw `no such table`.)
+    #expect(
+      counts.instruments == 1,
+      "deleteLocalData must not wipe the per-profile instrument table")
     #expect(changedTypes == Set(RecordTypeRegistry.allTypes.keys))
   }
 

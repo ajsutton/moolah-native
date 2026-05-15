@@ -31,7 +31,8 @@ enum ProfileDataSyncHandlerTestSupport {
       zoneName: "profile-\(profileId.uuidString)",
       ownerName: CKCurrentUserDefaultName
     )
-    let bundle = Self.makeBundle(database: database, instrument: .defaultTestInstrument)
+    let bundle = try Self.makeBundle(
+      database: database, instrument: .defaultTestInstrument)
     let handler = ProfileDataSyncHandler(
       profileId: profileId,
       zoneID: zoneID,
@@ -232,8 +233,13 @@ enum ProfileDataSyncHandlerTestSupport {
   static func makeBundle(
     database: any DatabaseWriter,
     instrument: Instrument
-  ) -> ProfileGRDBRepositories {
+  ) throws -> ProfileGRDBRepositories {
     let conversionService = FixedConversionService(rates: [:])
+    // Shared profile-index registry over its own in-memory DB —
+    // mirrors production wiring and never touches the per-profile
+    // `instrument` table the `v10_drop_shared_instrument_legacy`
+    // migration removes.
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
     return ProfileGRDBRepositories(
       csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
       importRules: GRDBImportRuleRepository(database: database),
@@ -241,23 +247,23 @@ enum ProfileDataSyncHandlerTestSupport {
       categories: GRDBCategoryRepository(database: database),
       accounts: GRDBAccountRepository(
         database: database,
-        instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-        instrumentRegistrar: PerProfileInstrumentRegistrar(database: database)),
+        instrumentResolver: registry,
+        instrumentRegistrar: registry),
       earmarks: GRDBEarmarkRepository(
         database: database,
         defaultInstrument: instrument,
-        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
+        instrumentResolver: registry),
       earmarkBudgetItems: GRDBEarmarkBudgetItemRepository(database: database),
       investmentValues: GRDBInvestmentRepository(
         database: database,
         defaultInstrument: instrument,
-        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
+        instrumentResolver: registry),
       transactions: GRDBTransactionRepository(
         database: database,
         defaultInstrument: instrument,
         conversionService: conversionService,
-        instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-        instrumentRegistrar: PerProfileInstrumentRegistrar(database: database)),
+        instrumentResolver: registry,
+        instrumentRegistrar: registry),
       transactionLegs: GRDBTransactionLegRepository(database: database),
       database: database)
   }

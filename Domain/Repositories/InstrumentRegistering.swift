@@ -9,10 +9,11 @@
 /// The create / update paths await this seam *before* the per-profile
 /// `database.write` that inserts the txn / leg / account rows, so a read
 /// issued immediately after the method returns resolves the instrument.
-/// Production injects the shared profile-index registry (where its
-/// resolver reads); preview / test / apply inject a transitional
-/// per-profile registrar that writes the same per-profile `instrument`
-/// row the old placeholder insert did (see `PerProfileInstrumentMapResolver`).
+/// Every caller — production, preview, test, and the sync apply path
+/// — injects the shared profile-index registry (where the matching
+/// `InstrumentMapResolving` reads). Nothing writes the per-profile
+/// `instrument` table, which the `v10_drop_shared_instrument_legacy`
+/// migration removes.
 protocol InstrumentRegistering: Sendable {
   func registerResolvable(_ instrument: Instrument) async throws
 }

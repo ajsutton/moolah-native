@@ -26,6 +26,14 @@ struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable {
   /// rows alongside the standard repository APIs.
   let database: DatabaseQueue
 
+  /// The shared profile-index instrument registry every repository
+  /// resolves and registers through. Pointed at its own in-memory
+  /// profile-index DB, never the per-profile `instrument` table the
+  /// `v10_drop_shared_instrument_legacy` migration removes. Exposed so
+  /// `fetchAggregationForTesting` resolves the exact instrument map the
+  /// repositories built during seeding.
+  let instrumentRegistry: GRDBInstrumentRegistryRepository
+
   /// Creates a backend wired to an in-memory GRDB queue.
   ///
   /// - Parameter customConversion: An optional conversion service override. When
@@ -46,7 +54,8 @@ struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable {
         client: rateClient, database: database)
       conversion = FiatConversionService(exchangeRates: exchangeRates)
     }
-    let registry = GRDBInstrumentRegistryRepository(database: database)
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
+    self.instrumentRegistry = registry
     let backend = CloudKitBackend(
       database: database,
       instrument: currency,
@@ -79,12 +88,11 @@ extension CloudKitAnalysisTestBackend {
   func fetchAggregationForTesting(
     after: Date?, forecastUntil: Date?
   ) async throws -> GRDBAnalysisRepository.DailyBalancesAggregation {
-    // Behaviour-preserving: resolve the instrument map from the same
-    // per-profile DB the aggregation previously read inline, so this
-    // shim's contract is unchanged after the resolver cutover.
-    let instruments = try await PerProfileInstrumentMapResolver(
-      database: self.database
-    ).instrumentMap()
+    // Resolve the instrument map from the shared profile-index registry
+    // the repositories registered into during seeding — the same
+    // resolver the production aggregation path consults, never the
+    // per-profile `instrument` table.
+    let instruments = try await instrumentRegistry.instrumentMap()
     return try await GRDBAnalysisRepository.fetchDailyBalancesAggregation(
       database: self.database,
       instruments: instruments,

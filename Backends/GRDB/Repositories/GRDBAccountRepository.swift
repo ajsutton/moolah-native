@@ -54,11 +54,11 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   /// operation *before* the per-profile snapshot opens — the registry
   /// lives on a separate (profile-index) database, so a cross-database
   /// transaction is impossible. Instrument identity is immutable lookup
-  /// data. Production sessions inject the shared
-  /// `GRDBInstrumentRegistryRepository`; preview / test / apply callers
-  /// inject `PerProfileInstrumentMapResolver` over the same per-profile
-  /// DB so their behaviour is unchanged until the per-profile
-  /// `instrument` table is dropped.
+  /// data. Every caller — production, preview, test, and the sync
+  /// apply path — injects the shared `GRDBInstrumentRegistryRepository`
+  /// (the profile-index registry). Nothing reads the per-profile
+  /// `instrument` table any more, ahead of the
+  /// `v10_drop_shared_instrument_legacy` migration.
   let instrumentResolver: any InstrumentMapResolving
   /// Registers a non-fiat account denomination so it becomes resolvable
   /// by `instrumentResolver` before `create` returns. Awaited *before*
@@ -66,13 +66,11 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   /// registry lives on a separate database — a cross-database
   /// transaction is impossible, and the registration must be durable
   /// before a reader can observe the new account). Replaces the old
-  /// per-profile placeholder `instrument` insert. Production sessions
-  /// inject the shared `GRDBInstrumentRegistryRepository`;
-  /// preview / test / apply callers inject
-  /// `PerProfileInstrumentRegistrar` over the same per-profile DB, which
-  /// performs the exact idempotent per-profile insert the removed
-  /// `ensureNonFiatInstrumentRow` did so their behaviour is unchanged
-  /// until the per-profile `instrument` table is dropped.
+  /// per-profile placeholder `instrument` insert. Every caller —
+  /// production, preview, test, and the sync apply path — injects the
+  /// shared `GRDBInstrumentRegistryRepository`, so registration always
+  /// lands on the profile-index registry, never the soon-to-be-dropped
+  /// per-profile `instrument` table.
   private let instrumentRegistrar: any InstrumentRegistering
   /// Receives `(recordType, id)` so the opening-balance create path can
   /// tag its txn and leg writes with `TransactionRow.recordType` /

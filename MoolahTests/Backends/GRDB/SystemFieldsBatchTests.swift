@@ -71,8 +71,8 @@ struct SystemFieldsBatchTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: conversionService,
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
+      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
     return (repo, database)
   }
 

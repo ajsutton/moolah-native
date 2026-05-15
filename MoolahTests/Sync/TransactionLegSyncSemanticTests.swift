@@ -19,8 +19,8 @@ struct TransactionLegSyncSemanticTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
+      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
     let legRepo = GRDBTransactionLegRepository(database: database)
     let accountId = UUID()
     let txn = try await txnRepo.create(
@@ -68,8 +68,8 @@ struct TransactionLegSyncSemanticTests {
       database: database,
       defaultInstrument: .defaultTestInstrument,
       conversionService: FixedConversionService(),
-      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-      instrumentRegistrar: PerProfileInstrumentRegistrar(database: database))
+      instrumentResolver: (try SharedRegistryTestSupport.makeSharedRegistry()),
+      instrumentRegistrar: (try SharedRegistryTestSupport.makeSharedRegistry()))
     let legRepo = GRDBTransactionLegRepository(database: database)
     let accountId = UUID()
     let txn = try await txnRepo.create(

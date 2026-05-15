@@ -75,22 +75,27 @@ struct ApplyPathSharedRegistryResolutionTests {
     #expect(perProfileCount == 0)
   }
 
-  @Test("no shared registry (legacy/preview) keeps the per-profile shim")
-  func legacyPathKeepsPerProfileShim() async throws {
+  @Test("apply bundle never resolves through the per-profile instrument table")
+  func applyBundleIgnoresPerProfileInstrumentTable() async throws {
     let perProfile = try ProfileDatabase.openInMemory()
+    let sharedRegistry = try SharedRegistryTestSupport.makeSharedRegistry()
     let bundle = ProfileGRDBRepositories.makeForApply(
-      database: perProfile, sharedRegistry: nil)
+      database: perProfile, sharedRegistry: sharedRegistry)
 
-    // Seed the per-profile `instrument` table directly; the legacy
-    // shim resolver must still read it (byte-for-byte preserved until
-    // the per-profile table is dropped).
+    // Seed the per-profile `instrument` table directly with a crypto
+    // row (fiat is ambient, so it would resolve regardless). It must
+    // be invisible to the bundle's resolver: resolution is shared-only
+    // now — `makeForApply` no longer has a per-profile fallback — so a
+    // row that exists ONLY in the per-profile table never resolves.
     let row = ProfileDataSyncHandlerTestSupport.instrumentRow(
-      id: "AUD", kind: "fiatCurrency", name: "Australian Dollar")
+      id: "1:native", kind: "cryptoToken", name: "PerProfileOnly")
     try await perProfile.write { database in
       try row.insert(database)
     }
 
     let map = try await bundle.transactions.instrumentResolver.instrumentMap()
-    #expect(map["AUD"] != nil)
+    #expect(
+      map["1:native"] == nil,
+      "the apply bundle must not resolve crypto from the per-profile instrument table")
   }
 }
