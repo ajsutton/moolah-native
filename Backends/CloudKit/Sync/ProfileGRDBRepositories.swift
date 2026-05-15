@@ -49,20 +49,44 @@ extension ProfileGRDBRepositories {
   /// session-side bundle owned by `CloudKitBackend` continues to carry
   /// real values for user-mutation paths.
   ///
-  /// The `instrumentResolver` injected into each repository here is a fresh
-  /// `PerProfileInstrumentMapResolver` that is likewise never invoked by the
-  /// apply path: `applyRemoteChangesSync` writes raw Rows directly and never
-  /// calls `instrumentMap()`. The `instrumentRegistrar` is a fresh
-  /// `PerProfileInstrumentRegistrar` for the same reason — the apply path
-  /// never calls `create` / `createMany` / `update`, so `registerResolvable`
-  /// is never invoked. Do NOT rewire these to the shared registry without
-  /// first auditing every apply-path caller — the apply path currently
-  /// carries no observation and assumes both seams are no-ops.
-  static func makeForApply(database: any GRDB.DatabaseWriter) -> ProfileGRDBRepositories {
+  /// `sharedRegistry`, when supplied (production CloudKit sync always
+  /// passes `SyncCoordinator.sharedInstrumentRegistry`), is injected as
+  /// the `instrumentResolver` / `instrumentRegistrar` for every repo
+  /// that takes one. The apply path never invokes either seam today —
+  /// `applyRemoteChangesSync` writes raw Rows and never calls
+  /// `instrumentMap()`, and the apply path never calls
+  /// `create` / `createMany` / `update`, so `registerResolvable` is
+  /// never reached — but pointing the seams at the shared profile-index
+  /// registry instead of a per-profile `PerProfile*` shim guarantees
+  /// that any future apply-time resolution can never read or write the
+  /// per-profile `instrument` table that the follow-up
+  /// `v10_drop_shared_instrument_legacy` migration drops.
+  ///
+  /// When `sharedRegistry` is `nil` (preview / legacy callers / tests
+  /// that don't construct a shared registry) the `PerProfile*` shims
+  /// are kept so create→read behaviour stays byte-for-byte preserved
+  /// until that migration removes the per-profile table.
+  ///
+  /// The bundle's `instruments` member stays a per-profile
+  /// `GRDBInstrumentRegistryRepository(database:)` deliberately: its
+  /// only sync caller is `ProfileDataSyncHandler.deleteLocalData`,
+  /// which wipes a *single profile's* local rows on zone purge /
+  /// sign-out / account-switch. Pointing it at the shared, iCloud-
+  /// account-scoped registry would let one profile's zone purge wipe
+  /// every profile's instruments. The per-profile rows survive on disk
+  /// until `v10_drop_shared_instrument_legacy` drops the table.
+  static func makeForApply(
+    database: any GRDB.DatabaseWriter,
+    sharedRegistry: GRDBInstrumentRegistryRepository? = nil
+  ) -> ProfileGRDBRepositories {
     // USD is a stable, locale-independent fiat that satisfies
     // `Instrument.fiat(code:)`'s `isoCurrencies` lookup. The choice is
     // arbitrary — only the type matters for the apply path.
     let placeholderInstrument = Instrument.fiat(code: "USD")
+    let resolver: any InstrumentMapResolving =
+      sharedRegistry ?? PerProfileInstrumentMapResolver(database: database)
+    let registrar: any InstrumentRegistering =
+      sharedRegistry ?? PerProfileInstrumentRegistrar(database: database)
     return ProfileGRDBRepositories(
       csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
       importRules: GRDBImportRuleRepository(database: database),
@@ -70,30 +94,30 @@ extension ProfileGRDBRepositories {
       categories: GRDBCategoryRepository(database: database),
       accounts: GRDBAccountRepository(
         database: database,
-        instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-        instrumentRegistrar: PerProfileInstrumentRegistrar(database: database)),
+        instrumentResolver: resolver,
+        instrumentRegistrar: registrar),
       earmarks: GRDBEarmarkRepository(
         database: database,
         defaultInstrument: placeholderInstrument,
-        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
+        instrumentResolver: resolver),
       earmarkBudgetItems: GRDBEarmarkBudgetItemRepository(database: database),
       investmentValues: GRDBInvestmentRepository(
         database: database,
         defaultInstrument: placeholderInstrument,
-        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
+        instrumentResolver: resolver),
       transactions: GRDBTransactionRepository(
         database: database,
         defaultInstrument: placeholderInstrument,
         conversionService: ApplyPathConversionService(),
-        instrumentResolver: PerProfileInstrumentMapResolver(database: database),
-        instrumentRegistrar: PerProfileInstrumentRegistrar(database: database)),
+        instrumentResolver: resolver,
+        instrumentRegistrar: registrar),
       transactionLegs: GRDBTransactionLegRepository(database: database),
       database: database)
   }
 }
 
 /// Placeholder `InstrumentConversionService` for the apply-path bundle.
-/// Reachable only from `ProfileGRDBRepositories.makeForApply(database:)`;
+/// Reachable only from `ProfileGRDBRepositories.makeForApply`;
 /// every method throws `ConversionError.unsupportedConversion` because
 /// the apply path never reads through the conversion service. If a
 /// future code change starts invoking it from the apply path, the

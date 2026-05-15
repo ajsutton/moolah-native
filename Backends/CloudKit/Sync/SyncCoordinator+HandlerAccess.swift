@@ -9,7 +9,7 @@ extension SyncCoordinator {
   ///
   /// Bundle resolution is delegated to `resolveGRDBRepositories(for:)`, which
   /// returns a cached bundle if one was built before, or constructs a fresh
-  /// apply-path bundle via `ProfileGRDBRepositories.makeForApply(database:)` backed
+  /// apply-path bundle via `ProfileGRDBRepositories.makeForApply` backed
   /// by `containerManager.database(for:)`. This allows sync apply for
   /// un-sessionized profiles (multi-profile background apply, pre-render race,
   /// encrypted reset on an unopened profile) — the scenario that motivated
@@ -31,7 +31,7 @@ extension SyncCoordinator {
 
   /// Returns the per-profile GRDB repository bundle, constructing and caching
   /// it on first access. The bundle is built via
-  /// `ProfileGRDBRepositories.makeForApply(database:)` backed by
+  /// `ProfileGRDBRepositories.makeForApply` backed by
   /// `containerManager.database(for:)`, which allows sync apply for
   /// un-sessionized profiles — see issue #619.
   ///
@@ -46,7 +46,14 @@ extension SyncCoordinator {
       return cached
     }
     let database = try containerManager.database(for: profileId)
-    let bundle = ProfileGRDBRepositories.makeForApply(database: database)
+    // Production CloudKit sync always carries `sharedInstrumentRegistry`
+    // (the profile-index registry); the apply bundle's resolver /
+    // registrar must therefore target it, never the per-profile
+    // `instrument` table that `v10_drop_shared_instrument_legacy`
+    // drops. `nil` only for legacy callers (tests without a shared
+    // registry) — those keep the per-profile shim.
+    let bundle = ProfileGRDBRepositories.makeForApply(
+      database: database, sharedRegistry: sharedInstrumentRegistry)
     cachedGRDBRepositories[profileId] = bundle
     return bundle
   }
