@@ -109,6 +109,7 @@ struct RepositoryHookRecordTypeTests {
     let capture = HookCapture()
     let repo = GRDBAccountRepository(
       database: database,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
 
@@ -139,6 +140,7 @@ struct RepositoryHookRecordTypeTests {
     let earmarkRepo = GRDBEarmarkRepository(
       database: database,
       defaultInstrument: .defaultTestInstrument,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database),
       onRecordChanged: makeChangedHook(capture),
       onRecordDeleted: makeDeletedHook(capture))
     let earmark = try await earmarkRepo.create(

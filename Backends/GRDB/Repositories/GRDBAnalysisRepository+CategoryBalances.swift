@@ -27,9 +27,13 @@ extension GRDBAnalysisRepository {
     let qty: Int64
   }
 
-  /// Pair of SQL output rows and the instrument lookup, fetched in a
-  /// single MVCC snapshot so a concurrent writer can't drop a row's
-  /// `instrument_id` between the two reads.
+  /// Pair of SQL output rows and the instrument lookup. The lookup is
+  /// resolved via the injected `InstrumentMapResolving` *before* the
+  /// per-profile read snapshot opens (the canonical registry is a
+  /// separate database, so it can't be joined into this transaction);
+  /// the SQL rows come from the snapshot. Instrument identity is
+  /// immutable lookup data, so the non-atomic pairing is safe and
+  /// intended. Mirrors `GRDBTransactionRepository`'s hoisted-map shape.
   struct CategoryBalancesAggregation: Sendable {
     let rows: [CategoryBalancesRow]
     let instrumentMap: [String: Instrument]
@@ -97,6 +101,7 @@ extension GRDBAnalysisRepository {
   /// so the planner doesn't see a degenerate `IN ()`.
   static func fetchCategoryBalancesAggregation(
     database: any DatabaseReader,
+    instruments: [String: Instrument],
     args: CategoryBalancesFilterArgs
   ) async throws -> CategoryBalancesAggregation {
     try await database.read { database -> CategoryBalancesAggregation in
@@ -116,8 +121,7 @@ extension GRDBAnalysisRepository {
             instrumentId: instrumentId,
             qty: qty))
       }
-      let instrumentMap = try InstrumentRow.fetchInstrumentMap(database: database)
-      return CategoryBalancesAggregation(rows: rows, instrumentMap: instrumentMap)
+      return CategoryBalancesAggregation(rows: rows, instrumentMap: instruments)
     }
   }
 

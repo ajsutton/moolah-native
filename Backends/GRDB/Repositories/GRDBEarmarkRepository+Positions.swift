@@ -23,12 +23,6 @@ extension GRDBEarmarkRepository {
       positions: [], savedPositions: [], spentPositions: [])
   }
 
-  /// Forwards to the shared `InstrumentRow.fetchInstrumentMap` so every
-  /// repository observes the same stored-then-ambient ordering.
-  static func fetchInstrumentMap(database: Database) throws -> [String: Instrument] {
-    try InstrumentRow.fetchInstrumentMap(database: database)
-  }
-
   /// Computes per-earmark, per-instrument position sums from the
   /// `transaction_leg` table, excluding scheduled (recurring) parents.
   /// Returns `[earmarkId: EarmarkPositionLists]`. Mirrors

@@ -81,8 +81,10 @@ extension GRDBTransactionRepository {
     filter: TransactionFilter, page: Int, pageSize: Int
   ) -> AsyncStream<TransactionPage> {
     let defaultInstrument = self.defaultInstrument
-    return withResolvedInstrumentMap(
-      repoMethod: "GRDBTransactionRepository.observe"
+    return resolvedInstrumentMapStream(
+      resolver: instrumentResolver,
+      errorChannel: errorChannel,
+      database: database
     ) { instruments, errorChannel, database in
       ValueObservation
         // Explicit-region form: every joined table's `observableRegion`
@@ -131,8 +133,10 @@ extension GRDBTransactionRepository {
   /// into the tracking closure — changing it requires cancelling the
   /// prior subscription.
   func observeAll(filter: TransactionFilter) -> AsyncStream<[Transaction]> {
-    withResolvedInstrumentMap(
-      repoMethod: "GRDBTransactionRepository.observeAll"
+    resolvedInstrumentMapStream(
+      resolver: instrumentResolver,
+      errorChannel: errorChannel,
+      database: database
     ) { instruments, errorChannel, database in
       ValueObservation
         // Explicit-region form: every joined table's `observableRegion`
@@ -171,60 +175,5 @@ extension GRDBTransactionRepository {
   /// the channel's docstring for the surface-then-finish contract.
   func observeErrors() -> AsyncStream<any Error> {
     errorChannel.stream
-  }
-
-  /// Bridges the async instrument-map resolution into the synchronous
-  /// `ValueObservation` pipeline. The canonical registry is on a
-  /// separate database and the `tracking(regions:fetch:)` closure is
-  /// synchronous, so the map must be resolved *before* the observation
-  /// is constructed. The returned outer `AsyncStream`'s worker task is
-  /// the async setup point: it `await`s `instrumentResolver`, then
-  /// `build`s the inner retrying stream with the resolved map captured,
-  /// and forwards every emission. A resolver failure surfaces via the
-  /// shared `errorChannel` (matching the observation error contract)
-  /// and ends the stream. Re-resolution on a metadata change requires a
-  /// re-subscribe; cross-database instrument-metadata live-refresh via
-  /// the shared registry's change stream is a follow-up.
-  private func withResolvedInstrumentMap<Value: Sendable>(
-    repoMethod: String,
-    build:
-      @escaping @Sendable (
-        _ instruments: [String: Instrument],
-        _ errorChannel: ObservationErrorChannel,
-        _ database: any DatabaseWriter
-      ) -> AsyncStream<Value>
-  ) -> AsyncStream<Value> {
-    let resolver = instrumentResolver
-    let errorChannel = errorChannel
-    let database = database
-    return AsyncStream { continuation in
-      let task = Task {
-        let instruments: [String: Instrument]
-        do {
-          instruments = try await resolver.instrumentMap()
-        } catch {
-          // Only surface to the shared (single-shot) errorChannel if the
-          // consumer is still alive — a cancelled subscription's transient
-          // resolver error must not permanently finish the channel for a
-          // later re-subscriber.
-          if !Task.isCancelled {
-            await errorChannel.surfaceAndFinish(error)
-          }
-          continuation.finish()
-          return
-        }
-        guard !Task.isCancelled else {
-          continuation.finish()
-          return
-        }
-        let inner = build(instruments, errorChannel, database)
-        for await value in inner {
-          if Task.isCancelled { break }
-          continuation.yield(value)
-        }
-        continuation.finish()
-      }
-      continuation.onTermination = { _ in task.cancel() }
-    }
   }
 }

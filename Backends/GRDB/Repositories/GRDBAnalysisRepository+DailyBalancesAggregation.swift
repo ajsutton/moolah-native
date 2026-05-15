@@ -32,20 +32,30 @@ extension GRDBAnalysisRepository {
   /// appeared in the transaction list.
   static func fetchDailyBalancesAggregation(
     database: any DatabaseReader,
+    instruments: [String: Instrument],
     after: Date?,
     forecastUntil: Date?
   ) async throws -> DailyBalancesAggregation {
     try await database.read { database -> DailyBalancesAggregation in
       try Self.readDailyBalancesAggregation(
-        database: database, after: after, forecastUntil: forecastUntil)
+        database: database,
+        instruments: instruments,
+        after: after,
+        forecastUntil: forecastUntil)
     }
   }
 
   /// Synchronous read body for `fetchDailyBalancesAggregation`. Lifted
   /// out of the `database.read` closure so the closure body stays
-  /// under the SwiftLint `closure_body_length` budget.
+  /// under the SwiftLint `closure_body_length` budget. `instruments` is
+  /// resolved via the injected `InstrumentMapResolving` before this
+  /// snapshot opens (the canonical registry is a separate database) and
+  /// threaded in rather than re-read here.
   private static func readDailyBalancesAggregation(
-    database: Database, after: Date?, forecastUntil: Date?
+    database: Database,
+    instruments: [String: Instrument],
+    after: Date?,
+    forecastUntil: Date?
   ) throws -> DailyBalancesAggregation {
     let accountRows = try Self.fetchAccountDeltaRowsPostCutoff(
       database: database, after: after)
@@ -57,18 +67,20 @@ extension GRDBAnalysisRepository {
       database: database)
     let tradesModeInvestmentAccountIds =
       try Self.fetchTradesModeInvestmentAccountIds(database: database)
-    // Fetch `instrumentMap` before the investment-value snapshots so
-    // `fetchInvestmentValueSnapshots` can resolve each row's instrument
-    // to its registered `Instrument` (with the right `kind` for stock /
-    // crypto investments) instead of falling back to fiat-by-id.
-    let instrumentMap = try InstrumentRow.fetchInstrumentMap(database: database)
+    // `instruments` is resolved via the injected resolver before this
+    // snapshot opens so `fetchInvestmentValueSnapshots` can resolve each
+    // row's instrument to its registered `Instrument` (with the right
+    // `kind` for stock / crypto investments) instead of falling back to
+    // fiat-by-id.
+    let instrumentMap = instruments
     let investmentValues = try Self.fetchInvestmentValueSnapshots(
       database: database,
       investmentAccountIds: investmentAccountIds,
       instrumentMap: instrumentMap)
     let scheduled =
       forecastUntil != nil
-      ? try Self.fetchScheduledTransactions(database: database) : []
+      ? try Self.fetchScheduledTransactions(
+        database: database, instruments: instrumentMap) : []
     // Pre-filter trades-mode rows out of the already-fetched arrays.
     // Doing the filter inside the read closure (not later) keeps every
     // input the assembly walk needs inside one MVCC snapshot and saves
@@ -259,7 +271,9 @@ extension GRDBAnalysisRepository {
   /// extrapolate recurring patterns. Filters to `recur_period IS NOT
   /// NULL` via the partial `transaction_scheduled` index so the read
   /// stays off a full scan.
-  private static func fetchScheduledTransactions(database: Database) throws -> [Transaction] {
+  private static func fetchScheduledTransactions(
+    database: Database, instruments: [String: Instrument]
+  ) throws -> [Transaction] {
     let txnRows =
       try TransactionRow
       .filter(TransactionRow.Columns.recurPeriod != nil)
@@ -270,11 +284,6 @@ extension GRDBAnalysisRepository {
       try TransactionLegRow
       .filter(txnIds.contains(TransactionLegRow.Columns.transactionId))
       .fetchAll(database)
-    let instrumentRows = try InstrumentRow.fetchAll(database)
-    var instrumentLookup: [String: Instrument] = [:]
-    for row in instrumentRows {
-      instrumentLookup[row.id] = try row.toDomain()
-    }
     let legsByTxnId = Dictionary(grouping: legRows, by: \.transactionId)
     return try txnRows.map { row -> Transaction in
       let legs =
@@ -282,7 +291,7 @@ extension GRDBAnalysisRepository {
         .sorted { $0.sortOrder < $1.sortOrder }
         .map { legRow -> TransactionLeg in
           let legInstrument =
-            instrumentLookup[legRow.instrumentId]
+            instruments[legRow.instrumentId]
             ?? Instrument.fiat(code: legRow.instrumentId)
           return try legRow.toDomain(instrument: legInstrument)
         }

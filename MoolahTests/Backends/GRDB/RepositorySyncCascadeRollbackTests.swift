@@ -21,7 +21,9 @@ struct RepositorySyncCascadeRollbackTests {
   @Test
   func accountSyncDeleteRollsBackInvestmentValueAndLegEdits() async throws {
     let database = try ProfileDatabase.openInMemory()
-    let accountRepo = GRDBAccountRepository(database: database)
+    let accountRepo = GRDBAccountRepository(
+      database: database,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
     let fixture = try await Self.seedAccountScenario(in: database)
 
     do {
@@ -37,7 +39,9 @@ struct RepositorySyncCascadeRollbackTests {
   @Test
   func earmarkSyncDeleteRollsBackBudgetItemAndLegEdits() async throws {
     let database = try ProfileDatabase.openInMemory()
-    let earmarkRepo = GRDBEarmarkRepository(database: database, defaultInstrument: .AUD)
+    let earmarkRepo = GRDBEarmarkRepository(
+      database: database, defaultInstrument: .AUD,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
     let fixture = try await Self.seedEarmarkScenario(in: database)
 
     do {

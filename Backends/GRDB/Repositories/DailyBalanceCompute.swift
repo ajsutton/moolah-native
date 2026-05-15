@@ -33,21 +33,26 @@ enum DailyBalanceCompute {
 
   /// Reads booked legs (excluding scheduled recurrences), looks up
   /// their dates, and accumulates a per-instrument running balance,
-  /// returning one entry per (calendar-day, instrument) tuple.
+  /// returning one entry per (calendar-day, instrument) tuple. The
+  /// `instruments` lookup is resolved by the caller via the injected
+  /// `InstrumentMapResolving` *before* its `database.read` snapshot
+  /// opens (the canonical registry is a separate database, so it can't
+  /// be joined into this transaction); instrument identity is immutable
+  /// lookup data, so the non-atomic pairing is safe and intended.
   static func compute(
     database: Database,
     accountId: UUID,
+    instruments: [String: Instrument],
     defaultInstrument: Instrument
   ) throws -> [AccountDailyBalance] {
     let bookedLegs = try fetchBookedLegs(database: database, accountId: accountId)
     let dateById = try fetchTransactionDates(
       database: database, transactionIds: bookedLegs.map(\.transactionId))
-    let instrumentMap = try InstrumentRow.fetchInstrumentMap(database: database)
 
     let entries = sortedLegEntries(legs: bookedLegs, dateById: dateById)
     return aggregateByInstrument(
       entries: entries,
-      instrumentMap: instrumentMap,
+      instrumentMap: instruments,
       defaultInstrument: defaultInstrument)
   }
 

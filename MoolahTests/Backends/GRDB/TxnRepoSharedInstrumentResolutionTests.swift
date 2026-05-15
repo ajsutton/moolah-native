@@ -60,7 +60,9 @@ struct TxnRepoSharedInstrumentResolutionTests {
       chainId: 1)
     let leg = TransactionLeg(
       accountId: account.id, instrument: eth, quantity: 1, type: .income)
-    let txn = Transaction(date: .now, payee: "in", legs: [leg])
+    let txn = Transaction(
+      date: Date(timeIntervalSince1970: 1_700_000_000), payee: "in",
+      legs: [leg])
 
     // Raw row inserts only: the per-profile `instrument` table stays
     // empty for `eth.id`, so any successful resolution must originate

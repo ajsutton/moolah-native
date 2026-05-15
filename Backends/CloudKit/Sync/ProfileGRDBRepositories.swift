@@ -48,6 +48,13 @@ extension ProfileGRDBRepositories {
   /// `applyRemoteChangesSync` and never invokes either placeholder; the
   /// session-side bundle owned by `CloudKitBackend` continues to carry
   /// real values for user-mutation paths.
+  ///
+  /// The `instrumentResolver` injected into each repository here is a fresh
+  /// `PerProfileInstrumentMapResolver` that is likewise never invoked by the
+  /// apply path: `applyRemoteChangesSync` writes raw Rows directly and never
+  /// calls `instrumentMap()`. Do NOT rewire these resolvers to the shared
+  /// registry without first auditing every apply-path caller — the apply path
+  /// currently carries no observation and assumes the resolver is a no-op.
   static func makeForApply(database: any GRDB.DatabaseWriter) -> ProfileGRDBRepositories {
     // USD is a stable, locale-independent fiat that satisfies
     // `Instrument.fiat(code:)`'s `isoCurrencies` lookup. The choice is
@@ -58,12 +65,18 @@ extension ProfileGRDBRepositories {
       importRules: GRDBImportRuleRepository(database: database),
       instruments: GRDBInstrumentRegistryRepository(database: database),
       categories: GRDBCategoryRepository(database: database),
-      accounts: GRDBAccountRepository(database: database),
+      accounts: GRDBAccountRepository(
+        database: database,
+        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
       earmarks: GRDBEarmarkRepository(
-        database: database, defaultInstrument: placeholderInstrument),
+        database: database,
+        defaultInstrument: placeholderInstrument,
+        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
       earmarkBudgetItems: GRDBEarmarkBudgetItemRepository(database: database),
       investmentValues: GRDBInvestmentRepository(
-        database: database, defaultInstrument: placeholderInstrument),
+        database: database,
+        defaultInstrument: placeholderInstrument,
+        instrumentResolver: PerProfileInstrumentMapResolver(database: database)),
       transactions: GRDBTransactionRepository(
         database: database,
         defaultInstrument: placeholderInstrument,

@@ -23,7 +23,9 @@ struct CoreFinancialGraphRollbackTests {
   @Test
   func accountCreateWithOpeningBalanceRollsBackOnFailure() async throws {
     let database = try ProfileDatabase.openInMemory()
-    let repo = GRDBAccountRepository(database: database)
+    let repo = GRDBAccountRepository(
+      database: database,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
 
     // Pre-seed an account whose row must remain untouched after the
     // failed second-account create — its existence pins the "no torn
@@ -239,7 +241,9 @@ struct CoreFinancialGraphRollbackTests {
   @Test
   func accountUpdateRollsBackOnFailure() async throws {
     let database = try ProfileDatabase.openInMemory()
-    let repo = GRDBAccountRepository(database: database)
+    let repo = GRDBAccountRepository(
+      database: database,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
 
     let id = UUID()
     let original = Account(id: id, name: "Original", type: .bank, instrument: .AUD)
@@ -282,7 +286,8 @@ struct CoreFinancialGraphRollbackTests {
   func earmarkSetBudgetRollsBackOnFailure() async throws {
     let database = try ProfileDatabase.openInMemory()
     let earmarkRepo = GRDBEarmarkRepository(
-      database: database, defaultInstrument: .AUD)
+      database: database, defaultInstrument: .AUD,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
     let categoryRepo = GRDBCategoryRepository(database: database)
 
     let earmarkId = UUID()

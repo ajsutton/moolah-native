@@ -20,21 +20,44 @@ import GRDB
 /// commits — emitting hooks inside the write would publish changes that
 /// haven't yet been made durable.
 ///
+/// **Instrument resolution.** Positions resolve their `instrument` via
+/// the injected `instrumentResolver`. The instrument map is fetched
+/// once, *before* opening the per-profile read/write snapshot, because
+/// the canonical registry lives on a different (profile-index)
+/// database — a cross-database transaction is impossible. Instrument
+/// identity is immutable lookup data, so a read that is not atomic with
+/// the account/leg-row snapshot is safe and intended. Mirrors
+/// `GRDBTransactionRepository`.
+///
 /// **`@unchecked Sendable` justification.** All stored properties are
 /// `let`. `database` (`any DatabaseWriter`) is itself `Sendable` (GRDB
 /// protocol guarantee — the queue's serial executor mediates concurrent
-/// access). `onRecordChanged` and `onRecordDeleted` are `@Sendable`
-/// closures captured at init. Nothing mutates post-init, so the
-/// reference can be shared across actor boundaries without a data
-/// race; `@unchecked` only waives Swift's structural check that
-/// `final class` types meet `Sendable`'s requirements automatically.
+/// access). `instrumentResolver` is a `Sendable` protocol
+/// (`InstrumentMapResolving`) and immutable post-init. `onRecordChanged`
+/// and `onRecordDeleted` are `@Sendable` closures captured at init.
+/// Nothing mutates post-init, so the reference can be shared across
+/// actor boundaries without a data race; `@unchecked` only waives
+/// Swift's structural check that `final class` types meet `Sendable`'s
+/// requirements automatically.
 /// See `guides/CONCURRENCY_GUIDE.md` §2 "False Positives to Avoid",
 /// Carve-out 3 (GRDB repositories).
 final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
-  // `database` and `errorChannel` are deliberately not `private` so the
-  // sibling `+Observation.swift` extension can reach them. Treat them
-  // as private-by-convention from elsewhere in the module.
+  // `database`, `instrumentResolver`, and `errorChannel` are
+  // deliberately not `private` so the sibling `+Observation.swift`
+  // extension can reach them. Treat them as private-by-convention from
+  // elsewhere in the module.
   let database: any DatabaseWriter
+  /// Resolves the `[String: Instrument]` lookup table from the
+  /// canonical instrument registry. Fetched once per read/write
+  /// operation *before* the per-profile snapshot opens — the registry
+  /// lives on a separate (profile-index) database, so a cross-database
+  /// transaction is impossible. Instrument identity is immutable lookup
+  /// data. Production sessions inject the shared
+  /// `GRDBInstrumentRegistryRepository`; preview / test / apply callers
+  /// inject `PerProfileInstrumentMapResolver` over the same per-profile
+  /// DB so their behaviour is unchanged until the per-profile
+  /// `instrument` table is dropped.
+  let instrumentResolver: any InstrumentMapResolving
   /// Receives `(recordType, id)` so the opening-balance create path can
   /// tag its txn and leg writes with `TransactionRow.recordType` /
   /// `TransactionLegRow.recordType` instead of the account's own type —
@@ -62,11 +85,13 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
 
   init(
     database: any DatabaseWriter,
+    instrumentResolver: any InstrumentMapResolving,
     onRecordChanged: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
     onRecordDeleted: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
     onInstrumentChanged: @escaping @Sendable (Instrument) -> Void = { _ in }
   ) {
     self.database = database
+    self.instrumentResolver = instrumentResolver
     self.onRecordChanged = onRecordChanged
     self.onRecordDeleted = onRecordDeleted
     self.onInstrumentChanged = onInstrumentChanged
@@ -75,8 +100,14 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   // MARK: - AccountRepository conformance
 
   func fetchAll() async throws -> [Account] {
-    try await database.read { database in
-      let instruments = try Self.fetchInstrumentMap(database: database)
+    // Resolve the instrument lookup table before opening the
+    // per-profile snapshot: the canonical registry is a separate
+    // database, so the map cannot be joined into this transaction.
+    // Instrument identity is immutable lookup data — a read not atomic
+    // with the row snapshot is safe and intended. Mirrors
+    // `GRDBTransactionRepository.fetchAll(filter:)`.
+    let instruments = try await instrumentResolver.instrumentMap()
+    return try await database.read { database in
       let rows =
         try AccountRow
         .order(AccountRow.Columns.position.asc)
@@ -139,6 +170,9 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
     // follow-up `database.read` would race with concurrent writers and
     // could observe positions from after the update commit, or — worse
     // — emit `onRecordChanged` before the second read settled.
+    // Hoisted ahead of the write snapshot for the same cross-database
+    // reason as `fetchAll()`.
+    let instruments = try await instrumentResolver.instrumentMap()
     let resolved = try await database.write { database -> Account in
       guard
         var existing =
@@ -156,7 +190,6 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
       existing.valuationMode = account.valuationMode.rawValue
       try existing.update(database)
 
-      let instruments = try Self.fetchInstrumentMap(database: database)
       let positions = try Self.computePositions(
         database: database, instruments: instruments, accountId: account.id)
       return try existing.toDomain(instruments: instruments, positions: positions)
@@ -199,6 +232,9 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
     // Rejects deletes against an account with non-zero positions —
     // mirrors the SwiftData-era contract enforced by
     // `CloudKitAccountRepository.delete(id:)`.
+    // Hoisted ahead of the write snapshot for the same cross-database
+    // reason as `fetchAll()`.
+    let instruments = try await instrumentResolver.instrumentMap()
     try await database.write { database in
       guard
         var existing =
@@ -208,7 +244,6 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
       else {
         throw BackendError.notFound("Account not found")
       }
-      let instruments = try Self.fetchInstrumentMap(database: database)
       let positions = try Self.computePositions(
         database: database, instruments: instruments, accountId: id)
       if positions.contains(where: { $0.quantity != 0 }) {

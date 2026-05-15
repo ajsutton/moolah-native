@@ -15,7 +15,9 @@ struct RepositorySyncCascadeTests {
   @Test
   func accountSyncDeleteCascadesToInvestmentValuesAndNullsLegs() async throws {
     let database = try ProfileDatabase.openInMemory()
-    let accountRepo = GRDBAccountRepository(database: database)
+    let accountRepo = GRDBAccountRepository(
+      database: database,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
     let accountId = UUID()
     let legId = UUID()
     let txId = UUID()
@@ -144,7 +146,9 @@ struct RepositorySyncCascadeTests {
   @Test
   func earmarkSyncDeleteCascadesBudgetItemsAndNullsLegs() async throws {
     let database = try ProfileDatabase.openInMemory()
-    let earmarkRepo = GRDBEarmarkRepository(database: database, defaultInstrument: .AUD)
+    let earmarkRepo = GRDBEarmarkRepository(
+      database: database, defaultInstrument: .AUD,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
     let earmarkId = UUID()
     let categoryId = UUID()
     let budgetId = UUID()
@@ -198,7 +202,9 @@ struct RepositorySyncCascadeTests {
   @Test
   func setBudgetToleratesUnknownCategoryWithoutStubInsert() async throws {
     let database = try ProfileDatabase.openInMemory()
-    let earmarkRepo = GRDBEarmarkRepository(database: database, defaultInstrument: .USD)
+    let earmarkRepo = GRDBEarmarkRepository(
+      database: database, defaultInstrument: .USD,
+      instrumentResolver: PerProfileInstrumentMapResolver(database: database))
     let earmarkId = UUID()
     let unknownCategoryId = UUID()
 

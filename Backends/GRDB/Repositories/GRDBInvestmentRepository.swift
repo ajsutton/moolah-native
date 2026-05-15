@@ -13,27 +13,48 @@ import GRDB
 /// `SELECT … LIMIT 1` followed by `UPDATE` or `INSERT` so a same-day
 /// re-write replaces in place.
 ///
+/// **Instrument resolution.** `fetchDailyBalances(...)` resolves each
+/// leg's `instrument` via the injected `instrumentResolver`. The
+/// instrument map is fetched once, *before* opening the per-profile
+/// read snapshot, because the canonical registry lives on a different
+/// (profile-index) database — a cross-database transaction is
+/// impossible. Instrument identity is immutable lookup data, so a read
+/// that is not atomic with the leg-row snapshot is safe and intended.
+/// Mirrors `GRDBTransactionRepository`.
+///
 /// **`@unchecked Sendable` justification.** All stored properties are
 /// `let`. `database` (`any DatabaseWriter`) is itself `Sendable` (GRDB
 /// protocol guarantee — the queue's serial executor mediates concurrent
-/// access). `defaultInstrument` is a value type. `onRecordChanged` and
-/// `onRecordDeleted` are `@Sendable` closures captured at init. Nothing
-/// mutates post-init, so the reference can be shared across actor
-/// boundaries without a data race; `@unchecked` only waives Swift's
-/// structural check that `final class` types meet `Sendable`'s
-/// requirements automatically.
+/// access). `defaultInstrument` is a value type. `instrumentResolver`
+/// is a `Sendable` protocol (`InstrumentMapResolving`) and immutable
+/// post-init. `onRecordChanged` and `onRecordDeleted` are `@Sendable`
+/// closures captured at init. Nothing mutates post-init, so the
+/// reference can be shared across actor boundaries without a data race;
+/// `@unchecked` only waives Swift's structural check that `final class`
+/// types meet `Sendable`'s requirements automatically.
 /// See `guides/CONCURRENCY_GUIDE.md` §2 "False Positives to Avoid",
 /// Carve-out 3 (GRDB repositories).
 final class GRDBInvestmentRepository: InvestmentRepository, @unchecked Sendable {
-  // `database`, `defaultInstrument`, and `errorChannel` are deliberately
-  // not `private` so the sibling `+Observation.swift` extension can reach
-  // them. Treat them as private-by-convention from elsewhere in the
-  // module.
+  // `database`, `defaultInstrument`, `instrumentResolver`, and
+  // `errorChannel` are deliberately not `private` so the sibling
+  // `+Observation.swift` extension can reach them. Treat them as
+  // private-by-convention from elsewhere in the module.
   let database: any DatabaseWriter
   /// Used as the labelling instrument on `AccountDailyBalance` rows
   /// returned from `fetchDailyBalances(...)`. Mirrors
   /// `CloudKitInvestmentRepository.instrument`.
   let defaultInstrument: Instrument
+  /// Resolves the `[String: Instrument]` lookup table from the
+  /// canonical instrument registry. Fetched once per read operation
+  /// *before* the per-profile snapshot opens — the registry lives on a
+  /// separate (profile-index) database, so a cross-database transaction
+  /// is impossible. Instrument identity is immutable lookup data.
+  /// Production sessions inject the shared
+  /// `GRDBInstrumentRegistryRepository`; preview / test / apply callers
+  /// inject `PerProfileInstrumentMapResolver` over the same per-profile
+  /// DB so their behaviour is unchanged until the per-profile
+  /// `instrument` table is dropped.
+  let instrumentResolver: any InstrumentMapResolving
   private let onRecordChanged: @Sendable (String, UUID) -> Void
   private let onRecordDeleted: @Sendable (String, UUID) -> Void
   /// Single shared error channel for every `observeValues(...)` /
@@ -48,11 +69,13 @@ final class GRDBInvestmentRepository: InvestmentRepository, @unchecked Sendable 
   init(
     database: any DatabaseWriter,
     defaultInstrument: Instrument,
+    instrumentResolver: any InstrumentMapResolving,
     onRecordChanged: @escaping @Sendable (String, UUID) -> Void = { _, _ in },
     onRecordDeleted: @escaping @Sendable (String, UUID) -> Void = { _, _ in }
   ) {
     self.database = database
     self.defaultInstrument = defaultInstrument
+    self.instrumentResolver = instrumentResolver
     self.onRecordChanged = onRecordChanged
     self.onRecordDeleted = onRecordDeleted
   }
@@ -132,10 +155,18 @@ final class GRDBInvestmentRepository: InvestmentRepository, @unchecked Sendable 
 
   func fetchDailyBalances(accountId: UUID) async throws -> [AccountDailyBalance] {
     let defaultInstrument = self.defaultInstrument
+    // Resolve the instrument lookup table before opening the
+    // per-profile snapshot: the canonical registry is a separate
+    // database, so the map cannot be joined into this transaction.
+    // Instrument identity is immutable lookup data — a read not atomic
+    // with the leg-row snapshot is safe and intended. Mirrors
+    // `GRDBTransactionRepository.fetchAll(filter:)`.
+    let instruments = try await instrumentResolver.instrumentMap()
     return try await database.read { database in
       try DailyBalanceCompute.compute(
         database: database,
         accountId: accountId,
+        instruments: instruments,
         defaultInstrument: defaultInstrument)
     }
   }
