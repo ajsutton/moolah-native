@@ -76,7 +76,8 @@ struct TransferEventBuilder: Sendable {
     transfers: [AlchemyTransfer],
     account: Account,
     services: BuilderServices,
-    importOrigin: ImportOrigin
+    importOrigin: ImportOrigin,
+    signedGasTxs: [SignedGasTx] = []
   ) async throws -> [BuiltTransaction] {
     let chain = services.chain
     let discovery = services.discovery
@@ -112,6 +113,7 @@ struct TransferEventBuilder: Sendable {
     let groups = groupByHash(transfers)
     let receipts = try await TransferReceiptCoalescer.fetchReceipts(
       groups: groups,
+      extraSignedHashes: signedGasTxs.map(\.hash),
       walletAddress: context.walletAddress,
       chain: chain,
       alchemy: alchemy)
@@ -131,6 +133,32 @@ struct TransferEventBuilder: Sendable {
         continue
       }
       results.append(built)
+    }
+
+    // #919: every tx the wallet signed paid gas, even when it produced
+    // no transfer (approve(), failed, zero-movement). Those hashes are
+    // absent from `groups`; emit a transaction whose only leg is the
+    // gas leg, dated to the signed-tx block timestamp.
+    let groupedHashes = Set(groups.compactMap(\.first?.hash))
+    for signed in signedGasTxs where !groupedHashes.contains(signed.hash) {
+      try Task.checkCancellation()
+      guard
+        let receipt = receipts[signed.hash],
+        let gasLeg = TransferReceiptCoalescer.makeGasLeg(
+          receipt: receipt,
+          accountId: context.account.id,
+          chain: context.chain,
+          walletAddress: context.walletAddress)
+      else {
+        continue
+      }
+      let transaction = Transaction(
+        date: signed.blockTimestamp,
+        legs: [gasLeg],
+        importOrigin: context.importOrigin)
+      results.append(
+        BuiltTransaction(
+          originAccountId: context.account.id, transaction: transaction))
     }
     return results
   }

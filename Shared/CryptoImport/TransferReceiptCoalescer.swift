@@ -29,11 +29,16 @@ enum TransferReceiptCoalescer {
   /// the cancellation rather than a missing leg.
   static func fetchReceipts(
     groups: [[AlchemyTransfer]],
+    extraSignedHashes: [String] = [],
     walletAddress: String,
     chain: ChainConfig,
     alchemy: any AlchemyClient
   ) async throws -> [String: AlchemyTransactionReceipt] {
-    let hashes = outboundHashes(in: groups, walletAddress: walletAddress)
+    var hashes = outboundHashes(in: groups, walletAddress: walletAddress)
+    var seen = Set(hashes)
+    for hash in extraSignedHashes where seen.insert(hash).inserted {
+      hashes.append(hash)
+    }
     guard !hashes.isEmpty else { return [:] }
     var receipts: [String: AlchemyTransactionReceipt] = [:]
     receipts.reserveCapacity(hashes.count)
