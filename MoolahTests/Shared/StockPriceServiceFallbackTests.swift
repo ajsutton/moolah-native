@@ -13,21 +13,23 @@ import Testing
 /// range-filters like Yahoo does, so it is the more faithful pin.
 @Suite("StockPriceService fallback semantics")
 struct StockPriceServiceFallbackTests {
+  nonisolated(unsafe) private static let isoFormatter: ISO8601DateFormatter = {
+    let fmt = ISO8601DateFormatter()
+    fmt.formatOptions = [.withFullDate]
+    return fmt
+  }()
+
   /// Non-throwing parse used for the pinned `now` clock. The ISO literals
   /// here are compile-time constants; a `nil` is a programmer error.
   private static func parse(_ iso: String) -> Date {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withFullDate]
-    guard let result = formatter.date(from: iso) else {
+    guard let result = isoFormatter.date(from: iso) else {
       preconditionFailure("Invalid ISO date literal: \(iso)")
     }
     return result
   }
 
   private func date(_ iso: String) throws -> Date {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withFullDate]
-    return try #require(formatter.date(from: iso))
+    try #require(Self.isoFormatter.date(from: iso))
   }
 
   private func makeService(_ prices: [String: Decimal]) throws -> StockPriceService {

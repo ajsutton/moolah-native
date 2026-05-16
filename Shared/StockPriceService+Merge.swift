@@ -28,7 +28,7 @@ extension StockPriceService {
 
     if var existing = caches[ticker] {
       for (dateKey, price) in newPrices {
-        guard let key = DateKey.from(isoString: dateKey) else { continue }
+        guard let key = DateKey.from(isoString: dateKey) else { continue }  // malformed wire date — unusable as a sorted key; skip
         if existing.prices.exact(key) != price {
           deltaRecords.append(priceRecord(ticker: ticker, date: dateKey, price: price))
           existing.prices.upsert(key, price)
@@ -44,7 +44,7 @@ extension StockPriceService {
     } else {
       var series = SortedDateSeries<Decimal>()
       for (dateKey, price) in newPrices {
-        guard let key = DateKey.from(isoString: dateKey) else { continue }
+        guard let key = DateKey.from(isoString: dateKey) else { continue }  // malformed wire date — unusable as a sorted key; skip
         series.upsert(key, price)
         deltaRecords.append(priceRecord(ticker: ticker, date: dateKey, price: price))
       }
