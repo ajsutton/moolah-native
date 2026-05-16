@@ -54,10 +54,10 @@ struct CryptoWalletAccountView: View {
   }
 
   @ViewBuilder private var walletHeader: some View {
-    // Gate unchanged: the header only renders for a crypto account
-    // whose chain is known (and a sync store is available) — the
-    // generalised header derives the chain name from `chainId` via
-    // `SyncableAccountPresentation`, so `chain` is no longer passed.
+    // The header only renders for a crypto account whose chain is known
+    // (and a sync store is available). It derives the chain name from
+    // `chainId` via `SyncableAccountPresentation`, so the chain is not
+    // passed in.
     if let chainId = account.chainId,
       ChainConfig.config(for: chainId) != nil,
       let cryptoSyncStore = session.cryptoSyncStore

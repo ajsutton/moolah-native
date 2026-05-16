@@ -9,9 +9,9 @@ import SwiftUI
 #endif
 
 /// Compact header for a syncable account (`AccountType.crypto` or
-/// `.exchange`). Generalised from the crypto-only `WalletAccountHeaderView`;
-/// all account-type branching lives in `SyncableAccountPresentation` so
-/// this view stays provider-agnostic. Renders:
+/// `.exchange`). All account-type branching lives in
+/// `SyncableAccountPresentation` so this view stays provider-agnostic.
+/// Renders:
 ///
 /// - For crypto: the full wallet address in a monospaced, selectable
 ///   font with a copy button. The address is **never** truncated in
@@ -96,10 +96,12 @@ struct SyncedAccountHeaderView: View {
     SyncedAccountHeaderLogic.errorCaption(for: syncState, account: account)
   }
 
+  private var presentation: SyncableAccountPresentation {
+    SyncableAccountPresentation(account: account, hasCredential: hasCredential)
+  }
+
   var body: some View {
-    let presentation = SyncableAccountPresentation(
-      account: account, hasCredential: hasCredential)
-    return VStack(alignment: .leading, spacing: 4) {
+    VStack(alignment: .leading, spacing: 4) {
       if account.type == .crypto {
         addressSection
       }
@@ -144,13 +146,20 @@ struct SyncedAccountHeaderView: View {
   private func identifierRow(_ presentation: SyncableAccountPresentation) -> some View {
     if !presentation.identifier.isEmpty {
       HStack {
-        identifierText(presentation)
-        if let secondary = presentation.secondaryIdentifier {
-          Text(secondary)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.chainName)
+        // Identifier + chain name form one VoiceOver stop. Only this
+        // text subgroup is combined so the external Link below stays a
+        // separate focusable action, and `.textSelection` on the crypto
+        // address remains reachable to VoiceOver.
+        HStack(spacing: 4) {
+          identifierText(presentation)
+          if let secondary = presentation.secondaryIdentifier {
+            Text(secondary)
+              .font(.caption)
+              .foregroundStyle(.secondary)
+              .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.chainName)
+          }
         }
+        .accessibilityElement(children: .combine)
         if let url = presentation.externalURL,
           let title = presentation.externalActionTitle
         {
@@ -158,10 +167,6 @@ struct SyncedAccountHeaderView: View {
             .font(.caption)
         }
       }
-      // One VoiceOver stop for identifier + chain; the external Link
-      // stays a separate focusable action (not combined into the
-      // element — it must remain individually actionable).
-      .accessibilityElement(children: .combine)
     }
   }
 
@@ -193,11 +198,19 @@ struct SyncedAccountHeaderView: View {
   /// elsewhere).
   private func missingCredentialHint(_ hint: String) -> some View {
     HStack(spacing: 6) {
-      Image(systemName: "key.slash")
-        .foregroundStyle(.secondary)
-      Text(hint)
-        .font(.caption)
-        .foregroundStyle(.secondary)
+      // Icon + hint text form one VoiceOver stop. The icon is
+      // decorative (hidden from VoiceOver); only this subgroup is
+      // combined so the macOS `SettingsLink` stays independently
+      // activatable.
+      HStack(spacing: 6) {
+        Image(systemName: "key.slash")
+          .foregroundStyle(.secondary)
+          .accessibilityHidden(true)
+        Text(hint)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+      .accessibilityElement(children: .combine)
       // `SettingsLink` is macOS-only and crypto-only. iOS users
       // navigate to Crypto preferences from the app's settings tab;
       // the hint copy alone is enough on that platform.
@@ -213,7 +226,6 @@ struct SyncedAccountHeaderView: View {
       #endif
       Spacer()
     }
-    .accessibilityElement(children: .combine)
     .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.missingApiKeyHint)
   }
 
@@ -264,10 +276,6 @@ struct SyncedAccountHeaderView: View {
         inProgress: syncStore.inProgressAccountIds,
         hasCredential: presentation.hasCredential)
     )
-    // A global Cmd+R "Refresh" command already exists
-    // (`RefreshCommands` in MoolahDomainCommands). Cmd+Shift+R avoids a
-    // duplicate-shortcut conflict in the same responder chain.
-    .keyboardShortcut("r", modifiers: [.command, .shift])
     .help(
       presentation.hasCredential
         ? "Sync account now"
@@ -312,6 +320,4 @@ extension SyncedAccountHeaderView {
 // see the `CryptoWalletAccountView` preview comment). The header is
 // exercised in canvas through its parents instead — the crypto path via
 // `CryptoWalletAccountView`'s `#Preview` and the exchange path via
-// `ExchangeAccountView`'s `#Preview` — which is the established pattern
-// (the pre-generalisation `WalletAccountHeaderView` had no preview of
-// its own either).
+// `ExchangeAccountView`'s `#Preview`.

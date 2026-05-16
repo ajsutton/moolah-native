@@ -41,9 +41,9 @@ struct SyncableAccountPresentation: Sendable {
       } else {
         externalURL = nil
       }
-      // Byte-verbatim with the crypto missing-Alchemy-key hint that
-      // `SyncedAccountHeaderView` rendered before this seam existed —
-      // do not reword without updating `CryptoSettingsView` too.
+      // Byte-verbatim with the crypto missing-Alchemy-key hint in
+      // `SyncedAccountHeaderView` — do not reword without updating
+      // `CryptoSettingsView` too.
       missingCredentialHint =
         hasCredential
         ? nil : "Add an Alchemy key in Crypto preferences to enable sync."
@@ -62,8 +62,8 @@ struct SyncableAccountPresentation: Sendable {
       }
       missingCredentialHint =
         hasCredential
-        ? nil : "Add your read-only API token in account settings to sync."
-    default:
+        ? nil : "Edit this account to add a read-only API token."
+    case .bank, .creditCard, .asset, .investment:
       identifier = ""
       secondaryIdentifier = nil
       isSelectableIdentifier = false

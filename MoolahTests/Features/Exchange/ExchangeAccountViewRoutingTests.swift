@@ -7,7 +7,9 @@ import Testing
 /// a build/compile guard: it pins that `ExchangeAccountView` constructs
 /// from an `.exchange` account with the same stores its siblings take
 /// and composes the shared synced-account header. End-to-end routing is
-/// verified by the run-mac manual step in the plan (Task 11D Step 5).
+/// verified by manual app launch; this unit test is a build/compile
+/// guard only.
+@Suite("ExchangeAccountView — routing")
 @MainActor
 struct ExchangeAccountViewRoutingTests {
   @Test

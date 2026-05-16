@@ -6,10 +6,11 @@ import OSLog
 /// predicate, and the user-facing error caption so they are all
 /// unit-testable without instantiating a SwiftUI view.
 ///
-/// Generalised from the crypto-only `WalletAccountHeaderLogic`: the
-/// sync-enabled predicate and the error caption now branch on account
-/// type so the same header serves crypto and exchange accounts. Crypto
-/// copy is byte-identical to the pre-generalisation strings.
+/// The sync-enabled predicate and the error caption branch on account
+/// type so the same header serves crypto and exchange accounts. The
+/// crypto error-caption strings are byte-identical to the
+/// `WalletAccountHeaderLogic` contract and must stay so — do not reword
+/// a crypto branch without updating its callers/tests.
 enum SyncedAccountHeaderLogic {
   private static let logger = Logger(
     subsystem: "com.moolah.app", category: "SyncedAccountHeaderLogic")
@@ -76,7 +77,7 @@ enum SyncedAccountHeaderLogic {
           "Keychain unavailable for \(account.id, privacy: .public): \(error, privacy: .public)")
         return true
       }
-    default:
+    case .bank, .creditCard, .asset, .investment:
       return true
     }
   }
@@ -103,7 +104,7 @@ enum SyncedAccountHeaderLogic {
       switch account.type {
       case .exchange:
         return "Add your read-only API token to sync."
-      default:
+      case .crypto, .bank, .creditCard, .asset, .investment:
         return "Add an Alchemy API key to enable sync."
       }
     case .invalidApiKey:
@@ -111,7 +112,7 @@ enum SyncedAccountHeaderLogic {
       case .exchange:
         let provider = account.exchangeProvider?.displayName ?? "The exchange"
         return "\(provider) rejected the API token."
-      default:
+      case .crypto, .bank, .creditCard, .asset, .investment:
         return "Alchemy rejected the API key."
       }
     case .rateLimited(let retryAfter):

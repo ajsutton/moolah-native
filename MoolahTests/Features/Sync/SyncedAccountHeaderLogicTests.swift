@@ -11,9 +11,8 @@ import Testing
 /// rendering itself is exercised via preview snapshots and the UI
 /// driver suite.
 ///
-/// Characterisation: the crypto-account behaviour asserted here is
-/// byte-identical to the pre-generalisation `WalletAccountHeaderLogic`
-/// contract — these tests must stay green across the generalisation.
+/// Characterisation: the crypto-string assertions here are byte-identical
+/// to the `WalletAccountHeaderLogic` contract and must remain so.
 @Suite("SyncedAccountHeaderLogic")
 struct SyncedAccountHeaderLogicTests {
   private let cryptoAccount = Account(
