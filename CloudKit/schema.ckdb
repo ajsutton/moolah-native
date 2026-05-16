@@ -8,6 +8,7 @@ DEFINE SCHEMA
         "___modifiedBy" REFERENCE,
         "___recordID"   REFERENCE QUERYABLE,
         chainId         INT64 QUERYABLE SORTABLE,
+        exchangeProvider STRING QUERYABLE SEARCHABLE SORTABLE,
         instrumentId    STRING QUERYABLE SEARCHABLE SORTABLE,
         isHidden        INT64 QUERYABLE SORTABLE,
         name            STRING QUERYABLE SEARCHABLE SORTABLE,
