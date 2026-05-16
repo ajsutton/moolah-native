@@ -25,20 +25,30 @@ struct CreateAccountView: View {
   @State private var cryptoChain: ChainConfig = .ethereum
   @State private var cryptoWalletAddress = ""
 
+  // MARK: - Exchange-only form state
+  //
+  // Lifted to the shell for the same reason as the crypto state above:
+  // one set of bindings across type switches; the shared Cancel/Create
+  // toolbar and shared name + type Picker stay type-agnostic.
+
+  @State private var exchangeProvider: ExchangeProvider = .coinstash
+  @State private var exchangeToken = ""
+
   let instrument: Instrument
   let accountStore: AccountStore
-  let cryptoSyncStore: CryptoSyncStore?
+  let cryptoSyncStore: SyncedAccountStore?
 
   private enum Field: Hashable {
     case name
     case balance
     case walletAddress
+    case exchangeToken
   }
 
   init(
     instrument: Instrument,
     accountStore: AccountStore,
-    cryptoSyncStore: CryptoSyncStore? = nil
+    cryptoSyncStore: SyncedAccountStore? = nil
   ) {
     self.instrument = instrument
     self.accountStore = accountStore
@@ -61,9 +71,17 @@ struct CreateAccountView: View {
         sharedFields
         if type == .crypto {
           cryptoFields
-        } else {
+        } else if type != .exchange {
           standardFields
         }
+      }
+      // The exchange branch renders its own Section (it carries a footer
+      // — the read-only-token safety note); it can't nest inside the
+      // shared Section above.
+      if type == .exchange {
+        ExchangeAccountCreationView(
+          provider: $exchangeProvider,
+          token: $exchangeToken)
       }
       if let errorMessage {
         Section {
@@ -97,7 +115,13 @@ struct CreateAccountView: View {
   @ViewBuilder private var sharedFields: some View {
     TextField("Name", text: $name, prompt: Text(namePrompt))
       .focused($focusedField, equals: .name)
-      .onSubmit { focusedField = type == .crypto ? .walletAddress : .balance }
+      .onSubmit {
+        switch type {
+        case .crypto: focusedField = .walletAddress
+        case .exchange: focusedField = .exchangeToken
+        default: focusedField = .balance
+        }
+      }
       .accessibilityLabel("Account name")
 
     Picker("Account Type", selection: $type) {
@@ -134,15 +158,19 @@ struct CreateAccountView: View {
   private var namePrompt: String {
     switch type {
     case .crypto: return "e.g. Hardware Wallet — Ethereum"
+    case .exchange: return "e.g. \(exchangeProvider.displayName)"
     default: return "e.g. MyBank - Savings"
     }
   }
 
   private var isValid: Bool {
-    let trimmedName = name.trimmingCharacters(in: .whitespaces)
+    let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedName.isEmpty else { return false }
     if type == .crypto {
       return Account.validatedWalletAddress(cryptoWalletAddress) != nil
+    }
+    if type == .exchange {
+      return !exchangeToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     return true
   }
@@ -155,6 +183,12 @@ struct CreateAccountView: View {
 
     if type == .crypto {
       await submitCrypto()
+      isSubmitting = false
+      return
+    }
+
+    if type == .exchange {
+      await submitExchange()
       isSubmitting = false
       return
     }
@@ -189,6 +223,29 @@ struct CreateAccountView: View {
       dismiss()
     case .invalidAddress:
       errorMessage = "Enter a valid 0x wallet address."
+    case .failure(let error):
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  private func submitExchange() async {
+    // No env/session here — construct the production token store the same
+    // way `ProfileSession` does (iCloud-synced keychain). The account is
+    // denominated in the profile currency (`instrument`), exactly as the
+    // crypto path passes `accountInstrument: instrument`. The shared
+    // `SyncedAccountStore` (`cryptoSyncStore`) drives the initial sync.
+    let logic = ExchangeAccountCreationLogic(
+      accountStore: accountStore,
+      tokenStore: ExchangeTokenStore(synchronizable: true),
+      syncStore: cryptoSyncStore,
+      profileInstrument: instrument)
+    let outcome = await logic.submit(
+      name: name, provider: exchangeProvider, token: exchangeToken)
+    switch outcome {
+    case .created:
+      dismiss()
+    case .invalidInput:
+      errorMessage = "Enter your read-only API token."
     case .failure(let error):
       errorMessage = error.localizedDescription
     }

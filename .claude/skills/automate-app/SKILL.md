@@ -93,6 +93,13 @@ moolah-tell 'get balance of account "Savings" of profile "Test"'
 # Get all account names and balances
 moolah-tell 'get {name, balance} of every account of profile "Test"'
 
+# Get per-instrument holdings (multi-instrument crypto/exchange accounts).
+# `balance` only reflects the account's primary instrument; `positions`
+# returns a list of "SYMBOL=quantity" strings for every held instrument.
+# Instruments that net to zero are omitted (matches the positions view).
+moolah-tell 'get positions of account "Trust - Coinstash" of profile "Test"'
+# → OP=12.5, USDC=0.0, BTC=0.00032433, AUD=14.20
+
 # Get net worth
 moolah-tell 'net worth of profile "Test"'
 
@@ -128,6 +135,17 @@ moolah-tell 'delete transaction id "UUID-HERE" of profile "Test"'
 # Pay a scheduled transaction
 moolah-tell 'pay transaction id "UUID-HERE" of profile "Test"'
 ```
+
+> **Caveat — the singular `transaction` class term is shadowed.** The
+> dictionary defines a `transaction type` *property*, which the AppleScript
+> parser prefers over the `transaction` *class*. As a result, specifiers that
+> use the bare class term — `every transaction whose …`, `transaction id "…"`
+> in some positions — can fail to parse ("Expected class name but found
+> transaction"). `count transactions of profile …` (plural element) and
+> `get … of every transaction of profile …` work. To clear a synced
+> account's imported data, prefer `reset import` (below) over deleting each
+> transaction by id. Tracked in
+> [#923](https://github.com/ajsutton/moolah-native/issues/923).
 
 ### Earmark Operations
 
@@ -170,6 +188,35 @@ moolah-tell 'navigate to account "Savings" of profile "Test"'
 
 # Navigate to a specific earmark (same: selects in sidebar, shows detail)
 moolah-tell 'navigate to earmark "Holiday" of profile "Test"'
+```
+
+### Synced account testing (crypto / exchange)
+
+For verifying a crypto/exchange import change end-to-end against a test
+profile:
+
+```bash
+# Force a sync of every synced account (crypto AND exchange) now,
+# bypassing the hourly staleness timer. Returns immediately; the sync
+# runs in the background — watch logs for completion.
+moolah-tell 'synchronize profile "Test"'
+
+# Clear every transaction on a synced account so the next `synchronize`
+# re-imports it from scratch (per-leg dedup is keyed on
+# (accountId, externalId); with the legs gone the rebuild is clean).
+# Keeps the account and its saved API token.
+moolah-tell 'reset import of account "Trust - Coinstash" of profile "Test"'
+```
+
+Typical clean-resync verification loop (use the `run-mac-app-with-logs`
+skill so the sync is captured):
+
+```bash
+moolah-tell 'reset import of account "Trust - Coinstash" of profile "Test"'
+moolah-tell 'synchronize profile "Test"'
+# wait for the sync to land, e.g.:
+#   until grep -q "ExchangeSyncEngine.*Built .* candidates" .agent-tmp/app-logs.txt; do sleep 2; done
+moolah-tell 'get positions of account "Trust - Coinstash" of profile "Test"'
 ```
 
 ### Screenshot

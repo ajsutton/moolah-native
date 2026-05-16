@@ -13,6 +13,7 @@
     private let _investmentValue: Double
     private let _isHidden: Bool
     private let _profileName: String
+    private let _positions: [String]
 
     @MainActor
     init(account: Account, profileName: String) {
@@ -25,6 +26,11 @@
       _investmentValue = 0
       _isHidden = account.isHidden
       _profileName = profileName
+      // One "SYMBOL=quantity" entry per held instrument, ordered by
+      // instrument id (matches `Position` ordering). Multi-instrument
+      // accounts (crypto / exchange) hold more than the primary; `balance`
+      // alone can't express them.
+      _positions = account.positions.map { "\($0.instrument.shortCode)=\($0.quantity)" }
       super.init()
     }
 
@@ -34,6 +40,7 @@
     @objc var balance: Double { _balance }
     @objc var investmentValue: Double { _investmentValue }
     @objc var isHidden: Bool { _isHidden }
+    @objc var positions: [String] { _positions }
 
     // MARK: - Object Specifier
 

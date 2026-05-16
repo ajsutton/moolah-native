@@ -12,6 +12,8 @@ import Foundation
 /// Identifiers are added incrementally as drivers and tests need them — see
 /// `guides/UI_TEST_GUIDE.md` §4.
 public enum UITestIdentifiers {
+  // MARK: - Sidebar
+
   public enum Sidebar {
     /// Sidebar row for a specific account. `id` is the account's UUID, lowercased.
     ///
@@ -48,6 +50,8 @@ public enum UITestIdentifiers {
     public static let editAccountContextMenuItem = "sidebar.contextMenu.editAccount"
   }
 
+  // MARK: - TransactionList
+
   public enum TransactionList {
     /// Root container of the transaction list (centre column). Used as a
     /// stable post-condition sentinel after sidebar selection — the row
@@ -61,6 +65,8 @@ public enum UITestIdentifiers {
       "transactionlist.transaction.\(id.uuidString.lowercased())"
     }
   }
+
+  // MARK: - Detail
 
   public enum Detail {
     /// Payee text field on the transaction detail surface.
@@ -148,11 +154,15 @@ public enum UITestIdentifiers {
     }
   }
 
+  // MARK: - SyncFooter
+
   public enum SyncFooter {
     public static let container = "sync.footer.container"
     public static let label = "sync.footer.label"
     public static let detail = "sync.footer.detail"
   }
+
+  // MARK: - Welcome
 
   public enum Welcome {
     /// "Get started" primary CTA on the first-run hero (states 1 and 4).
@@ -191,6 +201,8 @@ public enum UITestIdentifiers {
     public static let iCloudOffSystemSettingsLink = "welcome.off.systemSettings"
   }
 
+  // MARK: - InstrumentPicker
+
   public enum InstrumentPicker {
     /// The field button that opens the instrument picker sheet. The qualifier
     /// is the currently selected instrument's id (e.g. `"AUD"`, `"USD"`).
@@ -218,6 +230,8 @@ public enum UITestIdentifiers {
     }
   }
 
+  // MARK: - Settings
+
   public enum Settings {
     /// Title of the Crypto tab in the macOS Settings TabView. SwiftUI's
     /// `Tab` does not propagate `.accessibilityIdentifier(_:)` to the
@@ -231,6 +245,8 @@ public enum UITestIdentifiers {
     public static let cryptoTabTitle = "Crypto"
   }
 
+  // MARK: - CryptoAccountCreation
+
   public enum CryptoAccountCreation {
     /// Chain picker (Ethereum / OP Mainnet / Base / Polygon) inside the
     /// crypto branch of `CreateAccountView`. Pinned so a UI test can
@@ -243,6 +259,22 @@ public enum UITestIdentifiers {
     public static let walletAddressField = "createAccount.crypto.walletAddress"
   }
 
+  // MARK: - ExchangeAccountCreation
+
+  public enum ExchangeAccountCreation {
+    /// Provider picker (currently Coinstash) inside the exchange branch
+    /// of `CreateAccountView`. Pinned so a UI test can switch providers
+    /// without depending on rendered display names.
+    public static let providerPicker = "createAccount.exchange.providerPicker"
+
+    /// Read-only API-token `SecureField` inside the exchange branch of
+    /// `CreateAccountView`. The user pastes their provider token here;
+    /// it is persisted to the keychain via `ExchangeTokenStore`.
+    public static let accessTokenField = "createAccount.exchange.accessTokenField"
+  }
+
+  // MARK: - CreateCategory
+
   public enum CreateCategory {
     /// Parent-category autocomplete field in the create-category sheet
     /// reached from the Categories list "+". Pinned so a future UI test
@@ -253,79 +285,10 @@ public enum UITestIdentifiers {
   // The `WalletAccountHeader` namespace lives in
   // `UITestIdentifiers+WalletAccountHeader.swift`.
 
-  public enum CryptoSettings {
-    /// Root container of the `CryptoSettingsView` Form. Sentinel for the
-    /// "Crypto tab is on screen" post-condition after switching tabs in the
-    /// macOS Settings window.
-    public static let container = "crypto.settings.container"
+  // The `CryptoSettings` namespace lives in
+  // `UITestIdentifiers+CryptoSettings.swift`.
 
-    /// "+" toolbar button in the Crypto tab header that opens
-    /// `AddTokenSheet`. Tapping it presents the embedded
-    /// `InstrumentPickerSheet` filtered to crypto tokens.
-    public static let addTokenButton = "crypto.settings.addToken"
-
-    /// A row in the registered-tokens list. The qualifier is the
-    /// `CryptoRegistration.id`, which is the Instrument id (e.g.
-    /// `1:0x1f9840…f984`).
-    public static func registrationRow(_ id: String) -> String {
-      "crypto.settings.registration.\(id)"
-    }
-
-    /// Secure field for the Alchemy API key. Pinned so a UI test can
-    /// drive the settings flow end-to-end.
-    public static let alchemyApiKeyField = "crypto.settings.alchemy.field"
-
-    /// "Save" button next to the Alchemy API key entry field.
-    public static let alchemyApiKeySaveButton = "crypto.settings.alchemy.save"
-
-    /// "Remove" button shown when an Alchemy key is already configured.
-    public static let alchemyApiKeyRemoveButton = "crypto.settings.alchemy.remove"
-
-    /// A crypto account row in the accounts list. Qualifier is the
-    /// `Account.id` UUID.
-    public static func accountRow(_ id: UUID) -> String {
-      "crypto.settings.account.\(id.uuidString)"
-    }
-
-    /// Per-row "Sync now" button. Qualifier is the `Account.id` UUID.
-    public static func syncNowButton(_ id: UUID) -> String {
-      "crypto.settings.account.sync.\(id.uuidString)"
-    }
-
-    /// Navigation row that opens the Discovered Tokens inbox.
-    public static let discoveredTokensRow = "crypto.settings.discoveredTokens"
-
-    /// Navigation row that opens the Spam Tokens management view.
-    public static let spamTokensRow = "crypto.settings.spamTokens"
-
-    /// A row inside the Discovered Tokens inbox. Qualifier is the
-    /// `CryptoRegistration.id`.
-    public static func discoveredRow(_ id: String) -> String {
-      "crypto.settings.discovered.\(id)"
-    }
-
-    /// "Mark as spam" button on a Discovered Tokens row.
-    public static func markSpamButton(_ id: String) -> String {
-      "crypto.settings.discovered.spam.\(id)"
-    }
-
-    /// "Re-resolve" button on a Discovered Tokens row.
-    public static func reResolveButton(_ id: String) -> String {
-      "crypto.settings.discovered.reresolve.\(id)"
-    }
-
-    /// A row inside the Spam Tokens management view. Qualifier is the
-    /// `CryptoRegistration.id`.
-    public static func spamRow(_ id: String) -> String {
-      "crypto.settings.spam.\(id)"
-    }
-
-    /// "Restore" button on a Spam Tokens row — flips status back to
-    /// `.unpriced` so the row returns to the Discovered Tokens inbox.
-    public static func restoreButton(_ id: String) -> String {
-      "crypto.settings.spam.restore.\(id)"
-    }
-  }
+  // MARK: - EditAccount
 
   public enum EditAccount {
     /// Valuation-mode picker shown for legacy investment accounts in
@@ -349,7 +312,17 @@ public enum UITestIdentifiers {
     /// future tests can exercise the save path through the same
     /// resolver pattern.
     public static let saveButton = "editAccount.save"
+
+    /// Write-only `SecureField` shown only for `.exchange` accounts in
+    /// `EditAccountView.exchangeSection`. The user types a new read-only
+    /// API token to replace the stored one (blank = keep existing).
+    /// Distinct from `ExchangeAccountCreation.accessTokenField`
+    /// (`createAccount.exchange.accessTokenField`) so XCUITest matching
+    /// never resolves the wrong field across the create/edit surfaces.
+    public static let exchangeAccessTokenField = "editAccount.exchange.accessTokenField"
   }
+
+  // MARK: - Autocomplete
 
   public enum Autocomplete {
     /// Container element of the payee autocomplete dropdown.

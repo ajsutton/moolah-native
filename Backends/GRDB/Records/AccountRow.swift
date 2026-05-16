@@ -25,6 +25,7 @@ struct AccountRow {
     case valuationMode = "valuation_mode"
     case walletAddress = "wallet_address"
     case chainId = "chain_id"
+    case exchangeProvider = "exchange_provider"
   }
 
   enum CodingKeys: String, CodingKey {
@@ -39,6 +40,7 @@ struct AccountRow {
     case valuationMode = "valuation_mode"
     case walletAddress = "wallet_address"
     case chainId = "chain_id"
+    case exchangeProvider = "exchange_provider"
   }
 
   var id: UUID
@@ -63,6 +65,10 @@ struct AccountRow {
   /// populated when `type == "crypto"`. Defaulted to `nil` so existing
   /// memberwise-init call sites continue to compile.
   var chainId: Int?
+  /// Raw value of `ExchangeProvider` (e.g. `"coinstash"`), populated when
+  /// `type == "exchange"`. Defaulted to `nil` so existing memberwise-init
+  /// call sites continue to compile.
+  var exchangeProvider: String?
 }
 
 extension AccountRow: Codable {}

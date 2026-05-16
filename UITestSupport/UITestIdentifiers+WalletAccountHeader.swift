@@ -1,10 +1,10 @@
 import Foundation
 
 extension UITestIdentifiers {
-  /// Identifier namespace for `WalletAccountHeaderView` — the bar that
+  /// Identifier namespace for `SyncedAccountHeaderView` — the bar that
   /// renders above the transaction list on a `.crypto` account.
   public enum WalletAccountHeader {
-    /// Container of the `WalletAccountHeaderView` bar shown above the
+    /// Container of the `SyncedAccountHeaderView` bar shown above the
     /// transaction list on a `.crypto` account. Sentinel for "the
     /// wallet header is on screen".
     public static let container = "wallet.header.container"
@@ -42,9 +42,5 @@ extension UITestIdentifiers {
     /// `SettingsLink` inside the missing-API-key hint that opens the
     /// Crypto preferences pane.
     public static let missingApiKeyHintLink = "wallet.header.missingApiKeyHint.link"
-
-    /// Overflow menu button (ellipsis). Holds the
-    /// "View on block explorer" action.
-    public static let overflowMenu = "wallet.header.overflowMenu"
   }
 }

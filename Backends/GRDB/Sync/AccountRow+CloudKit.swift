@@ -21,6 +21,7 @@ extension AccountRow: CloudKitRecordConvertible {
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
     AccountRecordCloudKitFields(
       chainId: chainId.map(Int64.init),
+      exchangeProvider: exchangeProvider,
       instrumentId: instrumentId,
       isHidden: isHidden ? 1 : 0,
       name: name,
@@ -48,7 +49,8 @@ extension AccountRow: CloudKitRecordConvertible {
       encodedSystemFields: nil,
       valuationMode: fields.valuationMode ?? "recordedValue",
       walletAddress: fields.walletAddress,
-      chainId: fields.chainId.map(Int.init)
+      chainId: fields.chainId.map(Int.init),
+      exchangeProvider: fields.exchangeProvider
     )
   }
 
@@ -59,7 +61,9 @@ extension AccountRow: CloudKitRecordConvertible {
   /// for the entire zone. Logs a single warning per unknown value so the
   /// drift is visible in Console.
   static func safeAccountTypeRaw(_ raw: String) -> String {
-    let known: Set<String> = ["bank", "cc", "asset", "investment", "crypto"]
+    let known: Set<String> = [
+      "bank", "cc", "asset", "investment", "crypto", "exchange",
+    ]
     if known.contains(raw) { return raw }
     accountRowSyncLogger.warning(
       """

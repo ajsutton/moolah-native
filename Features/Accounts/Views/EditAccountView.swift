@@ -31,6 +31,10 @@ struct EditAccountView: View {
   @State private var errorMessage: String?
   @State private var showValuationPicker: Bool
   @State private var pickerShownDueToProbeFailure = false
+  /// Write-only replacement for an exchange account's read-only API
+  /// token. Empty = keep the stored token (handled by
+  /// `EditExchangeTokenLogic.applyTokenChange`).
+  @State private var replacementToken = ""
   @FocusState private var focusedField: Field?
 
   let account: Account
@@ -99,6 +103,7 @@ struct EditAccountView: View {
     Form {
       detailsSection
       valuationSection
+      exchangeSection
       if let errorMessage {
         Section {
           Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
@@ -215,6 +220,33 @@ struct EditAccountView: View {
     }
   }
 
+  /// Visible only for `.exchange` accounts: a read-only provider label
+  /// plus a write-only `SecureField` to replace the stored API token.
+  /// The current token is never surfaced (it lives in the keychain, not
+  /// the DB). Leaving the field blank keeps the existing token — stated
+  /// in the footer because that behaviour is not self-evident.
+  @ViewBuilder private var exchangeSection: some View {
+    if type == .exchange {
+      Section {
+        LabeledContent(
+          "Exchange",
+          value: account.exchangeProvider?.displayName ?? "—")
+        SecureField("New token", text: $replacementToken)
+          .textContentType(.password)
+          .accessibilityLabel("Replace API token")
+          .accessibilityHint("Leave blank to keep the existing token")
+          .accessibilityIdentifier(
+            UITestIdentifiers.EditAccount.exchangeAccessTokenField)
+      } footer: {
+        // Footer: plain Text, no .foregroundStyle — grouped-Form footers
+        // are already secondary.
+        Text(
+          "Enter a new read-only token to replace the stored one. "
+            + "Leave blank to keep the existing token.")
+      }
+    }
+  }
+
   // MARK: - Save
 
   private var isValid: Bool {
@@ -235,6 +267,16 @@ struct EditAccountView: View {
     updated.valuationMode = valuationMode
 
     do {
+      // Replace the keychain token BEFORE mutating the account row so a
+      // token-save failure aborts the whole save (surfaced via
+      // `errorMessage`) with no partially-applied edit. No env/session
+      // store for this — construct the production token store the same
+      // way `CreateAccountView.submitExchange` and `ProfileSession` do
+      // (iCloud-synced keychain). A blank field is a no-op.
+      try EditExchangeTokenLogic.applyTokenChange(
+        token: replacementToken,
+        for: account.id,
+        using: ExchangeTokenStore(synchronizable: true))
       _ = try await accountStore.update(updated)
       dismiss()
     } catch {
@@ -282,6 +324,28 @@ private func makePreviewView(account: Account) -> some View {
       type: .investment,
       instrument: .AUD,
       valuationMode: .calculatedFromTrades))
+}
+
+#Preview("Exchange account (replace-token section)") {
+  makePreviewView(
+    account: Account(
+      name: "My Coinstash",
+      type: .exchange,
+      instrument: .AUD,
+      valuationMode: .calculatedFromTrades,
+      exchangeProvider: .coinstash))
+}
+
+#Preview("Exchange account (replace-token section, Accessibility3)") {
+  makePreviewView(
+    account: Account(
+      name: "My Coinstash",
+      type: .exchange,
+      instrument: .AUD,
+      valuationMode: .calculatedFromTrades,
+      exchangeProvider: .coinstash)
+  )
+  .dynamicTypeSize(.accessibility3)
 }
 
 /// Wrapper that imitates the section structure used by

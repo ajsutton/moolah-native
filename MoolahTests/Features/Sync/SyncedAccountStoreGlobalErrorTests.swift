@@ -1,11 +1,11 @@
-// MoolahTests/Features/Crypto/CryptoSyncStoreGlobalErrorTests.swift
+// MoolahTests/Features/Sync/SyncedAccountStoreGlobalErrorTests.swift
 import Foundation
 import GRDB
 import Testing
 
 @testable import Moolah
 
-/// Tests for `CryptoSyncStore.globalError`. The banner powers
+/// Tests for `SyncedAccountStore.globalError`. The banner powers
 /// `CryptoSettingsView.alchemyStatusBadge`: it must surface whenever a
 /// build phase produces a process-wide failure (`.missingApiKey` /
 /// `.invalidApiKey`) — either of those means no account can sync, so
@@ -15,13 +15,13 @@ import Testing
 /// apply pass succeeds with empty input); doing so would leave the
 /// user staring at a per-row error caption with no global affordance
 /// to fix the underlying problem. These tests pin that contract.
-@Suite("CryptoSyncStore — globalError banner")
+@Suite("SyncedAccountStore — globalError banner")
 @MainActor
-struct CryptoSyncStoreGlobalErrorTests {
+struct SyncedAccountStoreGlobalErrorTests {
   nonisolated static let pinnedNow = Date(timeIntervalSince1970: 1_700_000_000)
 
   private struct Fixture {
-    let store: CryptoSyncStore
+    let store: SyncedAccountStore
     let backend: CloudKitBackend
     let database: DatabaseQueue
     let alchemy: RecordingAlchemyClientStub
@@ -54,8 +54,8 @@ struct CryptoSyncStoreGlobalErrorTests {
       walletSyncState: backend.walletSyncState,
       importRules: NoOpWalletImportRulesEngine(),
       clock: { Self.pinnedNow })
-    let store = CryptoSyncStore(
-      walletSyncEngine: walletSyncEngine,
+    let store = SyncedAccountStore(
+      sources: [WalletSyncSource(engine: walletSyncEngine)],
       walletApplyEngine: walletApplyEngine,
       walletSyncState: backend.walletSyncState,
       accounts: backend.accounts,
@@ -198,5 +198,76 @@ struct CryptoSyncStoreGlobalErrorTests {
     await fixture.store.syncAccount(account)
 
     #expect(fixture.store.globalError == nil)
+  }
+
+  // MARK: - globalError is crypto-scoped (the banner is Alchemy-specific)
+
+  /// Seeds an exchange account + saves its token, registering a
+  /// `CoinstashSyncSource` whose stub client throws the given error.
+  private func registerFailingExchangeAccount(
+    in fixture: Fixture, token: String, error: ExchangeClientError
+  ) throws -> Account {
+    let account = Account(
+      name: "Coinstash", type: .exchange, instrument: .AUD,
+      valuationMode: .calculatedFromTrades, exchangeProvider: .coinstash)
+    _ = TestBackend.seed(accounts: [account], in: fixture.database)
+    let tokenStore = ExchangeTokenStore(synchronizable: false)
+    try tokenStore.save(token: token, for: account.id)
+    fixture.store.appendSourceForTesting(
+      CoinstashSyncSource(
+        tokenStore: tokenStore,
+        client: StubExchangeClient(error: error),
+        engine: ExchangeSyncEngine(
+          resolver: ExchangeInstrumentResolver(
+            registry: StubInstrumentRegistry(), fiatInstrument: .AUD))))
+    return account
+  }
+
+  @Test("Exchange .invalidApiKey does NOT set the Alchemy globalError banner")
+  func exchangeInvalidApiKeyDoesNotRaiseGlobalError() async throws {
+    let fixture = try makeStore()
+    let exchange = try registerFailingExchangeAccount(
+      in: fixture, token: "BAD", error: .unauthorized)
+    try await fixture.backend.walletSyncState.save(
+      WalletSyncState(
+        id: exchange.id, lastSyncedBlockNumber: 0,
+        lastSyncedAt: .distantPast, lastError: nil))
+    await fixture.store.loadInitialState()
+
+    await fixture.store.syncStaleAccounts()
+
+    // The exchange build failed with `.invalidApiKey`, but the banner is
+    // Alchemy-specific — it must stay clear. The per-account error is
+    // still recorded on the row.
+    #expect(fixture.store.globalError == nil)
+    let state = try #require(
+      try await fixture.backend.walletSyncState.load(accountId: exchange.id))
+    #expect(state.lastError == .invalidApiKey)
+  }
+
+  @Test("Crypto .invalidApiKey still sets globalError even alongside a failing exchange")
+  func cryptoStillRaisesGlobalErrorWithFailingExchange() async throws {
+    let fixture = try makeStore()
+    let crypto = seedCryptoAccount(in: fixture.database)
+    let exchange = try registerFailingExchangeAccount(
+      in: fixture, token: "BAD", error: .unauthorized)
+    try await fixture.backend.walletSyncState.save(
+      WalletSyncState(
+        id: crypto.id, lastSyncedBlockNumber: 0,
+        lastSyncedAt: .distantPast, lastError: nil))
+    try await fixture.backend.walletSyncState.save(
+      WalletSyncState(
+        id: exchange.id, lastSyncedBlockNumber: 0,
+        lastSyncedAt: .distantPast, lastError: nil))
+    await fixture.store.loadInitialState()
+    let address = try #require(crypto.walletAddress)
+    fixture.alchemy.setTransfersResponse(
+      .failure(WalletSyncError.invalidApiKey), for: address)
+
+    await fixture.store.syncStaleAccounts()
+
+    // The crypto failure drives the (Alchemy) banner; the exchange
+    // failure is scoped out.
+    #expect(fixture.store.globalError == .invalidApiKey)
   }
 }

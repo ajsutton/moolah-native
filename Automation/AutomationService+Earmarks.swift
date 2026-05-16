@@ -251,8 +251,13 @@ extension AutomationService {
       throw AutomationError.operationFailed(
         "Crypto sync is not available for this profile (instrument registry not configured).")
     }
-    let cryptoAccounts = session.accountStore.accounts.filter { $0.type == .crypto }
-    guard !cryptoAccounts.isEmpty else { return }
-    await cryptoSyncStore.syncAccounts(cryptoAccounts)
+    // Every synced account, not just `.crypto`: exchange accounts are
+    // claimed by their own sync source (e.g. `CoinstashSyncSource`) and
+    // must sync here too, mirroring the store's source-based stale-timer
+    // selection. The store still asks each source `handles(_:)`, so
+    // passing a non-syncable account is a harmless no-op.
+    let syncedAccounts = session.accountStore.accounts.filter { $0.type.isSynced }
+    guard !syncedAccounts.isEmpty else { return }
+    await cryptoSyncStore.syncAccounts(syncedAccounts)
   }
 }

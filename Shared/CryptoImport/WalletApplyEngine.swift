@@ -16,8 +16,9 @@ import os
 @MainActor
 final class WalletApplyEngine {
 
-  /// Per-account input to the apply pass. Stage 9's `CryptoSyncStore`
-  /// builds one entry per account that completed Stage 6 successfully;
+  /// Per-account input to the apply pass. `SyncedAccountStore`
+  /// builds one entry per account that completed its build pass
+  /// successfully;
   /// failed accounts produce no entry and have their `lastError` set
   /// elsewhere.
   struct AccountInput: Sendable {

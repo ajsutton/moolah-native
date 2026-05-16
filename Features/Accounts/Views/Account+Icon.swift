@@ -13,6 +13,9 @@ extension Account {
     // dedicated crypto SF Symbol can land in a UI follow-up once the
     // wallet feature surfaces a distinct visual identity.
     case .crypto: return "chart.line.uptrend.xyaxis"
+    // Exchange accounts share the investment-like chart icon; a
+    // dedicated exchange SF Symbol can land in a UI follow-up.
+    case .exchange: return "chart.line.uptrend.xyaxis"
     }
   }
 }

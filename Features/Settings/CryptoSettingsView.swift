@@ -3,20 +3,22 @@ import SwiftUI
 
 /// Crypto preferences tab. Surfaces every user-facing control for the
 /// wallet auto-import: Alchemy API key, CoinGecko API key, the list of
-/// registered tokens, the list of crypto accounts (with last-sync
-/// timestamps + per-account "Sync now"), the Discovered Tokens inbox
-/// and the Spam tokens management view.
+/// registered tokens, the Discovered Tokens inbox and the Spam tokens
+/// management view.
+///
+/// The per-account sync control (last-synced timestamp + "Sync now")
+/// lives in the account-detail header (`SyncedAccountHeaderView`), not
+/// here — a duplicate Settings list would be a second source of truth.
 ///
 /// `cryptoSyncStore` and `tokenDiscovery` are optional so the view can
 /// still render in degraded launches (preview / no `instrumentRegistry`)
 /// where the wallet-import feature is unavailable. Sections that depend
-/// on them (the accounts list, the inbox actions) hide themselves when
-/// the dependency is missing.
+/// on them (the Alchemy status badge, the inbox actions) hide themselves
+/// when the dependency is missing.
 struct CryptoSettingsView: View {
   @Bindable var store: CryptoTokenStore
-  let cryptoSyncStore: CryptoSyncStore?
+  let cryptoSyncStore: SyncedAccountStore?
   let tokenDiscovery: CryptoTokenDiscoveryService?
-  let accountStore: AccountStore?
 
   // Module-internal so the sibling extension file
   // `CryptoSettingsView+TokenList.swift` can read / mutate the same
@@ -27,23 +29,17 @@ struct CryptoSettingsView: View {
 
   init(
     store: CryptoTokenStore,
-    cryptoSyncStore: CryptoSyncStore? = nil,
-    tokenDiscovery: CryptoTokenDiscoveryService? = nil,
-    accountStore: AccountStore? = nil
+    cryptoSyncStore: SyncedAccountStore? = nil,
+    tokenDiscovery: CryptoTokenDiscoveryService? = nil
   ) {
     self.store = store
     self.cryptoSyncStore = cryptoSyncStore
     self.tokenDiscovery = tokenDiscovery
-    self.accountStore = accountStore
   }
 
   var body: some View {
     Form {
       alchemyApiKeySection
-      if let accountStore, let cryptoSyncStore {
-        CryptoAccountsListSection(
-          accountStore: accountStore, syncStore: cryptoSyncStore)
-      }
       tokenInboxNavigationSection
       tokenListSection
       coinGeckoApiKeySection

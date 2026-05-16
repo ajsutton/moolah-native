@@ -13,7 +13,7 @@ struct CryptoAccountCreationLogic {
   /// registry). When `nil`, account creation still proceeds; the first
   /// sync simply isn't kicked off — the next scenePhase `.active`
   /// stale-check will pick it up.
-  let cryptoSyncStore: CryptoSyncStore?
+  let cryptoSyncStore: SyncedAccountStore?
   /// Denominating the account in the profile currency (rather than the
   /// chain's native token) lets a wallet's reported value sit alongside
   /// every other account in one currency, and lets a single account

@@ -22,6 +22,11 @@
 ///      the "deprecated field is suddenly invisible" race.
 ///
 /// History (newest first):
+/// - 2: `AccountType.exchange` (centralised-exchange accounts) +
+///      `Account.exchangeProvider` synced field (`exchangeProvider` on
+///      `AccountRecord`). Older builds decode `.exchange` as `.asset`
+///      (defensive fallback) and drop the provider on round-trip; the
+///      bump fences those downgrades off from this build forward.
 /// - 1: gate introduced alongside the crypto-wallet foundation.
 ///      `AccountType.crypto`, `Account.walletAddress` and `chainId`,
 ///      `TransactionLeg.externalId`, `WalletSyncState`. Older builds
@@ -33,5 +38,5 @@
 /// cloud without a `dataFormatVersion` field reads as `0` and is
 /// trivially compatible with any v1+ build.
 enum DataFormatVersion {
-  static let current: Int = 1
+  static let current: Int = 2
 }

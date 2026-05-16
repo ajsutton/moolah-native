@@ -8,14 +8,14 @@ import Testing
 /// End-to-end tests for `CryptoAccountCreationLogic.submit(...)`.
 ///
 /// Drives the full create-and-sync sequence through real `AccountStore`
-/// and `CryptoSyncStore` instances backed by `TestBackend`. The Alchemy
+/// and `SyncedAccountStore` instances backed by `TestBackend`. The Alchemy
 /// client is the only piece stubbed — these tests own the contract that
 /// a successful save kicks off the per-account sync, and a failed
 /// validation skips it.
 @Suite("CryptoAccountCreationLogic — submit")
 @MainActor
 struct CryptoAccountCreationStoreTests {
-  // Pinned clock matches the `CryptoSyncStore` test pattern; keeps
+  // Pinned clock matches the `SyncedAccountStore` test pattern; keeps
   // `lastSyncedAt` deterministic when we assert against post-sync state.
   nonisolated static let pinnedNow = Date(timeIntervalSince1970: 1_700_000_000)
   // Canonical lowercase address used for happy-path tests; matches the
@@ -24,7 +24,7 @@ struct CryptoAccountCreationStoreTests {
 
   private struct Fixture {
     let accountStore: AccountStore
-    let cryptoSyncStore: CryptoSyncStore
+    let cryptoSyncStore: SyncedAccountStore
     let backend: CloudKitBackend
     let database: DatabaseQueue
     let alchemy: RecordingAlchemyClientStub
@@ -57,8 +57,8 @@ struct CryptoAccountCreationStoreTests {
       walletSyncState: backend.walletSyncState,
       importRules: NoOpWalletImportRulesEngine(),
       clock: { Self.pinnedNow })
-    let cryptoSyncStore = CryptoSyncStore(
-      walletSyncEngine: walletSyncEngine,
+    let cryptoSyncStore = SyncedAccountStore(
+      sources: [WalletSyncSource(engine: walletSyncEngine)],
       walletApplyEngine: walletApplyEngine,
       walletSyncState: backend.walletSyncState,
       accounts: backend.accounts,

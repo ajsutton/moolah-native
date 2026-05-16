@@ -364,6 +364,16 @@ extension ContentView {
           positions: accountStore.positions(for: account.id),
           conversionService: session.backend.conversionService,
           session: session)
+      case .exchange:
+        ExchangeAccountView(
+          account: account,
+          accounts: accountStore.accounts,
+          categories: categoryStore.categories,
+          earmarks: earmarkStore.earmarks,
+          transactionStore: transactionStore,
+          positions: accountStore.positions(for: account.id),
+          conversionService: session.backend.conversionService,
+          session: session)
       default:
         StandardAccountView(
           account: account,

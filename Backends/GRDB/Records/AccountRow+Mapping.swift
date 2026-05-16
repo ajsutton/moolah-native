@@ -15,6 +15,8 @@ extension AccountRow {
   /// flattened to its id; the repository reconstructs the full
   /// `Instrument` on `toDomain`. The `walletAddress` and `chainId`
   /// fields are populated when the account is a crypto wallet.
+  /// The `exchangeProvider` field is populated when the account is an
+  /// exchange account.
   init(domain: Account) {
     self.id = domain.id
     self.recordName = Self.recordName(for: domain.id)
@@ -27,6 +29,7 @@ extension AccountRow {
     self.valuationMode = domain.valuationMode.rawValue
     self.walletAddress = domain.walletAddress
     self.chainId = domain.chainId
+    self.exchangeProvider = domain.exchangeProvider?.rawValue
   }
 
   /// Domain projection. `instruments` is the registry lookup
@@ -42,6 +45,7 @@ extension AccountRow {
     positions: [Position] = []
   ) throws -> Account {
     let instrument = instruments[instrumentId] ?? Instrument.fiat(code: instrumentId)
+    let resolvedExchangeProvider = exchangeProvider.flatMap(ExchangeProvider.init(rawValue:))
     return Account(
       id: id,
       name: name,
@@ -52,6 +56,7 @@ extension AccountRow {
       isHidden: isHidden,
       valuationMode: ValuationMode(rawValue: valuationMode) ?? .recordedValue,
       walletAddress: walletAddress,
-      chainId: chainId)
+      chainId: chainId,
+      exchangeProvider: resolvedExchangeProvider)
   }
 }

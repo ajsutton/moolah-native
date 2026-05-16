@@ -299,6 +299,25 @@ final class AutomationService {
     await session.transactionStore.delete(id: transactionId)
   }
 
+  /// Deletes every transaction with a leg on the named account so a
+  /// subsequent `synchronize` re-imports it from scratch. Per-leg dedup is
+  /// keyed on `(accountId, externalId)`; with the prior legs gone the next
+  /// sync rebuilds the account cleanly. Testing aid for synced (crypto /
+  /// exchange) accounts after an import-logic change. Returns the number of
+  /// transactions deleted.
+  @discardableResult
+  func resetImportedTransactions(
+    profileIdentifier: String, accountName: String
+  ) async throws -> Int {
+    let transactions = try await listTransactions(
+      profileIdentifier: profileIdentifier, accountName: accountName)
+    let session = try resolveSession(for: profileIdentifier)
+    for transaction in transactions {
+      await session.transactionStore.delete(id: transaction.id)
+    }
+    return transactions.count
+  }
+
   /// Pays a scheduled transaction (creates a non-scheduled copy with today's date).
   func payScheduledTransaction(
     profileIdentifier: String,

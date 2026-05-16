@@ -53,6 +53,10 @@ import GRDB
 /// reader. Permitted per `guides/DATABASE_SCHEMA_GUIDE.md` §1 rule 3 /
 /// §6 rule 7. See `ProfileSchema+DropSharedInstrumentLegacy.swift` for
 /// the full rationale.
+/// `v11_add_exchange_account_fields` — rebuilds account to widen the
+/// type CHECK to include `'exchange'` and adds the CHECK-pinned
+/// `exchange_provider` column. See
+/// `ProfileSchema+ExchangeAccountFields.swift`.
 ///
 /// **Retention policy for the cache tables.** The six rate-cache
 /// tables are kept forever — needed for historic-conversion
@@ -73,7 +77,7 @@ enum ProfileSchema {
   /// Bumped each time a migration is added. Surfaced for open-time
   /// integrity checks; not used by `DatabaseMigrator` (which keys on
   /// the stable string IDs of registered migrations).
-  static let version = 10
+  static let version = 11
 
   static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
@@ -101,6 +105,8 @@ enum ProfileSchema {
       "v9_add_counterparty_address", migrate: addCounterpartyAddressToTransactionLeg)
     migrator.registerMigration(
       "v10_drop_shared_instrument_legacy", migrate: dropSharedInstrumentLegacy)
+    migrator.registerMigration(
+      "v11_add_exchange_account_fields", migrate: addExchangeAccountFields)
 
     return migrator
   }

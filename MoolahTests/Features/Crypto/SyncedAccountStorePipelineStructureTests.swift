@@ -1,4 +1,4 @@
-// MoolahTests/Features/Crypto/CryptoSyncPipelineStructureTests.swift
+// MoolahTests/Features/Crypto/SyncedAccountStorePipelineStructureTests.swift
 import Foundation
 import GRDB
 import Testing
@@ -17,14 +17,14 @@ import Testing
 /// pass for unmergeable inputs and only fail probabilistically on the
 /// mergeable cases. This test makes the structural contract explicit
 /// using a recording merger that captures every invocation.
-@Suite("CryptoSyncStore — pipeline structure")
+@Suite("SyncedAccountStore — pipeline structure")
 @MainActor
-struct CryptoSyncPipelineStructureTests {
+struct SyncedAccountStorePipelineStructureTests {
   nonisolated static let pinnedNow = Date(timeIntervalSince1970: 1_700_000_000)
   static let counterparty = "0x9999999999999999999999999999999999999999"
 
   private struct Fixture {
-    let store: CryptoSyncStore
+    let store: SyncedAccountStore
     let backend: CloudKitBackend
     let database: DatabaseQueue
     let alchemy: RecordingAlchemyClientStub
@@ -61,8 +61,8 @@ struct CryptoSyncPipelineStructureTests {
       importRules: NoOpWalletImportRulesEngine(),
       merger: merger,
       clock: { Self.pinnedNow })
-    let store = CryptoSyncStore(
-      walletSyncEngine: walletSyncEngine,
+    let store = SyncedAccountStore(
+      sources: [WalletSyncSource(engine: walletSyncEngine)],
       walletApplyEngine: walletApplyEngine,
       walletSyncState: backend.walletSyncState,
       accounts: backend.accounts,

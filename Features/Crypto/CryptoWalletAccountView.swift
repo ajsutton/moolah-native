@@ -54,15 +54,19 @@ struct CryptoWalletAccountView: View {
   }
 
   @ViewBuilder private var walletHeader: some View {
+    // The header only renders for a crypto account whose chain is known
+    // (and a sync store is available). It derives the chain name from
+    // `chainId` via `SyncableAccountPresentation`, so the chain is not
+    // passed in.
     if let chainId = account.chainId,
-      let chain = ChainConfig.config(for: chainId),
+      ChainConfig.config(for: chainId) != nil,
       let cryptoSyncStore = session.cryptoSyncStore
     {
-      WalletAccountHeaderView(
+      SyncedAccountHeaderView(
         account: account,
-        chain: chain,
-        cryptoSyncStore: cryptoSyncStore,
-        hasApiKey: session.cryptoTokenStore?.hasAlchemyApiKey ?? false)
+        syncStore: cryptoSyncStore,
+        cryptoTokenStore: session.cryptoTokenStore,
+        exchangeTokenStore: ExchangeTokenStore(synchronizable: true))
     }
   }
 }
