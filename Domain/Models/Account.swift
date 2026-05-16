@@ -20,6 +20,20 @@ enum AccountType: String, Codable, Sendable, CaseIterable {
     self == .investment || self == .crypto || self == .exchange
   }
 
+  /// Whether this account type is populated by an external sync source
+  /// (crypto wallets via `WalletSyncSource`, exchange accounts via a
+  /// provider source such as `CoinstashSyncSource`) rather than manual
+  /// entry. A coarse type-level pre-filter — the sync store still asks each
+  /// source `handles(_:)` for the precise check (wallet address / chain id,
+  /// exchange provider). Exhaustive switch so a new `AccountType` case (a
+  /// SyncBoundary change) is forced to make a sync decision here.
+  var isSynced: Bool {
+    switch self {
+    case .crypto, .exchange: return true
+    case .bank, .creditCard, .asset, .investment: return false
+    }
+  }
+
   var displayName: String {
     switch self {
     case .bank: return "Bank Account"

@@ -20,6 +20,19 @@ struct AccountTypeTests {
   }
 
   @Test
+  func syncedTypesAreExactlyCryptoAndExchange() {
+    #expect(AccountType.crypto.isSynced)
+    #expect(AccountType.exchange.isSynced)
+    #expect(!AccountType.bank.isSynced)
+    #expect(!AccountType.creditCard.isSynced)
+    #expect(!AccountType.asset.isSynced)
+    #expect(!AccountType.investment.isSynced)
+    // Regression guard for the automation sync filter: exactly the two
+    // source-backed types, even if a new case is added later.
+    #expect(AccountType.allCases.filter(\.isSynced) == [.crypto, .exchange])
+  }
+
+  @Test
   func unknownStringDecodesAsAssetWithWarning() throws {
     // RawRepresentable enums fail decode on unknown raw values by default.
     // The defensive fallback for unknown account types is implemented in the

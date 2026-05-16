@@ -79,6 +79,10 @@
       <property name="hidden" code="Mhid" type="boolean" access="r" description="Whether the account is hidden.">
         <cocoa key="isHidden"/>
       </property>
+      <property name="positions" code="Mpos" access="r" description="Per-instrument holdings as &quot;SYMBOL=quantity&quot; strings (multi-instrument crypto/exchange accounts hold more than balance shows).">
+        <cocoa key="positions"/>
+        <type type="text" list="yes"/>
+      </property>
     </class>
 
     <class name="transaction" code="Txn " description="A financial transaction." plural="transactions">
@@ -219,6 +223,11 @@
     <command name="delete" code="Mooldelt" description="Delete an account, transaction, earmark, or category.">
       <cocoa class="Moolah.DeleteCommand"/>
       <direct-parameter type="specifier" description="The object to delete."/>
+    </command>
+
+    <command name="reset import" code="Moolrsti" description="Delete every transaction on a synced account so a subsequent synchronize re-imports it from scratch (testing aid for crypto/exchange import changes).">
+      <cocoa class="Moolah.ResetImportCommand"/>
+      <direct-parameter type="specifier" description="The account whose imported transactions to clear."/>
     </command>
 
     <command name="pay" code="Moolpays" description="Pay a scheduled transaction.">
