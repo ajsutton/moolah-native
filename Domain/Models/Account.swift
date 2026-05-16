@@ -7,16 +7,17 @@ enum AccountType: String, Codable, Sendable, CaseIterable {
   case asset
   case investment
   case crypto
+  case exchange
 
   var isCurrent: Bool {
     self == .bank || self == .asset || self == .creditCard
   }
 
   /// Whether this type should be treated as an investment account for sidebar
-  /// grouping and any query that filters investments. `true` for `.investment`
-  /// and `.crypto`.
+  /// grouping and any query that filters investments. `true` for `.investment`,
+  /// `.crypto`, and `.exchange`.
   var isInvestmentLike: Bool {
-    self == .investment || self == .crypto
+    self == .investment || self == .crypto || self == .exchange
   }
 
   var displayName: String {
@@ -26,6 +27,7 @@ enum AccountType: String, Codable, Sendable, CaseIterable {
     case .asset: return "Asset"
     case .investment: return "Investment"
     case .crypto: return "Crypto Wallet"
+    case .exchange: return "Exchange"
     }
   }
 }
@@ -43,6 +45,9 @@ struct Account {
   /// EVM chain ID (1 = Ethereum, 10 = OP, 8453 = Base, 137 = Polygon).
   /// Required when `type == .crypto`.
   var chainId: Int?
+  /// Provider for a centralised-exchange account. Required when
+  /// `type == .exchange`; nil otherwise.
+  var exchangeProvider: ExchangeProvider?
   var valuationMode: ValuationMode
 
   init(
@@ -55,7 +60,8 @@ struct Account {
     isHidden: Bool = false,
     valuationMode: ValuationMode = .recordedValue,
     walletAddress: String? = nil,
-    chainId: Int? = nil
+    chainId: Int? = nil,
+    exchangeProvider: ExchangeProvider? = nil
   ) {
     self.id = id
     self.name = name
@@ -67,6 +73,7 @@ struct Account {
     self.valuationMode = valuationMode
     self.walletAddress = walletAddress
     self.chainId = chainId
+    self.exchangeProvider = exchangeProvider
   }
 }
 
@@ -85,6 +92,7 @@ extension Account: Codable {
     case valuationMode
     case walletAddress
     case chainId
+    case exchangeProvider
   }
 
   init(from decoder: Decoder) throws {
@@ -113,6 +121,8 @@ extension Account: Codable {
       try container.decodeIfPresent(ValuationMode.self, forKey: .valuationMode) ?? .recordedValue
     walletAddress = try container.decodeIfPresent(String.self, forKey: .walletAddress)
     chainId = try container.decodeIfPresent(Int.self, forKey: .chainId)
+    exchangeProvider = try container.decodeIfPresent(
+      ExchangeProvider.self, forKey: .exchangeProvider)
   }
 
   func encode(to encoder: Encoder) throws {
@@ -126,6 +136,7 @@ extension Account: Codable {
     try container.encode(valuationMode, forKey: .valuationMode)
     try container.encodeIfPresent(walletAddress, forKey: .walletAddress)
     try container.encodeIfPresent(chainId, forKey: .chainId)
+    try container.encodeIfPresent(exchangeProvider, forKey: .exchangeProvider)
   }
 }
 
@@ -136,6 +147,7 @@ extension Account: Hashable {
       && lhs.position == rhs.position && lhs.isHidden == rhs.isHidden
       && lhs.valuationMode == rhs.valuationMode
       && lhs.walletAddress == rhs.walletAddress && lhs.chainId == rhs.chainId
+      && lhs.exchangeProvider == rhs.exchangeProvider
       && lhs.positions == rhs.positions
   }
 
@@ -149,6 +161,7 @@ extension Account: Hashable {
     hasher.combine(valuationMode)
     hasher.combine(walletAddress)
     hasher.combine(chainId)
+    hasher.combine(exchangeProvider)
     hasher.combine(positions)
   }
 }
