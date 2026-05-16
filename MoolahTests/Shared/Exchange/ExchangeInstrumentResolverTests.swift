@@ -28,7 +28,8 @@ struct ExchangeInstrumentResolverTests {
     #expect(try await resolver.instrument(forSymbol: "ZZZ", isFiat: false) == nil)
   }
 
-  @Test func fiatFlagShortCircuitsSymbolLookup() async throws {
+  @Test
+  func fiatFlagShortCircuitsSymbolLookup() async throws {
     let resolver = ExchangeInstrumentResolver(
       registry: StubInstrumentRegistry(), fiatInstrument: .AUD)
     // isFiat wins even when a symbol is supplied — no registry lookup.
