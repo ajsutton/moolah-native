@@ -32,11 +32,44 @@ struct AlchemyTransactionReceipt: Sendable, Hashable {
   /// while `receipt.from` is a different EOA; that wallet did not pay
   /// gas and gets no `:gas` leg.
   let from: String
+  /// OP-stack L1 data fee in wei, decoded from the receipt's `l1Fee`
+  /// field. `nil` on chains that don't post calldata to an L1 (Ethereum,
+  /// Polygon) — the field is absent there. On Optimism / Base this is
+  /// usually the dominant cost; `TransferReceiptCoalescer.makeGasLeg`
+  /// adds it to the gas-leg quantity, gated by
+  /// `ChainConfig.chargesL1DataFee` (#920). Kept separate from
+  /// `l2ExecutionFeeWei` because the receipt is chain-agnostic — only
+  /// the gas-leg builder knows whether this chain charges it.
+  let l1FeeWei: Decimal?
 
-  /// `gasUsed * effectiveGasPrice` in wei. Caller divides by
-  /// `10 ** chain.nativeInstrument.decimals` to get native units.
-  var totalGasFeeWei: Decimal {
+  /// L2 execution fee — `gasUsed * effectiveGasPrice` in wei. This is
+  /// the *whole* transaction fee on Ethereum / Polygon, but only the L2
+  /// portion on OP-stack chains (the L1 data fee is `l1FeeWei`). Caller
+  /// divides by `10 ** chain.nativeInstrument.decimals` to get native
+  /// units.
+  var l2ExecutionFeeWei: Decimal {
     gasUsed * effectiveGasPrice
+  }
+
+  /// Hand-written rather than synthesized: a *defaulted* `let` stored
+  /// property is excluded from Swift's synthesized memberwise
+  /// initializer entirely (SE-0242 only defaults `var` parameters), so
+  /// `l1FeeWei` could not be set at all without this init. It exists to
+  /// expose `l1FeeWei` as an optional parameter — the pre-OP-stack call
+  /// sites and L1-chain test stubs that omit it stay unchanged — not to
+  /// duplicate synthesized behaviour. Do not "simplify" it away.
+  init(
+    hash: String,
+    gasUsed: Decimal,
+    effectiveGasPrice: Decimal,
+    from: String,
+    l1FeeWei: Decimal? = nil
+  ) {
+    self.hash = hash
+    self.gasUsed = gasUsed
+    self.effectiveGasPrice = effectiveGasPrice
+    self.from = from
+    self.l1FeeWei = l1FeeWei
   }
 }
 

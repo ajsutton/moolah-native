@@ -78,6 +78,20 @@ struct ChainConfigTests {
   }
 
   @Test
+  func l1DataFeeMatchesOPStackChains() {
+    // OP-stack rollups (Optimism, Base) post calldata to Ethereum L1
+    // and charge an L1 data fee on top of L2 execution; Ethereum does
+    // not. This invariant gates whether `makeGasLeg` adds
+    // `receipt.l1FeeWei` to the gas-leg quantity (#920).
+    let charges = Dictionary(
+      uniqueKeysWithValues: ChainConfig.all.map { ($0.chainId, $0.chargesL1DataFee) }
+    )
+    #expect(charges[1] == false)
+    #expect(charges[10] == true)
+    #expect(charges[8453] == true)
+  }
+
+  @Test
   func internalTransferSupportPerChain() {
     // Blockscout is the authoritative internal-ETH source for all supported chains;
     // no chain requests the Alchemy `internal` category.

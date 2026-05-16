@@ -139,15 +139,29 @@ enum TransferReceiptCoalescer {
   /// negative is preserved rather than `abs()`-stripped; downstream
   /// display logic handles the sign.
   ///
+  /// On OP-stack chains (`chain.chargesL1DataFee`) the fee is the L2
+  /// execution cost *plus* the L1 data fee (`receipt.l1FeeWei`), which
+  /// is usually the dominant component. Both are summed before scaling
+  /// so Optimism / Base gas isn't under-counted by ~an order of
+  /// magnitude (#920). On Ethereum / Polygon the L1 component is `nil`
+  /// and the fee is the L2 execution cost alone.
+  ///
+  /// If an OP-stack receipt arrives *without* `l1FeeWei` (the field
+  /// should always be present there — a missing one indicates a
+  /// provider/shape anomaly, not a free transaction), the leg is still
+  /// built from the L2 portion alone rather than dropped: an
+  /// under-counted gas leg is less wrong than silently losing the
+  /// expense entirely. The anomaly is logged so the under-count is
+  /// observable rather than silent.
+  ///
   /// Returns `nil` in any of:
   /// - `receipt.from != walletAddress`: the wallet did not sign the
   ///   outer tx (e.g. an `internal` row where the wallet appears as a
   ///   sub-call's `from` inside someone else's tx, or an `erc20
   ///   transferFrom` initiated by a router holding approval). The
   ///   on-chain gas was paid by another EOA, not us.
-  /// - `receipt.totalGasFeeWei <= 0`: zero-fee synthetic. A zero gas
-  ///   leg would clutter the transaction without representing real
-  ///   expense.
+  /// - total gas fee `<= 0`: zero-fee synthetic. A zero gas leg would
+  ///   clutter the transaction without representing real expense.
   ///
   /// `walletAddress` is expected pre-lowercased (the builder passes
   /// `BuildContext.walletAddress`). `receipt.from` is also lowercased at
@@ -163,7 +177,20 @@ enum TransferReceiptCoalescer {
     walletAddress: String
   ) -> TransactionLeg? {
     guard receipt.from.lowercased() == walletAddress else { return nil }
-    let gasFeeWei = receipt.totalGasFeeWei
+    let l1DataFeeWei: Decimal
+    if chain.chargesL1DataFee {
+      if let l1FeeWei = receipt.l1FeeWei {
+        l1DataFeeWei = l1FeeWei
+      } else {
+        l1DataFeeWei = 0
+        Self.logger.notice(
+          "OP-stack receipt missing l1Fee for hash \(receipt.hash, privacy: .private) on chain \(chain.chainId, privacy: .public) — gas leg under-counts the L1 data fee (#920)"
+        )
+      }
+    } else {
+      l1DataFeeWei = 0
+    }
+    let gasFeeWei = receipt.l2ExecutionFeeWei + l1DataFeeWei
     guard gasFeeWei > 0 else { return nil }
     let nativeDecimals = chain.nativeInstrument.decimals
     guard nativeDecimals >= 0 else { return nil }
