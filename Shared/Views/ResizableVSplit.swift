@@ -2,6 +2,7 @@ import SwiftUI
 
 #if os(macOS)
   import AppKit
+  import QuartzCore
 
   /// A vertical split (panes stacked, divider horizontal) backed by
   /// `NSSplitView` so the divider position can be autosaved in
@@ -24,7 +25,8 @@ import SwiftUI
   ///   - minBottomHeight: Minimum height of the bottom pane.
   ///   - collapsed: When `true`, programmatically collapses the top pane to
   ///     zero, preserving the user's divider position for restoration on
-  ///     expand. The transition is instant.
+  ///     expand. The transition animates (~0.28s); if the divider is
+  ///     already at the target the change applies instantly.
   ///   - defaults: `UserDefaults` instance probed for an existing
   ///     autosaved divider position. Defaults to `.moolahShared`; tests can
   ///     inject an isolated suite to avoid leaking saved frames between
@@ -99,7 +101,7 @@ import SwiftUI
 
       if !hasSavedFrames {
         let height = initialTopHeight
-        Task { @MainActor [weak split] in
+        Task { [weak split] in
           split?.setPosition(height, ofDividerAt: 0)
         }
       }
@@ -111,7 +113,13 @@ import SwiftUI
     func updateNSView(_ nsView: NSSplitView, context: Context) {
       context.coordinator.topHost?.rootView = top()
       context.coordinator.bottomHost?.rootView = bottom()
-      context.coordinator.setCollapsed(collapsed, animated: false)
+      context.coordinator.setCollapsed(collapsed, animated: true)
+    }
+
+    static func dismantleNSView(
+      _ nsView: NSSplitView, coordinator: Coordinator
+    ) {
+      coordinator.cancelAnimation()
     }
 
     // `Coordinator` is nested in the generic `ResizableVSplit`, and Swift
@@ -132,6 +140,9 @@ import SwiftUI
       /// True while a programmatic collapse is in effect. Lets the
       /// divider travel below `minTopHeight` (that floor only
       /// constrains user drags, not the scroll-driven collapse).
+      /// Intentionally not reset on premature teardown: the coordinator
+      /// is discarded (a fresh one comes from `makeCoordinator()`) and
+      /// `dismantleNSView` invalidates the link.
       var isCollapsing = false
       /// The divider position to restore when expanding. Captured at collapse
       /// time so the user's dragged / autosaved size returns. Not updated
@@ -140,6 +151,18 @@ import SwiftUI
       /// Last value handed to `setCollapsed` so a no-op `updateNSView`
       /// doesn't re-trigger the transition.
       var appliedCollapsed = false
+      /// Drives the eased divider animation. `NSSplitView` only honours
+      /// `setPosition(_:ofDividerAt:)`, so the divider is stepped each
+      /// display frame rather than via an (ignored) constraint/implicit
+      /// animation. A new animation invalidates the previous link, so a
+      /// mid-flight reversal simply restarts from the current position.
+      private var displayLink: CADisplayLink?
+      private weak var animatingSplit: NSSplitView?
+      private var animationStartPosition: CGFloat = 0
+      private var animationEndPosition: CGFloat = 0
+      private var animationStartTime: CFTimeInterval = 0
+      private let animationDuration: CFTimeInterval = 0.28
+      private var animationFinalize: (@MainActor () -> Void)?
 
       init(
         autosaveName: String,
@@ -157,36 +180,133 @@ import SwiftUI
         guard collapsed != appliedCollapsed else { return }
         appliedCollapsed = collapsed
         if collapsed {
-          applyCollapse()
+          applyCollapse(animated: animated)
         } else {
-          applyExpand()
+          applyExpand(animated: animated)
         }
       }
 
-      private func applyCollapse() {
+      private func applyCollapse(animated: Bool) {
         guard let split = splitView else { return }
         // Divider 0's position is the bottom edge of the top pane,
         // i.e. the top arranged subview's current height. That's the
         // reciprocal of `setPosition(_:ofDividerAt:)`.
-        savedDividerPosition = split.arrangedSubviews.first?.frame.height
-        // Clear the autosave name before moving the divider so the transient
-        // 0 position is never persisted. NSSplitView applies an autosaveName
-        // assignment synchronously, so it is in effect before the deferred
-        // setPosition runs.
+        // Only snapshot when no animation is in flight; otherwise
+        // `frame.height` is a mid-transition value and would corrupt the
+        // size we restore on expand. The position saved before the first
+        // collapse (the user's resting size) stays valid.
+        if displayLink == nil {
+          savedDividerPosition = split.arrangedSubviews.first?.frame.height
+        }
+        // Clear the autosave name before moving the divider so the
+        // transient 0 position is never persisted. NSSplitView applies
+        // an autosaveName assignment synchronously, so persistence is
+        // off before the divider moves.
         split.autosaveName = ""
         isCollapsing = true
-        Task { @MainActor [weak split] in
+        // `finalize` is also the entire effect of the instant /
+        // Reduce-Motion path (when `animate` returns early), so it must
+        // pin the final position even though the stepped path ends at it.
+        animate(in: split, to: 0, animated: animated) { [weak split] in
           split?.setPosition(0, ofDividerAt: 0)
         }
       }
 
-      private func applyExpand() {
-        isCollapsing = false
-        guard let split = splitView else { return }
+      private func applyExpand(animated: Bool) {
+        // Clear even if the split is gone so the coordinator can't
+        // linger with `constrainMinCoordinate` pinned to 0. When a
+        // split exists the flag stays true *during* the expand
+        // animation so the divider can travel up from 0; it is cleared
+        // in the finalize closure below.
+        guard let split = splitView else {
+          isCollapsing = false
+          return
+        }
         let target = savedDividerPosition ?? initialTopHeight
-        split.setPosition(target, ofDividerAt: 0)
-        // Resume persistence from the restored (user-chosen) position.
-        split.autosaveName = autosaveName
+        let name = autosaveName
+        animate(in: split, to: target, animated: animated) { [weak self, weak split] in
+          self?.isCollapsing = false
+          split?.setPosition(target, ofDividerAt: 0)
+          split?.autosaveName = name
+        }
+      }
+
+      // MARK: Animation
+
+      /// Animate the `NSSplitView` divider from its current position to
+      /// `target` over `animationDuration` with an ease-in-out curve.
+      /// `setPosition(_:ofDividerAt:)` is the only divider API
+      /// `NSSplitView` honours and it is not implicitly animatable, so
+      /// it is stepped every display frame via `CADisplayLink`. Each
+      /// call invalidates any in-flight link, so an interrupting
+      /// collapse/expand restarts smoothly from the current position.
+      /// `finalize` runs once at the end to pin the exact final state
+      /// (and, on expand, clear `isCollapsing` / restore autosave).
+      private func animate(
+        in split: NSSplitView,
+        to target: CGFloat,
+        animated: Bool,
+        finalize: @escaping @MainActor () -> Void
+      ) {
+        displayLink?.invalidate()
+        displayLink = nil
+
+        let start = split.arrangedSubviews.first?.frame.height ?? target
+        guard animated, abs(start - target) > 0.5 else {
+          finalize()
+          return
+        }
+
+        animatingSplit = split
+        animationStartPosition = start
+        animationEndPosition = target
+        animationStartTime = CACurrentMediaTime()
+        animationFinalize = finalize
+
+        let link = split.displayLink(
+          target: self, selector: #selector(stepAnimation(_:)))
+        link.add(to: .current, forMode: .common)
+        displayLink = link
+      }
+
+      @objc
+      private func stepAnimation(_ link: CADisplayLink) {
+        MainActor.assertIsolated(
+          "CADisplayLink must run on the main run loop")
+        guard link === displayLink, let split = animatingSplit else {
+          link.invalidate()
+          return
+        }
+        let elapsed = CACurrentMediaTime() - animationStartTime
+        let raw = min(1, max(0, elapsed / animationDuration))
+        // ease-in-out quad
+        let eased =
+          raw < 0.5
+          ? 2 * raw * raw
+          : 1 - pow(-2 * raw + 2, 2) / 2
+        let position =
+          animationStartPosition
+          + (animationEndPosition - animationStartPosition) * CGFloat(eased)
+        split.setPosition(position, ofDividerAt: 0)
+
+        guard raw >= 1 else { return }
+        link.invalidate()
+        displayLink = nil
+        animatingSplit = nil
+        let finalize = animationFinalize
+        animationFinalize = nil
+        finalize?()
+      }
+
+      /// Invalidate the display link so the run loop releases its strong
+      /// reference to this coordinator. Called from `dismantleNSView`
+      /// when SwiftUI removes the representable mid-animation; without
+      /// this the link can outlive the view and pin the coordinator.
+      func cancelAnimation() {
+        displayLink?.invalidate()
+        displayLink = nil
+        animatingSplit = nil
+        animationFinalize = nil
       }
 
       // MARK: NSSplitViewDelegate
