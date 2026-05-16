@@ -9,8 +9,12 @@ struct BlockscoutTransferAdapterTests {
   private let wallet = "0xa4b572ea1b6f734fc88a0a004c5301f8dad54d60"
 
   private func tx(
-    hash: String, from: String, to: String?, value: String,
-    block: Int = 100, success: Bool = true
+    hash: String,
+    from: String,
+    to: String?,
+    value: String,
+    block: Int = 100,
+    success: Bool = true
   ) -> BlockscoutTransaction {
     BlockscoutTransaction(
       hash: hash, blockNumber: block,
@@ -36,16 +40,16 @@ struct BlockscoutTransferAdapterTests {
       nativeTxs: [tx(hash: "0xH1", from: wallet, to: "0xDEF", value: "1000000000000000000")],
       internalTxs: [],
       walletAddress: wallet)
-    let t = try #require(result.transfers.first)
+    let transfer = try #require(result.transfers.first)
     #expect(result.transfers.count == 1)
-    #expect(t.category == .external)
-    #expect(t.uniqueId == "0xH1:external:0")
-    #expect(t.from.lowercased() == wallet)
-    #expect(t.to == "0xDEF")
-    #expect(t.rawContract.address == nil)
-    #expect(t.rawContract.rawValue == "0xde0b6b3a7640000")  // 1e18 wei
-    #expect(t.blockNum == "0x64")  // 100
-    #expect(t.metadata.blockTimestamp == "2024-09-12T12:34:56.000000Z")
+    #expect(transfer.category == .external)
+    #expect(transfer.uniqueId == "0xH1:external:0")
+    #expect(transfer.from.lowercased() == wallet)
+    #expect(transfer.to == "0xDEF")
+    #expect(transfer.rawContract.address == nil)
+    #expect(transfer.rawContract.rawValue == "0xde0b6b3a7640000")  // 1e18 wei
+    #expect(transfer.blockNum == "0x64")  // 100
+    #expect(transfer.metadata.blockTimestamp == "2024-09-12T12:34:56.000000Z")
     #expect(result.signedGasTxs.map(\.hash) == ["0xH1"])
   }
 
@@ -101,11 +105,11 @@ struct BlockscoutTransferAdapterTests {
       nativeTxs: [],
       internalTxs: [itx(parent: "0xP", from: "0xROUTER", to: wallet, value: "777", index: 3)],
       walletAddress: wallet)
-    let t = try #require(result.transfers.first)
-    #expect(t.category == .internal)
-    #expect(t.hash == "0xP")
-    #expect(t.uniqueId == "0xP:internal:3")
-    #expect(t.to?.lowercased() == wallet)
+    let transfer = try #require(result.transfers.first)
+    #expect(transfer.category == .internal)
+    #expect(transfer.hash == "0xP")
+    #expect(transfer.uniqueId == "0xP:internal:3")
+    #expect(transfer.to?.lowercased() == wallet)
     #expect(result.signedGasTxs.isEmpty)
   }
 

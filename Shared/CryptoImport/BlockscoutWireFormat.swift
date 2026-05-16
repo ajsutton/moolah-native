@@ -16,9 +16,10 @@ struct BlockscoutTransactionsPage: Decodable, Sendable {
 
 extension BlockscoutTransactionsPage {
   init(from decoder: Decoder) throws {
-    let c = try decoder.container(keyedBy: BlockscoutPageCodingKeys.self)
-    self.items = try c.decodeIfPresent([BlockscoutTransaction].self, forKey: .items) ?? []
-    self.nextPageParams = try c.decodeIfPresent(
+    let container = try decoder.container(keyedBy: BlockscoutPageCodingKeys.self)
+    self.items =
+      try container.decodeIfPresent([BlockscoutTransaction].self, forKey: .items) ?? []
+    self.nextPageParams = try container.decodeIfPresent(
       BlockscoutPageParams.self, forKey: .nextPageParams)
   }
 }
@@ -31,9 +32,10 @@ struct BlockscoutInternalTxPage: Decodable, Sendable {
 
 extension BlockscoutInternalTxPage {
   init(from decoder: Decoder) throws {
-    let c = try decoder.container(keyedBy: BlockscoutPageCodingKeys.self)
-    self.items = try c.decodeIfPresent([BlockscoutInternalTx].self, forKey: .items) ?? []
-    self.nextPageParams = try c.decodeIfPresent(
+    let container = try decoder.container(keyedBy: BlockscoutPageCodingKeys.self)
+    self.items =
+      try container.decodeIfPresent([BlockscoutInternalTx].self, forKey: .items) ?? []
+    self.nextPageParams = try container.decodeIfPresent(
       BlockscoutPageParams.self, forKey: .nextPageParams)
   }
 }

@@ -41,42 +41,53 @@ enum BlockscoutTransferAdapter {
     var signed: [SignedGasTx] = []
     var seenSignedHashes: Set<String> = []
 
-    for tx in nativeTxs {
-      let from = tx.from.hash.lowercased()
-      let to = tx.to?.hash.lowercased()
+    for nativeTx in nativeTxs {
+      let from = nativeTx.from.hash.lowercased()
+      let to = nativeTx.to?.hash.lowercased()
       // Authoritative gas set: every tx the wallet signed, regardless
       // of value / status (#919). Dedup by hash, preserve first-seen.
-      if from == wallet, seenSignedHashes.insert(tx.hash).inserted {
+      if from == wallet, seenSignedHashes.insert(nativeTx.hash).inserted {
         signed.append(
           SignedGasTx(
-            hash: tx.hash,
-            blockTimestamp: parseTimestamp(tx.timestamp) ?? Date(timeIntervalSince1970: 0)))
+            hash: nativeTx.hash,
+            blockTimestamp: parseTimestamp(nativeTx.timestamp) ?? Date(timeIntervalSince1970: 0)))
       }
       // Value leg only for successful, non-zero transfers that touch the wallet.
       // Failed/reverted txs still paid gas (above) but did not move value.
-      guard tx.isSuccess else { continue }
-      guard let weiHex = decimalStringToHexWei(tx.value), weiHex != "0x0" else { continue }
+      guard nativeTx.isSuccess else { continue }
+      guard let weiHex = decimalStringToHexWei(nativeTx.value), weiHex != "0x0" else { continue }
       guard from == wallet || to == wallet else { continue }
       transfers.append(
         makeTransfer(
-          hash: tx.hash, uniqueId: "\(tx.hash):external:0",
-          category: .external, from: tx.from.hash, to: tx.to?.hash,
-          weiHex: weiHex, block: tx.blockNumber, timestamp: tx.timestamp))
+          identity: TransferIdentity(
+            hash: nativeTx.hash,
+            uniqueId: "\(nativeTx.hash):external:0",
+            category: .external,
+            from: nativeTx.from.hash,
+            to: nativeTx.to?.hash),
+          weiHex: weiHex,
+          block: nativeTx.blockNumber,
+          timestamp: nativeTx.timestamp))
     }
 
-    for itx in internalTxs {
-      let from = itx.from.hash.lowercased()
-      let to = itx.to?.hash.lowercased()
+    for internalTx in internalTxs {
+      let from = internalTx.from.hash.lowercased()
+      let to = internalTx.to?.hash.lowercased()
       // Failed internal calls did not move value; drop them.
-      guard itx.success else { continue }
-      guard let weiHex = decimalStringToHexWei(itx.value), weiHex != "0x0" else { continue }
+      guard internalTx.success else { continue }
+      guard let weiHex = decimalStringToHexWei(internalTx.value), weiHex != "0x0" else { continue }
       guard from == wallet || to == wallet else { continue }
       transfers.append(
         makeTransfer(
-          hash: itx.transactionHash,
-          uniqueId: "\(itx.transactionHash):internal:\(itx.index)",
-          category: .internal, from: itx.from.hash, to: itx.to?.hash,
-          weiHex: weiHex, block: itx.blockNumber, timestamp: itx.timestamp))
+          identity: TransferIdentity(
+            hash: internalTx.transactionHash,
+            uniqueId: "\(internalTx.transactionHash):internal:\(internalTx.index)",
+            category: .internal,
+            from: internalTx.from.hash,
+            to: internalTx.to?.hash),
+          weiHex: weiHex,
+          block: internalTx.blockNumber,
+          timestamp: internalTx.timestamp))
     }
 
     return BlockscoutAdaptResult(transfers: transfers, signedGasTxs: signed)
@@ -84,16 +95,28 @@ enum BlockscoutTransferAdapter {
 
   // MARK: - Internals
 
+  /// Bundles the transfer-identity fields for `makeTransfer` so it stays
+  /// within the 5-parameter SwiftLint threshold.
+  private struct TransferIdentity {
+    let hash: String
+    let uniqueId: String
+    let category: AlchemyTransferCategory
+    let from: String
+    let to: String?
+  }
+
   private static func makeTransfer(
-    hash: String, uniqueId: String, category: AlchemyTransferCategory,
-    from: String, to: String?, weiHex: String, block: Int, timestamp: String?
+    identity: TransferIdentity,
+    weiHex: String,
+    block: Int,
+    timestamp: String?
   ) -> AlchemyTransfer {
     AlchemyTransfer(
-      hash: hash,
-      uniqueId: uniqueId,
-      from: from,
-      to: to,
-      category: category,
+      hash: identity.hash,
+      uniqueId: identity.uniqueId,
+      from: identity.from,
+      to: identity.to,
+      category: identity.category,
       asset: nil,
       rawContract: AlchemyTransfer.RawContract(
         address: nil, decimal: nil, rawValue: weiHex),

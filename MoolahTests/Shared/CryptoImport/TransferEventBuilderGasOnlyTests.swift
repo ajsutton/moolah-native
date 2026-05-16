@@ -26,22 +26,25 @@ struct TransferEventBuilderGasOnlyTests {
       chain: .ethereum,
       discovery: makeDiscoverySubject().service,
       alchemy: alchemy)
-    let ts = Date(timeIntervalSince1970: 1_700_000_000)
+    let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
 
     let built = try await TransferEventBuilder().build(
       transfers: [],
       account: account,
       services: services,
       importOrigin: origin,
-      signedGasTxs: [SignedGasTx(hash: hash, blockTimestamp: ts)])
+      signedGasTxs: [SignedGasTx(hash: hash, blockTimestamp: timestamp)])
 
+    // 21_000 gas × 1_000_000_000 wei/gas = 21_000_000_000_000 wei = 0.000021 ETH (negative: expense)
+    let expectedGas =
+      Decimal(-21_000_000_000_000) / Decimal(sign: .plus, exponent: 18, significand: 1)
     #expect(built.count == 1)
     let legs = try #require(built.first?.transaction.legs)
     #expect(legs.count == 1)
     #expect(legs.first?.externalId == "\(hash):gas")
     #expect(legs.first?.type == .expense)
-    #expect((legs.first?.quantity ?? 0) < 0)
-    #expect(built.first?.transaction.date == ts)
+    #expect(legs.first?.quantity == expectedGas)
+    #expect(built.first?.transaction.date == timestamp)
   }
 
   @Test

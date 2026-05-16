@@ -14,29 +14,31 @@ struct BlockscoutWireFormatDecodingTests {
   @Test
   func decodesValueTransaction() throws {
     let page = try decodeTxPage("blockscout-tx-value")
-    let tx = try #require(page.items.first)
-    #expect(tx.hash == "0x7ce005a7bc9ca2d793ee9e57426f4103b06c2d02e8505f791b2291d9aa202df1")
-    #expect(tx.blockNumber == 19_002_820)
-    #expect(tx.value == "90000000000000000")
-    #expect(tx.timestamp != nil)
-    #expect(tx.isSuccess == true)
+    let transaction = try #require(page.items.first)
+    #expect(
+      transaction.hash
+        == "0x7ce005a7bc9ca2d793ee9e57426f4103b06c2d02e8505f791b2291d9aa202df1")
+    #expect(transaction.blockNumber == 19_002_820)
+    #expect(transaction.value == "90000000000000000")
+    #expect(transaction.timestamp != nil)
+    #expect(transaction.isSuccess == true)
   }
 
   @Test
   func decodesApproveAsZeroValueSuccess() throws {
     let page = try decodeTxPage("blockscout-tx-approve")
-    let tx = try #require(page.items.first)
-    #expect(tx.blockNumber == 21_833_612)
-    #expect(tx.value == "0")
-    #expect(tx.isSuccess == true)
-    #expect(tx.to != nil)
+    let transaction = try #require(page.items.first)
+    #expect(transaction.blockNumber == 21_833_612)
+    #expect(transaction.value == "0")
+    #expect(transaction.isSuccess == true)
+    #expect(transaction.to != nil)
   }
 
   @Test
   func decodesFailedTransaction() throws {
     let page = try decodeTxPage("blockscout-tx-failed")
-    let tx = try #require(page.items.first)
-    #expect(tx.isSuccess == false)
+    let transaction = try #require(page.items.first)
+    #expect(transaction.isSuccess == false)
   }
 
   @Test
@@ -62,7 +64,7 @@ struct BlockscoutWireFormatDecodingTests {
 
   @Test
   func missingNextPageParamsDecodesAsNil() throws {
-    let json = try #require(#"{"items":[],"next_page_params":null}"#.data(using: .utf8))
+    let json = Data(#"{"items":[],"next_page_params":null}"#.utf8)
     let page = try JSONDecoder().decode(BlockscoutTransactionsPage.self, from: json)
     #expect(page.items.isEmpty)
     #expect(page.nextPageParams == nil)

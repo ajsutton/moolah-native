@@ -41,6 +41,17 @@ struct LiveBlockscoutClient: Sendable {
 
   // MARK: - Internals
 
+  /// Bundles the page-type-specific callbacks for `paginate(_:config:)` so
+  /// the generic method stays under the 5-parameter SwiftLint threshold.
+  private struct PaginateConfig<Page, Item> {
+    let pathSuffix: String
+    let stage: String
+    let decode: (Data) throws -> Page
+    let items: (Page) -> [Item]
+    let cursor: (Page) -> BlockscoutPageParams?
+    let blockNumber: (Item) -> Int
+  }
+
   /// Generic cursor loop shared by both endpoints. Stops when the cursor
   /// is absent, when a page is empty, when a `BlockscoutPageParams` cursor
   /// repeats (misbehaving provider guard, mirrors `LiveAlchemyClient`), or
@@ -50,19 +61,22 @@ struct LiveBlockscoutClient: Sendable {
     chain: ChainConfig,
     walletAddress: String,
     fromBlock: UInt64,
-    pathSuffix: String,
-    stage: String,
-    decode: (Data) throws -> Page,
-    items: (Page) -> [Item],
-    cursor: (Page) -> BlockscoutPageParams?,
-    blockNumber: (Item) -> Int
+    config: PaginateConfig<Page, Item>
   ) async throws -> [Item] {
     let signpostID = OSSignpostID(log: Signposts.cryptoSync)
     os_signpost(
-      .begin, log: Signposts.cryptoSync, name: "blockscout.fetch",
-      signpostID: signpostID, "chain %{public}d", chain.chainId)
+      .begin,
+      log: Signposts.cryptoSync,
+      name: "blockscout.fetch",
+      signpostID: signpostID,
+      "chain %{public}d",
+      chain.chainId)
     defer {
-      os_signpost(.end, log: Signposts.cryptoSync, name: "blockscout.fetch", signpostID: signpostID)
+      os_signpost(
+        .end,
+        log: Signposts.cryptoSync,
+        name: "blockscout.fetch",
+        signpostID: signpostID)
     }
     var collected: [Item] = []
     var pageParams: BlockscoutPageParams?
@@ -71,26 +85,28 @@ struct LiveBlockscoutClient: Sendable {
       if let pageParams, !seenCursors.insert(pageParams).inserted { break }
       try await rateLimiter.acquire()
       let request = try buildRequest(
-        chain: chain, walletAddress: walletAddress,
-        pathSuffix: pathSuffix, pageParams: pageParams)
-      let data = try await send(request: request, stage: stage)
+        chain: chain,
+        walletAddress: walletAddress,
+        pathSuffix: config.pathSuffix,
+        pageParams: pageParams)
+      let data = try await send(request: request, stage: config.stage)
       let page: Page
       do {
-        page = try decode(data)
+        page = try config.decode(data)
       } catch {
         logger.error(
-          "Blockscout \(stage, privacy: .public) decode failed for chain \(chain.chainId, privacy: .public): \(error.localizedDescription, privacy: .public)"
+          "Blockscout \(config.stage, privacy: .public) decode failed for chain \(chain.chainId, privacy: .public): \(error.localizedDescription, privacy: .public)"
         )
-        throw WalletSyncError.providerMalformedResponse(stage: stage)
+        throw WalletSyncError.providerMalformedResponse(stage: config.stage)
       }
-      let pageItems = items(page)
+      let pageItems = config.items(page)
       if pageItems.isEmpty { break }
       collected.append(contentsOf: pageItems)
       // Newest-first: if the whole page is older than fromBlock, stop.
-      if pageItems.allSatisfy({ UInt64(blockNumber($0).magnitude) < fromBlock }) {
+      if pageItems.allSatisfy({ UInt64(config.blockNumber($0).magnitude) < fromBlock }) {
         break
       }
-      guard let next = cursor(page) else { break }
+      guard let next = config.cursor(page) else { break }
       pageParams = next
     }
     return collected
@@ -159,12 +175,13 @@ extension LiveBlockscoutClient: BlockExplorerClient {
       chain: chain,
       walletAddress: walletAddress,
       fromBlock: fromBlock,
-      pathSuffix: "transactions",
-      stage: "blockscout.transactions",
-      decode: { try JSONDecoder().decode(BlockscoutTransactionsPage.self, from: $0) },
-      items: { $0.items },
-      cursor: { $0.nextPageParams },
-      blockNumber: { $0.blockNumber })
+      config: PaginateConfig(
+        pathSuffix: "transactions",
+        stage: "blockscout.transactions",
+        decode: { try JSONDecoder().decode(BlockscoutTransactionsPage.self, from: $0) },
+        items: { $0.items },
+        cursor: { $0.nextPageParams },
+        blockNumber: { $0.blockNumber }))
   }
 
   func internalTransactions(
@@ -174,11 +191,12 @@ extension LiveBlockscoutClient: BlockExplorerClient {
       chain: chain,
       walletAddress: walletAddress,
       fromBlock: fromBlock,
-      pathSuffix: "internal-transactions",
-      stage: "blockscout.internalTransactions",
-      decode: { try JSONDecoder().decode(BlockscoutInternalTxPage.self, from: $0) },
-      items: { $0.items },
-      cursor: { $0.nextPageParams },
-      blockNumber: { $0.blockNumber })
+      config: PaginateConfig(
+        pathSuffix: "internal-transactions",
+        stage: "blockscout.internalTransactions",
+        decode: { try JSONDecoder().decode(BlockscoutInternalTxPage.self, from: $0) },
+        items: { $0.items },
+        cursor: { $0.nextPageParams },
+        blockNumber: { $0.blockNumber }))
   }
 }

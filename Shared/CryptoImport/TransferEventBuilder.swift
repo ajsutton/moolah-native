@@ -72,6 +72,13 @@ struct TransferEventBuilder: Sendable {
   /// Per-row decode failures (malformed hex, missing decimals on a
   /// non-native transfer) are logged and skipped — they shouldn't fail
   /// the whole account.
+  ///
+  /// `signedGasTxs` is the set of transactions the wallet signed according
+  /// to Blockscout's account tx list — including hashes that produced no
+  /// Alchemy transfer events (e.g. `approve()`, failed or zero-movement
+  /// txs). Each signed tx still paid gas; the builder emits a gas-leg-only
+  /// transaction for every such hash. Defaults to `[]` so existing callers
+  /// that don't supply Blockscout data remain unaffected.
   func build(
     transfers: [AlchemyTransfer],
     account: Account,
@@ -80,7 +87,6 @@ struct TransferEventBuilder: Sendable {
     signedGasTxs: [SignedGasTx] = []
   ) async throws -> [BuiltTransaction] {
     let chain = services.chain
-    let discovery = services.discovery
     let alchemy = services.alchemy
     let signpostID = OSSignpostID(log: Signposts.cryptoSync)
     os_signpost(
@@ -104,63 +110,14 @@ struct TransferEventBuilder: Sendable {
       account: account,
       walletAddress: rawAddress.lowercased(),
       chain: chain,
-      discovery: discovery,
+      discovery: services.discovery,
       importOrigin: importOrigin)
-    try await Self.preregisterChainNativeInstrument(chain: chain, discovery: discovery)
-
-    // Stable order: group preserves first-seen order so test fixtures
-    // and signposts are deterministic.
-    let groups = groupByHash(transfers)
-    let receipts = try await TransferReceiptCoalescer.fetchReceipts(
-      groups: groups,
-      extraSignedHashes: signedGasTxs.map(\.hash),
-      walletAddress: context.walletAddress,
-      chain: chain,
+    try await Self.preregisterChainNativeInstrument(chain: chain, discovery: services.discovery)
+    return try await buildCore(
+      transfers: transfers,
+      signedGasTxs: signedGasTxs,
+      context: context,
       alchemy: alchemy)
-
-    var results: [BuiltTransaction] = []
-    results.reserveCapacity(groups.count)
-
-    for events in groups {
-      try Task.checkCancellation()
-      let receipt = events.first.flatMap { receipts[$0.hash] }
-      guard
-        let built = try await buildEvent(
-          events: events,
-          receipt: receipt,
-          context: context)
-      else {
-        continue
-      }
-      results.append(built)
-    }
-
-    // #919: every tx the wallet signed paid gas, even when it produced
-    // no transfer (approve(), failed, zero-movement). Those hashes are
-    // absent from `groups`; emit a transaction whose only leg is the
-    // gas leg, dated to the signed-tx block timestamp.
-    let groupedHashes = Set(groups.compactMap(\.first?.hash))
-    for signed in signedGasTxs where !groupedHashes.contains(signed.hash) {
-      try Task.checkCancellation()
-      guard
-        let receipt = receipts[signed.hash],
-        let gasLeg = TransferReceiptCoalescer.makeGasLeg(
-          receipt: receipt,
-          accountId: context.account.id,
-          chain: context.chain,
-          walletAddress: context.walletAddress)
-      else {
-        continue
-      }
-      let transaction = Transaction(
-        date: signed.blockTimestamp,
-        legs: [gasLeg],
-        importOrigin: context.importOrigin)
-      results.append(
-        BuiltTransaction(
-          originAccountId: context.account.id, transaction: transaction))
-    }
-    return results
   }
 
   // MARK: - Internals
@@ -170,7 +127,7 @@ struct TransferEventBuilder: Sendable {
   /// signpost tracing and snapshot assertions in tests). Each event in a
   /// group already carries its own `hash`, so the key is dropped after
   /// grouping to keep call sites simple.
-  private func groupByHash(_ transfers: [AlchemyTransfer]) -> [[AlchemyTransfer]] {
+  func groupByHash(_ transfers: [AlchemyTransfer]) -> [[AlchemyTransfer]] {
     var order: [String] = []
     var buckets: [String: [AlchemyTransfer]] = [:]
     for transfer in transfers {
@@ -195,7 +152,7 @@ struct TransferEventBuilder: Sendable {
   /// with `externalId = "<hash>:gas"` — distinct from every transfer
   /// leg's per-event `uniqueId` so the schema's partial unique index
   /// on `(accountId, externalId)` doesn't reject the second insert.
-  private func buildEvent(
+  func buildEvent(
     events: [AlchemyTransfer],
     receipt: AlchemyTransactionReceipt?,
     context: BuildContext
@@ -396,22 +353,4 @@ struct TransferEventBuilder: Sendable {
     return rawDecimalValue / Decimal(sign: .plus, exponent: decimals, significand: 1)
   }
 
-}
-
-/// Per-call context bundle giving `TransferEventBuilder`'s helpers the
-/// account, chain, discovery actor, and import audit fields. Built once
-/// in `build(...)` and passed by value down the call tree.
-private struct BuildContext: Sendable {
-  let account: Account
-  let walletAddress: String
-  let chain: ChainConfig
-  let discovery: CryptoTokenDiscoveryService
-  let importOrigin: ImportOrigin
-}
-
-/// Result of mapping a transfer's direction onto a leg's sign + the
-/// other-party address.
-private struct SignAndCounterparty {
-  let signedQuantity: Decimal
-  let counterpartyAddress: String?
 }

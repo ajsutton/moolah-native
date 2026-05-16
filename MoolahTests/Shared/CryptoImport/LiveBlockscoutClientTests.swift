@@ -52,12 +52,14 @@ struct LiveBlockscoutClientTests {
   func paginatesUntilCursorAbsentAndStopsBelowFromBlock() async throws {
     // Page 1: one item at block 100, cursor → block 50.
     // Page 2: one item at block 40 (below fromBlock 45) → stop, no page 3.
-    let page1 = #"""
+    let page1 = Data(
+      #"""
       {"items":[{"hash":"0xaa","block_number":100,"timestamp":"2024-01-01T00:00:00.000000Z","from":{"hash":"0xabc"},"to":{"hash":"0xdef"},"value":"10","status":"ok","result":"success"}],"next_page_params":{"block_number":50,"index":1,"items_count":50}}
-      """#.data(using: .utf8)!
-    let page2 = #"""
+      """#.utf8)
+    let page2 = Data(
+      #"""
       {"items":[{"hash":"0xbb","block_number":40,"timestamp":"2024-01-01T00:00:00.000000Z","from":{"hash":"0xabc"},"to":{"hash":"0xdef"},"value":"10","status":"ok","result":"success"}],"next_page_params":{"block_number":10,"index":1,"items_count":50}}
-      """#.data(using: .utf8)!
+      """#.utf8)
     let calls = TestCallRecorder()
     let client = makeClient { req in
       calls.record(request: req)

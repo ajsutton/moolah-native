@@ -9,7 +9,7 @@ import OSLog
 enum TransferReceiptCoalescer {
   /// Shared static `Logger`; matches the builder's pattern so receipt
   /// failures appear under the same subsystem in Console.app.
-  static let logger = Logger(
+  private static let logger = Logger(
     subsystem: "com.moolah.app", category: "TransferEventBuilder")
 
   /// Fetches `eth_getTransactionReceipt` for every unique outbound
@@ -19,6 +19,11 @@ enum TransferReceiptCoalescer {
   /// Inbound-only events don't trigger fetches — gas-leg construction
   /// is restricted to the from-side wallet per the design's "from-side
   /// wallet only" rule.
+  ///
+  /// `extraSignedHashes` extends the fetch set with hashes for signed
+  /// transactions that produced no transfer events (e.g. `approve()`,
+  /// failed txs); deduplicated against and appended after the outbound
+  /// hashes from `groups`, preserving order.
   ///
   /// Per-receipt fetch failures (network blip, rate limit on a single
   /// hash, malformed response) log and are dropped from the returned
