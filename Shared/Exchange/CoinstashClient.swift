@@ -1,0 +1,142 @@
+import Foundation
+import OSLog
+
+struct CoinstashClient: ExchangeClient, Sendable {
+  typealias Transport = @Sendable (URLRequest) async throws -> (Data, URLResponse)
+
+  private let transport: Transport
+  private static let pageSize = 100
+  private static let logger = Logger(
+    subsystem: "com.moolah.app", category: "CoinstashClient")
+
+  init(
+    transport: @escaping Transport = { try await URLSession.shared.data(for: $0) }
+  ) {
+    self.transport = transport
+  }
+
+  func fetchTransactions(token: String) async throws -> [ExchangeImportedTransaction] {
+    let profile = try await query(
+      CoinstashGraphQL.userProfileQuery,
+      variables: [:],
+      token: token,
+      decoding: CoinstashUserProfileData.self)
+    let userId = profile.userProfile.userId
+    try Task.checkCancellation()
+
+    let accountsData = try await query(
+      CoinstashGraphQL.userAccountsQuery,
+      variables: ["userId": .string(userId)],
+      token: token,
+      decoding: CoinstashUserAccountsData.self)
+    let accounts = accountsData.getUserAccounts.accounts
+    try Task.checkCancellation()
+    if accounts.count > 1 {
+      Self.logger.warning(
+        "Coinstash returned \(accounts.count) accounts; importing the first only")
+    }
+    guard let accountId = accounts.first?.accountId else { return [] }
+
+    var all: [CoinstashTransaction] = []
+    var pageIndex = 0
+    while true {
+      try Task.checkCancellation()
+      let pageData = try await query(
+        CoinstashGraphQL.transactionsQuery,
+        variables: [
+          "a": .string(accountId),
+          "p": .object([
+            "pageIndex": .int(pageIndex),
+            "pageSize": .int(Self.pageSize),
+          ]),
+        ],
+        token: token,
+        decoding: CoinstashTransactionsData.self)
+      let page = pageData.accountTransactions
+      all.append(contentsOf: page.result)
+      if all.count >= page.totalRecordsFound || page.result.isEmpty { break }
+      pageIndex += 1
+    }
+    return all.compactMap(Self.map(_:))
+  }
+
+  // MARK: - Mapping
+
+  static func map(_ transaction: CoinstashTransaction) -> ExchangeImportedTransaction? {
+    guard transaction.transactionStatus == "COMPLETED" else { return nil }
+    // Stack-allocated formatter — ISO8601DateFormatter (an NSObject subclass)
+    // is not safe to share across concurrent build tasks. Do NOT promote to a
+    // static/shared let: it is not Sendable and is mutated before use.
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    guard let occurredAt = formatter.date(from: transaction.transactedOn) else {
+      Self.logger.warning(
+        "Dropping tx \(transaction.transactionId, privacy: .public): unparseable date '\(transaction.transactedOn, privacy: .public)'"
+      )
+      return nil
+    }
+    let direction: ExchangeDirection
+    switch transaction.type {
+    case "CREDIT": direction = .credit
+    case "DEBIT": direction = .debit
+    default:
+      Self.logger.warning(
+        "Dropping tx \(transaction.transactionId, privacy: .public): unrecognised type '\(transaction.type, privacy: .public)'"
+      )
+      return nil
+    }
+    return ExchangeImportedTransaction(
+      externalId: transaction.transactionId,
+      occurredAt: occurredAt,
+      category: transaction.category,
+      direction: direction,
+      assetSymbol: transaction.assetSymbol,
+      amount: transaction.amount,
+      isFiat: transaction.amountType == "FIAT",
+      orderId: transaction.orderId)
+  }
+
+  // MARK: - GraphQL transport
+
+  private func query<T: Decodable & Sendable>(
+    _ graphQLQuery: String,
+    variables: [String: JSONValue],
+    token: String,
+    decoding: T.Type
+  ) async throws -> T {
+    var request = URLRequest(url: CoinstashGraphQL.endpoint)
+    request.httpMethod = "POST"
+    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    var body: [String: JSONValue] = ["query": .string(graphQLQuery)]
+    if !variables.isEmpty { body["variables"] = .object(variables) }
+    request.httpBody = try JSONEncoder().encode(JSONValue.object(body))
+
+    let (data, response) = try await transport(request)
+    guard let http = response as? HTTPURLResponse else {
+      throw ExchangeClientError.malformedResponse
+    }
+    switch http.statusCode {
+    case 200: break
+    case 401: throw ExchangeClientError.unauthorized
+    case 429:
+      // No proactive client-side rate limiter: Coinstash publishes no limits
+      // and an account's history is 1–3 pages. Handle 429 reactively; the
+      // store retries on the next cycle.
+      throw ExchangeClientError.rateLimited(retryAfter: nil)
+    default: throw ExchangeClientError.http(http.statusCode)
+    }
+    let decoded = try JSONDecoder().decode(
+      CoinstashGraphQLResponse<T>.self, from: data)
+    if let firstError = decoded.errors.first {
+      if firstError.message.localizedCaseInsensitiveContains("unauthor") {
+        throw ExchangeClientError.unauthorized
+      }
+      throw ExchangeClientError.providerError(firstError.message)
+    }
+    guard let payload = decoded.data else {
+      throw ExchangeClientError.malformedResponse
+    }
+    return payload
+  }
+}
