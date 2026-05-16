@@ -15,6 +15,11 @@ extension TransactionListView {
     }
     #if os(macOS)
       .listStyle(.inset)
+      .onScrollGeometryChange(for: CGFloat.self) { geometry in
+        geometry.contentOffset.y
+      } action: { _, newOffset in
+        scrollCollapse?.update(offsetY: newOffset)
+      }
     #else
       .listStyle(.plain)
     #endif
@@ -66,6 +71,10 @@ extension TransactionListView {
       // filter so the toolbar reflects the new context.
       selectedTransaction = nil
       activeFilter = newBase
+      // A new account/earmark always opens with its header expanded; it
+      // collapses again only once the user scrolls. No-op when no split
+      // is hosting us.
+      scrollCollapse?.reset()
     }
     .task(id: activeFilter) {
       // The view-driven reactive subscription. `observe(filter:)` runs
