@@ -53,7 +53,7 @@ struct BlockscoutPageParams: Decodable, Sendable, Hashable {
   let itemsCount: Int?
   let transactionIndex: Int?
 
-  enum CodingKeys: String, CodingKey {
+  private enum CodingKeys: String, CodingKey {
     case blockNumber = "block_number"
     case index
     case itemsCount = "items_count"
@@ -63,14 +63,21 @@ struct BlockscoutPageParams: Decodable, Sendable, Hashable {
   /// Query items to thread back for the next page. Encodes only the
   /// non-nil cursor fields, matching what Blockscout returned.
   var queryItems: [URLQueryItem] {
-    var items: [URLQueryItem] = []
-    if let blockNumber { items.append(.init(name: "block_number", value: String(blockNumber))) }
-    if let index { items.append(.init(name: "index", value: String(index))) }
-    if let itemsCount { items.append(.init(name: "items_count", value: String(itemsCount))) }
-    if let transactionIndex {
-      items.append(.init(name: "transaction_index", value: String(transactionIndex)))
+    var result: [URLQueryItem] = []
+    if let blockNumber {
+      result.append(.init(name: CodingKeys.blockNumber.rawValue, value: String(blockNumber)))
     }
-    return items
+    if let index {
+      result.append(.init(name: CodingKeys.index.rawValue, value: String(index)))
+    }
+    if let itemsCount {
+      result.append(.init(name: CodingKeys.itemsCount.rawValue, value: String(itemsCount)))
+    }
+    if let transactionIndex {
+      result.append(
+        .init(name: CodingKeys.transactionIndex.rawValue, value: String(transactionIndex)))
+    }
+    return result
   }
 }
 
@@ -82,7 +89,8 @@ struct BlockscoutAddress: Decodable, Sendable, Hashable {
 
 /// One item from the address `transactions` endpoint. `value` is wei as
 /// a decimal string. Success is derived from `status`/`result` so a
-/// reverted tx is still enumerated (it paid gas — #919).
+/// reverted tx is still enumerated (it paid gas —
+/// https://github.com/ajsutton/moolah-native/issues/919).
 struct BlockscoutTransaction: Decodable, Sendable, Hashable {
   let hash: String
   let blockNumber: Int
@@ -93,7 +101,7 @@ struct BlockscoutTransaction: Decodable, Sendable, Hashable {
   let status: String?
   let result: String?
 
-  enum CodingKeys: String, CodingKey {
+  private enum CodingKeys: String, CodingKey {
     case hash
     case blockNumber = "block_number"
     case timestamp
@@ -129,7 +137,7 @@ struct BlockscoutInternalTx: Decodable, Sendable, Hashable {
   let index: Int
   let success: Bool
 
-  enum CodingKeys: String, CodingKey {
+  private enum CodingKeys: String, CodingKey {
     case transactionHash = "transaction_hash"
     case blockNumber = "block_number"
     case timestamp
