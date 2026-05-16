@@ -223,14 +223,17 @@ final class WalletApplyEngine {
     return legs
   }
 
+  /// Persists the deduped survivors in a single atomic bulk insert.
+  ///
+  /// `createMany` writes every transaction (with its legs) inside one
+  /// write transaction; on any failure none persist. That all-or-nothing
+  /// boundary is safe here because the apply pipeline dedups exactly on
+  /// `(accountId, externalId)` — a rolled-back batch is re-fetched within
+  /// the reorg window next cycle and every already-landed leg dedups to a
+  /// no-op. It also avoids the per-`create` commit/fsync that made a busy
+  /// wallet's persist pass O(transactions) write transactions.
   private func persist(_ candidates: [BuiltTransaction]) async throws -> [Transaction] {
-    var persisted: [Transaction] = []
-    persisted.reserveCapacity(candidates.count)
-    for candidate in candidates {
-      let saved = try await transactions.create(candidate.transaction)
-      persisted.append(saved)
-    }
-    return persisted
+    try await transactions.createMany(candidates.map(\.transaction))
   }
 
   private func updateSyncState(for perAccount: [AccountInput]) async throws {
