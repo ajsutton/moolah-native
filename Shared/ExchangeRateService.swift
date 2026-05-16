@@ -231,10 +231,9 @@ actor ExchangeRateService {
     guard let key = DateKey.from(isoString: dateString),
       let cache = caches[base]
     else { return nil }
-    // Step day-by-day toward the past: the original scanned the newest day
-    // <= target that actually carries `quote` (a day map may exist without
-    // this quote), so skip days lacking the quote and keep probing older
-    // days. `floorKey` makes each hop O(log n).
+    // Finds the newest day on or before `target` carrying `quote`, skipping
+    // day maps that lack it (a day map may exist without this quote) and
+    // probing older days. `floorKey` makes each hop O(log n).
     var probe = key
     while let dayKey = cache.rates.floorKey(probe) {
       if let rate = cache.rates.exact(dayKey)?[quote] { return rate }
@@ -267,6 +266,7 @@ actor ExchangeRateService {
     }
   }
 
+  // internal: called from `ExchangeRateService+Prefetch.swift` and tests.
   func fetchAndMerge(base: String, from: Date, to: Date) async throws {
     let fetched = try await client.fetchRates(base: base, from: from, to: to)
     // Frankfurter (and the chunked extension call sites in this service)
@@ -294,8 +294,7 @@ actor ExchangeRateService {
     base: String, newRates: [String: [String: Decimal]]
   ) -> [ExchangeRateRecord] {
     guard !newRates.isEmpty else { return [] }
-    let sortedDates = newRates.keys.sorted()
-    guard let earliest = sortedDates.first, let latest = sortedDates.last else { return [] }
+    guard let earliest = newRates.keys.min(), let latest = newRates.keys.max() else { return [] }
 
     if var existing = caches[base] {
       let deltaRecords = mergeIntoExisting(&existing, base: base, newRates: newRates)
@@ -320,9 +319,8 @@ actor ExchangeRateService {
   }
 
   /// Whole-day merge of `newRates` into an existing cache entry, returning
-  /// only the per-(date, quote) rows that actually changed. The entire day
-  /// map is overwritten (matches the original `existing.rates[dateKey] =
-  /// dayRates`), not per-quote merged into the existing day.
+  /// only the per-(date, quote) rows that actually changed. Replaces the
+  /// entire day map (no per-quote merge into the existing day).
   private func mergeIntoExisting(
     _ existing: inout ExchangeRateCache,
     base: String,
@@ -335,7 +333,7 @@ actor ExchangeRateService {
       for (quote, rate) in dayRates where existingDayRates[quote] != rate {
         deltaRecords.append(rateRecord(base: base, quote: quote, date: dateKey, rate: rate))
       }
-      existing.rates.upsert(key, dayRates)
+      existing.rates.upsert(dayRates, forKey: key)
     }
     return deltaRecords
   }
@@ -349,7 +347,7 @@ actor ExchangeRateService {
     var deltaRecords: [ExchangeRateRecord] = []
     for (dateKey, dayRates) in newRates {
       guard let key = DateKey.from(isoString: dateKey) else { continue }  // malformed wire date — unusable as a sorted key; skip
-      series.upsert(key, dayRates)
+      series.upsert(dayRates, forKey: key)
       for (quote, rate) in dayRates {
         deltaRecords.append(rateRecord(base: base, quote: quote, date: dateKey, rate: rate))
       }

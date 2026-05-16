@@ -23,8 +23,10 @@ struct ExchangeRateServiceFallbackTests {
   private func date(_ string: String) -> Date {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withFullDate]
-    // swiftlint:disable:next force_unwrapping
-    return formatter.date(from: string)!
+    guard let result = formatter.date(from: string) else {
+      preconditionFailure("Invalid ISO date literal: \(string)")
+    }
+    return result
   }
 
   @Test("exact / gap / post-latest match prior-implementation semantics")
@@ -51,8 +53,7 @@ struct ExchangeRateServiceFallbackTests {
   /// Pins the IN-RANGE gap branch: a queried date that sits strictly
   /// between the cache's `earliestDate` and `latestDate` but is itself
   /// absent must be served from `fallbackRate` WITHOUT a network fetch
-  /// (the day-step `floorKey` probe loop in the rewrite; the
-  /// `keys.sorted().reversed()` scan in the original). Seeding mirrors
+  /// (the day-step `floorKey` probe loop). Seeding mirrors
   /// the sibling `ExchangeRateServiceTests.inRangeMissUsesFallback...`:
   /// prime two dates that bracket a deliberate hole so the cached range
   /// spans the gap, then query the hole. The unchanged `fetchCount`

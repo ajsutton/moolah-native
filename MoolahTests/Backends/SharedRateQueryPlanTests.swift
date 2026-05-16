@@ -31,12 +31,16 @@ struct SharedRateQueryPlanTests {
         database,
         sql: """
           EXPLAIN QUERY PLAN
-          SELECT * FROM exchange_rate WHERE base = ?
+          SELECT * FROM exchange_rate WHERE base = ? ORDER BY "date"
           """,
         arguments: ["AUD"]
       ).map { String(describing: $0["detail"] ?? "") }
       #expect(plan.contains { $0.contains("SEARCH") && $0.contains("PRIMARY KEY") })
       #expect(!plan.contains { $0.contains("SCAN") })
+      // `WHERE base = ? ORDER BY date` is a PK-prefix scan (PK is
+      // `(base, date, quote)`), so the planner satisfies the order
+      // directly from the index — no sort buffer.
+      #expect(!plan.contains { $0.contains("USE TEMP B-TREE") })
       // The per-profile `exchange_rate_lookup` index is intentionally
       // omitted from the shared DB; assert the planner cannot reach
       // for it because it doesn't exist.
@@ -52,12 +56,16 @@ struct SharedRateQueryPlanTests {
         database,
         sql: """
           EXPLAIN QUERY PLAN
-          SELECT * FROM stock_price WHERE ticker = ?
+          SELECT * FROM stock_price WHERE ticker = ? ORDER BY "date"
           """,
         arguments: ["BHP.AX"]
       ).map { String(describing: $0["detail"] ?? "") }
       #expect(plan.contains { $0.contains("SEARCH") && $0.contains("PRIMARY KEY") })
       #expect(!plan.contains { $0.contains("SCAN") })
+      // `WHERE ticker = ? ORDER BY date` is a PK-prefix scan (PK is
+      // `(ticker, date)`), so the planner satisfies the order directly
+      // from the index — no sort buffer.
+      #expect(!plan.contains { $0.contains("USE TEMP B-TREE") })
     }
   }
 
@@ -69,12 +77,16 @@ struct SharedRateQueryPlanTests {
         database,
         sql: """
           EXPLAIN QUERY PLAN
-          SELECT * FROM crypto_price WHERE token_id = ?
+          SELECT * FROM crypto_price WHERE token_id = ? ORDER BY "date"
           """,
         arguments: ["1:native"]
       ).map { String(describing: $0["detail"] ?? "") }
       #expect(plan.contains { $0.contains("SEARCH") && $0.contains("PRIMARY KEY") })
       #expect(!plan.contains { $0.contains("SCAN") })
+      // `WHERE token_id = ? ORDER BY date` is a PK-prefix scan (PK is
+      // `(token_id, date)`), so the planner satisfies the order directly
+      // from the index — no sort buffer.
+      #expect(!plan.contains { $0.contains("USE TEMP B-TREE") })
     }
   }
 

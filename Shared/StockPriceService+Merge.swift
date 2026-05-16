@@ -4,9 +4,7 @@ import Foundation
 
 // MARK: - StockPriceService merge / delta computation
 
-// In-memory merge for `StockPriceService`. Split out of
-// `StockPriceService.swift` to keep that file within the type/file
-// length budget, mirroring the `CryptoPriceService+Merge.swift` split.
+// In-memory merge logic for `StockPriceService`.
 
 extension StockPriceService {
   /// Merges `newPrices` into `caches[ticker]` and returns the rows that
@@ -21,8 +19,7 @@ extension StockPriceService {
     ticker: String, instrument: Instrument, newPrices: [String: Decimal]
   ) -> [StockPriceRecord] {
     guard !newPrices.isEmpty else { return [] }
-    let sortedDates = newPrices.keys.sorted()
-    guard let earliest = sortedDates.first, let latest = sortedDates.last else { return [] }
+    guard let earliest = newPrices.keys.min(), let latest = newPrices.keys.max() else { return [] }
 
     var deltaRecords: [StockPriceRecord] = []
 
@@ -31,7 +28,7 @@ extension StockPriceService {
         guard let key = DateKey.from(isoString: dateKey) else { continue }  // malformed wire date — unusable as a sorted key; skip
         if existing.prices.exact(key) != price {
           deltaRecords.append(priceRecord(ticker: ticker, date: dateKey, price: price))
-          existing.prices.upsert(key, price)
+          existing.prices.upsert(price, forKey: key)
         }
       }
       if earliest < existing.earliestDate {
@@ -45,7 +42,7 @@ extension StockPriceService {
       var series = SortedDateSeries<Decimal>()
       for (dateKey, price) in newPrices {
         guard let key = DateKey.from(isoString: dateKey) else { continue }  // malformed wire date — unusable as a sorted key; skip
-        series.upsert(key, price)
+        series.upsert(price, forKey: key)
         deltaRecords.append(priceRecord(ticker: ticker, date: dateKey, price: price))
       }
       caches[ticker] = StockPriceCache(
