@@ -24,6 +24,15 @@ struct ChainConfig: Sendable, Hashable {
   /// design open question 3.
   let supportsInternalTransfers: Bool
 
+  /// `true` on OP-stack rollups (Optimism, Base), where the transaction
+  /// fee is the L2 execution fee *plus* an L1 data fee for posting the
+  /// transaction's calldata to Ethereum. The L1 component is usually the
+  /// dominant cost. `false` on chains where `gasUsed * effectiveGasPrice`
+  /// is the whole fee (Ethereum L1, Polygon). Gates whether `makeGasLeg`
+  /// adds `AlchemyTransactionReceipt.l1FeeWei` to the gas-leg quantity —
+  /// see #920.
+  let chargesL1DataFee: Bool
+
   /// Block-explorer base URL (no trailing slash). Used by
   /// `BlockExplorerLink` to render outbound transaction links.
   let blockExplorerBaseURL: URL
@@ -45,49 +54,57 @@ struct ChainConfig: Sendable, Hashable {
 
 extension ChainConfig {
   /// Ethereum mainnet — chain 1. Native token: ETH (18 decimals).
-  /// Supports the `internal` transfer category.
+  /// Supports the `internal` transfer category. As an L1 it charges no
+  /// L1 data fee.
   static let ethereum = ChainConfig(
     chainId: 1,
     alchemyNetworkSlug: "eth-mainnet",
     nativeInstrument: Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18),
     supportsInternalTransfers: true,
+    chargesL1DataFee: false,
     blockExplorerBaseURL: requireURL("https://etherscan.io"),
     displayName: "Ethereum"
   )
 
   /// OP Mainnet (Optimism) — chain 10. Native token: ETH (18 decimals).
-  /// Does NOT support the `internal` transfer category.
+  /// Does NOT support the `internal` transfer category. OP-stack rollup:
+  /// charges an L1 data fee on top of L2 execution.
   static let optimism = ChainConfig(
     chainId: 10,
     alchemyNetworkSlug: "opt-mainnet",
     nativeInstrument: Instrument.crypto(
       chainId: 10, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18),
     supportsInternalTransfers: false,
+    chargesL1DataFee: true,
     blockExplorerBaseURL: requireURL("https://optimistic.etherscan.io"),
     displayName: "OP Mainnet"
   )
 
   /// Base — chain 8453. Native token: ETH (18 decimals).
-  /// Does NOT support the `internal` transfer category.
+  /// Does NOT support the `internal` transfer category. OP-stack rollup:
+  /// charges an L1 data fee on top of L2 execution.
   static let base = ChainConfig(
     chainId: 8453,
     alchemyNetworkSlug: "base-mainnet",
     nativeInstrument: Instrument.crypto(
       chainId: 8453, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18),
     supportsInternalTransfers: false,
+    chargesL1DataFee: true,
     blockExplorerBaseURL: requireURL("https://basescan.org"),
     displayName: "Base"
   )
 
   /// Polygon PoS — chain 137. Native token: MATIC (18 decimals).
-  /// Supports the `internal` transfer category.
+  /// Supports the `internal` transfer category. Not an OP-stack chain:
+  /// `gasUsed * effectiveGasPrice` is the whole fee.
   static let polygon = ChainConfig(
     chainId: 137,
     alchemyNetworkSlug: "polygon-mainnet",
     nativeInstrument: Instrument.crypto(
       chainId: 137, contractAddress: nil, symbol: "MATIC", name: "Polygon", decimals: 18),
     supportsInternalTransfers: true,
+    chargesL1DataFee: false,
     blockExplorerBaseURL: requireURL("https://polygonscan.com"),
     displayName: "Polygon"
   )
