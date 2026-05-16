@@ -33,7 +33,7 @@ struct CoinstashClient: ExchangeClient, Sendable {
     try Task.checkCancellation()
     if accounts.count > 1 {
       Self.logger.warning(
-        "Coinstash returned \(accounts.count) accounts; importing the first only")
+        "Coinstash returned \(accounts.count, privacy: .public) accounts; importing the first only")
     }
     guard let accountId = accounts.first?.accountId else { return [] }
 
@@ -62,11 +62,11 @@ struct CoinstashClient: ExchangeClient, Sendable {
 
   // MARK: - Mapping
 
-  static func map(_ transaction: CoinstashTransaction) -> ExchangeImportedTransaction? {
+  private static func map(_ transaction: CoinstashTransaction) -> ExchangeImportedTransaction? {
     guard transaction.transactionStatus == "COMPLETED" else { return nil }
-    // Stack-allocated formatter — ISO8601DateFormatter (an NSObject subclass)
-    // is not safe to share across concurrent build tasks. Do NOT promote to a
-    // static/shared let: it is not Sendable and is mutated before use.
+    // ISO8601DateFormatter is not Sendable (an NSObject subclass with mutable
+    // internals), so a `static let` on this Sendable struct would be a compile
+    // error. A per-call local is the correct spelling — do not hoist to static.
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     guard let occurredAt = formatter.date(from: transaction.transactedOn) else {

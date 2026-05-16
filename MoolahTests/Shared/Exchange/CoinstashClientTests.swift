@@ -24,6 +24,9 @@ struct CoinstashClientTests {
       } else {
         json = page
       }
+      // Test-only: request.url is always set (built from CoinstashGraphQL.endpoint)
+      // and HTTPURLResponse(url:statusCode:httpVersion:nil:headerFields:nil) never
+      // returns nil for a valid URL — forced unwrap is provably safe here.
       // swiftlint:disable force_unwrapping
       let response = HTTPURLResponse(
         url: request.url!, statusCode: 200,
@@ -40,6 +43,9 @@ struct CoinstashClientTests {
   @Test
   func mapsUnauthorizedToError() async throws {
     let client = CoinstashClient(transport: { request in
+      // Test-only: request.url is always set (built from CoinstashGraphQL.endpoint)
+      // and HTTPURLResponse(url:statusCode:httpVersion:nil:headerFields:nil) never
+      // returns nil for a valid URL — forced unwrap is provably safe here.
       // swiftlint:disable force_unwrapping
       let response = HTTPURLResponse(
         url: request.url!, statusCode: 200,
@@ -47,7 +53,7 @@ struct CoinstashClientTests {
       // swiftlint:enable force_unwrapping
       return (Data(#"{"errors":[{"message":"Unauthorized"}]}"#.utf8), response)
     })
-    await #expect(throws: ExchangeClientError.self) {
+    await #expect(throws: ExchangeClientError.unauthorized) {
       _ = try await client.fetchTransactions(token: "BAD")
     }
   }
