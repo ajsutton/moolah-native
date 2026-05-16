@@ -23,10 +23,11 @@ struct TransactionListView: View {
   let grouping: Grouping
   @Environment(ImportStore.self) private var importStore
   // Module-internal (not `private`) so the file-scope extension in
-  // `TransactionListView+List.swift` can read it from `transactionsList`,
-  // same as `activeFilter` / `showFilterSheet` above. SwiftLint's
-  // `strict_fileprivate` rule disallows `fileprivate`, making `internal`
-  // the smallest legal cross-file scope.
+  // `TransactionListView+List.swift` can read it from the list code.
+  // SwiftLint's `strict_fileprivate` rule disallows `fileprivate`, making
+  // `internal` the smallest legal cross-file scope. Unlike `activeFilter` /
+  // `showFilterSheet`, the extension never reassigns this — it only calls
+  // methods through the optional (`scrollCollapse?.update(...)` / `reset()`).
   @Environment(\.transactionScrollCollapse) var scrollCollapse
 
   /// When non-nil, the parent owns the selection and handles the inspector.
