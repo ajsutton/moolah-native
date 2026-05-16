@@ -34,8 +34,7 @@ enum BlockscoutTransferAdapter {
   static func adapt(
     nativeTxs: [BlockscoutTransaction],
     internalTxs: [BlockscoutInternalTx],
-    walletAddress rawWallet: String,
-    chain: ChainConfig
+    walletAddress rawWallet: String
   ) -> BlockscoutAdaptResult {
     let wallet = rawWallet.lowercased()
     var transfers: [AlchemyTransfer] = []
@@ -53,7 +52,9 @@ enum BlockscoutTransferAdapter {
             hash: tx.hash,
             blockTimestamp: parseTimestamp(tx.timestamp) ?? Date(timeIntervalSince1970: 0)))
       }
-      // Value leg only for non-zero transfers that touch the wallet.
+      // Value leg only for successful, non-zero transfers that touch the wallet.
+      // Failed/reverted txs still paid gas (above) but did not move value.
+      guard tx.isSuccess else { continue }
       guard let weiHex = decimalStringToHexWei(tx.value), weiHex != "0x0" else { continue }
       guard from == wallet || to == wallet else { continue }
       transfers.append(
@@ -66,6 +67,8 @@ enum BlockscoutTransferAdapter {
     for itx in internalTxs {
       let from = itx.from.hash.lowercased()
       let to = itx.to?.hash.lowercased()
+      // Failed internal calls did not move value; drop them.
+      guard itx.success else { continue }
       guard let weiHex = decimalStringToHexWei(itx.value), weiHex != "0x0" else { continue }
       guard from == wallet || to == wallet else { continue }
       transfers.append(
@@ -104,7 +107,8 @@ enum BlockscoutTransferAdapter {
   static func decimalStringToHexWei(_ decimalString: String) -> String? {
     let trimmed = decimalString.trimmingCharacters(in: .whitespaces)
     guard !trimmed.isEmpty, trimmed.allSatisfy(\.isNumber) else {
-      logger.notice("Skipping Blockscout row — non-numeric value")
+      logger.notice(
+        "Skipping Blockscout row — non-numeric value: \(decimalString, privacy: .private)")
       return nil
     }
     if trimmed.allSatisfy({ $0 == "0" }) { return "0x0" }
@@ -113,15 +117,26 @@ enum BlockscoutTransferAdapter {
     var digits = ""
     let sixteen = Decimal(16)
     while value > 0 {
-      let remainder = value - (value / sixteen).rounded(.down) * sixteen
+      let remainder = value - decimalFloor(value / sixteen) * sixteen
       let nibble = (remainder as NSDecimalNumber).intValue
       digits.append(Self.hexDigits[nibble])
-      value = (value / sixteen).rounded(.down)
+      value = decimalFloor(value / sixteen)
     }
     return "0x" + String(digits.reversed())
   }
 
   private static let hexDigits = Array("0123456789abcdef")
+
+  /// Returns `value` rounded toward negative infinity (floor) to an
+  /// integer. `Decimal` has no stdlib rounding (it isn't `FloatingPoint`);
+  /// `NSDecimalRound(.down)` is the correct Foundation call. Used by the
+  /// base-10-wei → hex loop, which needs exact integer division.
+  private static func decimalFloor(_ value: Decimal) -> Decimal {
+    var input = value
+    var result = Decimal()
+    NSDecimalRound(&result, &input, 0, .down)
+    return result
+  }
 
   /// ISO-8601 (Blockscout uses fractional seconds, e.g.
   /// `2024-09-12T12:34:56.000000Z`). Reuses the lenient policy: `nil`
@@ -134,16 +149,5 @@ enum BlockscoutTransferAdapter {
     let plain = ISO8601DateFormatter()
     plain.formatOptions = [.withInternetDateTime]
     return plain.date(from: raw)
-  }
-}
-
-extension Decimal {
-  /// Truncates toward zero. Local helper for the wei→hex loop; kept
-  /// fileprivate-equivalent by living next to its only caller.
-  fileprivate func rounded(_ rule: FloatingPointRoundingRule) -> Decimal {
-    var input = self
-    var result = Decimal()
-    NSDecimalRound(&result, &input, 0, rule == .down ? .down : .plain)
-    return result
   }
 }
