@@ -1,3 +1,5 @@
+// Multi-argument SwiftUI modifier chains here require wrapping
+// that would otherwise trip multiline_arguments.
 // swiftlint:disable multiline_arguments
 
 import SwiftUI
@@ -77,10 +79,10 @@ extension TransactionListView {
       scrollCollapse?.reset()
     }
     .task(id: activeFilter) {
-      // The view-driven reactive subscription. `observe(filter:)` runs
-      // the for-await loop until this `.task` is cancelled (filter change
-      // or unmount). The for-await body lives in the store, not here
-      // (per the thin-view rule from spec Section 5).
+      // The view-driven reactive subscription. The store owns the
+      // for-await loop; the view only starts and cancels it. `.task`
+      // runs `observe(filter:)` until cancelled (filter change or
+      // unmount).
       await transactionStore.observe(filter: activeFilter)
     }
     .refreshable {

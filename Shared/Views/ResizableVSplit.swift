@@ -132,7 +132,7 @@ import SwiftUI
     // forbids conforming a class from a generic context to an `@objc`
     // protocol (`NSSplitViewDelegate`) in an extension. The conformance
     // must stay on the class declaration; the delegate methods are grouped
-    // under the `// MARK: NSSplitViewDelegate` section below.
+    // under the `// MARK: - NSSplitViewDelegate` section below.
     @MainActor
     final class Coordinator: NSObject, NSSplitViewDelegate {
       var topHost: NSHostingView<Top>?
@@ -213,8 +213,11 @@ import SwiftUI
         // `finalize` is also the entire effect of the instant /
         // Reduce-Motion path (when `animate` returns early), so it must
         // pin the final position even though the stepped path ends at it.
-        animate(in: split, to: 0, animated: animated) { [weak split] in
+        animate(in: split, to: 0, animated: animated) { [weak self, weak split] in
           split?.setPosition(0, ofDividerAt: 0)
+          // Collapsed pane is zero-height but still in the view tree;
+          // hide it so VoiceOver can't strand focus in invisible content.
+          self?.topHost?.isHidden = true
         }
       }
 
@@ -229,6 +232,8 @@ import SwiftUI
           return
         }
         let target = savedDividerPosition ?? initialTopHeight
+        // Restore the pane to the a11y tree before it animates back in.
+        topHost?.isHidden = false
         let name = autosaveName
         animate(in: split, to: target, animated: animated) { [weak self, weak split] in
           self?.isCollapsing = false
@@ -237,7 +242,7 @@ import SwiftUI
         }
       }
 
-      // MARK: Animation
+      // MARK: - Animation
 
       /// Animate the `NSSplitView` divider from its current position to
       /// `target` over `animationDuration` with an ease-in-out curve.
@@ -278,7 +283,11 @@ import SwiftUI
       @objc
       private func stepAnimation(_ link: CADisplayLink) {
         MainActor.assertIsolated(
-          "CADisplayLink must run on the main run loop")
+          """
+          CADisplayLink fires on the run loop it was added to. \
+          `animate(in:to:animated:finalize:)` is @MainActor-isolated, \
+          so `.current` at add time is always the main run loop.
+          """)
         guard link === displayLink, let split = animatingSplit else {
           link.invalidate()
           return
@@ -315,7 +324,7 @@ import SwiftUI
         animationFinalize = nil
       }
 
-      // MARK: NSSplitViewDelegate
+      // MARK: - NSSplitViewDelegate
 
       func splitView(
         _ splitView: NSSplitView,
