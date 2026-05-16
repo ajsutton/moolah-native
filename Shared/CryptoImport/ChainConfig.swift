@@ -21,9 +21,11 @@ struct ChainConfig: Sendable, Hashable {
   /// Ethereum, OP Mainnet, and Base.
   let nativeInstrument: Instrument
 
-  /// `true` if Alchemy supports the `internal` transfer category on this
-  /// chain (Ethereum only). OP / Base do NOT support `internal` — see
-  /// design open question 3.
+  /// `true` if Alchemy's `internal` transfer category is requested for
+  /// this chain. Currently `false` for all supported chains because
+  /// Blockscout is the authoritative source for internal ETH transfers
+  /// on every supported chain, and requesting `internal` from Alchemy
+  /// would produce rows that `WalletSyncEngine` discards.
   let supportsInternalTransfers: Bool
 
   /// Block-explorer base URL (no trailing slash). Used by
@@ -55,20 +57,22 @@ struct ChainConfig: Sendable, Hashable {
 
 extension ChainConfig {
   /// Ethereum mainnet — chain 1. Native token: ETH (18 decimals).
-  /// Supports the `internal` transfer category.
+  /// Blockscout is the authoritative internal-ETH source; Alchemy
+  /// `internal` is not requested.
   static let ethereum = ChainConfig(
     chainId: 1,
     alchemyNetworkSlug: "eth-mainnet",
     nativeInstrument: Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18),
-    supportsInternalTransfers: true,
+    supportsInternalTransfers: false,
     blockExplorerBaseURL: requireURL("https://etherscan.io"),
     blockscoutAPIBaseURL: requireURL("https://eth.blockscout.com"),
     displayName: "Ethereum"
   )
 
   /// OP Mainnet (Optimism) — chain 10. Native token: ETH (18 decimals).
-  /// Does NOT support the `internal` transfer category.
+  /// Blockscout is the authoritative internal-ETH source; Alchemy
+  /// `internal` is not requested.
   static let optimism = ChainConfig(
     chainId: 10,
     alchemyNetworkSlug: "opt-mainnet",
@@ -81,7 +85,8 @@ extension ChainConfig {
   )
 
   /// Base — chain 8453. Native token: ETH (18 decimals).
-  /// Does NOT support the `internal` transfer category.
+  /// Blockscout is the authoritative internal-ETH source; Alchemy
+  /// `internal` is not requested.
   static let base = ChainConfig(
     chainId: 8453,
     alchemyNetworkSlug: "base-mainnet",

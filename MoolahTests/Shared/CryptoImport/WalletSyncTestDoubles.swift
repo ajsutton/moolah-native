@@ -379,6 +379,11 @@ final class RecordingBlockExplorerClientStub: BlockExplorerClient, @unchecked Se
 
 /// Shared empty Blockscout stub for engine-construction sites that
 /// don't exercise the Blockscout path.
+///
+/// Returns a **fresh** `RecordingBlockExplorerClientStub` on every access.
+/// Tests that need to observe recorded calls must capture the instance before
+/// passing it to the engine — asserting on `BlockExplorerTestDoubles.empty`
+/// directly would always see an empty call list (a different instance).
 enum BlockExplorerTestDoubles {
   static var empty: RecordingBlockExplorerClientStub { RecordingBlockExplorerClientStub() }
 }

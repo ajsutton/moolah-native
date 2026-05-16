@@ -7,7 +7,9 @@ import Testing
 @Suite("LiveAlchemyClient — request shape")
 struct LiveAlchemyClientRequestTests {
   @Test
-  func ethereumRequestUsesEthMainnetSlugAndIncludesInternalCategory() async throws {
+  func ethereumRequestUsesEthMainnetSlugAndExcludesInternalCategory() async throws {
+    // Blockscout owns internal ETH for all supported chains, including Ethereum;
+    // the Alchemy `internal` category is not requested even for chain 1.
     let fixture = try AlchemyTestSupport.loadFixture("eth-simple-eth-send")
     let client = AlchemyTestSupport.makeClient { request in
       AlchemyURLProtocolStub.captureRequest(request)
@@ -32,7 +34,7 @@ struct LiveAlchemyClientRequestTests {
     let categories = try #require(params["category"] as? [String])
     #expect(categories.contains("external"))
     #expect(categories.contains("erc20"))
-    #expect(categories.contains("internal"))
+    #expect(categories.contains("internal") == false)
   }
 
   @Test

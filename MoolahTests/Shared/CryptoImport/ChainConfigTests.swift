@@ -11,7 +11,7 @@ struct ChainConfigTests {
     let config = ChainConfig.ethereum
     #expect(config.chainId == 1)
     #expect(config.alchemyNetworkSlug == "eth-mainnet")
-    #expect(config.supportsInternalTransfers == true)
+    #expect(config.supportsInternalTransfers == false)
     #expect(config.displayName == "Ethereum")
     #expect(config.blockExplorerBaseURL.absoluteString == "https://etherscan.io")
     #expect(config.blockscoutAPIBaseURL.absoluteString == "https://eth.blockscout.com")
@@ -78,13 +78,14 @@ struct ChainConfigTests {
   }
 
   @Test
-  func internalTransferSupportMatchesDesignDoc() {
-    // Per design open question 3: ETH supports `internal`, OP and Base do not.
+  func internalTransferSupportPerChain() {
+    // Blockscout is the authoritative internal-ETH source for all supported chains;
+    // no chain requests the Alchemy `internal` category.
     // Polygon (chain 137) has no public Blockscout instance and is not a supported chain.
     let supports = Dictionary(
       uniqueKeysWithValues: ChainConfig.all.map { ($0.chainId, $0.supportsInternalTransfers) }
     )
-    #expect(supports[1] == true)
+    #expect(supports[1] == false)
     #expect(supports[10] == false)
     #expect(supports[8453] == false)
     #expect(supports[137] == nil)  // Polygon (no public Blockscout — unsupported)

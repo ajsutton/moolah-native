@@ -83,6 +83,8 @@ struct LiveBlockscoutClient: Sendable {
     var pageParams: BlockscoutPageParams?
     var seenCursors: Set<BlockscoutPageParams> = []
     while true {
+      // Explicit per-iteration cancellation check (don't rely on the rate limiter's).
+      try Task.checkCancellation()
       if let pageParams, !seenCursors.insert(pageParams).inserted { break }
       try await rateLimiter.acquire()
       let request = try buildRequest(

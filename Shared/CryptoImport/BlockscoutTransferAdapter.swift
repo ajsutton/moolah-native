@@ -128,6 +128,11 @@ enum BlockscoutTransferAdapter {
   /// Blockscout `value` is a base-10 wei string. The builder consumes a
   /// `0x`-hex `rawValue` (`HexDecimal.parse`), so convert. Returns
   /// `"0x0"` for "0"; `nil` on non-numeric input (row logged + skipped).
+  ///
+  /// `internal` (not `private`) so `BlockscoutTransferAdapterTests` can
+  /// exercise the base-10-wei → hex arithmetic in isolation — this
+  /// project has a known `Decimal → Int64` truncation footgun, so the
+  /// conversion is tested directly rather than only through the adapter.
   static func decimalStringToHexWei(_ decimalString: String) -> String? {
     let trimmed = decimalString.trimmingCharacters(in: .whitespaces)
     guard !trimmed.isEmpty, trimmed.allSatisfy(\.isNumber) else {
