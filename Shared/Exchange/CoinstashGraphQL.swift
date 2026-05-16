@@ -1,19 +1,35 @@
 import Foundation
 
+/// Coinstash GraphQL endpoint, query strings, and response models.
 enum CoinstashGraphQL {
-  // String-literal URL: a parse failure is a programming error, not runtime input.
+  /// Coinstash GraphQL endpoint.
+  ///
+  /// String-literal URL: a parse failure is a programming error, not runtime input.
   static let endpoint = URL(string: "https://graph.coinstash.com.au/graphql")!  // swiftlint:disable:this force_unwrapping
 
+  /// Fetches the authenticated user's profile.
+  ///
+  /// Decodes into `CoinstashGraphQLResponse<CoinstashUserProfileData>`.
   static let userProfileQuery = """
     query { userProfile { userId } }
     """
 
+  /// Fetches all exchange accounts for the given user.
+  ///
+  /// Required variable: `$userId` (ID) — the `userId` from `userProfileQuery`.
+  /// Decodes into `CoinstashGraphQLResponse<CoinstashUserAccountsData>`.
   static let userAccountsQuery = """
     query Q($userId: ID!) {
       getUserAccounts(userId: $userId) { accounts { accountId accountType } }
     }
     """
 
+  /// Fetches a page of transactions for the given account.
+  ///
+  /// Required variables:
+  /// - `$a` (ID) — the account ID.
+  /// - `$p` (SearchAccountTransactionsPayloadInput) — pagination / filter payload.
+  /// Decodes into `CoinstashGraphQLResponse<CoinstashTransactionsData>`.
   static let transactionsQuery = """
     query Q($a: ID!, $p: SearchAccountTransactionsPayloadInput) {
       accountTransactions(accountId: $a, searchAccountTransactionsPayloadInput: $p) {
@@ -54,11 +70,11 @@ struct CoinstashUserAccountsData: Decodable, Sendable {
     let accountType: String
   }
 
-  struct GetUserAccountsResult: Decodable, Sendable {
+  struct UserAccountsPayload: Decodable, Sendable {
     let accounts: [AccountSummary]
   }
 
-  let getUserAccounts: GetUserAccountsResult
+  let getUserAccounts: UserAccountsPayload
 }
 
 struct CoinstashTransaction: Decodable, Sendable, Hashable {

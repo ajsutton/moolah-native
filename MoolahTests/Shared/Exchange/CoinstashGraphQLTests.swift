@@ -31,6 +31,23 @@ struct CoinstashGraphQLTests {
   }
 
   @Test
+  func decodesTransactionWithOptionalFieldsAbsent() throws {
+    let json = """
+      {"data":{"accountTransactions":{"isSuccessful":true,
+        "totalRecordsFound":1,"result":[
+        {"transactionId":"t3","transactedOn":"2026-03-01T05:38:19.186Z",
+         "category":"DEPOSIT","type":"CREDIT",
+         "amount":100.00,"amountType":"FIAT","transactionStatus":"COMPLETED"}]}}}
+      """
+    let resp = try JSONDecoder().decode(
+      CoinstashGraphQLResponse<CoinstashTransactionsData>.self, from: Data(json.utf8))
+    let transaction = try #require(resp.data?.accountTransactions.result.first)
+    #expect(transaction.assetSymbol == nil)
+    #expect(transaction.quoteBuyPrice == nil)
+    #expect(transaction.orderId == nil)
+  }
+
+  @Test
   func surfacesGraphQLErrors() throws {
     let json = """
       {"errors":[{"message":"Unauthorized"}]}
