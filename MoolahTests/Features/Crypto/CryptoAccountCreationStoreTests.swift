@@ -74,12 +74,19 @@ struct CryptoAccountCreationStoreTests {
       alchemy: alchemy)
   }
 
-  @Test("Successful submit creates the account with the chain's native instrument")
+  /// Profile currency handed to the create flow. A new crypto account is
+  /// denominated in the profile currency (not the chain's native token);
+  /// per-token positions emerge from leg aggregation converted into this
+  /// instrument as wallet syncs land.
+  nonisolated static let profileInstrument: Instrument = .defaultTestInstrument
+
+  @Test("Successful submit creates the account denominated in the profile currency")
   func successfulSubmitCreatesCryptoAccount() async throws {
     let fixture = try makeFixture()
     let logic = CryptoAccountCreationLogic(
       accountStore: fixture.accountStore,
-      cryptoSyncStore: fixture.cryptoSyncStore)
+      cryptoSyncStore: fixture.cryptoSyncStore,
+      accountInstrument: Self.profileInstrument)
 
     let outcome = await logic.submit(
       name: "Hardware Wallet",
@@ -93,7 +100,7 @@ struct CryptoAccountCreationStoreTests {
     #expect(created.type == .crypto)
     #expect(created.walletAddress == Self.validAddress)
     #expect(created.chainId == ChainConfig.ethereum.chainId)
-    #expect(created.instrument == ChainConfig.ethereum.nativeInstrument)
+    #expect(created.instrument == Self.profileInstrument)
     #expect(created.name == "Hardware Wallet")
     // Crypto wallets compute balance from leg aggregation, so they ship
     // as `.calculatedFromTrades` from creation. The `Account` default is
@@ -114,12 +121,15 @@ struct CryptoAccountCreationStoreTests {
     #expect(fixture.accountStore.accounts.first?.id == created.id)
   }
 
-  @Test("Polygon chain produces a MATIC-native account")
-  func polygonChainSetsMaticInstrument() async throws {
+  @Test(
+    "Chain selection does not change the account instrument — Polygon still uses the profile currency"
+  )
+  func chainDoesNotOverrideProfileInstrument() async throws {
     let fixture = try makeFixture()
     let logic = CryptoAccountCreationLogic(
       accountStore: fixture.accountStore,
-      cryptoSyncStore: fixture.cryptoSyncStore)
+      cryptoSyncStore: fixture.cryptoSyncStore,
+      accountInstrument: Self.profileInstrument)
 
     let outcome = await logic.submit(
       name: "Polygon Hot Wallet",
@@ -130,9 +140,12 @@ struct CryptoAccountCreationStoreTests {
       Issue.record("Expected .created outcome, got \(outcome)")
       return
     }
+    // The chain still drives `chainId` (and therefore which network the
+    // wallet sync queries), but the account is denominated in the
+    // profile currency regardless of the chain's native token.
     #expect(created.chainId == ChainConfig.polygon.chainId)
-    #expect(created.instrument == ChainConfig.polygon.nativeInstrument)
-    #expect(created.instrument.ticker == "MATIC")
+    #expect(created.instrument == Self.profileInstrument)
+    #expect(created.instrument != ChainConfig.polygon.nativeInstrument)
   }
 
   @Test("Successful submit kicks off the initial Alchemy sync for the new account")
@@ -140,7 +153,8 @@ struct CryptoAccountCreationStoreTests {
     let fixture = try makeFixture()
     let logic = CryptoAccountCreationLogic(
       accountStore: fixture.accountStore,
-      cryptoSyncStore: fixture.cryptoSyncStore)
+      cryptoSyncStore: fixture.cryptoSyncStore,
+      accountInstrument: Self.profileInstrument)
 
     let outcome = await logic.submit(
       name: "Sync Wallet",
@@ -176,7 +190,8 @@ struct CryptoAccountCreationStoreTests {
     }
     let logic = CryptoAccountCreationLogic(
       accountStore: fixture.accountStore,
-      cryptoSyncStore: fixture.cryptoSyncStore)
+      cryptoSyncStore: fixture.cryptoSyncStore,
+      accountInstrument: Self.profileInstrument)
 
     let start = ContinuousClock.now
     let outcome = await logic.submit(
@@ -206,7 +221,8 @@ struct CryptoAccountCreationStoreTests {
     let fixture = try makeFixture()
     let logic = CryptoAccountCreationLogic(
       accountStore: fixture.accountStore,
-      cryptoSyncStore: fixture.cryptoSyncStore)
+      cryptoSyncStore: fixture.cryptoSyncStore,
+      accountInstrument: Self.profileInstrument)
 
     let outcome = await logic.submit(
       name: "Bad Address Wallet",
@@ -227,7 +243,8 @@ struct CryptoAccountCreationStoreTests {
     let fixture = try makeFixture()
     let logic = CryptoAccountCreationLogic(
       accountStore: fixture.accountStore,
-      cryptoSyncStore: fixture.cryptoSyncStore)
+      cryptoSyncStore: fixture.cryptoSyncStore,
+      accountInstrument: Self.profileInstrument)
 
     let outcome = await logic.submit(
       name: "   ",
@@ -247,7 +264,8 @@ struct CryptoAccountCreationStoreTests {
     let fixture = try makeFixture()
     let logic = CryptoAccountCreationLogic(
       accountStore: fixture.accountStore,
-      cryptoSyncStore: fixture.cryptoSyncStore)
+      cryptoSyncStore: fixture.cryptoSyncStore,
+      accountInstrument: Self.profileInstrument)
 
     // Mix of leading whitespace, mixed case, and trailing newline.
     let raw = "  0xABCDEF0123456789ABCDEF0123456789ABCDEF01\n"
@@ -269,7 +287,8 @@ struct CryptoAccountCreationStoreTests {
     let fixture = try makeFixture()
     let logic = CryptoAccountCreationLogic(
       accountStore: fixture.accountStore,
-      cryptoSyncStore: nil)
+      cryptoSyncStore: nil,
+      accountInstrument: Self.profileInstrument)
 
     let outcome = await logic.submit(
       name: "Degraded Launch Wallet",

@@ -97,6 +97,50 @@ struct BalanceCalculatorValuationModeTests {
     #expect(total == InstrumentAmount(quantity: 500, instrument: .AUD))
   }
 
+  // MARK: - Crypto account conversion date
+
+  /// A crypto account is denominated in the profile currency, so its
+  /// worth is "what are my tokens worth *today*". `displayBalance`
+  /// defaults to `Date()`, so the default path must pick the current
+  /// rate; pinning a historic date must pick the historic rate. This
+  /// pins the conversion-date semantic the crypto-account change relies
+  /// on (a regression to a historic date would silently misvalue every
+  /// wallet).
+  @Test(
+    "crypto account: native-token positions convert to the profile currency at the current date")
+  func cryptoAccountConvertsPositionsAtCurrentDate() async throws {
+    let eth = Instrument.crypto(
+      chainId: 1,
+      contractAddress: "0x0000000000000000000000000000000000000000",
+      symbol: "ETH",
+      name: "Ether",
+      decimals: 18)
+    let historic = Date(timeIntervalSince1970: 1_577_836_800)  // 2020-01-01
+    let recent = Date(timeIntervalSince1970: 1_704_067_200)  // 2024-01-01
+    let conversion = DateBasedFixedConversionService(rates: [
+      historic: [eth.id: 1000],
+      recent: [eth.id: 4000],
+    ])
+    let calculator = AccountBalanceCalculator(
+      conversionService: conversion, targetInstrument: .AUD)
+    var account = Account(
+      name: "Hardware Wallet", type: .crypto, instrument: .AUD,
+      valuationMode: .calculatedFromTrades)
+    account.positions = [Position(instrument: eth, quantity: 2)]
+
+    // Default path uses `Date()` (well past `recent`): the wallet reflects
+    // today's rate — 2 ETH × 4000 — not the historic 1000.
+    let current = try await calculator.displayBalance(
+      for: account, investmentValue: nil)
+    #expect(current == InstrumentAmount(quantity: 8000, instrument: .AUD))
+
+    // Pinning a historic date selects the historic rate, proving the
+    // conversion is genuinely date-driven and the default really is "now".
+    let asOfHistoric = try await calculator.displayBalance(
+      for: account, investmentValue: nil, date: historic)
+    #expect(asOfHistoric == InstrumentAmount(quantity: 2000, instrument: .AUD))
+  }
+
   // MARK: - .knownZero positions (issue #790)
 
   /// Issue #790: positions whose conversion resolves to `.knownZero`

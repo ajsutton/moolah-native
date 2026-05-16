@@ -6,10 +6,11 @@ import SwiftUI
 ///
 /// Renders the crypto-specific portion of the account-creation sheet:
 /// chain picker (ETH / OP / Base / Polygon) and a wallet-address text
-/// field. Per the design spec, the account's `instrument` is set
-/// automatically to the chain's native instrument (ETH for
-/// Ethereum/OP/Base, MATIC for Polygon); per-token positions emerge
-/// from leg aggregation as wallet syncs land.
+/// field. The account is denominated in the profile currency (not the
+/// chain's native token); per-token positions emerge from leg
+/// aggregation, converted into the profile currency as wallet syncs
+/// land. The selected chain still drives `chainId` — i.e. which network
+/// the wallet sync queries.
 ///
 /// Address validation:
 ///
@@ -21,14 +22,11 @@ import SwiftUI
 ///   inline hint — v1 cannot resolve ENS to a 0x address.
 ///
 /// The shared shell in `CreateAccountView` owns the Form / NavigationStack
-/// / toolbar. This view exposes:
-///
-/// - `body` — the chain picker and address field (rendered inside the
-///   parent `Form`).
-/// - `CryptoAccountCreationLogic` — pure form-logic type used by the
-///   parent's Save button to validate and submit; kept separate so
-///   `CryptoAccountCreationLogicTests` exercise the contract directly
-///   without spinning up a SwiftUI view.
+/// / toolbar. This view renders only `body` — the chain picker and
+/// address field inside the parent `Form`. The validate-and-submit
+/// contract lives in `CryptoAccountCreationLogic` (its own file) so
+/// `CryptoAccountCreationStoreTests` can exercise it without spinning up
+/// a SwiftUI view.
 struct CryptoAccountCreationView: View {
   @Binding var chain: ChainConfig
   @Binding var walletAddressInput: String
@@ -73,68 +71,6 @@ struct CryptoAccountCreationView: View {
       return "ENS resolution not supported in v1 — paste a 0x address."
     }
     return nil
-  }
-}
-
-// MARK: - Submit logic
-
-/// Pure form-logic helper for the crypto branch of `CreateAccountView`.
-/// Owns the create-account + kick-off-sync sequence so the parent view
-/// can dispatch from its Save button without relying on a transient
-/// SwiftUI view instance, and so `CryptoAccountCreationLogicTests` can
-/// exercise the contract end-to-end against `TestBackend`.
-@MainActor
-struct CryptoAccountCreationLogic {
-  let accountStore: AccountStore
-  /// May be `nil` in degraded launches (preview / no instrument
-  /// registry). When `nil`, account creation still proceeds; the first
-  /// sync simply isn't kicked off — the next scenePhase `.active`
-  /// stale-check will pick it up.
-  let cryptoSyncStore: CryptoSyncStore?
-
-  /// Output of `submit(name:chain:walletAddressInput:)`. The parent
-  /// surface uses `.created` to dismiss the sheet and `.failure` /
-  /// `.invalidAddress` to show an inline error message.
-  enum Outcome: Sendable {
-    case created(Account)
-    case invalidAddress
-    case failure(Error)
-  }
-
-  /// Persists the new crypto account and kicks off its first sync.
-  /// Returns the outcome rather than mutating shared state directly so
-  /// the parent view can decide how to surface success vs failure.
-  func submit(name: String, chain: ChainConfig, walletAddressInput: String) async -> Outcome {
-    guard let walletAddress = Account.validatedWalletAddress(walletAddressInput) else {
-      return .invalidAddress
-    }
-    let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmedName.isEmpty else { return .invalidAddress }
-
-    let account = Account(
-      name: trimmedName,
-      type: .crypto,
-      instrument: chain.nativeInstrument,
-      valuationMode: .calculatedFromTrades,
-      walletAddress: walletAddress,
-      chainId: chain.chainId
-    )
-
-    do {
-      let created = try await accountStore.create(account)
-      // Kick off the initial sync without awaiting so the parent sheet
-      // can `dismiss()` the moment the account is persisted instead of
-      // sitting open through the entire network round-trip. The store
-      // tracks the spawned task so it's cancelled on profile teardown
-      // and collapses with the next scenePhase `.active` trigger
-      // rather than queueing a redundant pass. A `nil` `cryptoSyncStore`
-      // (degraded launch) leaves the account stale; the next
-      // stale-sync pass picks it up.
-      cryptoSyncStore?.scheduleInitialSync(for: created)
-      return .created(created)
-    } catch {
-      return .failure(error)
-    }
   }
 }
 

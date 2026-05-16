@@ -145,6 +145,13 @@ struct AccountBalanceCalculator {
   /// balance; a thrown conversion error still propagates so the balance
   /// is marked unavailable per Rule 11. See issue #790.
   ///
+  /// A `.crypto` account's `instrument` is the profile currency (set at
+  /// creation), so this loop converts each native-token position into the
+  /// profile currency on `date` — the current-value read the user expects
+  /// for a wallet's worth. The native token is never the account
+  /// instrument, so the same-instrument fast path below only fires for a
+  /// position that already happens to be in the profile currency.
+  ///
   /// Pass `date` to share a conversion timestamp across a multi-account
   /// pass; defaults to `Date()` for one-shot callers.
   func displayBalance(

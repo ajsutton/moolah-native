@@ -180,7 +180,8 @@ struct CreateAccountView: View {
 
   private func submitCrypto() async {
     let logic = CryptoAccountCreationLogic(
-      accountStore: accountStore, cryptoSyncStore: cryptoSyncStore)
+      accountStore: accountStore, cryptoSyncStore: cryptoSyncStore,
+      accountInstrument: instrument)
     let outcome = await logic.submit(
       name: name, chain: cryptoChain, walletAddressInput: cryptoWalletAddress)
     switch outcome {
