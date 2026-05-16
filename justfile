@@ -154,7 +154,6 @@ generate:
 
     STAMP_DIR=".build/stamps"
     SCHEMA_STAMP="$STAMP_DIR/ckdb-schema-gen.stamp"
-    XCODEGEN_MODE_FILE="$STAMP_DIR/xcodegen.mode"
     mkdir -p "$STAMP_DIR"
 
     # ---- ckdb-schema-gen ----
@@ -191,40 +190,21 @@ generate:
     # builds are produced by fastlane lanes (no entitlement injection here) and
     # shipped via the GitHub release artefact — there is no local Release path.
     #
-    # Both modes are cached. Regenerate when `project.yml` (or, in the
-    # injection path, `scripts/inject-entitlements.sh`) is newer than
-    # `Moolah.xcodeproj/project.pbxproj`, when the project file is
-    # missing, or when the mode flipped between injected and non-injected
-    # since the last successful run (so the project picks up / drops the
-    # entitlement keys).
-    last_mode="$(cat "$XCODEGEN_MODE_FILE" 2>/dev/null || echo "")"
+    # xcodegen's own `--use-cache` keys on the resolved spec — the parsed
+    # `project.yml` *and* the full set of source files it globs in. That
+    # makes it skip regeneration when nothing changed and regenerate when
+    # a file is added or deleted under one of project.yml's directory
+    # paths (the case a `project.yml` mtime check misses) or when the
+    # injected-entitlements spec content differs. The cache lives inside
+    # the worktree's `.build`, so it is not shared between worktrees and
+    # is removed along with the worktree.
+    XCODEGEN_CACHE=".build/xcodegen.cache"
     if [ "${ENABLE_ENTITLEMENTS:-}" = "1" ]; then
-        current_mode="1"
+        SPEC=$(bash scripts/inject-entitlements.sh)
+        trap "rm -f $SPEC" EXIT
+        xcodegen generate --use-cache --cache-path "$XCODEGEN_CACHE" --spec "$SPEC"
     else
-        current_mode="0"
-    fi
-
-    needs_xcodegen=0
-    if [ ! -f "Moolah.xcodeproj/project.pbxproj" ]; then
-        needs_xcodegen=1
-    elif [ "project.yml" -nt "Moolah.xcodeproj/project.pbxproj" ]; then
-        needs_xcodegen=1
-    elif [ "$last_mode" != "$current_mode" ]; then
-        needs_xcodegen=1
-    elif [ "$current_mode" = "1" ] \
-        && [ "scripts/inject-entitlements.sh" -nt "Moolah.xcodeproj/project.pbxproj" ]; then
-        needs_xcodegen=1
-    fi
-
-    if [ "$needs_xcodegen" -eq 1 ]; then
-        if [ "$current_mode" = "1" ]; then
-            SPEC=$(bash scripts/inject-entitlements.sh)
-            trap "rm -f $SPEC" EXIT
-            xcodegen generate --spec "$SPEC"
-        else
-            xcodegen generate
-        fi
-        echo "$current_mode" > "$XCODEGEN_MODE_FILE"
+        xcodegen generate --use-cache --cache-path "$XCODEGEN_CACHE"
     fi
 
 # Removes:
