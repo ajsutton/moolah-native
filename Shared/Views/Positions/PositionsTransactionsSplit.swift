@@ -28,6 +28,10 @@ struct PositionsTransactionsSplit<Positions: View, Transactions: View>: View {
   @ViewBuilder let positions: () -> Positions
   @ViewBuilder let transactions: () -> Transactions
 
+  #if os(macOS)
+    @State private var scrollCollapse = TransactionScrollCollapse()
+  #endif
+
   #if !os(macOS)
     @State private var selectedTab: Tab
   #endif
@@ -53,11 +57,13 @@ struct PositionsTransactionsSplit<Positions: View, Transactions: View>: View {
     #if os(macOS)
       ResizableVSplit(
         autosaveName: autosaveName,
-        initialTopHeight: initialTopHeight
+        initialTopHeight: initialTopHeight,
+        collapsed: scrollCollapse.isCollapsed
       ) {
         positions()
       } bottom: {
         transactions()
+          .environment(\.transactionScrollCollapse, scrollCollapse)
       }
     #else
       VStack(spacing: 0) {
