@@ -85,6 +85,13 @@ struct ExchangeAccountMigrationTests {
           VALUES (?, 'keep', 'Keep', 'bank', 'AUD', 0, 0, 'recordedValue')
           """,
         arguments: [id])
+      try database.execute(
+        sql: """
+          INSERT INTO account (id, record_name, name, type, instrument_id,
+            position, is_hidden, valuation_mode, wallet_address, chain_id)
+          VALUES (?, 'wallet', 'Wallet', 'crypto', 'ETH', 1, 0, 'recordedValue', '0xabc', 1)
+          """,
+        arguments: [Data(repeating: 3, count: 16)])
     }
     #expect(throws: (any Error).self) {
       try queue.write { database in
@@ -101,6 +108,12 @@ struct ExchangeAccountMigrationTests {
       #expect(accountNewExists == nil)
       let columnNames = try database.columns(in: "account").map(\.name)
       #expect(!columnNames.contains("exchange_provider"))
+      let walletAddress = try String.fetchOne(
+        database, sql: "SELECT wallet_address FROM account WHERE record_name = 'wallet'")
+      #expect(walletAddress == "0xabc")
+      let chainId = try Int.fetchOne(
+        database, sql: "SELECT chain_id FROM account WHERE record_name = 'wallet'")
+      #expect(chainId == 1)
     }
   }
 }

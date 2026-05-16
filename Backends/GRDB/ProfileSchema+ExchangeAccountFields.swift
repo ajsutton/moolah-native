@@ -29,6 +29,8 @@ extension ProfileSchema {
                 CHECK (valuation_mode IN ('recordedValue', 'calculatedFromTrades')),
             wallet_address         TEXT,
             chain_id               INTEGER,
+            -- Widening for a new ExchangeProvider requires another table-rebuild
+            -- migration: SQLite cannot ALTER a CHECK in place (same as `type`).
             exchange_provider      TEXT
                 CHECK (exchange_provider IS NULL OR exchange_provider IN ('coinstash')),
             encoded_system_fields  BLOB
