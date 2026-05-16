@@ -110,7 +110,8 @@ final class SyncedAccountStore {
   ///   - sources: Provider-neutral sync sources. The store asks each
   ///     `handles(_:)` to decide which accounts it can sync — it never
   ///     branches on `account.type` itself.
-  ///   - walletApplyEngine: Sequential `@MainActor` apply pass (Stage 7).
+  ///   - walletApplyEngine: Sequential `@MainActor` apply pass — runs
+  ///     after the parallel build phase completes.
   ///   - walletSyncState: Per-device sync checkpoint store.
   ///   - accounts: Account repository — read on every stale check to
   ///     filter to syncable accounts (via `sources`).
@@ -122,7 +123,7 @@ final class SyncedAccountStore {
   ///     since the last successful sync. Default 24 hours.
   ///   - timerInterval: Hourly stale-check cadence. Default 1 hour.
   ///   - maxConcurrentBuilds: Cap on simultaneous per-account fetches in
-  ///     the parallel build phase. Default 4 (per design).
+  ///     the parallel build phase. Default 4.
   init(
     sources: [any AccountSyncSource],
     walletApplyEngine: WalletApplyEngine,
@@ -141,6 +142,15 @@ final class SyncedAccountStore {
     self.staleThreshold = staleThreshold
     self.timerInterval = timerInterval
     self.maxConcurrentBuilds = max(1, maxConcurrentBuilds)
+  }
+
+  /// The first registered `AccountSyncSource` that claims `account`, or
+  /// `nil` if none do. Centralises the provider-neutral lookup so the
+  /// store never branches on `account.type` itself. Module-internal (not
+  /// `private`) so the `+Internals` extension's `accountsToSync` can
+  /// share the same predicate.
+  func source(for account: Account) -> (any AccountSyncSource)? {
+    sources.first(where: { $0.handles(account) })
   }
 
   // MARK: - Public sync triggers
@@ -170,7 +180,7 @@ final class SyncedAccountStore {
   /// task wins; the user-initiated one collapses to a no-op rather than
   /// queueing a duplicate write).
   func syncAccount(_ account: Account) async {
-    guard sources.contains(where: { $0.handles(account) }) else { return }
+    guard source(for: account) != nil else { return }
     guard !inProgressAccountIds.contains(account.id) else { return }
     await syncAccounts([account])
   }
@@ -259,7 +269,7 @@ final class SyncedAccountStore {
   /// 6. Clear in-flight markers.
   func syncAccounts(_ accountList: [Account]) async {
     let inputs = accountList.filter { account in
-      guard sources.contains(where: { $0.handles(account) }) else { return false }
+      guard source(for: account) != nil else { return false }
       // Re-skip anything already in flight from a prior trigger; this
       // is the load-bearing collapse-duplicates check exercised by the
       // concurrent-trigger test.
@@ -272,7 +282,7 @@ final class SyncedAccountStore {
     os_signpost(
       .begin,
       log: Signposts.cryptoSync,
-      name: "cryptoSyncStore.syncAccounts",
+      name: "syncedAccountStore.syncAccounts",
       signpostID: signpostID,
       "%{public}d accounts",
       inputs.count)
@@ -280,7 +290,7 @@ final class SyncedAccountStore {
       os_signpost(
         .end,
         log: Signposts.cryptoSync,
-        name: "cryptoSyncStore.syncAccounts",
+        name: "syncedAccountStore.syncAccounts",
         signpostID: signpostID)
     }
 
@@ -310,9 +320,11 @@ final class SyncedAccountStore {
     /// construction. The integration harness builds the store first,
     /// then registers a `CoinstashSyncSource` that uses harness-owned
     /// collaborators (you cannot reference the harness inside its own
-    /// init). Mutation happens on `@MainActor` (the store is
-    /// `@MainActor`), so `sources` stays `Sendable`-safe. Gated
-    /// `#if DEBUG` so production cannot mutate the source list.
+    /// init).
+    ///
+    /// Mutation is confined to @MainActor because SyncedAccountStore is
+    /// @MainActor (the compiler enforces this) — no data-race risk.
+    /// Gated `#if DEBUG` so production cannot mutate the source list.
     func appendSourceForTesting(_ source: any AccountSyncSource) {
       sources.append(source)
     }

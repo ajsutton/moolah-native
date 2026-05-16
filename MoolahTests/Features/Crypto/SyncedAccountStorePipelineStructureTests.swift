@@ -1,4 +1,4 @@
-// MoolahTests/Features/Crypto/CryptoSyncPipelineStructureTests.swift
+// MoolahTests/Features/Crypto/SyncedAccountStorePipelineStructureTests.swift
 import Foundation
 import GRDB
 import Testing
@@ -19,7 +19,7 @@ import Testing
 /// using a recording merger that captures every invocation.
 @Suite("SyncedAccountStore — pipeline structure")
 @MainActor
-struct CryptoSyncPipelineStructureTests {
+struct SyncedAccountStorePipelineStructureTests {
   nonisolated static let pinnedNow = Date(timeIntervalSince1970: 1_700_000_000)
   static let counterparty = "0x9999999999999999999999999999999999999999"
 

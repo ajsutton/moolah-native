@@ -1,7 +1,6 @@
 // Features/Sync/SyncedAccountStore+Internals.swift
 import Foundation
 import OSLog
-import SwiftUI
 
 /// Outcome of one per-account build task. The apply pass only consumes
 /// `.success`; `.failed` accounts have their errors persisted inside the
@@ -43,7 +42,7 @@ extension SyncedAccountStore {
       // chainId for crypto; exchange accounts have neither but are
       // claimed by `CoinstashSyncSource`. Asking the sources keeps the
       // stale-timer / scene-active path provider-neutral.
-      guard sources.contains(where: { $0.handles(account) }) else { return false }
+      guard source(for: account) != nil else { return false }
       if includeNonStale { return true }
       let lastSyncedAt = statePerAccount[account.id]?.lastSyncedAt ?? .distantPast
       return now.timeIntervalSince(lastSyncedAt) >= staleThreshold
@@ -116,7 +115,7 @@ extension SyncedAccountStore {
   ///
   /// Cancellation propagates: a cancelled cycle never writes a
   /// half-resolved error row.
-  static func buildOne(
+  nonisolated static func buildOne(
     account: Account,
     sources: [any AccountSyncSource],
     walletSyncState: any WalletSyncStateRepository,
@@ -130,10 +129,10 @@ extension SyncedAccountStore {
     }
     do {
       let built = try await source.build(account: account)
-      // AccountInput construction is IDENTICAL to today (same for crypto
-      // and exchange). For exchange accounts `headBlockNumber` is 0
-      // (no block-watermark concept); for crypto the wallet engine fills
-      // it from the fetched transfers.
+      // AccountInput construction is the same for crypto and exchange
+      // accounts. For exchange accounts headBlockNumber is 0 (no block
+      // watermark); for crypto the wallet engine fills it from fetched
+      // transfers.
       let input = WalletApplyEngine.AccountInput(
         account: account,
         headBlockNumber: built.headBlockNumber,
@@ -170,7 +169,7 @@ extension SyncedAccountStore {
   ///
   /// `lastSyncedAt` is intentionally **not** updated on failure — the
   /// staleness check should still treat the account as overdue.
-  static func persistError(
+  nonisolated static func persistError(
     _ error: WalletSyncError,
     accountId: UUID,
     priorState: WalletSyncState?,
@@ -295,7 +294,6 @@ extension SyncedAccountStore {
   /// Logger for internals-extension diagnostics. Static and `Sendable`
   /// so the cross-actor `buildOne` / `persistError` helpers can call
   /// it without capturing `self`.
-  static var internalsLogger: Logger {
-    Logger(subsystem: "com.moolah.app", category: "SyncedAccountStore")
-  }
+  nonisolated private static let internalsLogger = Logger(
+    subsystem: "com.moolah.app", category: "SyncedAccountStore")
 }

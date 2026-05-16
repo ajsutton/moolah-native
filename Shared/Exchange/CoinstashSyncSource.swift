@@ -31,8 +31,8 @@ struct CoinstashSyncSource: AccountSyncSource, Sendable {
   }
 
   func build(account: Account) async throws -> WalletSyncBuildResult {
-    // SAFETY: synchronous Security-framework read on the build task. The
-    // token is per-account (not shared) so this is the natural call
+    // The Security-framework keychain read is synchronous, on the build
+    // task. The token is per-account (not shared) so this is the natural call
     // site; matches the existing Alchemy-key per-request keychain read
     // pattern. Distinguish a genuine "no token" (→ missingApiKey,
     // actionable) from a transient keychain failure (e.g. device locked

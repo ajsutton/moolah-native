@@ -24,7 +24,7 @@ struct WalletSyncSource: AccountSyncSource, Sendable {
 
   func handles(_ account: Account) -> Bool {
     account.type == .crypto
-      && account.walletAddress?.isEmpty == false
+      && account.walletAddress.map { !$0.isEmpty } == true
       && chain(for: account) != nil
   }
 
