@@ -1,13 +1,13 @@
-import Foundation
+import CoreGraphics
 import Observation
 
 /// Turns a stream of transaction-list scroll offsets into a stable
 /// collapse decision for the detail header above the list.
 ///
-/// Hysteresis (confirmed design 2026-05-16): collapse once the user
-/// scrolls past `collapseThreshold`; re-expand **only** when the list
-/// is back at the top (`offsetY <= expandThreshold`). No mid-list
-/// re-expansion — that produced jitter in earlier explorations.
+/// Hysteresis: collapse once the user scrolls past `collapseThreshold`;
+/// re-expand **only** when the list is back at the top
+/// (`offsetY <= expandThreshold`). The deliberate asymmetry suppresses
+/// the jitter that mid-list re-expansion produced in earlier explorations.
 @MainActor
 @Observable
 final class TransactionScrollCollapse {

@@ -4,20 +4,23 @@ import Testing
 
 @MainActor
 struct TransactionScrollCollapseTests {
-  @Test func startsExpanded() {
+  @Test
+  func startsExpanded() {
     let model = TransactionScrollCollapse()
     #expect(model.isCollapsed == false)
   }
 
-  @Test func collapsesAfterScrollingPastThreshold() {
+  @Test
+  func collapsesAfterScrollingPastThreshold() {
     let model = TransactionScrollCollapse()
     model.update(offsetY: 10)
-    #expect(model.isCollapsed == false)  // within band, still expanded
+    #expect(model.isCollapsed == false)  // 10 < collapseThreshold (44) → no state change
     model.update(offsetY: 60)  // > 44
     #expect(model.isCollapsed == true)
   }
 
-  @Test func staysCollapsedWhileScrollingInTheMiddle() {
+  @Test
+  func staysCollapsedWhileScrollingInTheMiddle() {
     let model = TransactionScrollCollapse()
     model.update(offsetY: 60)
     #expect(model.isCollapsed == true)
@@ -27,7 +30,8 @@ struct TransactionScrollCollapseTests {
     #expect(model.isCollapsed == true)
   }
 
-  @Test func reExpandsOnlyWhenBackAtTop() {
+  @Test
+  func reExpandsOnlyWhenBackAtTop() {
     let model = TransactionScrollCollapse()
     model.update(offsetY: 300)
     #expect(model.isCollapsed == true)
@@ -35,14 +39,16 @@ struct TransactionScrollCollapseTests {
     #expect(model.isCollapsed == false)
   }
 
-  @Test func overscrollBounceCountsAsTop() {
+  @Test
+  func overscrollBounceCountsAsTop() {
     let model = TransactionScrollCollapse()
     model.update(offsetY: 300)
     model.update(offsetY: -8)  // rubber-band bounce at top
     #expect(model.isCollapsed == false)
   }
 
-  @Test func resetReturnsToExpanded() {
+  @Test
+  func resetReturnsToExpanded() {
     let model = TransactionScrollCollapse()
     model.update(offsetY: 300)
     #expect(model.isCollapsed == true)
