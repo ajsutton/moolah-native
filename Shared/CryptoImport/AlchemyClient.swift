@@ -70,13 +70,24 @@ extension AlchemyTokenMetadata {
   }
 }
 
+/// The fixed inputs for one direction's paginated transfer fetch.
+/// Bundled into a value so the page loop and the per-page round-trip
+/// share one parameter instead of threading the same five arguments.
+private struct AlchemyTransferQuery: Sendable {
+  let chain: ChainConfig
+  let address: String
+  let isFromAddress: Bool
+  let fromBlock: UInt64
+  let apiKey: String
+}
+
 /// Live `AlchemyClient` over `URLSession`. Sendable struct — no mutable
 /// state; mirrors the shape of `Backends/CoinGecko/CoinGeckoClient.swift`.
 ///
 /// Privacy classifications follow the design table:
 /// `chainId` and block numbers → `.public`; wallet addresses and contract
 /// addresses → `.private`; the API key is never logged.
-struct LiveAlchemyClient: AlchemyClient {
+struct LiveAlchemyClient: AlchemyClient, Sendable {
   private let session: URLSession
   /// Closure that yields the current Alchemy API key, or `nil` when the
   /// keychain has none. Resolved per-request inside each public method
@@ -130,24 +141,16 @@ struct LiveAlchemyClient: AlchemyClient {
         signpostID: signpostID)
     }
     var transfers: [AlchemyTransfer] = []
-    transfers.append(
-      contentsOf: try await fetchTransfers(
-        chain: chain,
-        address: walletAddress,
-        isFromAddress: true,
-        fromBlock: fromBlock,
-        apiKey: apiKey
-      )
-    )
-    transfers.append(
-      contentsOf: try await fetchTransfers(
-        chain: chain,
-        address: walletAddress,
-        isFromAddress: false,
-        fromBlock: fromBlock,
-        apiKey: apiKey
-      )
-    )
+    for isFromAddress in [true, false] {
+      transfers.append(
+        contentsOf: try await fetchTransfers(
+          AlchemyTransferQuery(
+            chain: chain,
+            address: walletAddress,
+            isFromAddress: isFromAddress,
+            fromBlock: fromBlock,
+            apiKey: apiKey)))
+    }
     return transfers
   }
 
@@ -257,47 +260,77 @@ struct LiveAlchemyClient: AlchemyClient {
     return key
   }
 
+  /// Fetches every transfer for one direction. Alchemy caps
+  /// `alchemy_getAssetTransfers` at `maxCount` (1000) transfers per
+  /// response, oldest-block-first, and returns a `pageKey` when more
+  /// remain. This follows the cursor until it is absent — otherwise a
+  /// wallet with heavy (often spam-airdrop) history truncates at the
+  /// oldest 1000 per direction and the balance is wrong.
   private func fetchTransfers(
-    chain: ChainConfig,
-    address: String,
-    isFromAddress: Bool,
-    fromBlock: UInt64,
-    apiKey: String
+    _ query: AlchemyTransferQuery
   ) async throws -> [AlchemyTransfer] {
-    try await rateLimiter.acquire()
+    var collected: [AlchemyTransfer] = []
+    var pageKey: String?
+    // Guards against a misbehaving provider that returns a `pageKey`
+    // already used: re-requesting it would loop forever. Stop before
+    // re-fetching a continuation cursor that has already been requested.
+    var requestedPageKeys: Set<String> = []
+    while true {
+      if let pageKey, !requestedPageKeys.insert(pageKey).inserted {
+        break
+      }
+      let result = try await fetchTransferPage(query, pageKey: pageKey)
+      collected.append(contentsOf: result.transfers)
+      pageKey = result.pageKey
+      if pageKey == nil { break }
+    }
+    return collected
+  }
 
+  /// One rate-limited `alchemy_getAssetTransfers` round-trip for a
+  /// single direction and page. `pageKey` is `nil` for the first page;
+  /// the caller threads back `result.pageKey` for subsequent pages.
+  private func fetchTransferPage(
+    _ query: AlchemyTransferQuery,
+    pageKey: String?
+  ) async throws -> AlchemyTransferResult {
+    let chain = query.chain
     var categories: [AlchemyTransferCategory] = [.external, .erc20]
     if chain.supportsInternalTransfers {
       categories.append(.internal)
     }
+    try await rateLimiter.acquire()
     let body = AlchemyJSONRPCRequest<AlchemyJSONRPCParams>(
       method: "alchemy_getAssetTransfers",
       params: .assetTransfers(
         AlchemyAssetTransfersParams(
-          fromBlock: "0x" + String(fromBlock, radix: 16),
+          fromBlock: "0x" + String(query.fromBlock, radix: 16),
           toBlock: "latest",
-          fromAddress: isFromAddress ? address : nil,
-          toAddress: isFromAddress ? nil : address,
+          fromAddress: query.isFromAddress ? query.address : nil,
+          toAddress: query.isFromAddress ? nil : query.address,
           category: categories.map(\.rawValue),
           withMetadata: true,
-          excludeZeroValue: true
+          excludeZeroValue: true,
+          pageKey: pageKey
         )
       )
     )
-    let request = try buildRequest(chain: chain, body: body, apiKey: apiKey)
+    let request = try buildRequest(chain: chain, body: body, apiKey: query.apiKey)
     logger.debug(
       """
       Alchemy getAssetTransfers: chain \(chain.chainId, privacy: .public) \
-      direction \(isFromAddress ? "from" : "to", privacy: .public) \
-      address \(address, privacy: .private) \
-      fromBlock \(fromBlock, privacy: .public)
+      direction \(query.isFromAddress ? "from" : "to", privacy: .public) \
+      address \(query.address, privacy: .private) \
+      fromBlock \(query.fromBlock, privacy: .public) \
+      continuation \(pageKey != nil, privacy: .public)
       """
     )
 
     let data = try await send(request: request, stage: "getAssetTransfers")
     do {
-      let envelope = try JSONDecoder().decode(AlchemyTransferEnvelope.self, from: data)
-      return envelope.result.transfers
+      return try JSONDecoder().decode(
+        AlchemyTransferEnvelope.self, from: data
+      ).result
     } catch {
       logger.error(
         "Alchemy getAssetTransfers decode failed for chain \(chain.chainId, privacy: .public): \(error.localizedDescription, privacy: .public)"
