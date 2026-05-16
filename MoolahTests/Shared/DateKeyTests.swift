@@ -21,9 +21,9 @@ struct DateKeyTests {
   }
 
   @Test("yyyymmdd integer order equals chronological order")
-  func ordering() {
-    let a = DateKey.from(isoString: "2023-12-31")!
-    let b = DateKey.from(isoString: "2024-01-01")!
-    #expect(a < b)
+  func ordering() throws {
+    let dec31 = try #require(DateKey.from(isoString: "2023-12-31"))
+    let jan01 = try #require(DateKey.from(isoString: "2024-01-01"))
+    #expect(dec31 < jan01)
   }
 }

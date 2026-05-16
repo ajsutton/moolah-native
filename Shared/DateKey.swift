@@ -25,10 +25,10 @@ enum DateKey {
 
   /// Formats `yyyymmdd` back into a zero-padded `"YYYY-MM-DD"` string.
   static func isoString(_ key: Int32) -> String {
-    let v = Int(key)
-    let year = v / 10_000
-    let month = (v / 100) % 100
-    let day = v % 100
+    let raw = Int(key)
+    let year = raw / 10_000
+    let month = (raw / 100) % 100
+    let day = raw % 100
     return String(format: "%04d-%02d-%02d", year, month, day)
   }
 }
