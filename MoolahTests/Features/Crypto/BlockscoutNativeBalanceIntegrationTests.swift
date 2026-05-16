@@ -32,23 +32,70 @@ struct BlockscoutNativeBalanceIntegrationTests {
   private static let expectedBalance = Decimal(
     sign: .plus, exponent: -6, significand: 1_499_979)
 
-  @Test("Internal credit and approve gas are both reflected in native balance")
-  func internalCreditAndApproveGasAreBothReflectedInNativeBalance() async throws {
-    let wallet = "0xa4b572ea1b6f734fc88a0a004c5301f8dad54d60"
-    let approveHash = "0xAPPROVE"
-    let (alchemy, blockscout) = makeStubs(wallet: wallet, approveHash: approveHash)
+  private static let wallet = "0xa4b572ea1b6f734fc88a0a004c5301f8dad54d60"
+  private static let approveHash = "0xAPPROVE"
+
+  // Pinned clock value tests assert against. `nonisolated` so the
+  // `@Sendable` clock closure passed to `WalletApplyEngine` can read
+  // it without crossing the suite's `@MainActor` boundary.
+  nonisolated static let pinnedNow = Date(timeIntervalSince1970: 1_700_000_000)
+
+  @Test("Internal credit leg is persisted after apply")
+  func internalCreditIsPersistedAfterApply() async throws {
+    let legs = try await runPipeline()
+    #expect(
+      legs.contains { $0.quantity > 0 && $0.externalId?.contains("0xP:internal:0") == true },
+      "Internal credit leg (#918) missing")
+  }
+
+  @Test("Approve gas leg is persisted after apply")
+  func approveGasLegIsPersistedAfterApply() async throws {
+    let legs = try await runPipeline()
+    let gasId = TransferReceiptCoalescer.gasLegExternalId(hash: Self.approveHash)
+    #expect(
+      legs.contains { $0.quantity < 0 && $0.externalId == gasId },
+      "approve() gas leg (#919) missing")
+  }
+
+  @Test("Native balance reflects external, internal, and gas legs")
+  func nativeBalanceReflectsExternalInternalAndGas() async throws {
+    let legs = try await runPipeline()
+    let nativeInstrument = ChainConfig.ethereum.nativeInstrument
+    // Sum via Int64 storageValues rather than raw Decimal quantities.
+    // Decimal division chains (HexDecimal.parse → /10^18 → storageValue →
+    // /10^8) accumulate NSDecimalRound artefacts that prevent exact Decimal
+    // equality at the sum level. Int64 addition is exact; the single /10^8
+    // conversion at the end gives the representable 1.499979.
+    let rawBalance = legs.map { $0.amount.storageValue }.reduce(Int64.zero, +)
+    let balance = InstrumentAmount(storageValue: rawBalance, instrument: nativeInstrument).quantity
+    // Exact: 100_000_000 + 50_000_000 − 2_100 = 149_997_900 / 10^8 = 1.499979.
+    #expect(
+      balance == Self.expectedBalance, "Expected \(Self.expectedBalance) ETH but got \(balance) ETH"
+    )
+  }
+
+  // MARK: - Helpers
+
+  /// Runs the full build→apply pipeline against a fresh `TestBackend` and
+  /// returns the persisted native-ETH legs for the test wallet account.
+  /// Each call creates its own isolated backend so tests share no state.
+  private func runPipeline() async throws -> [TransactionLeg] {
+    let (alchemy, blockscout) = makeStubs(
+      wallet: Self.wallet, approveHash: Self.approveHash)
     let (backend, database) = try TestBackend.create()
-    let account = makeSyncedAccount(wallet: wallet, in: database)
+    let account = makeSyncedAccount(wallet: Self.wallet, in: database)
 
     let buildResult = try await buildPhase(
       account: account, alchemy: alchemy, blockscout: blockscout)
     _ = try await applyPhase(account: account, buildResult: buildResult, backend: backend)
 
-    try await assertBalance(
-      account: account, backend: backend, approveHash: approveHash)
+    let stored = try await backend.transactions.fetchAll(
+      filter: TransactionFilter(accountId: account.id))
+    let nativeInstrument = ChainConfig.ethereum.nativeInstrument
+    return stored.flatMap(\.legs).filter {
+      $0.instrument == nativeInstrument && $0.accountId == account.id
+    }
   }
-
-  // MARK: - Build helpers
 
   private func makeStubs(
     wallet: String,
@@ -107,7 +154,6 @@ struct BlockscoutNativeBalanceIntegrationTests {
   }
 
   /// Seeds and returns a crypto account for `wallet` in the given database.
-  /// Mirrors the `seedCryptoAccount` helper in `WalletApplyEngineTests`.
   private func makeSyncedAccount(wallet: String, in database: any DatabaseWriter) -> Account {
     let account = Account(
       name: "Wallet",
@@ -143,48 +189,13 @@ struct BlockscoutNativeBalanceIntegrationTests {
     let engine = WalletApplyEngine(
       transactions: backend.transactions,
       walletSyncState: backend.walletSyncState,
-      importRules: NoOpWalletImportRulesEngine())
+      importRules: NoOpWalletImportRulesEngine(),
+      clock: { Self.pinnedNow })
     return try await engine.apply(perAccount: [
       .init(
         account: account,
         headBlockNumber: buildResult.headBlockNumber,
         candidates: buildResult.candidates)
     ])
-  }
-
-  private func assertBalance(
-    account: Account,
-    backend: CloudKitBackend,
-    approveHash: String
-  ) async throws {
-    let stored = try await backend.transactions.fetchAll(
-      filter: TransactionFilter(accountId: account.id))
-    let nativeInstrument = ChainConfig.ethereum.nativeInstrument
-    let accountLegs = stored.flatMap(\.legs).filter {
-      $0.instrument == nativeInstrument && $0.accountId == account.id
-    }
-    // Sum via Int64 storageValues rather than raw Decimal quantities.
-    // Decimal division chains (HexDecimal.parse → /10^18 → storageValue →
-    // /10^8) accumulate NSDecimalRound artefacts that prevent exact Decimal
-    // equality at the sum level. Int64 addition is exact; the single /10^8
-    // conversion at the end gives the representable 1.499979.
-    let rawBalance = accountLegs.map { $0.amount.storageValue }.reduce(Int64.zero, +)
-    let balance = InstrumentAmount(storageValue: rawBalance, instrument: nativeInstrument).quantity
-
-    // Exact: 100_000_000 + 50_000_000 − 2_100 = 149_997_900 / 10^8 = 1.499979.
-    #expect(
-      balance == Self.expectedBalance,
-      "Expected \(Self.expectedBalance) ETH but got \(balance) ETH")
-
-    // Structural: internal credit (#918) present.
-    #expect(
-      accountLegs.contains { $0.quantity > 0 && $0.externalId?.contains("0xP:internal:0") == true },
-      "Internal credit leg (0xP) missing — #918 not fixed")
-
-    // Structural: approve-only gas leg (#919) present.
-    let gasExternalId = TransferReceiptCoalescer.gasLegExternalId(hash: approveHash)
-    #expect(
-      accountLegs.contains { $0.quantity < 0 && $0.externalId == gasExternalId },
-      "approve() gas leg missing — #919 not fixed")
   }
 }
