@@ -10,11 +10,10 @@ struct LiveBlockscoutClientTests {
     handler: @escaping @Sendable (URLRequest) throws -> (HTTPURLResponse, Data)
   ) -> LiveBlockscoutClient {
     let config = URLSessionConfiguration.ephemeral
-    // AlchemyURLProtocolStub is a generic URLProtocol stub (handles any request); reused here for Blockscout deliberately.
-    config.protocolClasses = [AlchemyURLProtocolStub.self]
+    config.protocolClasses = [BlockscoutURLProtocolStub.self]
     let session = URLSession(configuration: config)
-    AlchemyURLProtocolStub.lastRequest = nil
-    AlchemyURLProtocolStub.requestHandler = handler
+    BlockscoutURLProtocolStub.lastRequest = nil
+    BlockscoutURLProtocolStub.requestHandler = handler
     return LiveBlockscoutClient(
       session: session, rateLimiter: RateLimiter(permitsPerSecond: 1_000))
   }
@@ -23,12 +22,12 @@ struct LiveBlockscoutClientTests {
   func nativeTransactionsHitsCorrectHostAndPath() async throws {
     let fixture = try AlchemyTestSupport.loadFixture("blockscout-tx-value")
     let client = makeClient { req in
-      AlchemyURLProtocolStub.captureRequest(req)
+      BlockscoutURLProtocolStub.captureRequest(req)
       return (AlchemyTestSupport.okResponse(for: req), fixture)
     }
     let txs = try await client.nativeTransactions(
       chain: .ethereum, walletAddress: "0xABC", fromBlock: 0)
-    let url = try #require(AlchemyURLProtocolStub.lastRequest?.url)
+    let url = try #require(BlockscoutURLProtocolStub.lastRequest?.url)
     #expect(url.host == "eth.blockscout.com")
     #expect(url.path == "/api/v2/addresses/0xABC/transactions")
     #expect(txs.count == 1)
@@ -38,12 +37,12 @@ struct LiveBlockscoutClientTests {
   func internalTransactionsHitsCorrectPath() async throws {
     let fixture = try AlchemyTestSupport.loadFixture("blockscout-internal")
     let client = makeClient { req in
-      AlchemyURLProtocolStub.captureRequest(req)
+      BlockscoutURLProtocolStub.captureRequest(req)
       return (AlchemyTestSupport.okResponse(for: req), fixture)
     }
     _ = try await client.internalTransactions(
       chain: .optimism, walletAddress: "0xABC", fromBlock: 0)
-    let url = try #require(AlchemyURLProtocolStub.lastRequest?.url)
+    let url = try #require(BlockscoutURLProtocolStub.lastRequest?.url)
     #expect(url.host == "optimism.blockscout.com")
     #expect(url.path == "/api/v2/addresses/0xABC/internal-transactions")
   }
@@ -100,4 +99,40 @@ struct LiveBlockscoutClientTests {
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0)
     }
   }
+}
+
+/// Dedicated `URLProtocol` stub for the `LiveBlockscoutClient` suite.
+/// Owns its own static handler state so Swift Testing's parallel-suite
+/// execution cannot race with `AlchemyURLProtocolStub`'s matching statics
+/// in the Alchemy suites.
+class BlockscoutURLProtocolStub: URLProtocol {
+  nonisolated(unsafe) static var requestHandler:
+    (@Sendable (URLRequest) throws -> (HTTPURLResponse, Data))?
+  nonisolated(unsafe) static var lastRequest: URLRequest?
+
+  /// Records the request that was just received. Tests opt-in by calling
+  /// this from their handler closure.
+  static func captureRequest(_ request: URLRequest) {
+    lastRequest = request
+  }
+
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    guard let handler = BlockscoutURLProtocolStub.requestHandler else {
+      client?.urlProtocol(self, didFailWithError: URLError(.unknown))
+      return
+    }
+    do {
+      let (response, data) = try handler(request)
+      client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+      client?.urlProtocol(self, didLoad: data)
+      client?.urlProtocolDidFinishLoading(self)
+    } catch {
+      client?.urlProtocol(self, didFailWithError: error)
+    }
+  }
+
+  override func stopLoading() {}
 }

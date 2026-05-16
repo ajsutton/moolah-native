@@ -40,7 +40,10 @@ extension ProfileSession {
   ///
   /// - `RateLimiter(permitsPerSecond: 25)` matching Alchemy's free-tier
   ///   ceiling (design §"Concurrency model").
+  /// - `RateLimiter(permitsPerSecond: 5)` for Blockscout public
+  ///   unauthenticated tier (~5 req/s per IP).
   /// - `LiveAlchemyClient` — same shape as `Backends/CoinGecko/CoinGeckoClient`.
+  /// - `LiveBlockscoutClient` — authoritative native + internal ETH index.
   /// - `CryptoTokenDiscoveryService` — actor-coalesced registry resolver.
   /// - `WalletSyncEngine` — Stage 6's read-only build orchestrator.
   /// - `WalletApplyEngine` — Stage 7's `@MainActor` apply pass with the
@@ -80,6 +83,7 @@ extension ProfileSession {
         importSessionId: UUID(),
         parserIdentifier: "alchemy-wallet-sync")
     }
+    // Blockscout public unauthenticated tier: ~5 req/s per IP.
     let blockscoutRateLimiter = RateLimiter(permitsPerSecond: 5)
     let blockExplorer: any BlockExplorerClient = LiveBlockscoutClient(
       rateLimiter: blockscoutRateLimiter)

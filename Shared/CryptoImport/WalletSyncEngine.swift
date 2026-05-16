@@ -45,6 +45,9 @@ struct WalletSyncEngine: Sendable {
   ///   - alchemy: Stage 4's `AlchemyClient`. The engine itself doesn't
   ///     hold the rate limiter — `LiveAlchemyClient` does, so callers
   ///     don't need to plumb it through here.
+  ///   - blockExplorer: Authoritative index for native and internal ETH
+  ///     transfers. `LiveBlockscoutClient` holds the rate limiter; the
+  ///     engine only calls the protocol.
   ///   - discovery: Stage 5's actor-coalesced token registry resolver.
   ///   - walletSyncState: Per-device sync checkpoint store. The engine
   ///     reads `lastSyncedBlockNumber` to compute `fromBlock`; **it does
@@ -149,21 +152,20 @@ struct WalletSyncEngine: Sendable {
     return WalletSyncBuildResult(candidates: built, headBlockNumber: headBlock)
   }
 
-  /// Fetches native and internal ETH from Blockscout and normalises the
-  /// result via `BlockscoutTransferAdapter`. Extracted so `build` stays
-  /// within the SwiftLint `function_body_length` budget.
+  /// Fetches native and internal transfers from Blockscout and returns the
+  /// adapted result ready for merging with the Alchemy ERC-20 set.
   private func fetchBlockscout(
     chain: ChainConfig,
     walletAddress: String,
     fromBlock: UInt64
   ) async throws -> BlockscoutAdaptResult {
-    let native = try await blockExplorer.nativeTransactions(
+    async let native = blockExplorer.nativeTransactions(
       chain: chain, walletAddress: walletAddress, fromBlock: fromBlock)
-    let internalTxs = try await blockExplorer.internalTransactions(
+    async let internalTxs = blockExplorer.internalTransactions(
       chain: chain, walletAddress: walletAddress, fromBlock: fromBlock)
     return BlockscoutTransferAdapter.adapt(
-      nativeTxs: native,
-      internalTxs: internalTxs,
+      nativeTxs: try await native,
+      internalTxs: try await internalTxs,
       walletAddress: walletAddress.lowercased())
   }
 

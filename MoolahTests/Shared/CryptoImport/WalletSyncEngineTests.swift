@@ -124,6 +124,7 @@ struct WalletSyncEngineTests {
     alchemy.setTransfersResponse(
       .transfers([
         makeAlchemyTransfer(
+          // Category is irrelevant: cancellation fires in the Alchemy stub hook before the response returns, so the .erc20 filter is never reached.
           hash: "0xa", from: Self.counterparty, to: Self.wallet, category: .external)
       ]))
     let (engine, _) = makeEngine(alchemy: alchemy)
@@ -272,23 +273,24 @@ struct WalletSyncEngineTests {
   }
 }
 
-/// Behavioural tests for `WalletSyncEngine`'s Blockscout integration.
-/// Verifies that Alchemy external rows are dropped (Blockscout is the
-/// authoritative native-ETH index) and that Blockscout failures propagate
-/// as `WalletSyncError` without fallback. Separated from
-/// `WalletSyncEngineTests` to stay within the `type_body_length` budget.
+/// Behavioural tests for `WalletSyncEngine`'s Blockscout integration:
+/// Alchemy native rows are dropped and Blockscout is the authoritative
+/// native-ETH index; Blockscout failures propagate as `WalletSyncError`
+/// without fallback; the reorg-adjusted `fromBlock` is forwarded to
+/// Blockscout the same way it is to Alchemy.
 @Suite("WalletSyncEngine — Blockscout integration")
 struct WalletSyncEngineBlockscoutTests {
   private func makeEngine(
     alchemy: RecordingAlchemyClientStub = .init(),
-    blockExplorer: RecordingBlockExplorerClientStub = BlockExplorerTestDoubles.empty
+    blockExplorer: RecordingBlockExplorerClientStub = BlockExplorerTestDoubles.empty,
+    syncState: RecordingWalletSyncStateRepository = .init()
   ) -> WalletSyncEngine {
     let subject = makeDiscoverySubject()
     return WalletSyncEngine(
       alchemy: alchemy,
       blockExplorer: blockExplorer,
       discovery: subject.service,
-      walletSyncState: RecordingWalletSyncStateRepository(),
+      walletSyncState: syncState,
       importOriginFactory: { accountId in makeWalletImportOrigin(for: accountId) })
   }
 
@@ -338,5 +340,26 @@ struct WalletSyncEngineBlockscoutTests {
       _ = try await engine.build(
         account: makeCryptoAccount(walletAddress: "0xabc", chain: .ethereum), chain: .ethereum)
     }
+  }
+
+  @Test("Blockscout receives reorg-adjusted fromBlock from prior sync state")
+  func blockscoutReceivesReorgAdjustedFromBlock() async throws {
+    let alchemy = RecordingAlchemyClientStub()
+    alchemy.setTransfersResponse(.transfers([]))
+    let blockscout = RecordingBlockExplorerClientStub()
+    let syncState = RecordingWalletSyncStateRepository()
+    let account = makeCryptoAccount(walletAddress: "0xabc", chain: .ethereum)
+    syncState.seed(
+      WalletSyncState(
+        id: account.id,
+        lastSyncedBlockNumber: 100,
+        lastSyncedAt: Date(timeIntervalSince1970: 1_700_000_000),
+        lastError: nil))
+    let engine = makeEngine(alchemy: alchemy, blockExplorer: blockscout, syncState: syncState)
+
+    _ = try await engine.build(account: account, chain: .ethereum)
+
+    #expect(blockscout.recordedNativeCalls.first?.fromBlock == 68)  // 100 - 32
+    #expect(blockscout.recordedInternalCalls.first?.fromBlock == 68)  // 100 - 32
   }
 }
