@@ -3,24 +3,26 @@ import Foundation
 
 /// Per-chain config for the crypto wallet importer.
 ///
-/// Covers Ethereum, OP Mainnet, Base, and Polygon. Extending to other EVM
-/// chains (Arbitrum, Avalanche, …) is purely additive — add a new entry to
-/// `all`.
+/// Covers Ethereum, OP Mainnet, and Base. Extending to other EVM chains
+/// (Arbitrum, Avalanche, …) is purely additive — add a new entry to `all`.
+/// Polygon is not supported because it has no first-party public Blockscout
+/// instance; existing Polygon accounts degrade gracefully via the
+/// `ChainConfig.config(for:) == nil → skipped` path.
 struct ChainConfig: Sendable, Hashable {
   /// EVM chain identifier (e.g. 1 for Ethereum mainnet).
   let chainId: Int
 
   /// Alchemy network slug, e.g. `eth-mainnet`, `opt-mainnet`,
-  /// `base-mainnet`, `polygon-mainnet`. Used as the path component for the
-  /// JSON-RPC endpoint hostname (`https://<slug>.g.alchemy.com/v2/<key>`).
+  /// `base-mainnet`. Used as the path component for the JSON-RPC endpoint
+  /// hostname (`https://<slug>.g.alchemy.com/v2/<key>`).
   let alchemyNetworkSlug: String
 
   /// The instrument used as the chain's native token (gas) — ETH for
-  /// Ethereum / OP / Base; MATIC for Polygon.
+  /// Ethereum, OP Mainnet, and Base.
   let nativeInstrument: Instrument
 
   /// `true` if Alchemy supports the `internal` transfer category on this
-  /// chain (Ethereum, Polygon). OP / Base do NOT support `internal` — see
+  /// chain (Ethereum only). OP / Base do NOT support `internal` — see
   /// design open question 3.
   let supportsInternalTransfers: Bool
 
@@ -28,13 +30,21 @@ struct ChainConfig: Sendable, Hashable {
   /// `BlockExplorerLink` to render outbound transaction links.
   let blockExplorerBaseURL: URL
 
+  /// Blockscout public-instance API base URL (no trailing slash), e.g.
+  /// `https://eth.blockscout.com`. Used by `LiveBlockscoutClient` for the
+  /// `/api/v2/addresses/{address}/transactions` and
+  /// `/internal-transactions` endpoints. Every supported chain has a
+  /// first-party public Blockscout instance; Polygon does not, which is
+  /// why it is not a supported chain.
+  let blockscoutAPIBaseURL: URL
+
   /// Human-readable name for the chain picker / settings UI.
   let displayName: String
 
   /// All supported chains, indexed by `chainId` order. The chain
   /// picker renders this in declaration order; stable across launches.
   static let all: [ChainConfig] = [
-    .ethereum, .optimism, .base, .polygon,
+    .ethereum, .optimism, .base,
   ]
 
   /// Lookup by EVM chain ID. Returns `nil` for unsupported chains.
@@ -53,6 +63,7 @@ extension ChainConfig {
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18),
     supportsInternalTransfers: true,
     blockExplorerBaseURL: requireURL("https://etherscan.io"),
+    blockscoutAPIBaseURL: requireURL("https://eth.blockscout.com"),
     displayName: "Ethereum"
   )
 
@@ -65,6 +76,7 @@ extension ChainConfig {
       chainId: 10, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18),
     supportsInternalTransfers: false,
     blockExplorerBaseURL: requireURL("https://optimistic.etherscan.io"),
+    blockscoutAPIBaseURL: requireURL("https://optimism.blockscout.com"),
     displayName: "OP Mainnet"
   )
 
@@ -77,19 +89,8 @@ extension ChainConfig {
       chainId: 8453, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18),
     supportsInternalTransfers: false,
     blockExplorerBaseURL: requireURL("https://basescan.org"),
+    blockscoutAPIBaseURL: requireURL("https://base.blockscout.com"),
     displayName: "Base"
-  )
-
-  /// Polygon PoS — chain 137. Native token: MATIC (18 decimals).
-  /// Supports the `internal` transfer category.
-  static let polygon = ChainConfig(
-    chainId: 137,
-    alchemyNetworkSlug: "polygon-mainnet",
-    nativeInstrument: Instrument.crypto(
-      chainId: 137, contractAddress: nil, symbol: "MATIC", name: "Polygon", decimals: 18),
-    supportsInternalTransfers: true,
-    blockExplorerBaseURL: requireURL("https://polygonscan.com"),
-    displayName: "Polygon"
   )
 
   /// Compile-time URL constructor. The hardcoded literals above are valid

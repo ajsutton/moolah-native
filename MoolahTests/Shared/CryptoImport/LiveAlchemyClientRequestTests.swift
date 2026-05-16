@@ -75,24 +75,6 @@ struct LiveAlchemyClientRequestTests {
   }
 
   @Test
-  func polygonRequestUsesPolygonSlugAndIncludesInternal() async throws {
-    let fixture = try AlchemyTestSupport.loadFixture("polygon-spam-airdrop")
-    let client = AlchemyTestSupport.makeClient { request in
-      AlchemyURLProtocolStub.captureRequest(request)
-      return (AlchemyTestSupport.okResponse(for: request), fixture)
-    }
-    _ = try await client.getAssetTransfers(
-      chain: .polygon, walletAddress: "0xdef", fromBlock: 0
-    )
-    let url = try #require(AlchemyURLProtocolStub.lastRequest?.url)
-    #expect(url.host == "polygon-mainnet.g.alchemy.com")
-    let body = AlchemyURLProtocolStub.lastBodyJSON
-    let paramsArray = try #require(body["params"] as? [[String: Any]])
-    let categories = try #require(paramsArray.first?["category"] as? [String])
-    #expect(categories.contains("internal"))
-  }
-
-  @Test
   func twoPassQueryUsesFromAddressThenToAddress() async throws {
     let fixture = try AlchemyTestSupport.loadFixture("eth-simple-eth-send")
     let calls = TestCallRecorder()

@@ -289,5 +289,7 @@ struct CrossAccountTransferMergerTests {
 /// hoisting of `fileprivate` out of `private extension`).
 private enum TestInstruments {
   static let ethereum: Instrument = ChainConfig.ethereum.nativeInstrument
-  static let polygon: Instrument = ChainConfig.polygon.nativeInstrument
+  // Use the raw instrument constructor so this test double is independent of ChainConfig.
+  static let polygon = Instrument.crypto(
+    chainId: 137, contractAddress: nil, symbol: "MATIC", name: "Polygon", decimals: 18)
 }

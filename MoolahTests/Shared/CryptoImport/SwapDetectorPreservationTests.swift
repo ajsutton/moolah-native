@@ -12,7 +12,9 @@ import Testing
 struct SwapDetectorPreservationTests {
   private static let accountId = makeUUID("AAAAAAAA-0000-0000-0000-000000000002")
   private static let ethereum = ChainConfig.ethereum.nativeInstrument
-  private static let polygon = ChainConfig.polygon.nativeInstrument
+  // Use the raw instrument constructor so this test double is independent of ChainConfig.
+  private static let polygon = Instrument.crypto(
+    chainId: 137, contractAddress: nil, symbol: "MATIC", name: "Polygon", decimals: 18)
   private static let base = ChainConfig.base.nativeInstrument
 
   @Test("Self-send + swap pair → self-send stays .income, swap legs retyped")

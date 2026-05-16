@@ -122,7 +122,7 @@ struct CryptoAccountCreationStoreTests {
   }
 
   @Test(
-    "Chain selection does not change the account instrument — Polygon still uses the profile currency"
+    "Chain selection does not change the account instrument — Base still uses the profile currency"
   )
   func chainDoesNotOverrideProfileInstrument() async throws {
     let fixture = try makeFixture()
@@ -132,8 +132,8 @@ struct CryptoAccountCreationStoreTests {
       accountInstrument: Self.profileInstrument)
 
     let outcome = await logic.submit(
-      name: "Polygon Hot Wallet",
-      chain: .polygon,
+      name: "Base Hot Wallet",
+      chain: .base,
       walletAddressInput: Self.validAddress)
 
     guard case .created(let created) = outcome else {
@@ -143,9 +143,9 @@ struct CryptoAccountCreationStoreTests {
     // The chain still drives `chainId` (and therefore which network the
     // wallet sync queries), but the account is denominated in the
     // profile currency regardless of the chain's native token.
-    #expect(created.chainId == ChainConfig.polygon.chainId)
+    #expect(created.chainId == ChainConfig.base.chainId)
     #expect(created.instrument == Self.profileInstrument)
-    #expect(created.instrument != ChainConfig.polygon.nativeInstrument)
+    #expect(created.instrument != ChainConfig.base.nativeInstrument)
   }
 
   @Test("Successful submit kicks off the initial Alchemy sync for the new account")
