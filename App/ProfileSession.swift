@@ -41,7 +41,7 @@ final class ProfileSession: Identifiable {
   /// once in `finishInit` after `init` returns; effectively `let` from
   /// the consumer's perspective. `private(set)` so callers cannot
   /// reassign.
-  private(set) var cryptoSyncStore: CryptoSyncStore?
+  private(set) var cryptoSyncStore: SyncedAccountStore?
 
   /// Token resolver shared with the inbox UI. Nil with `cryptoSyncStore`.
   /// Same lifecycle pattern as `cryptoSyncStore`.
@@ -210,7 +210,8 @@ final class ProfileSession: Identifiable {
     let cryptoWiring = Self.makeCryptoSyncWiring(
       backend: backend,
       registry: instrumentRegistry,
-      cryptoPriceService: cryptoPriceService)
+      cryptoPriceService: cryptoPriceService,
+      profileInstrument: profile.instrument)
     self.cryptoSyncStore = cryptoWiring?.store
     self.cryptoTokenDiscovery = cryptoWiring?.discovery
     seedBuiltInCryptoPresets(registry: instrumentRegistry)

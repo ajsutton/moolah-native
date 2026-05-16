@@ -1,26 +1,32 @@
-// Features/Crypto/CryptoSyncStore+Internals.swift
+// Features/Sync/SyncedAccountStore+Internals.swift
 import Foundation
 import OSLog
 import SwiftUI
 
-/// Outcome of one per-account build task. Stage 9's apply pass only
-/// consumes `.success`; `.failed` accounts have their errors persisted
-/// inside the build task itself, and `.skipped` accounts (cancelled,
-/// unknown chain id) contribute nothing.
+/// Outcome of one per-account build task. The apply pass only consumes
+/// `.success`; `.failed` accounts have their errors persisted inside the
+/// build task itself, and `.skipped` accounts (cancelled, no matching
+/// source) contribute nothing.
+///
+/// `.failed` carries the account's `AccountType` so `updateGlobalError`
+/// can scope the Alchemy-key banner to crypto accounts — an exchange
+/// credential failure must not light the (Alchemy-specific) global
+/// banner.
 enum PerAccountBuildResult: Sendable {
   case success(WalletApplyEngine.AccountInput)
-  case failed(UUID, WalletSyncError)
+  case failed(UUID, WalletSyncError, AccountType)
   case skipped(UUID)
 }
 
-extension CryptoSyncStore {
+extension SyncedAccountStore {
 
   // MARK: - Stale filter
 
-  /// Filters `accounts.fetchAll()` down to crypto accounts that are
+  /// Filters `accounts.fetchAll()` down to syncable accounts (any
+  /// account some registered `AccountSyncSource` claims) that are
   /// either stale (older than `staleThreshold`) or — when
-  /// `includeNonStale == true` — every crypto account regardless. Reads
-  /// `clock()` for "now" so tests can pin time.
+  /// `includeNonStale == true` — every syncable account regardless.
+  /// Reads `clock()` for "now" so tests can pin time.
   func accountsToSync(includeNonStale: Bool) async -> [Account] {
     let allAccounts: [Account]
     do {
@@ -33,9 +39,11 @@ extension CryptoSyncStore {
     }
     let now = clock()
     return allAccounts.filter { account in
-      guard account.type == .crypto else { return false }
-      guard account.walletAddress?.isEmpty == false else { return false }
-      guard account.chainId != nil else { return false }
+      // `WalletSyncSource.handles` already enforces walletAddress +
+      // chainId for crypto; exchange accounts have neither but are
+      // claimed by `CoinstashSyncSource`. Asking the sources keeps the
+      // stale-timer / scene-active path provider-neutral.
+      guard sources.contains(where: { $0.handles(account) }) else { return false }
       if includeNonStale { return true }
       let lastSyncedAt = statePerAccount[account.id]?.lastSyncedAt ?? .distantPast
       return now.timeIntervalSince(lastSyncedAt) >= staleThreshold
@@ -61,7 +69,7 @@ extension CryptoSyncStore {
     for accountList: [Account]
   ) async -> [PerAccountBuildResult] {
     let limit = maxConcurrentBuilds
-    let walletSyncEngine = self.walletSyncEngine
+    let sources = self.sources
     let walletSyncState = self.walletSyncState
     let statesById = self.statePerAccount
 
@@ -76,7 +84,7 @@ extension CryptoSyncStore {
         group.addTask {
           await Self.buildOne(
             account: account,
-            engine: walletSyncEngine,
+            sources: sources,
             walletSyncState: walletSyncState,
             priorState: statesById[account.id])
         }
@@ -92,7 +100,7 @@ extension CryptoSyncStore {
           group.addTask {
             await Self.buildOne(
               account: next,
-              engine: walletSyncEngine,
+              sources: sources,
               walletSyncState: walletSyncState,
               priorState: statesById[next.id])
           }
@@ -110,22 +118,26 @@ extension CryptoSyncStore {
   /// half-resolved error row.
   static func buildOne(
     account: Account,
-    engine: WalletSyncEngine,
+    sources: [any AccountSyncSource],
     walletSyncState: any WalletSyncStateRepository,
     priorState: WalletSyncState?
   ) async -> PerAccountBuildResult {
-    guard let chain = ChainConfig.config(for: account.chainId ?? -1) else {
+    guard let source = sources.first(where: { $0.handles(account) }) else {
       internalsLogger.notice(
-        "Skipping account \(account.id, privacy: .public) — unknown chainId"
+        "Skipping account \(account.id, privacy: .public) — no matching sync source"
       )
       return .skipped(account.id)
     }
     do {
-      let result = try await engine.build(account: account, chain: chain)
+      let built = try await source.build(account: account)
+      // AccountInput construction is IDENTICAL to today (same for crypto
+      // and exchange). For exchange accounts `headBlockNumber` is 0
+      // (no block-watermark concept); for crypto the wallet engine fills
+      // it from the fetched transfers.
       let input = WalletApplyEngine.AccountInput(
         account: account,
-        headBlockNumber: result.headBlockNumber,
-        candidates: result.candidates)
+        headBlockNumber: built.headBlockNumber,
+        candidates: built.candidates)
       return .success(input)
     } catch is CancellationError {
       // Cooperative cancellation — never write a half-resolved row.
@@ -136,7 +148,7 @@ extension CryptoSyncStore {
         accountId: account.id,
         priorState: priorState,
         walletSyncState: walletSyncState)
-      return .failed(account.id, walletError)
+      return .failed(account.id, walletError, account.type)
     } catch {
       let mapped = WalletSyncError.network(
         underlyingDescription: error.localizedDescription)
@@ -145,7 +157,7 @@ extension CryptoSyncStore {
         accountId: account.id,
         priorState: priorState,
         walletSyncState: walletSyncState)
-      return .failed(account.id, mapped)
+      return .failed(account.id, mapped, account.type)
     }
   }
 
@@ -203,23 +215,27 @@ extension CryptoSyncStore {
   }
 
   /// Updates `globalError` based on the build phase's per-account
-  /// outcomes. The banner is process-wide: an `.invalidApiKey` /
-  /// `.missingApiKey` from any one account implies no account can sync
-  /// (the API key is shared across every wallet), so we only need to
-  /// find the first occurrence — preferring `.missingApiKey` over
+  /// outcomes, **scoped to crypto accounts**. The banner powers
+  /// `CryptoSettingsView.alchemyStatusBadge`, which is Alchemy-specific:
+  /// the shared Alchemy key means an `.invalidApiKey` / `.missingApiKey`
+  /// from any one *crypto* account implies no crypto account can sync,
+  /// so we surface it once — preferring `.missingApiKey` over
   /// `.invalidApiKey` when both are present because the former gives
   /// the user a clearer instruction (add a key) than the latter
-  /// (replace a key).
+  /// (replace a key). An exchange account's per-account token failure
+  /// (`.invalidApiKey` / `.missingApiKey` from `CoinstashSyncSource`)
+  /// is deliberately ignored here — folding it in would tell the user
+  /// the Alchemy key is broken when it is fine.
   ///
-  /// When no process-wide error appears in this cycle's outcomes the
-  /// banner clears. Per-account errors (`.network`, `.rateLimited`,
+  /// When no crypto process-wide error appears in this cycle's outcomes
+  /// the banner clears. Per-account errors (`.network`, `.rateLimited`,
   /// `.providerMalformedResponse`) are surfaced via the per-row
   /// `WalletSyncState.lastError`, not the banner.
   func updateGlobalError(from results: [PerAccountBuildResult]) {
     var sawMissing = false
     var sawInvalid = false
     for result in results {
-      if case let .failed(_, error) = result {
+      if case let .failed(_, error, accountType) = result, accountType == .crypto {
         switch error {
         case .missingApiKey:
           sawMissing = true
@@ -280,6 +296,6 @@ extension CryptoSyncStore {
   /// so the cross-actor `buildOne` / `persistError` helpers can call
   /// it without capturing `self`.
   static var internalsLogger: Logger {
-    Logger(subsystem: "com.moolah.app", category: "CryptoSyncStore")
+    Logger(subsystem: "com.moolah.app", category: "SyncedAccountStore")
   }
 }

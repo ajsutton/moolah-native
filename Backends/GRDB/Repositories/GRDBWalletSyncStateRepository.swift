@@ -4,9 +4,10 @@ import Foundation
 import GRDB
 
 /// GRDB-backed implementation of `WalletSyncStateRepository`. Stores
-/// per-device sync checkpoints for crypto wallet accounts in the local
-/// `wallet_sync_state` table. NOT synced via CKSyncEngine (intentional —
-/// see `WalletSyncStateRepository` doc-comment).
+/// per-device sync checkpoints for auto-imported accounts (on-chain
+/// wallets and exchanges) in the local `wallet_sync_state` table. NOT
+/// synced via CKSyncEngine (intentional — see
+/// `WalletSyncStateRepository` doc-comment).
 ///
 /// Implemented as a `Sendable` struct (not a `final class` with
 /// `@unchecked Sendable`) per CONCURRENCY_GUIDE §2: the only stored

@@ -27,14 +27,15 @@ extension ProfileSession {
   /// per `(chainId, contractAddress)`" guarantee across the manual +
   /// automatic re-resolution paths.
   struct CryptoSyncWiring {
-    let store: CryptoSyncStore
+    let store: SyncedAccountStore
     let discovery: CryptoTokenDiscoveryService
   }
 
-  /// Builds the `CryptoSyncStore` (and exposes the underlying
-  /// `CryptoTokenDiscoveryService`) for a profile. Returns `nil` when
-  /// the profile has no `instrumentRegistry` (preview / degraded
-  /// launches); the wallet-import feature is unavailable in that mode.
+  /// Builds the `SyncedAccountStore` (and exposes the underlying
+  /// `CryptoTokenDiscoveryService`) for a profile, registering the
+  /// wallet + Coinstash sync sources. Returns `nil` when the profile
+  /// has no `instrumentRegistry` (preview / degraded launches); the
+  /// auto-import feature is unavailable in that mode.
   ///
   /// Live wiring uses:
   ///
@@ -60,7 +61,8 @@ extension ProfileSession {
   static func makeCryptoSyncWiring(
     backend: BackendProvider,
     registry: (any InstrumentRegistryRepository)?,
-    cryptoPriceService: CryptoPriceService
+    cryptoPriceService: CryptoPriceService,
+    profileInstrument: Instrument
   ) -> CryptoSyncWiring? {
     guard let registry else { return nil }
 
@@ -97,8 +99,21 @@ extension ProfileSession {
       transactions: backend.transactions,
       walletSyncState: backend.walletSyncState,
       importRules: NoOpWalletImportRulesEngine())
-    let store = CryptoSyncStore(
-      walletSyncEngine: walletSyncEngine,
+    // Provider-neutral sources. The store asks each `handles(_:)` which
+    // accounts it can sync — it never branches on `account.type`.
+    // Future exchanges append their own `<Provider>SyncSource` here.
+    let walletSource = WalletSyncSource(engine: walletSyncEngine)
+    let coinstashSource = CoinstashSyncSource(
+      tokenStore: ExchangeTokenStore(synchronizable: true),
+      client: CoinstashClient(),
+      engine: ExchangeSyncEngine(
+        resolver: ExchangeInstrumentResolver(
+          registry: registry,
+          // The profile's own currency, NOT a hardcoded `.AUD` — a
+          // non-AUD profile would otherwise mis-denominate.
+          fiatInstrument: profileInstrument)))
+    let store = SyncedAccountStore(
+      sources: [walletSource, coinstashSource],
       walletApplyEngine: walletApplyEngine,
       walletSyncState: backend.walletSyncState,
       accounts: backend.accounts)

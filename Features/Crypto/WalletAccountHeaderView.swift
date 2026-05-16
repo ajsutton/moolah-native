@@ -29,13 +29,13 @@ import SwiftUI
 struct WalletAccountHeaderView: View {
   let account: Account
   let chain: ChainConfig
-  let cryptoSyncStore: CryptoSyncStore
+  let cryptoSyncStore: SyncedAccountStore
 
   /// Whether the profile has an Alchemy API key configured. Drives
   /// the `Sync now` enabled state and the inline "add a key" hint.
   /// Read by the parent view (`ContentView`) from
   /// `session.cryptoTokenStore?.hasAlchemyApiKey` because the keychain
-  /// lookup lives on `CryptoTokenStore`, not on `CryptoSyncStore` —
+  /// lookup lives on `CryptoTokenStore`, not on `SyncedAccountStore` —
   /// surfacing it here as a value keeps the header view trivially
   /// previewable + testable without dragging the token store along.
   let hasApiKey: Bool
@@ -55,7 +55,7 @@ struct WalletAccountHeaderView: View {
   init(
     account: Account,
     chain: ChainConfig,
-    cryptoSyncStore: CryptoSyncStore,
+    cryptoSyncStore: SyncedAccountStore,
     hasApiKey: Bool,
     copyToPasteboard: @escaping @MainActor (String) -> Void = WalletAccountHeaderView.defaultCopy,
     openExternalURL: @escaping @MainActor (URL) -> Void = WalletAccountHeaderView.defaultOpen
@@ -285,7 +285,7 @@ enum WalletAccountHeaderLogic {
   /// account. The button collapses to disabled when:
   ///
   /// - The account is already mid-sync (mirrors
-  ///   `CryptoSyncStore.syncAccount`'s collapse-duplicates guard so a
+  ///   `SyncedAccountStore.syncAccount`'s collapse-duplicates guard so a
   ///   tap during sync isn't a misleading no-op).
   /// - No Alchemy API key is configured. Per design — "Without a valid
   ///   key, sync is disabled with an inline prompt to add one." — the

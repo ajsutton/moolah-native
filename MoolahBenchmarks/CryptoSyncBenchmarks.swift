@@ -44,7 +44,7 @@ final class CryptoSyncBenchmarks: XCTestCase {
   }
 
   /// Concurrent sync of 5 accounts. Exercises the parallel-build phase
-  /// of `CryptoSyncStore.syncAccounts` (`withTaskGroup` with concurrency
+  /// of `SyncedAccountStore.syncAccounts` (`withTaskGroup` with concurrency
   /// cap = 4) followed by the sequential apply pass. Each wallet has
   /// 100 transfers so the total work is comparable to the single-wallet
   /// 500-tx benchmark while measuring the parallel scheduling cost.
@@ -131,7 +131,7 @@ final class CryptoSyncBenchmarks: XCTestCase {
 
   // MARK: - Helpers
 
-  /// Drives one full sync cycle through `CryptoSyncStore.syncAccounts`
+  /// Drives one full sync cycle through `SyncedAccountStore.syncAccounts`
   /// with the given scripted Alchemy responses. Each call constructs a
   /// fresh `TestBackend` so iteration N starts from an empty repository
   /// — the benchmarks measure cold sync cost, not warm-cache cost.
@@ -151,14 +151,14 @@ final class CryptoSyncBenchmarks: XCTestCase {
     await store.syncAccounts(accounts)
   }
 
-  /// Builds a `CryptoSyncStore` with the given Alchemy stub. Uses an
+  /// Builds a `SyncedAccountStore` with the given Alchemy stub. Uses an
   /// in-memory token resolver and the no-op rules engine so the
   /// benchmark only measures pipeline-internal work.
   @MainActor
   private static func makeStore(
     backend: CloudKitBackend,
     alchemy: any AlchemyClient
-  ) throws -> CryptoSyncStore {
+  ) throws -> SyncedAccountStore {
     let registry = StubInstrumentRegistry()
     let resolver = BenchmarkRegistrationResolver()
     let discovery = CryptoTokenDiscoveryService(
@@ -181,8 +181,8 @@ final class CryptoSyncBenchmarks: XCTestCase {
       walletSyncState: backend.walletSyncState,
       importRules: NoOpWalletImportRulesEngine(),
       clock: { Self.pinnedNow })
-    return CryptoSyncStore(
-      walletSyncEngine: walletSyncEngine,
+    return SyncedAccountStore(
+      sources: [WalletSyncSource(engine: walletSyncEngine)],
       walletApplyEngine: walletApplyEngine,
       walletSyncState: backend.walletSyncState,
       accounts: backend.accounts,

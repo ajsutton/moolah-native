@@ -9,12 +9,12 @@ import Testing
 /// Behavioural tests for the Crypto Accounts list section. Per CLAUDE.md
 /// the testable surface is the data — what `AccountStore.accounts`
 /// exposes after a load, which entries the view filters in, and
-/// whether `CryptoSyncStore.syncAccount(_:)` actually fires when the
+/// whether `SyncedAccountStore.syncAccount(_:)` actually fires when the
 /// "Sync now" button is tapped (the view is a thin shell that calls
 /// straight through).
 ///
-/// `CryptoSyncStore.syncAccount` is exercised against a `TestBackend`
-/// fixture identical to the existing `CryptoSyncStoreTests` setup so
+/// `SyncedAccountStore.syncAccount` is exercised against a `TestBackend`
+/// fixture identical to the existing `SyncedAccountStoreTests` setup so
 /// the behaviour we verify here is the same one that runs in
 /// production.
 @Suite("Crypto Accounts list — data behaviour")
@@ -23,13 +23,13 @@ struct CryptoSettingsAccountsListTests {
   nonisolated static let pinnedNow = Date(timeIntervalSince1970: 1_700_000_000)
 
   private struct Fixture {
-    let syncStore: CryptoSyncStore
+    let syncStore: SyncedAccountStore
     let backend: CloudKitBackend
     let database: DatabaseQueue
     let alchemy: RecordingAlchemyClientStub
   }
 
-  /// Builds a `CryptoSyncStore` against `TestBackend` so the apply pass
+  /// Builds a `SyncedAccountStore` against `TestBackend` so the apply pass
   /// writes through the real repositories. Only Alchemy is stubbed —
   /// the same shape the existing Stage 9 tests use.
   private func makeFixture() throws -> Fixture {
@@ -59,8 +59,8 @@ struct CryptoSettingsAccountsListTests {
       walletSyncState: backend.walletSyncState,
       importRules: NoOpWalletImportRulesEngine(),
       clock: { Self.pinnedNow })
-    let store = CryptoSyncStore(
-      walletSyncEngine: walletSyncEngine,
+    let store = SyncedAccountStore(
+      sources: [WalletSyncSource(engine: walletSyncEngine)],
       walletApplyEngine: walletApplyEngine,
       walletSyncState: backend.walletSyncState,
       accounts: backend.accounts,

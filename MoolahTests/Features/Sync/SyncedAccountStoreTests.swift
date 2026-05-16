@@ -1,4 +1,4 @@
-// MoolahTests/Features/Crypto/CryptoSyncStoreTests.swift
+// MoolahTests/Features/Sync/SyncedAccountStoreTests.swift
 import Foundation
 import GRDB
 import SwiftUI
@@ -6,15 +6,15 @@ import Testing
 
 @testable import Moolah
 
-/// Behavioural tests for `CryptoSyncStore`. Exercises every sync trigger
+/// Behavioural tests for `SyncedAccountStore`. Exercises every sync trigger
 /// (launch, scene-active, manual, hourly timer), the cancellation
 /// discipline on the timer task, per-account error containment, and the
 /// concurrent-sync collapse via `inProgressAccountIds`. Uses
 /// `TestBackend` for the repositories so persistence and per-leg dedup
 /// run end-to-end; only the Alchemy client is stubbed.
-@Suite("CryptoSyncStore — Triggers + timer + scenePhase")
+@Suite("SyncedAccountStore — Triggers + timer + scenePhase")
 @MainActor
-struct CryptoSyncStoreTests {
+struct SyncedAccountStoreTests {
   // MARK: - Pinned clock
 
   /// Pinned clock value tests assert against. `nonisolated` so the
@@ -28,13 +28,13 @@ struct CryptoSyncStoreTests {
   /// under test plus every collaborator they need to assert against
   /// without re-deriving them from the store's storage.
   private struct Fixture {
-    let store: CryptoSyncStore
+    let store: SyncedAccountStore
     let backend: CloudKitBackend
     let database: DatabaseQueue
     let alchemy: RecordingAlchemyClientStub
   }
 
-  /// Builds a `CryptoSyncStore` backed by a real `TestBackend` so the
+  /// Builds a `SyncedAccountStore` backed by a real `TestBackend` so the
   /// apply pass writes through `TransactionRepository` and the per-account
   /// `WalletSyncState` lands in the in-memory GRDB queue. Alchemy is the
   /// only piece stubbed; Stage 9's tests are about the orchestrator's
@@ -74,8 +74,8 @@ struct CryptoSyncStoreTests {
       walletSyncState: backend.walletSyncState,
       importRules: NoOpWalletImportRulesEngine(),
       clock: clock)
-    let store = CryptoSyncStore(
-      walletSyncEngine: walletSyncEngine,
+    let store = SyncedAccountStore(
+      sources: [WalletSyncSource(engine: walletSyncEngine)],
       walletApplyEngine: walletApplyEngine,
       walletSyncState: backend.walletSyncState,
       accounts: backend.accounts,
@@ -329,7 +329,7 @@ struct CryptoSyncStoreTests {
   }
 
   // The global-error-banner tests live in
-  // `CryptoSyncStoreGlobalErrorTests.swift`.
+  // `SyncedAccountStoreGlobalErrorTests.swift`.
 
   // MARK: - No background tasks
   //
@@ -338,7 +338,7 @@ struct CryptoSyncStoreTests {
   // linked frameworks, which is brittle. The compile-time contract is
   // enforced two ways:
   //
-  // 1. `CryptoSyncStore.swift` imports only Foundation / OSLog /
+  // 1. `SyncedAccountStore.swift` imports only Foundation / OSLog /
   //    Observation / SwiftUI — verified at code-review time and pinned
   //    by the file's MARK header.
   // 2. The merge-queue / CI build fails if a future change adds

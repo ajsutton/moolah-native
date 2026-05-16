@@ -1,14 +1,16 @@
-// Features/Crypto/CryptoSyncStore.swift
+// Features/Sync/SyncedAccountStore.swift
 import Foundation
 import OSLog
 import Observation
 import SwiftUI
 import os
 
-/// `@MainActor @Observable` orchestrator for the wallet auto-import.
-/// Owns the foreground sync timer, the per-account "Sync now" command,
-/// and per-account observable state (last-synced, sync-in-progress,
-/// last-error).
+/// `@MainActor @Observable` orchestrator for provider-neutral account
+/// auto-import (on-chain wallets and centralised exchanges). Owns the
+/// foreground sync timer, the per-account "Sync now" command, and
+/// per-account observable state (last-synced, sync-in-progress,
+/// last-error). It never branches on account type — every provider is
+/// expressed as an `AccountSyncSource`.
 ///
 /// Cancellation discipline (per design §"Sync trigger taxonomy"):
 ///
@@ -29,7 +31,7 @@ import os
 /// `WalletSyncState.lastError` and does not abort other accounts.
 @MainActor
 @Observable
-final class CryptoSyncStore {
+final class SyncedAccountStore {
   /// Per-account in-flight markers. Used both as observable view state
   /// (so a row can show a spinner) and as a guard against concurrent
   /// duplicate launches: `syncStaleAccounts` and `syncAccount` skip an
@@ -45,21 +47,30 @@ final class CryptoSyncStore {
   private(set) var statePerAccount: [UUID: WalletSyncState] = [:]
 
   /// Banner-level error visible across the crypto-settings UI when a
-  /// process-wide failure (`.missingApiKey` / `.invalidApiKey`) means
-  /// no account can sync at all. Set by `updateGlobalError(from:)`
-  /// after every build phase based on whether any per-account result
-  /// surfaced a process-wide error; cleared back to `nil` on the next
-  /// cycle that has no such failures. Per-account network /
-  /// rate-limit / malformed errors are stored on
+  /// process-wide Alchemy-key failure (`.missingApiKey` /
+  /// `.invalidApiKey`) means no **crypto** account can sync at all. Set
+  /// by `updateGlobalError(from:)` after every build phase, scoped to
+  /// crypto accounts only — the banner powers
+  /// `CryptoSettingsView.alchemyStatusBadge`, which is Alchemy-specific;
+  /// an exchange credential failure must not light it. Cleared back to
+  /// `nil` on the next cycle with no such crypto failure. Per-account
+  /// network / rate-limit / malformed errors are stored on
   /// `statePerAccount[id].lastError` instead.
   private(set) var globalError: WalletSyncError?
 
   // Internal (default) access so the helpers in
-  // `CryptoSyncStore+Internals.swift` can read these without bouncing
-  // through accessor methods. The properties remain `let` so the store
-  // is still effectively immutable from outside this module's
-  // extensions.
-  let walletSyncEngine: WalletSyncEngine
+  // `SyncedAccountStore+Internals.swift` can read these without
+  // bouncing through accessor methods. The properties remain `let` so
+  // the store is still effectively immutable from outside this
+  // module's extensions.
+  //
+  // `sources` is the provider-neutral seam: each `AccountSyncSource`
+  // claims the accounts it can sync via `handles(_:)`. The store never
+  // inspects `account.type` — it asks the sources. `private(set) var`
+  // (not `let`) only so the test-only `appendSourceForTesting(_:)` can
+  // register an extra source post-construction; production sets it once
+  // in `init`.
+  private(set) var sources: [any AccountSyncSource]
   let walletApplyEngine: WalletApplyEngine
   let walletSyncState: any WalletSyncStateRepository
   let accounts: any AccountRepository
@@ -93,14 +104,16 @@ final class CryptoSyncStore {
   private(set) var initialSyncTasks: [UUID: Task<Void, Never>] = [:]
 
   private static let logger = Logger(
-    subsystem: "com.moolah.app", category: "CryptoSyncStore")
+    subsystem: "com.moolah.app", category: "SyncedAccountStore")
 
   /// - Parameters:
-  ///   - walletSyncEngine: Per-account build orchestrator (Stage 6).
+  ///   - sources: Provider-neutral sync sources. The store asks each
+  ///     `handles(_:)` to decide which accounts it can sync — it never
+  ///     branches on `account.type` itself.
   ///   - walletApplyEngine: Sequential `@MainActor` apply pass (Stage 7).
   ///   - walletSyncState: Per-device sync checkpoint store.
   ///   - accounts: Account repository — read on every stale check to
-  ///     filter `type == .crypto`.
+  ///     filter to syncable accounts (via `sources`).
   ///   - clock: Closure returning "now". The clock injection is for
   ///     per-account `lastSyncedAt` decisions; the timer's
   ///     `Task.sleep` uses the real Swift clock regardless. Tests pass
@@ -111,7 +124,7 @@ final class CryptoSyncStore {
   ///   - maxConcurrentBuilds: Cap on simultaneous per-account fetches in
   ///     the parallel build phase. Default 4 (per design).
   init(
-    walletSyncEngine: WalletSyncEngine,
+    sources: [any AccountSyncSource],
     walletApplyEngine: WalletApplyEngine,
     walletSyncState: any WalletSyncStateRepository,
     accounts: any AccountRepository,
@@ -120,7 +133,7 @@ final class CryptoSyncStore {
     timerInterval: Duration = .seconds(3_600),
     maxConcurrentBuilds: Int = 4
   ) {
-    self.walletSyncEngine = walletSyncEngine
+    self.sources = sources
     self.walletApplyEngine = walletApplyEngine
     self.walletSyncState = walletSyncState
     self.accounts = accounts
@@ -139,7 +152,7 @@ final class CryptoSyncStore {
     await reloadStatePerAccount(failureLogPrefix: "Initial WalletSyncState load")
   }
 
-  /// Sync any crypto account whose `lastSyncedAt` is older than
+  /// Sync any syncable account whose `lastSyncedAt` is older than
   /// `staleThreshold` (24 h by default). Used by app-launch, scene-active,
   /// and the hourly timer. A no-op when nothing is stale.
   ///
@@ -157,13 +170,14 @@ final class CryptoSyncStore {
   /// task wins; the user-initiated one collapses to a no-op rather than
   /// queueing a duplicate write).
   func syncAccount(_ account: Account) async {
-    guard account.type == .crypto else { return }
+    guard sources.contains(where: { $0.handles(account) }) else { return }
     guard !inProgressAccountIds.contains(account.id) else { return }
     await syncAccounts([account])
   }
 
   /// Fire-and-forget kick-off of `syncAccount(_:)` for a newly created
-  /// crypto account. Returns immediately so the create-account sheet
+  /// syncable account (crypto or exchange). Returns immediately so the
+  /// create-account sheet
   /// can `dismiss()` the moment the account is persisted; the network
   /// sync continues in the spawned task, which is tracked in
   /// `initialSyncTasks` so `cancelTimer()` can tear it down on profile
@@ -245,7 +259,7 @@ final class CryptoSyncStore {
   /// 6. Clear in-flight markers.
   func syncAccounts(_ accountList: [Account]) async {
     let inputs = accountList.filter { account in
-      guard account.type == .crypto else { return false }
+      guard sources.contains(where: { $0.handles(account) }) else { return false }
       // Re-skip anything already in flight from a prior trigger; this
       // is the load-bearing collapse-duplicates check exercised by the
       // concurrent-trigger test.
@@ -283,13 +297,26 @@ final class CryptoSyncStore {
 
   // MARK: - Internal mutators
 
-  /// Setter shim so `CryptoSyncStore+Internals.swift` extension methods
-  /// can update observable state. The store's public surface keeps
-  /// `private(set)` for `globalError` so views can only observe — the
-  /// shim is internal, not public.
+  /// Setter shim so `SyncedAccountStore+Internals.swift` extension
+  /// methods can update observable state. The store's public surface
+  /// keeps `private(set)` for `globalError` so views can only observe —
+  /// the shim is internal, not public.
   func setGlobalError(_ error: WalletSyncError?) {
     globalError = error
   }
+
+  #if DEBUG
+    /// Test-only: register an extra `AccountSyncSource` after
+    /// construction. The integration harness builds the store first,
+    /// then registers a `CoinstashSyncSource` that uses harness-owned
+    /// collaborators (you cannot reference the harness inside its own
+    /// init). Mutation happens on `@MainActor` (the store is
+    /// `@MainActor`), so `sources` stays `Sendable`-safe. Gated
+    /// `#if DEBUG` so production cannot mutate the source list.
+    func appendSourceForTesting(_ source: any AccountSyncSource) {
+      sources.append(source)
+    }
+  #endif
 
   /// Replaces the entire `statePerAccount` map. Used by the apply-phase
   /// refresh after a sync cycle so the in-memory view of checkpoint
@@ -316,5 +343,5 @@ final class CryptoSyncStore {
   }
 
   // Implementation helpers (parallel build, apply pass, timer loop)
-  // live in `CryptoSyncStore+Internals.swift`.
+  // live in `SyncedAccountStore+Internals.swift`.
 }

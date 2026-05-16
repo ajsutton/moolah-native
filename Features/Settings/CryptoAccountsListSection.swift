@@ -7,7 +7,7 @@ import SwiftUI
 /// - The account name + chain.
 /// - "Synced 2h ago" relative timestamp (or "Never synced" when no
 ///   `WalletSyncState` exists yet).
-/// - "Sync now" button that calls `CryptoSyncStore.syncAccount(_:)`. The
+/// - "Sync now" button that calls `SyncedAccountStore.syncAccount(_:)`. The
 ///   button shows a spinner while the account is in flight and is
 ///   disabled to prevent re-entrant taps.
 /// - Inline error caption when the most recent attempt failed
@@ -17,9 +17,9 @@ import SwiftUI
 /// who haven't created one yet aren't confronted with an empty list.
 struct CryptoAccountsListSection: View {
   let accountStore: AccountStore
-  @Bindable var syncStore: CryptoSyncStore
+  @Bindable var syncStore: SyncedAccountStore
 
-  init(accountStore: AccountStore, syncStore: CryptoSyncStore) {
+  init(accountStore: AccountStore, syncStore: SyncedAccountStore) {
     self.accountStore = accountStore
     self.syncStore = syncStore
   }
@@ -87,7 +87,7 @@ struct CryptoAccountsListSection: View {
 
   /// Trailing "Sync now" affordance. While a sync is running we render a
   /// `ProgressView` instead of the button so a second user tap can't
-  /// queue a duplicate request — `CryptoSyncStore.syncAccount` already
+  /// queue a duplicate request — `SyncedAccountStore.syncAccount` already
   /// collapses duplicates internally, but hiding the button is the
   /// clearer affordance.
   @ViewBuilder

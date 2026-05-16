@@ -25,9 +25,9 @@ import OSLog
 /// 5. Persist via the registry. Status is sticky-positive: once a row
 ///    transitions out of `.unpriced`, the next sync cycle leaves it alone.
 ///
-/// Periodic re-resolution (`reResolve`) is the hook surface for Stage 9's
-/// `CryptoSyncStore`. The actual scheduling — at most once per day per
-/// `.unpriced` token, per design — lives in the sync store.
+/// Periodic re-resolution (`reResolve`) is the hook surface for
+/// `SyncedAccountStore`. The actual scheduling — at most once per day
+/// per `.unpriced` token, per design — lives in the sync store.
 /// See issue #753 for the cadence tuning.
 actor CryptoTokenDiscoveryService {
   private var inFlight: [String: Task<CryptoRegistration, Error>] = [:]
@@ -176,7 +176,7 @@ actor CryptoTokenDiscoveryService {
   /// made on another device while we were idling between daily cycles
   /// must not be clobbered by an automatic re-resolution.
   ///
-  /// Stage 9's `CryptoSyncStore` is the only intended caller and is
+  /// `SyncedAccountStore` is the only intended caller and is
   /// responsible for the daily-cadence gate (issue #753).
   func reResolve(
     _ registration: CryptoRegistration,

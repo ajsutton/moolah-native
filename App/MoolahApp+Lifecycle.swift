@@ -22,16 +22,16 @@ extension MoolahApp {
     default:
       break
     }
-    forwardScenePhaseToCryptoSyncStores(newPhase)
+    forwardScenePhaseToSyncStores(newPhase)
   }
 
   /// Forwards every scenePhase transition to each open profile's
-  /// `CryptoSyncStore` so the per-profile timer + scene-active sync
+  /// `SyncedAccountStore` so the per-profile timer + scene-active sync
   /// trigger live alongside the rest of the lifecycle plumbing instead
   /// of needing a separate `.onChange` modifier inside the window
   /// hierarchy. Each store handles cancel-then-spawn / cancel-then-clear
-  /// internally — see `CryptoSyncStore.handleScenePhaseChange`.
-  private func forwardScenePhaseToCryptoSyncStores(_ newPhase: ScenePhase) {
+  /// internally — see `SyncedAccountStore.handleScenePhaseChange`.
+  private func forwardScenePhaseToSyncStores(_ newPhase: ScenePhase) {
     for session in sessionManager.openProfiles {
       session.cryptoSyncStore?.handleScenePhaseChange(newPhase)
     }

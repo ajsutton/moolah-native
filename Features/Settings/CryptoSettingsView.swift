@@ -14,7 +14,7 @@ import SwiftUI
 /// the dependency is missing.
 struct CryptoSettingsView: View {
   @Bindable var store: CryptoTokenStore
-  let cryptoSyncStore: CryptoSyncStore?
+  let cryptoSyncStore: SyncedAccountStore?
   let tokenDiscovery: CryptoTokenDiscoveryService?
   let accountStore: AccountStore?
 
@@ -27,7 +27,7 @@ struct CryptoSettingsView: View {
 
   init(
     store: CryptoTokenStore,
-    cryptoSyncStore: CryptoSyncStore? = nil,
+    cryptoSyncStore: SyncedAccountStore? = nil,
     tokenDiscovery: CryptoTokenDiscoveryService? = nil,
     accountStore: AccountStore? = nil
   ) {

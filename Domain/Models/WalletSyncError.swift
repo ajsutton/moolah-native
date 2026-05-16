@@ -1,7 +1,7 @@
 import Foundation
 
 /// Structured outcome of a failed wallet sync cycle. Stored in `WalletSyncState`
-/// so the `CryptoSyncStore` can format it for display without coupling the
+/// so the `SyncedAccountStore` can format it for display without coupling the
 /// domain model to localised strings.
 ///
 /// Conforms to `Error` so the wallet-sync data layer (Stage 4 onward) can

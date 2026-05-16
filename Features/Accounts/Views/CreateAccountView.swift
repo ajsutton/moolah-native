@@ -27,7 +27,7 @@ struct CreateAccountView: View {
 
   let instrument: Instrument
   let accountStore: AccountStore
-  let cryptoSyncStore: CryptoSyncStore?
+  let cryptoSyncStore: SyncedAccountStore?
 
   private enum Field: Hashable {
     case name
@@ -38,7 +38,7 @@ struct CreateAccountView: View {
   init(
     instrument: Instrument,
     accountStore: AccountStore,
-    cryptoSyncStore: CryptoSyncStore? = nil
+    cryptoSyncStore: SyncedAccountStore? = nil
   ) {
     self.instrument = instrument
     self.accountStore = accountStore
