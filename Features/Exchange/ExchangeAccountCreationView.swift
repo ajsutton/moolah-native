@@ -65,5 +65,7 @@ struct ExchangeAccountCreationView: View {
     ExchangeAccountCreationView(provider: $provider, token: $token)
   }
   .formStyle(.grouped)
-  .frame(width: 500, height: 320)
+  #if os(macOS)
+    .frame(width: 500, height: 320)
+  #endif
 }

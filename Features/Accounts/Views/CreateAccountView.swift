@@ -158,19 +158,19 @@ struct CreateAccountView: View {
   private var namePrompt: String {
     switch type {
     case .crypto: return "e.g. Hardware Wallet — Ethereum"
-    case .exchange: return "e.g. Coinstash"
+    case .exchange: return "e.g. \(exchangeProvider.displayName)"
     default: return "e.g. MyBank - Savings"
     }
   }
 
   private var isValid: Bool {
-    let trimmedName = name.trimmingCharacters(in: .whitespaces)
+    let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedName.isEmpty else { return false }
     if type == .crypto {
       return Account.validatedWalletAddress(cryptoWalletAddress) != nil
     }
     if type == .exchange {
-      return !exchangeToken.trimmingCharacters(in: .whitespaces).isEmpty
+      return !exchangeToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     return true
   }
