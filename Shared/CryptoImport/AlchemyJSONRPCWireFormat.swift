@@ -44,11 +44,18 @@ struct AlchemyJSONRPCNullableResponse<Result: Decodable>: Decodable {
   let result: Result?
 }
 
+// These envelopes are created and decoded across the `await` in
+// `LiveAlchemyClient.send`, so they cross actor boundaries; their
+// instances are safe to send whenever the generic body is.
+extension AlchemyJSONRPCRequest: Sendable where Params: Sendable {}
+extension AlchemyJSONRPCResponse: Sendable where Result: Sendable {}
+extension AlchemyJSONRPCNullableResponse: Sendable where Result: Sendable {}
+
 /// Discriminated `params` payload — covers the JSON-RPC methods this
 /// client makes today. Each case encodes as the JSON-RPC convention of
 /// a one-element array around the parameter object (or address /
 /// hash string).
-enum AlchemyJSONRPCParams: Encodable {
+enum AlchemyJSONRPCParams: Encodable, Sendable {
   case assetTransfers(AlchemyAssetTransfersParams)
   case tokenMetadata(contractAddress: String)
   case transactionReceipt(hash: String)
@@ -67,7 +74,7 @@ enum AlchemyJSONRPCParams: Encodable {
 }
 
 /// Body for the `params[0]` object of `alchemy_getAssetTransfers`.
-struct AlchemyAssetTransfersParams: Encodable {
+struct AlchemyAssetTransfersParams: Encodable, Sendable {
   let fromBlock: String
   let toBlock: String
   let fromAddress: String?
@@ -75,6 +82,12 @@ struct AlchemyAssetTransfersParams: Encodable {
   let category: [String]
   let withMetadata: Bool
   let excludeZeroValue: Bool
+  /// Cursor for the next page. `nil` (and therefore omitted by the
+  /// synthesised encoder, like the other optional fields) on the first
+  /// request; set to the prior response's `pageKey` to fetch the next
+  /// page. Without this, Alchemy returns only the oldest `maxCount`
+  /// (1000) transfers per direction and the rest are silently lost.
+  let pageKey: String?
 }
 
 /// Decodes the `result` object of `alchemy_getAssetTransfers`. The
@@ -84,8 +97,12 @@ struct AlchemyTransferEnvelope: Decodable {
   let result: AlchemyTransferResult
 }
 
-struct AlchemyTransferResult: Decodable {
+struct AlchemyTransferResult: Decodable, Sendable {
   let transfers: [AlchemyTransfer]
+  /// Absent when all remaining transfers fit in this page. See
+  /// `AlchemyAssetTransfersParams.pageKey`. The synthesised decoder
+  /// maps a missing key to `nil`.
+  let pageKey: String?
 }
 
 /// HTTP response validator for `LiveAlchemyClient`. Maps status codes
@@ -163,7 +180,7 @@ enum AlchemyResponseValidator {
 /// than silently zero out (a zero gas leg would look like a free
 /// transaction; a missing `from` would always fail the wallet-match
 /// check and drop legitimate gas legs).
-struct AlchemyTransactionReceiptPayload: Decodable {
+struct AlchemyTransactionReceiptPayload: Decodable, Sendable {
   let gasUsed: String
   let effectiveGasPrice: String
   /// EOA that signed the transaction. Decoded raw; lowercased at
