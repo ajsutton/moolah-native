@@ -38,6 +38,7 @@ extension ExchangeRateService {
       // `SortedDateSeries(sortedEntries:)`'s precondition.
       typealias Entry = SortedDateSeries<[String: Decimal]>.Entry
       var entries: [Entry] = []
+      entries.reserveCapacity(rateRecords.count)
       for record in rateRecords {
         guard let key = DateKey.from(isoString: record.date) else { continue }
         let value = Decimal(string: String(record.rate)) ?? Decimal(record.rate)
