@@ -6,5 +6,5 @@ struct ExchangeRateCache: Codable, Sendable, Equatable {
   let base: String
   var earliestDate: String  // ISO date string "YYYY-MM-DD"
   var latestDate: String  // ISO date string "YYYY-MM-DD"
-  var rates: [String: [String: Decimal]]  // date string -> { quote code -> rate }
+  var rates: SortedDateSeries<[String: Decimal]>  // day key -> { quote code -> rate }
 }

@@ -11,7 +11,13 @@ enum StockPriceError: Error, Equatable {
 
 actor StockPriceService {
   private let client: StockPriceClient
-  private var caches: [String: StockPriceCache] = [:]
+  // `caches` is accessed by the merge extension in
+  // `StockPriceService+Merge.swift` (which defines
+  // `mergeReturningDelta(ticker:instrument:newPrices:)`, called from this
+  // file), so it is `internal` rather than `private`. It remains
+  // actor-isolated; the access modifier is internal only so the
+  // sibling-file extension can see it.
+  var caches: [String: StockPriceCache] = [:]
   /// Loaded tickers — set on first hydration so we don't re-read SQL when
   /// the cache is genuinely empty.
   private var hydratedTickers: Set<String> = []
@@ -121,7 +127,9 @@ actor StockPriceService {
 
     for date in dates {
       let dateString = dateFormatter.string(from: date)
-      if let price = caches[ticker]?.prices[dateString] {
+      if let key = DateKey.from(isoString: dateString),
+        let price = caches[ticker]?.prices.exact(key)
+      {
         lastKnownPrice = price
         results.append((date, price))
       } else if let fallback = lastKnownPrice {
@@ -190,16 +198,15 @@ actor StockPriceService {
   }
 
   private func lookupPrice(ticker: String, dateString: String) -> Decimal? {
-    caches[ticker]?.prices[dateString]
+    guard let key = DateKey.from(isoString: dateString) else { return nil }
+    return caches[ticker]?.prices.exact(key)
   }
 
   private func fallbackPrice(ticker: String, dateString: String) -> Decimal? {
-    guard let cache = caches[ticker] else { return nil }
-    let sortedDates = cache.prices.keys.sorted().reversed()
-    for cachedDate in sortedDates where cachedDate <= dateString {
-      return cache.prices[cachedDate]
-    }
-    return nil
+    guard let key = DateKey.from(isoString: dateString),
+      let cache = caches[ticker]
+    else { return nil }
+    return cache.prices.floor(key)
   }
 
   private func generateDateSeries(in range: ClosedRange<Date>) -> [Date] {
@@ -242,63 +249,6 @@ actor StockPriceService {
     try await persistDelta(ticker: ticker, deltaRecords: delta)
   }
 
-  /// Merges `newPrices` into `caches[ticker]` and returns the rows that
-  /// actually changed so the persistence layer can `INSERT OR REPLACE`
-  /// only those (rather than rewriting every cached row for the ticker
-  /// on every fetch).
-  ///
-  /// The comparison is per-date so a fetch that returns the same prices
-  /// already in cache produces an empty delta. This is what lets
-  /// `fetchAndMerge` skip the disk write on a no-op extension probe.
-  private func mergeReturningDelta(
-    ticker: String, instrument: Instrument, newPrices: [String: Decimal]
-  ) -> [StockPriceRecord] {
-    guard !newPrices.isEmpty else { return [] }
-    let sortedDates = newPrices.keys.sorted()
-    guard let earliest = sortedDates.first, let latest = sortedDates.last else { return [] }
-
-    var deltaRecords: [StockPriceRecord] = []
-
-    if var existing = caches[ticker] {
-      for (dateKey, price) in newPrices where existing.prices[dateKey] != price {
-        deltaRecords.append(priceRecord(ticker: ticker, date: dateKey, price: price))
-        existing.prices[dateKey] = price
-      }
-      if earliest < existing.earliestDate {
-        existing.earliestDate = earliest
-      }
-      if latest > existing.latestDate {
-        existing.latestDate = latest
-      }
-      caches[ticker] = existing
-    } else {
-      caches[ticker] = StockPriceCache(
-        ticker: ticker,
-        instrument: instrument,
-        earliestDate: earliest,
-        latestDate: latest,
-        prices: newPrices
-      )
-      for (dateKey, price) in newPrices {
-        deltaRecords.append(priceRecord(ticker: ticker, date: dateKey, price: price))
-      }
-    }
-
-    return deltaRecords
-  }
-
-  /// Marshalls a `(date, price)` pair into the GRDB record shape.
-  /// `Decimal → Double` round-trips via `NSDecimalNumber` (the same path
-  /// GRDB itself takes), keeping the precision-preservation contract in
-  /// sync with `loadCache`'s decode.
-  private func priceRecord(ticker: String, date: String, price: Decimal) -> StockPriceRecord {
-    StockPriceRecord(
-      ticker: ticker,
-      date: date,
-      price: NSDecimalNumber(decimal: price).doubleValue
-    )
-  }
-
   // MARK: - SQL persistence
 
   /// Hydrates `caches[ticker]` from `stock_price` + `stock_ticker_meta`.
@@ -319,20 +269,25 @@ actor StockPriceService {
       let priceRecords =
         try StockPriceRecord
         .filter(StockPriceRecord.Columns.ticker == ticker)
+        .order(StockPriceRecord.Columns.date)
         .fetchAll(database)
       // See `ExchangeRateService.loadCache` for the rationale on the
       // String-via-Decimal round-trip; preserves source precision instead
       // of inheriting the binary `Decimal(_: Double)` tail.
-      var prices: [String: Decimal] = [:]
+      // `.order(date)` ascending satisfies `init(sortedEntries:)`.
+      var entries: [SortedDateSeries<Decimal>.Entry] = []
+      entries.reserveCapacity(priceRecords.count)
       for record in priceRecords {
-        prices[record.date] = Decimal(string: String(record.price)) ?? Decimal(record.price)
+        guard let key = DateKey.from(isoString: record.date) else { continue }
+        let value = Decimal(string: String(record.price)) ?? Decimal(record.price)
+        entries.append(.init(key: key, value: value))
       }
       return StockPriceCache(
         ticker: ticker,
         instrument: Instrument.fiat(code: metaRecord.instrumentId),
         earliestDate: metaRecord.earliestDate,
         latestDate: metaRecord.latestDate,
-        prices: prices
+        prices: SortedDateSeries(sortedEntries: entries)
       )
     }
     if let snapshot { caches[ticker] = snapshot }

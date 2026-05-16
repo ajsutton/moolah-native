@@ -195,7 +195,9 @@ actor ExchangeRateService {
 
     for date in dates {
       let dateString = dateFormatter.string(from: date)
-      if let rate = caches[base]?.rates[dateString]?[quote] {
+      if let key = DateKey.from(isoString: dateString),
+        let rate = caches[base]?.rates.exact(key)?[quote]
+      {
         lastKnownRate = rate
         results.append((date, rate))
       } else if let fallback = lastKnownRate {
@@ -221,16 +223,21 @@ actor ExchangeRateService {
   // MARK: - Private helpers
 
   private func lookupRate(base: String, quote: String, dateString: String) -> Decimal? {
-    caches[base]?.rates[dateString]?[quote]
+    guard let key = DateKey.from(isoString: dateString) else { return nil }
+    return caches[base]?.rates.exact(key)?[quote]
   }
 
   private func fallbackRate(base: String, quote: String, dateString: String) -> Decimal? {
-    guard let cache = caches[base] else { return nil }
-    let sortedDates = cache.rates.keys.sorted().reversed()
-    for cachedDate in sortedDates {
-      if cachedDate <= dateString, let rate = cache.rates[cachedDate]?[quote] {
-        return rate
-      }
+    guard let key = DateKey.from(isoString: dateString),
+      let cache = caches[base]
+    else { return nil }
+    // Finds the newest day on or before `target` carrying `quote`, skipping
+    // day maps that lack it (a day map may exist without this quote) and
+    // probing older days. `floorKey` makes each hop O(log n).
+    var probe = key
+    while let dayKey = cache.rates.floorKey(probe) {
+      if let rate = cache.rates.exact(dayKey)?[quote] { return rate }
+      probe = dayKey - 1
     }
     return nil
   }
@@ -259,6 +266,7 @@ actor ExchangeRateService {
     }
   }
 
+  // internal: called from `ExchangeRateService+Prefetch.swift` and tests.
   func fetchAndMerge(base: String, from: Date, to: Date) async throws {
     let fetched = try await client.fetchRates(base: base, from: from, to: to)
     // Frankfurter (and the chunked extension call sites in this service)
@@ -286,19 +294,10 @@ actor ExchangeRateService {
     base: String, newRates: [String: [String: Decimal]]
   ) -> [ExchangeRateRecord] {
     guard !newRates.isEmpty else { return [] }
-    let sortedDates = newRates.keys.sorted()
-    guard let earliest = sortedDates.first, let latest = sortedDates.last else { return [] }
-
-    var deltaRecords: [ExchangeRateRecord] = []
+    guard let earliest = newRates.keys.min(), let latest = newRates.keys.max() else { return [] }
 
     if var existing = caches[base] {
-      for (dateKey, dayRates) in newRates {
-        let existingDayRates = existing.rates[dateKey] ?? [:]
-        for (quote, rate) in dayRates where existingDayRates[quote] != rate {
-          deltaRecords.append(rateRecord(base: base, quote: quote, date: dateKey, rate: rate))
-        }
-        existing.rates[dateKey] = dayRates
-      }
+      let deltaRecords = mergeIntoExisting(&existing, base: base, newRates: newRates)
       if earliest < existing.earliestDate {
         existing.earliestDate = earliest
       }
@@ -306,21 +305,54 @@ actor ExchangeRateService {
         existing.latestDate = latest
       }
       caches[base] = existing
-    } else {
-      caches[base] = ExchangeRateCache(
-        base: base,
-        earliestDate: earliest,
-        latestDate: latest,
-        rates: newRates
-      )
-      for (dateKey, dayRates) in newRates {
-        for (quote, rate) in dayRates {
-          deltaRecords.append(rateRecord(base: base, quote: quote, date: dateKey, rate: rate))
-        }
-      }
+      return deltaRecords
     }
 
+    let (series, deltaRecords) = buildFreshSeries(base: base, newRates: newRates)
+    caches[base] = ExchangeRateCache(
+      base: base,
+      earliestDate: earliest,
+      latestDate: latest,
+      rates: series
+    )
     return deltaRecords
+  }
+
+  /// Whole-day merge of `newRates` into an existing cache entry, returning
+  /// only the per-(date, quote) rows that actually changed. Replaces the
+  /// entire day map (no per-quote merge into the existing day).
+  private func mergeIntoExisting(
+    _ existing: inout ExchangeRateCache,
+    base: String,
+    newRates: [String: [String: Decimal]]
+  ) -> [ExchangeRateRecord] {
+    var deltaRecords: [ExchangeRateRecord] = []
+    for (dateKey, dayRates) in newRates {
+      guard let key = DateKey.from(isoString: dateKey) else { continue }  // malformed wire date — unusable as a sorted key; skip
+      let existingDayRates = existing.rates.exact(key) ?? [:]
+      for (quote, rate) in dayRates where existingDayRates[quote] != rate {
+        deltaRecords.append(rateRecord(base: base, quote: quote, date: dateKey, rate: rate))
+      }
+      existing.rates.upsert(dayRates, forKey: key)
+    }
+    return deltaRecords
+  }
+
+  /// Builds a fresh `SortedDateSeries` for a base with no existing cache
+  /// entry; every fetched (date, quote) rate is a delta row.
+  private func buildFreshSeries(
+    base: String, newRates: [String: [String: Decimal]]
+  ) -> (SortedDateSeries<[String: Decimal]>, [ExchangeRateRecord]) {
+    var series = SortedDateSeries<[String: Decimal]>()
+    var deltaRecords: [ExchangeRateRecord] = []
+    for (dateKey, dayRates) in newRates {
+      guard let key = DateKey.from(isoString: dateKey) else { continue }  // malformed wire date — unusable as a sorted key; skip
+      series.upsert(dayRates, forKey: key)
+      for (quote, rate) in dayRates {
+        deltaRecords.append(rateRecord(base: base, quote: quote, date: dateKey, rate: rate))
+      }
+    }
+    return (series, deltaRecords)
   }
 
   /// Marshalls a `(date, quote, rate)` triple into the GRDB record shape.

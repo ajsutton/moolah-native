@@ -282,7 +282,9 @@ actor CryptoPriceService {
 
     for date in dates {
       let dateString = dateFormatter.string(from: date)
-      if let price = caches[tokenId]?.prices[dateString] {
+      if let key = DateKey.from(isoString: dateString),
+        let price = caches[tokenId]?.prices.exact(key)
+      {
         lastKnownPrice = price
         results.append((date, price))
       } else if let fallback = lastKnownPrice {
@@ -339,16 +341,15 @@ actor CryptoPriceService {
 
 extension CryptoPriceService {
   private func lookupPrice(tokenId: String, dateString: String) -> Decimal? {
-    caches[tokenId]?.prices[dateString]
+    guard let key = DateKey.from(isoString: dateString) else { return nil }
+    return caches[tokenId]?.prices.exact(key)
   }
 
   private func fallbackPrice(tokenId: String, dateString: String) -> Decimal? {
-    guard let cache = caches[tokenId] else { return nil }
-    let sortedDates = cache.prices.keys.sorted().reversed()
-    for cachedDate in sortedDates where cachedDate <= dateString {
-      return cache.prices[cachedDate]
-    }
-    return nil
+    guard let key = DateKey.from(isoString: dateString),
+      let cache = caches[tokenId]
+    else { return nil }
+    return cache.prices.floor(key)
   }
 
   private func generateDateSeries(in range: ClosedRange<Date>) -> [Date] {

@@ -1,32 +1,33 @@
-// Shared/CryptoPriceService+Merge.swift
+// Shared/StockPriceService+Merge.swift
 
 import Foundation
 
-// MARK: - CryptoPriceService merge / delta computation
+// MARK: - StockPriceService merge / delta computation
 
-// In-memory merge for `CryptoPriceService`. The persistence-side companion
-// is in `CryptoPriceService+Persistence.swift`.
+// In-memory merge logic for `StockPriceService`.
 
-extension CryptoPriceService {
-  /// Merges `newPrices` into `caches[tokenId]` and returns the rows that
+extension StockPriceService {
+  /// Merges `newPrices` into `caches[ticker]` and returns the rows that
   /// actually changed so the persistence layer can `INSERT OR REPLACE`
-  /// only those (rather than rewriting every cached row for the token
-  /// on every fetch). The comparison is per-date so a fetch returning
-  /// the same prices already in cache produces an empty delta — which
-  /// the call sites use to skip the disk write entirely.
+  /// only those (rather than rewriting every cached row for the ticker
+  /// on every fetch).
+  ///
+  /// The comparison is per-date so a fetch that returns the same prices
+  /// already in cache produces an empty delta. This is what lets
+  /// `fetchAndMerge` skip the disk write on a no-op extension probe.
   func mergeReturningDelta(
-    tokenId: String, symbol: String, newPrices: [String: Decimal]
-  ) -> [CryptoPriceRecord] {
+    ticker: String, instrument: Instrument, newPrices: [String: Decimal]
+  ) -> [StockPriceRecord] {
     guard !newPrices.isEmpty else { return [] }
     guard let earliest = newPrices.keys.min(), let latest = newPrices.keys.max() else { return [] }
 
-    var deltaRecords: [CryptoPriceRecord] = []
+    var deltaRecords: [StockPriceRecord] = []
 
-    if var existing = caches[tokenId] {
+    if var existing = caches[ticker] {
       for (dateKey, price) in newPrices {
         guard let key = DateKey.from(isoString: dateKey) else { continue }  // malformed wire date — unusable as a sorted key; skip
         if existing.prices.exact(key) != price {
-          deltaRecords.append(priceRecord(tokenId: tokenId, date: dateKey, price: price))
+          deltaRecords.append(priceRecord(ticker: ticker, date: dateKey, price: price))
           existing.prices.upsert(price, forKey: key)
         }
       }
@@ -36,17 +37,17 @@ extension CryptoPriceService {
       if latest > existing.latestDate {
         existing.latestDate = latest
       }
-      caches[tokenId] = existing
+      caches[ticker] = existing
     } else {
       var series = SortedDateSeries<Decimal>()
       for (dateKey, price) in newPrices {
         guard let key = DateKey.from(isoString: dateKey) else { continue }  // malformed wire date — unusable as a sorted key; skip
         series.upsert(price, forKey: key)
-        deltaRecords.append(priceRecord(tokenId: tokenId, date: dateKey, price: price))
+        deltaRecords.append(priceRecord(ticker: ticker, date: dateKey, price: price))
       }
-      caches[tokenId] = CryptoPriceCache(
-        tokenId: tokenId,
-        symbol: symbol,
+      caches[ticker] = StockPriceCache(
+        ticker: ticker,
+        instrument: instrument,
         earliestDate: earliest,
         latestDate: latest,
         prices: series
@@ -60,11 +61,11 @@ extension CryptoPriceService {
   /// `Decimal → Double` round-trips via `NSDecimalNumber` (the same path
   /// GRDB itself takes), keeping the precision-preservation contract in
   /// sync with `loadCache`'s decode.
-  private func priceRecord(tokenId: String, date: String, price: Decimal) -> CryptoPriceRecord {
-    CryptoPriceRecord(
-      tokenId: tokenId,
+  private func priceRecord(ticker: String, date: String, price: Decimal) -> StockPriceRecord {
+    StockPriceRecord(
+      ticker: ticker,
       date: date,
-      priceUsd: NSDecimalNumber(decimal: price).doubleValue
+      price: NSDecimalNumber(decimal: price).doubleValue
     )
   }
 }

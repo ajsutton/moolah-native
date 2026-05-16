@@ -25,21 +25,34 @@ extension ExchangeRateService {
       let rateRecords =
         try ExchangeRateRecord
         .filter(ExchangeRateRecord.Columns.base == base)
+        .order(ExchangeRateRecord.Columns.date)
         .fetchAll(database)
       // Decode via the `String` form of the stored `Double` so we recover
       // the source decimal exactly (e.g. `0.581`), avoiding the precision
       // tail that `Decimal(_: Double)` would introduce
       // (`0.5810000000000001024`).
-      var rates: [String: [String: Decimal]] = [:]
+      //
+      // `.order(date)` ascending → keys appear ascending and grouped, so
+      // building `Entry` values in iteration order yields a list that is
+      // already sorted ascending with no duplicate keys, satisfying
+      // `SortedDateSeries(sortedEntries:)`'s precondition.
+      typealias Entry = SortedDateSeries<[String: Decimal]>.Entry
+      var entries: [Entry] = []
+      entries.reserveCapacity(rateRecords.count)
       for record in rateRecords {
+        guard let key = DateKey.from(isoString: record.date) else { continue }
         let value = Decimal(string: String(record.rate)) ?? Decimal(record.rate)
-        rates[record.date, default: [:]][record.quote] = value
+        if entries.last?.key == key {
+          entries[entries.count - 1].value[record.quote] = value
+        } else {
+          entries.append(Entry(key: key, value: [record.quote: value]))
+        }
       }
       return ExchangeRateCache(
         base: base,
         earliestDate: metaRecord.earliestDate,
         latestDate: metaRecord.latestDate,
-        rates: rates
+        rates: SortedDateSeries(sortedEntries: entries)
       )
     }
     if let snapshot { caches[base] = snapshot }
