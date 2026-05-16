@@ -88,6 +88,21 @@ struct ChainConfigTests {
   }
 
   @Test
+  func l1DataFeeMatchesOPStackChains() {
+    // OP-stack rollups (Optimism, Base) post calldata to Ethereum L1
+    // and charge an L1 data fee on top of L2 execution; Ethereum and
+    // Polygon do not. This invariant gates whether `makeGasLeg` adds
+    // `receipt.l1FeeWei` to the gas-leg quantity (#920).
+    let charges = Dictionary(
+      uniqueKeysWithValues: ChainConfig.all.map { ($0.chainId, $0.chargesL1DataFee) }
+    )
+    #expect(charges[1] == false)
+    #expect(charges[137] == false)
+    #expect(charges[10] == true)
+    #expect(charges[8453] == true)
+  }
+
+  @Test
   func internalTransferSupportMatchesDesignDoc() {
     // Per design open question 3: ETH and Polygon support `internal`,
     // OP and Base do not. This invariant is load-bearing for the

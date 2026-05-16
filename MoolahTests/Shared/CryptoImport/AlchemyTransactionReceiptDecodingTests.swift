@@ -32,7 +32,10 @@ struct AlchemyTransactionReceiptDecodingTests {
     // effectiveGasPrice = 0x59682f00 = 1,500,000,000 wei (1.5 gwei).
     #expect(receipt.effectiveGasPrice == Decimal(1_500_000_000))
     // 21,000 * 1,500,000,000 = 31,500,000,000,000 wei.
-    #expect(receipt.totalGasFeeWei == Decimal(31_500_000_000_000))
+    #expect(receipt.l2ExecutionFeeWei == Decimal(31_500_000_000_000))
+    // Ethereum (an L1) has no L1 data fee — the field is absent on the
+    // wire and must decode to `nil`, not `0`.
+    #expect(receipt.l1FeeWei == nil)
     #expect(receipt.from == "0x1111111111111111111111111111111111111111")
   }
 
@@ -50,8 +53,11 @@ struct AlchemyTransactionReceiptDecodingTests {
     #expect(receipt.gasUsed == Decimal(65_000))
     // effectiveGasPrice = 0xfaaa = 64,170 wei.
     #expect(receipt.effectiveGasPrice == Decimal(64_170))
-    // 65,000 * 64,170 = 4,171,050,000 wei.
-    #expect(receipt.totalGasFeeWei == Decimal(4_171_050_000))
+    // 65,000 * 64,170 = 4,171,050,000 wei (L2 execution portion only).
+    #expect(receipt.l2ExecutionFeeWei == Decimal(4_171_050_000))
+    // OP-stack receipts carry the dominant L1 data fee separately.
+    // l1Fee = 0x2540be400 = 10,000,000,000 wei.
+    #expect(receipt.l1FeeWei == Decimal(10_000_000_000))
     #expect(receipt.from == "0x1111111111111111111111111111111111111111")
   }
 
@@ -118,6 +124,35 @@ struct AlchemyTransactionReceiptDecodingTests {
     {
       _ = try await client.getTransactionReceipt(
         chain: .ethereum, hash: "0xnope")
+    }
+  }
+
+  @Test
+  func malformedHexInL1FeeMapsToProviderMalformedResponse() async throws {
+    // `l1Fee` is optional (absent on L1 chains), but a present-but-
+    // unparseable value is a malformed response — silently dropping it
+    // would re-introduce the OP-stack gas under-count (#920) rather
+    // than fail loudly.
+    let payload = Data(
+      """
+      {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "gasUsed": "0x5208",
+          "effectiveGasPrice": "0x59682f00",
+          "l1Fee": "0xZZZ",
+          "from": "0x1111111111111111111111111111111111111111"
+        }
+      }
+      """.utf8)
+    let client = AlchemyTestSupport.makeClient { request in
+      (AlchemyTestSupport.okResponse(for: request), payload)
+    }
+    await #expect(throws: WalletSyncError.providerMalformedResponse(stage: "getTransactionReceipt"))
+    {
+      _ = try await client.getTransactionReceipt(
+        chain: .optimism, hash: "0xnope")
     }
   }
 

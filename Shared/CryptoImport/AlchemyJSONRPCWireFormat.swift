@@ -169,23 +169,31 @@ enum AlchemyResponseValidator {
 }
 
 /// Wire-format payload for `eth_getTransactionReceipt`. We decode the
-/// three fields the gas-leg builder needs (`gasUsed`,
-/// `effectiveGasPrice`, `from`); everything else on the receipt is
-/// ignored.
+/// three fields the gas-leg builder always needs (`gasUsed`,
+/// `effectiveGasPrice`, `from`) plus the OP-stack `l1Fee`; everything
+/// else on the receipt is ignored.
 ///
 /// Hex parsing happens in `toReceipt(hash:)` rather than in a custom
-/// `init(from:)` so the throw-site stays close to the call. All three
-/// fields are required — the JSON-RPC spec mandates them on a non-null
-/// receipt, so a missing one is a malformed response we reject rather
-/// than silently zero out (a zero gas leg would look like a free
+/// `init(from:)` so the throw-site stays close to the call. The first
+/// three fields are required — the JSON-RPC spec mandates them on a
+/// non-null receipt, so a missing one is a malformed response we reject
+/// rather than silently zero out (a zero gas leg would look like a free
 /// transaction; a missing `from` would always fail the wallet-match
 /// check and drop legitimate gas legs).
+///
+/// `l1Fee` is OP-stack-specific and absent on L1 chains, so a missing
+/// value decodes to `nil` (normal). A *present but unparseable* `l1Fee`
+/// is rejected like the required fields — silently dropping it would
+/// re-introduce the OP-stack gas under-count (#920).
 struct AlchemyTransactionReceiptPayload: Decodable, Sendable {
   let gasUsed: String
   let effectiveGasPrice: String
   /// EOA that signed the transaction. Decoded raw; lowercased at
   /// construction so downstream comparisons stay canonical.
   let from: String
+  /// OP-stack L1 data fee as a 0x-hex string. Absent on Ethereum /
+  /// Polygon receipts (the chain has no L1 data fee).
+  let l1Fee: String?
 
   func toReceipt(hash: String) throws -> AlchemyTransactionReceipt {
     guard
@@ -194,11 +202,18 @@ struct AlchemyTransactionReceiptPayload: Decodable, Sendable {
     else {
       throw WalletSyncError.providerMalformedResponse(stage: "getTransactionReceipt")
     }
+    let l1FeeValue: Decimal? = try l1Fee.map { hex in
+      guard let parsed = HexDecimal.parse(hex) else {
+        throw WalletSyncError.providerMalformedResponse(stage: "getTransactionReceipt")
+      }
+      return parsed
+    }
     return AlchemyTransactionReceipt(
       hash: hash,
       gasUsed: gasUsedValue,
       effectiveGasPrice: effectiveGasPriceValue,
-      from: from.lowercased()
+      from: from.lowercased(),
+      l1FeeWei: l1FeeValue
     )
   }
 }
