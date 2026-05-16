@@ -8,25 +8,14 @@ import Testing
 /// that our wire-format structs (`BlockscoutTransaction`) decode correctly
 /// against live responses.
 ///
-/// # Gating mechanism
+/// # Gating
 ///
-/// Inspection of the five existing `LiveAlchemy*Tests` suites
-/// (`LiveAlchemyClientRequestTests`, `LiveAlchemyClientErrorTests`,
-/// `LiveAlchemyClientKeyProviderTests`, `LiveAlchemyClientPaginationTests`,
-/// `LiveAlchemyClientReceiptTests`) shows that **all of them are
-/// URLProtocol-stubbed** — "Live" in those names refers to the real
-/// `LiveAlchemyClient` type under test, NOT to live network calls. No
-/// env-var gate or Swift Testing `.disabled` / `.enabled(if:)` trait exists
-/// in those suites, because they never touch the network.
-///
-/// This suite IS different: it intentionally hits real public endpoints.
-/// Making it unconditional would cause CI to be flaky (network outages,
-/// rate-limits, Blockscout maintenance windows). Therefore, each test is
-/// wrapped in:
-///
-/// ```swift
-/// .enabled(if: ProcessInfo.processInfo.environment["MOOLAH_LIVE_NETWORK_TESTS"] != nil)
-/// ```
+/// The neighbouring `LiveAlchemy*` suites are URLProtocol-stubbed — "Live"
+/// there names the real `LiveAlchemyClient` type under test, not live
+/// network calls, so they need no gate. This suite intentionally hits the
+/// real public Blockscout endpoints, which would make CI flaky (outages,
+/// rate-limits, maintenance), so every test is gated behind
+/// `.enabled(if: liveNetworkEnabled)`.
 ///
 /// Default `just test` / `just test-mac` in CI do NOT set this env var, so
 /// every test in this suite is **skipped** (not failed) by default.
@@ -49,55 +38,21 @@ struct LiveBlockscoutClientNetworkTests {
 
   private static let knownWallet = "0xa4b572ea1b6f734fc88a0a004c5301f8dad54d60"
 
-  private static func makeClient() -> LiveBlockscoutClient {
+  private func makeClient() -> LiveBlockscoutClient {
+    // Blockscout public instances publish no hard rate limit; 2 req/s is a
+    // conservative, polite ceiling for a 3-chain smoke test.
     LiveBlockscoutClient(rateLimiter: RateLimiter(permitsPerSecond: 2))
   }
 
   @Test(
-    "Ethereum mainnet: nativeTransactions returns non-empty results",
-    .enabled(if: liveNetworkEnabled, "Set MOOLAH_LIVE_NETWORK_TESTS=1 to run live tests")
-  )
-  func ethereumNativeTransactionsDecodeFromLiveEndpoint() async throws {
-    let client = Self.makeClient()
+    "nativeTransactions returns non-empty 0x-hashed results per supported chain",
+    .enabled(if: liveNetworkEnabled, "Set MOOLAH_LIVE_NETWORK_TESTS=1 to run live tests"),
+    arguments: [ChainConfig.ethereum, ChainConfig.optimism, ChainConfig.base])
+  func nativeTransactionsDecodeFromLiveEndpoint(chain: ChainConfig) async throws {
+    let client = makeClient()
     let txs = try await client.nativeTransactions(
-      chain: .ethereum,
-      walletAddress: Self.knownWallet,
-      fromBlock: 0
-    )
-    #expect(!txs.isEmpty, "Expected at least one tx from known-active Ethereum wallet")
-    let hashes = txs.map(\.hash)
-    #expect(hashes.allSatisfy { $0.hasPrefix("0x") }, "All hashes should be 0x-prefixed")
-  }
-
-  @Test(
-    "OP Mainnet: nativeTransactions returns non-empty results",
-    .enabled(if: liveNetworkEnabled, "Set MOOLAH_LIVE_NETWORK_TESTS=1 to run live tests")
-  )
-  func optimismNativeTransactionsDecodeFromLiveEndpoint() async throws {
-    let client = Self.makeClient()
-    let txs = try await client.nativeTransactions(
-      chain: .optimism,
-      walletAddress: Self.knownWallet,
-      fromBlock: 0
-    )
-    #expect(!txs.isEmpty, "Expected at least one tx from known-active OP Mainnet wallet")
-    let hashes = txs.map(\.hash)
-    #expect(hashes.allSatisfy { $0.hasPrefix("0x") }, "All hashes should be 0x-prefixed")
-  }
-
-  @Test(
-    "Base: nativeTransactions returns non-empty results",
-    .enabled(if: liveNetworkEnabled, "Set MOOLAH_LIVE_NETWORK_TESTS=1 to run live tests")
-  )
-  func baseNativeTransactionsDecodeFromLiveEndpoint() async throws {
-    let client = Self.makeClient()
-    let txs = try await client.nativeTransactions(
-      chain: .base,
-      walletAddress: Self.knownWallet,
-      fromBlock: 0
-    )
-    #expect(!txs.isEmpty, "Expected at least one tx from known-active Base wallet")
-    let hashes = txs.map(\.hash)
-    #expect(hashes.allSatisfy { $0.hasPrefix("0x") }, "All hashes should be 0x-prefixed")
+      chain: chain, walletAddress: Self.knownWallet, fromBlock: 0)
+    #expect(!txs.isEmpty, "Expected ≥1 tx from the known-active wallet on chain \(chain.chainId)")
+    #expect(txs.map(\.hash).allSatisfy { $0.hasPrefix("0x") }, "All hashes should be 0x-prefixed")
   }
 }
