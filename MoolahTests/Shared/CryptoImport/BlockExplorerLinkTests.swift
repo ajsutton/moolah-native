@@ -6,8 +6,8 @@ import Testing
 
 /// URL-builder contract tests for `BlockExplorerLink`. Asserts the exact
 /// canonical form per chain (Etherscan / Optimistic Etherscan / BaseScan)
-/// and the `nil` defensive return for unsupported chains (including Polygon,
-/// which was removed from `ChainConfig` because it has no public Blockscout).
+/// and the `nil` defensive return for unsupported chains. Polygon (chain 137)
+/// is unsupported — it has no first-party public Blockscout instance.
 @Suite("BlockExplorerLink")
 struct BlockExplorerLinkTests {
   /// 32-byte tx hash (64 hex chars + `0x` prefix). Reused so the
@@ -36,7 +36,7 @@ struct BlockExplorerLinkTests {
     #expect(url?.absoluteString == "https://basescan.org/tx/\(Self.txHash)")
   }
 
-  @Test("Polygon (chain 137) transaction URL is nil — Polygon removed from ChainConfig")
+  @Test("Polygon (chain 137) transaction URL is nil — no public Blockscout instance")
   func polygonTransactionURLIsNil() {
     let url = BlockExplorerLink.transactionURL(chainId: 137, hash: Self.txHash)
     #expect(url == nil)
@@ -45,7 +45,6 @@ struct BlockExplorerLinkTests {
   @Test("Unknown chain id returns nil for transactionURL")
   func unknownChainTransactionURLIsNil() {
     #expect(BlockExplorerLink.transactionURL(chainId: 0, hash: Self.txHash) == nil)
-    #expect(BlockExplorerLink.transactionURL(chainId: 137, hash: Self.txHash) == nil)  // Polygon removed
     #expect(BlockExplorerLink.transactionURL(chainId: 42_161, hash: Self.txHash) == nil)
     #expect(BlockExplorerLink.transactionURL(chainId: 999_999, hash: Self.txHash) == nil)
   }
@@ -70,7 +69,7 @@ struct BlockExplorerLinkTests {
     #expect(url?.absoluteString == "https://basescan.org/address/\(Self.address)")
   }
 
-  @Test("Polygon (chain 137) address URL is nil — Polygon removed from ChainConfig")
+  @Test("Polygon (chain 137) address URL is nil — no public Blockscout instance")
   func polygonAddressURLIsNil() {
     let url = BlockExplorerLink.addressURL(chainId: 137, address: Self.address)
     #expect(url == nil)
@@ -79,7 +78,6 @@ struct BlockExplorerLinkTests {
   @Test("Unknown chain id returns nil for addressURL")
   func unknownChainAddressURLIsNil() {
     #expect(BlockExplorerLink.addressURL(chainId: 0, address: Self.address) == nil)
-    #expect(BlockExplorerLink.addressURL(chainId: 137, address: Self.address) == nil)  // Polygon removed
     #expect(BlockExplorerLink.addressURL(chainId: 42_161, address: Self.address) == nil)
   }
 

@@ -48,7 +48,7 @@ struct ChainConfigTests {
   }
 
   @Test
-  func allChainsAreUniqueAndPolygonRemoved() {
+  func allChainsAreUniqueAndComplete() {
     let chainIds = ChainConfig.all.map(\.chainId)
     #expect(Set(chainIds).count == chainIds.count)
     #expect(chainIds == [1, 10, 8453])
@@ -64,7 +64,7 @@ struct ChainConfigTests {
   @Test
   func lookupByIdReturnsNilForUnsupportedChain() {
     #expect(ChainConfig.config(for: 0) == nil)
-    #expect(ChainConfig.config(for: 137) == nil)  // Polygon — removed (no public Blockscout)
+    #expect(ChainConfig.config(for: 137) == nil)  // Polygon (no public Blockscout — unsupported)
     #expect(ChainConfig.config(for: 42_161) == nil)  // Arbitrum, not yet supported
     #expect(ChainConfig.config(for: 999_999) == nil)
   }
@@ -80,13 +80,13 @@ struct ChainConfigTests {
   @Test
   func internalTransferSupportMatchesDesignDoc() {
     // Per design open question 3: ETH supports `internal`, OP and Base do not.
-    // Polygon is removed from ChainConfig (no public Blockscout instance).
+    // Polygon (chain 137) has no public Blockscout instance and is not a supported chain.
     let supports = Dictionary(
       uniqueKeysWithValues: ChainConfig.all.map { ($0.chainId, $0.supportsInternalTransfers) }
     )
     #expect(supports[1] == true)
     #expect(supports[10] == false)
     #expect(supports[8453] == false)
-    #expect(supports[137] == nil)  // Polygon removed
+    #expect(supports[137] == nil)  // Polygon (no public Blockscout — unsupported)
   }
 }
