@@ -11,59 +11,8 @@ import Testing
 /// store is the only seam — the happy path uses a real
 /// `ExchangeTokenStore(synchronizable: false)` (device-local keychain,
 /// no entitlement) so token round-tripping is genuinely exercised; the
-/// rollback test injects a save-throwing double.
-/// Scaffolding (no existing equivalent): an in-memory backend giving an
-/// `AccountStore` + its `repository`, a token store (real device-local
-/// `ExchangeTokenStore`, or a save-throwing double when
-/// `failingTokenStore: true`), and an optional `SyncedAccountStore`.
-/// File-scoped (not nested) to stay within SwiftLint's 1-level nesting.
-@MainActor
-private struct ExchangeCreationHarness {
-  let accountStore: AccountStore
-  let tokenStore: any ExchangeTokenStoring
-  let syncStore: SyncedAccountStore?
-  /// The real device-local store, when used, so the suite can clear
-  /// keychain rows after each test.
-  private let realTokenStore: ExchangeTokenStore?
-
-  init(failingTokenStore: Bool = false) throws {
-    let (backend, _) = try TestBackend.create()
-    accountStore = AccountStore(
-      repository: backend.accounts,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument)
-    if failingTokenStore {
-      tokenStore = FailingExchangeTokenStore()
-      realTokenStore = nil
-    } else {
-      let store = ExchangeTokenStore(synchronizable: false)
-      tokenStore = store
-      realTokenStore = store
-    }
-    syncStore = nil
-  }
-
-  func cleanUp(accountId: UUID) {
-    realTokenStore?.delete(for: accountId)
-  }
-}
-
-/// Save-throwing token-store double — proves the rollback path deletes
-/// the just-created account so no "missing token" orphan is left.
-private struct FailingExchangeTokenStore: ExchangeTokenStoring {
-  func save(token: String, for accountId: UUID) throws {
-    throw FailingExchangeTokenStoreError.saveFailed
-  }
-
-  func token(for accountId: UUID) throws -> String? { nil }
-
-  func delete(for accountId: UUID) {}
-}
-
-private enum FailingExchangeTokenStoreError: Error {
-  case saveFailed
-}
-
+/// rollback test injects a save-throwing double. Scaffolding is the
+/// shared `ExchangeCreationHarness`.
 @Suite("ExchangeAccountCreationLogic — submit")
 @MainActor
 struct ExchangeAccountCreationLogicTests {
@@ -83,7 +32,7 @@ struct ExchangeAccountCreationLogicTests {
       Issue.record("expected .created, got \(outcome)")
       return
     }
-    defer { harness.cleanUp(accountId: account.id) }
+    defer { harness.cleanUpKeychain(for: account.id) }
     #expect(account.type == .exchange)
     #expect(account.exchangeProvider == .coinstash)
     #expect(account.instrument == .defaultTestInstrument)

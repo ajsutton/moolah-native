@@ -232,12 +232,14 @@ struct EditAccountView: View {
           "Exchange",
           value: account.exchangeProvider?.displayName ?? "—")
         SecureField("New token", text: $replacementToken)
+          .textContentType(.password)
           .accessibilityLabel("Replace API token")
+          .accessibilityHint("Leave blank to keep the existing token")
           .accessibilityIdentifier(
             UITestIdentifiers.EditAccount.exchangeAccessTokenField)
       } footer: {
-        // Plain Text (every other footer in this file is Text; no icon).
-        // No .foregroundStyle(.secondary) — footers are already secondary.
+        // Footer: plain Text, no .foregroundStyle — grouped-Form footers
+        // are already secondary.
         Text(
           "Enter a new read-only token to replace the stored one. "
             + "Leave blank to keep the existing token.")
@@ -272,9 +274,9 @@ struct EditAccountView: View {
       // way `CreateAccountView.submitExchange` and `ProfileSession` do
       // (iCloud-synced keychain). A blank field is a no-op.
       try EditExchangeTokenLogic.applyTokenChange(
-        newToken: replacementToken,
-        accountId: account.id,
-        tokenStore: ExchangeTokenStore(synchronizable: true))
+        token: replacementToken,
+        for: account.id,
+        using: ExchangeTokenStore(synchronizable: true))
       _ = try await accountStore.update(updated)
       dismiss()
     } catch {
@@ -332,6 +334,18 @@ private func makePreviewView(account: Account) -> some View {
       instrument: .AUD,
       valuationMode: .calculatedFromTrades,
       exchangeProvider: .coinstash))
+}
+
+#Preview("Exchange account (replace-token section, Accessibility3)") {
+  makePreviewView(
+    account: Account(
+      name: "My Coinstash",
+      type: .exchange,
+      instrument: .AUD,
+      valuationMode: .calculatedFromTrades,
+      exchangeProvider: .coinstash)
+  )
+  .dynamicTypeSize(.accessibility3)
 }
 
 /// Wrapper that imitates the section structure used by
