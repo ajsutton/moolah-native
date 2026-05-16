@@ -11,10 +11,3 @@ struct BuildContext: Sendable {
   let discovery: CryptoTokenDiscoveryService
   let importOrigin: ImportOrigin
 }
-
-/// Result of mapping a transfer's direction onto a leg's sign + the
-/// other-party address.
-struct SignAndCounterparty {
-  let signedQuantity: Decimal
-  let counterpartyAddress: String?
-}

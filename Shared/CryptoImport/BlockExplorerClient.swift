@@ -41,8 +41,9 @@ struct LiveBlockscoutClient: Sendable {
 
   // MARK: - Internals
 
-  /// Bundles the page-type-specific callbacks for `paginate(_:config:)` so
-  /// the generic method stays under the 5-parameter SwiftLint threshold.
+  // Per-endpoint configuration for the generic Blockscout cursor-loop paginator: the URL path
+  // suffix, log-stage tag, page decoder, item accessor, cursor extractor, and per-item
+  // block-number accessor for one paginated Blockscout endpoint.
   private struct PaginateConfig<Page, Item> {
     let pathSuffix: String
     let stage: String

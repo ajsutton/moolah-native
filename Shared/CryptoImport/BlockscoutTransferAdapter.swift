@@ -95,8 +95,9 @@ enum BlockscoutTransferAdapter {
 
   // MARK: - Internals
 
-  /// Bundles the transfer-identity fields for `makeTransfer` so it stays
-  /// within the 5-parameter SwiftLint threshold.
+  // Identity fields of a Blockscout transfer event — the tx hash, Alchemy-format uniqueId,
+  // category, and from/to counterparties — held separately from the transfer's value and
+  // block-location fields.
   private struct TransferIdentity {
     let hash: String
     let uniqueId: String

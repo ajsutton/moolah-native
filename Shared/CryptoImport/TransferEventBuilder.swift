@@ -113,7 +113,7 @@ struct TransferEventBuilder: Sendable {
       discovery: services.discovery,
       importOrigin: importOrigin)
     try await Self.preregisterChainNativeInstrument(chain: chain, discovery: services.discovery)
-    return try await buildCore(
+    return try await buildTransactions(
       transfers: transfers,
       signedGasTxs: signedGasTxs,
       context: context,
@@ -122,6 +122,7 @@ struct TransferEventBuilder: Sendable {
 
   // MARK: - Internals
 
+  // internal for TransferEventBuilder+GasOnly.swift; not general API
   /// Groups transfers by `hash` while preserving first-seen order so the
   /// emitted `[BuiltTransaction]` is stable across runs (helps with
   /// signpost tracing and snapshot assertions in tests). Each event in a
@@ -139,6 +140,7 @@ struct TransferEventBuilder: Sendable {
     return order.compactMap { buckets[$0] }
   }
 
+  // internal for TransferEventBuilder+GasOnly.swift; not general API
   /// Builds one `BuiltTransaction` from a hash group, or returns `nil`
   /// when the group produces no usable legs (every transfer was unknown
   /// category or malformed). Per-event legs are passed through
@@ -353,4 +355,11 @@ struct TransferEventBuilder: Sendable {
     return rawDecimalValue / Decimal(sign: .plus, exponent: decimals, significand: 1)
   }
 
+}
+
+/// Result of mapping a transfer's direction onto a leg's sign + the
+/// other-party address.
+private struct SignAndCounterparty {
+  let signedQuantity: Decimal
+  let counterpartyAddress: String?
 }
