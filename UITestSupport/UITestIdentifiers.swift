@@ -243,6 +243,18 @@ public enum UITestIdentifiers {
     public static let walletAddressField = "createAccount.crypto.walletAddress"
   }
 
+  public enum ExchangeAccountCreation {
+    /// Provider picker (currently Coinstash) inside the exchange branch
+    /// of `CreateAccountView`. Pinned so a UI test can switch providers
+    /// without depending on rendered display names.
+    public static let providerPicker = "ExchangeAccountCreation.providerPicker"
+
+    /// Read-only API-token `SecureField` inside the exchange branch of
+    /// `CreateAccountView`. The user pastes their provider token here;
+    /// it is persisted to the keychain via `ExchangeTokenStore`.
+    public static let accessTokenField = "ExchangeAccountCreation.accessTokenField"
+  }
+
   public enum CreateCategory {
     /// Parent-category autocomplete field in the create-category sheet
     /// reached from the Categories list "+". Pinned so a future UI test
