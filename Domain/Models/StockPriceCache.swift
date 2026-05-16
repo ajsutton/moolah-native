@@ -7,5 +7,5 @@ struct StockPriceCache: Codable, Sendable, Equatable {
   let instrument: Instrument  // denomination discovered from API (e.g. .AUD)
   var earliestDate: String  // ISO date string "YYYY-MM-DD"
   var latestDate: String  // ISO date string "YYYY-MM-DD"
-  var prices: [String: Decimal]  // date string -> adjusted close price
+  var prices: SortedDateSeries<Decimal>  // DateKey -> adjusted close price
 }
