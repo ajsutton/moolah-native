@@ -165,6 +165,7 @@ final class CryptoSyncBenchmarks: XCTestCase {
       registry: registry, resolver: resolver, alchemy: alchemy)
     let walletSyncEngine = WalletSyncEngine(
       alchemy: alchemy,
+      blockExplorer: EmptyBlockExplorerStub(),
       discovery: discovery,
       walletSyncState: backend.walletSyncState,
       importOriginFactory: { accountId in
@@ -287,3 +288,15 @@ final class CryptoSyncBenchmarks: XCTestCase {
 
 // Benchmark wallets, fixtures and scripted Alchemy / resolver stubs live
 // in `CryptoSyncBenchmarkSupport.swift`.
+
+/// No-op `BlockExplorerClient` for benchmarks that only measure the
+/// Alchemy-path work. Returns empty lists so the engine's Blockscout
+/// path adds no network variance to the measured pipeline work.
+private struct EmptyBlockExplorerStub: BlockExplorerClient {
+  func nativeTransactions(
+    chain: ChainConfig, walletAddress: String, fromBlock: UInt64
+  ) async throws -> [BlockscoutTransaction] { [] }
+  func internalTransactions(
+    chain: ChainConfig, walletAddress: String, fromBlock: UInt64
+  ) async throws -> [BlockscoutInternalTx] { [] }
+}

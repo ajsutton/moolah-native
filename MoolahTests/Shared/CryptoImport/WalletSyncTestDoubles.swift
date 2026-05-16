@@ -300,6 +300,52 @@ func makeCryptoAccount(
     chainId: chain.chainId)
 }
 
+/// Scriptable `BlockExplorerClient` stub. Mirrors
+/// `RecordingAlchemyClientStub`'s lock-protected `@unchecked Sendable`
+/// shape. Defaults to empty results so engine tests that don't care
+/// about Blockscout compile and exercise the Alchemy-only shape.
+final class RecordingBlockExplorerClientStub: BlockExplorerClient, @unchecked Sendable {
+  enum NativeResponse: Sendable {
+    case txs([BlockscoutTransaction])
+    case failure(any Error)
+  }
+  enum InternalResponse: Sendable {
+    case txs([BlockscoutInternalTx])
+    case failure(any Error)
+  }
+
+  private let lock = NSLock()
+  private var native: NativeResponse = .txs([])
+  private var internalTx: InternalResponse = .txs([])
+
+  func setNative(_ response: NativeResponse) { lock.withLock { self.native = response } }
+  func setInternal(_ response: InternalResponse) { lock.withLock { self.internalTx = response } }
+
+  func nativeTransactions(
+    chain: ChainConfig, walletAddress: String, fromBlock: UInt64
+  ) async throws -> [BlockscoutTransaction] {
+    switch lock.withLock({ native }) {
+    case .txs(let txs): return txs
+    case .failure(let error): throw error
+    }
+  }
+
+  func internalTransactions(
+    chain: ChainConfig, walletAddress: String, fromBlock: UInt64
+  ) async throws -> [BlockscoutInternalTx] {
+    switch lock.withLock({ internalTx }) {
+    case .txs(let txs): return txs
+    case .failure(let error): throw error
+    }
+  }
+}
+
+/// Shared empty Blockscout stub for engine-construction sites that
+/// don't exercise the Blockscout path.
+enum BlockExplorerTestDoubles {
+  static var empty: RecordingBlockExplorerClientStub { RecordingBlockExplorerClientStub() }
+}
+
 /// Records every `merge(...)` invocation and delegates to a live merger
 /// so the produced output is real. Used by the structural test that
 /// asserts the apply pass calls the merger exactly once after the

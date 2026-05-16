@@ -32,6 +32,7 @@ struct WalletSyncBuildResult: Sendable, Hashable {
 /// build phase.
 struct WalletSyncEngine: Sendable {
   private let alchemy: any AlchemyClient
+  private let blockExplorer: any BlockExplorerClient
   private let discovery: CryptoTokenDiscoveryService
   private let walletSyncState: any WalletSyncStateRepository
   private let importOriginFactory: @Sendable (UUID) -> ImportOrigin
@@ -53,11 +54,13 @@ struct WalletSyncEngine: Sendable {
   ///     the per-cycle session id; tests pass a deterministic factory.
   init(
     alchemy: any AlchemyClient,
+    blockExplorer: any BlockExplorerClient,
     discovery: CryptoTokenDiscoveryService,
     walletSyncState: any WalletSyncStateRepository,
     importOriginFactory: @Sendable @escaping (UUID) -> ImportOrigin
   ) {
     self.alchemy = alchemy
+    self.blockExplorer = blockExplorer
     self.discovery = discovery
     self.walletSyncState = walletSyncState
     self.importOriginFactory = importOriginFactory
@@ -95,17 +98,22 @@ struct WalletSyncEngine: Sendable {
     let priorBlock = state?.lastSyncedBlockNumber ?? 0
     let fromBlock = state.map { Self.subtractingReorgWindow($0.lastSyncedBlockNumber) } ?? 0
 
-    // 3. Fetch transfers (rate-limited inside AlchemyClient).
+    // 3. Native + internal ETH from Blockscout (authoritative tx index;
+    //    sees approve()/failed/zero-movement #919 and OP-stack internal
+    //    transfers #918). A failure here is a sync error for this
+    //    account — it propagates to CryptoSyncStore's persistError.
     try Task.checkCancellation()
-    let transfers = try await alchemy.getAssetTransfers(
+    let adapted = try await fetchBlockscout(
       chain: chain, walletAddress: walletAddress, fromBlock: fromBlock)
+
+    // 3b. ERC-20 only from Alchemy — Blockscout owns native/internal.
+    try Task.checkCancellation()
+    let alchemyAll = try await alchemy.getAssetTransfers(
+      chain: chain, walletAddress: walletAddress, fromBlock: fromBlock)
+    let transfers = adapted.transfers + alchemyAll.filter { $0.category == .erc20 }
     try Task.checkCancellation()
 
-    // 4. Compute head block from raw transfers before discovery — once
-    //    Alchemy has acknowledged the fetch we know the watermark even
-    //    if discovery cancels mid-build. Falls back to the prior
-    //    checkpoint when Alchemy returns no rows so the next cycle's
-    //    reorg-window math advances exactly once.
+    // 4. Head block over the merged set (Blockscout blockNum included).
     let headBlock = Self.maxBlockNumber(in: transfers) ?? priorBlock
 
     // 5. Build candidates. Discovery actor handles its own coalescing;
@@ -117,7 +125,8 @@ struct WalletSyncEngine: Sendable {
       account: account,
       services: BuilderServices(
         chain: chain, discovery: discovery, alchemy: alchemy),
-      importOrigin: importOrigin)
+      importOrigin: importOrigin,
+      signedGasTxs: adapted.signedGasTxs)
 
     // 6. Observability for wire-format regressions: if Alchemy returned
     //    rows but every one dropped at the builder, that's the symptom
@@ -138,6 +147,24 @@ struct WalletSyncEngine: Sendable {
       )
     }
     return WalletSyncBuildResult(candidates: built, headBlockNumber: headBlock)
+  }
+
+  /// Fetches native and internal ETH from Blockscout and normalises the
+  /// result via `BlockscoutTransferAdapter`. Extracted so `build` stays
+  /// within the SwiftLint `function_body_length` budget.
+  private func fetchBlockscout(
+    chain: ChainConfig,
+    walletAddress: String,
+    fromBlock: UInt64
+  ) async throws -> BlockscoutAdaptResult {
+    let native = try await blockExplorer.nativeTransactions(
+      chain: chain, walletAddress: walletAddress, fromBlock: fromBlock)
+    let internalTxs = try await blockExplorer.internalTransactions(
+      chain: chain, walletAddress: walletAddress, fromBlock: fromBlock)
+    return BlockscoutTransferAdapter.adapt(
+      nativeTxs: native,
+      internalTxs: internalTxs,
+      walletAddress: walletAddress.lowercased())
   }
 
   /// Per design: re-fetch covers `[lastSyncedBlockNumber - 32, head]`.

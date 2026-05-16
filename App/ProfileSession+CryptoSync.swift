@@ -80,8 +80,12 @@ extension ProfileSession {
         importSessionId: UUID(),
         parserIdentifier: "alchemy-wallet-sync")
     }
+    let blockscoutRateLimiter = RateLimiter(permitsPerSecond: 5)
+    let blockExplorer: any BlockExplorerClient = LiveBlockscoutClient(
+      rateLimiter: blockscoutRateLimiter)
     let walletSyncEngine = WalletSyncEngine(
       alchemy: alchemy,
+      blockExplorer: blockExplorer,
       discovery: discovery,
       walletSyncState: backend.walletSyncState,
       importOriginFactory: importOriginFactory)

@@ -41,6 +41,7 @@ struct CryptoAccountCreationStoreTests {
       alchemy: alchemy)
     let walletSyncEngine = WalletSyncEngine(
       alchemy: alchemy,
+      blockExplorer: BlockExplorerTestDoubles.empty,
       discovery: discovery,
       walletSyncState: backend.walletSyncState,
       importOriginFactory: { accountId in
