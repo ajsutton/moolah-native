@@ -151,8 +151,11 @@ final class RecordingAlchemyClientStub: AlchemyClient, @unchecked Sendable {
 final class RecordingWalletSyncStateRepository: WalletSyncStateRepository, @unchecked Sendable {
   private let lock = NSLock()
   private var seeded: [UUID: WalletSyncState] = [:]
-  private(set) var saveCount: Int = 0
-  private(set) var deleteCount: Int = 0
+  private var _saveCount: Int = 0
+  private var _deleteCount: Int = 0
+
+  var saveCount: Int { lock.withLock { _saveCount } }
+  var deleteCount: Int { lock.withLock { _deleteCount } }
 
   func seed(_ state: WalletSyncState) {
     lock.withLock { seeded[state.id] = state }
@@ -168,14 +171,14 @@ final class RecordingWalletSyncStateRepository: WalletSyncStateRepository, @unch
 
   func save(_ state: WalletSyncState) async throws {
     lock.withLock {
-      saveCount += 1
+      _saveCount += 1
       seeded[state.id] = state
     }
   }
 
   func delete(accountId: UUID) async throws {
     lock.withLock {
-      deleteCount += 1
+      _deleteCount += 1
       seeded[accountId] = nil
     }
   }
@@ -300,38 +303,87 @@ func makeCryptoAccount(
     chainId: chain.chainId)
 }
 
-/// Records every `merge(...)` invocation and delegates to a live merger
-/// so the produced output is real. Used by the structural test that
-/// asserts the apply pass calls the merger exactly once after the
-/// parallel build TaskGroup completes — i.e. with the union of every
-/// participating account's candidates, not once-per-account with
-/// partial input.
-final class RecordingCrossAccountTransferMerger:
-  CrossAccountTransferMerger, @unchecked Sendable
-{
-  struct Invocation: Sendable {
-    let candidates: [BuiltTransaction]
+/// Scriptable, recording `BlockExplorerClient` stub. Provides the same
+/// lock-discipline as `RecordingAlchemyClientStub`: all mutable state
+/// lives behind an `NSLock` so `@unchecked Sendable` is safe even under
+/// Swift Testing's parallel-suite execution. Defaults to empty results so
+/// engine tests that don't exercise Blockscout compile and run without any
+/// extra setup.
+final class RecordingBlockExplorerClientStub: BlockExplorerClient, @unchecked Sendable {
+  struct BlockExplorerCall: Sendable, Hashable {
+    let chainId: Int
+    let walletAddress: String
+    let fromBlock: UInt64
+  }
+
+  enum NativeResponse: Sendable {
+    case txs([BlockscoutTransaction])
+    case failure(any Error)
+  }
+  enum InternalResponse: Sendable {
+    case txs([BlockscoutInternalTx])
+    case failure(any Error)
   }
 
   private let lock = NSLock()
-  private var invocationsBacking: [Invocation] = []
-  private let inner: any CrossAccountTransferMerger
+  private var native: NativeResponse = .txs([])
+  private var internalTx: InternalResponse = .txs([])
+  private var nativeCalls: [BlockExplorerCall] = []
+  private var internalCalls: [BlockExplorerCall] = []
 
-  init(delegateTo inner: any CrossAccountTransferMerger = LiveCrossAccountTransferMerger()) {
-    self.inner = inner
+  func setNative(_ response: NativeResponse) { lock.withLock { self.native = response } }
+  func setInternal(_ response: InternalResponse) { lock.withLock { self.internalTx = response } }
+
+  var recordedNativeCalls: [BlockExplorerCall] {
+    lock.withLock { nativeCalls }
   }
 
-  var invocations: [Invocation] {
-    lock.withLock { invocationsBacking }
+  var recordedInternalCalls: [BlockExplorerCall] {
+    lock.withLock { internalCalls }
   }
 
-  func merge(
-    candidates: [BuiltTransaction],
-    existingLegLookup: @Sendable (_ externalId: String) async throws -> [TransactionLeg]
-  ) async throws -> [BuiltTransaction] {
-    lock.withLock {
-      invocationsBacking.append(Invocation(candidates: candidates))
+  func nativeTransactions(
+    chain: ChainConfig, walletAddress: String, fromBlock: UInt64
+  ) async throws -> [BlockscoutTransaction] {
+    let response = lock.withLock { () -> NativeResponse in
+      nativeCalls.append(
+        BlockExplorerCall(
+          chainId: chain.chainId,
+          walletAddress: walletAddress,
+          fromBlock: fromBlock))
+      return native
     }
-    return try await inner.merge(candidates: candidates, existingLegLookup: existingLegLookup)
+    switch response {
+    case .txs(let txs): return txs
+    case .failure(let error): throw error
+    }
   }
+
+  func internalTransactions(
+    chain: ChainConfig, walletAddress: String, fromBlock: UInt64
+  ) async throws -> [BlockscoutInternalTx] {
+    let response = lock.withLock { () -> InternalResponse in
+      internalCalls.append(
+        BlockExplorerCall(
+          chainId: chain.chainId,
+          walletAddress: walletAddress,
+          fromBlock: fromBlock))
+      return internalTx
+    }
+    switch response {
+    case .txs(let txs): return txs
+    case .failure(let error): throw error
+    }
+  }
+}
+
+/// Shared empty Blockscout stub for engine-construction sites that
+/// don't exercise the Blockscout path.
+///
+/// Returns a **fresh** `RecordingBlockExplorerClientStub` on every access.
+/// Tests that need to observe recorded calls must capture the instance before
+/// passing it to the engine — asserting on `BlockExplorerTestDoubles.empty`
+/// directly would always see an empty call list (a different instance).
+enum BlockExplorerTestDoubles {
+  static var empty: RecordingBlockExplorerClientStub { RecordingBlockExplorerClientStub() }
 }

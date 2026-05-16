@@ -7,7 +7,9 @@ import Testing
 @Suite("LiveAlchemyClient — request shape")
 struct LiveAlchemyClientRequestTests {
   @Test
-  func ethereumRequestUsesEthMainnetSlugAndIncludesInternalCategory() async throws {
+  func ethereumRequestUsesEthMainnetSlugAndExcludesInternalCategory() async throws {
+    // Blockscout owns internal ETH for all supported chains, including Ethereum;
+    // the Alchemy `internal` category is not requested even for chain 1.
     let fixture = try AlchemyTestSupport.loadFixture("eth-simple-eth-send")
     let client = AlchemyTestSupport.makeClient { request in
       AlchemyURLProtocolStub.captureRequest(request)
@@ -32,7 +34,7 @@ struct LiveAlchemyClientRequestTests {
     let categories = try #require(params["category"] as? [String])
     #expect(categories.contains("external"))
     #expect(categories.contains("erc20"))
-    #expect(categories.contains("internal"))
+    #expect(categories.contains("internal") == false)
   }
 
   @Test
@@ -72,24 +74,6 @@ struct LiveAlchemyClientRequestTests {
     let paramsArray = try #require(body["params"] as? [[String: Any]])
     let categories = try #require(paramsArray.first?["category"] as? [String])
     #expect(categories.contains("internal") == false)
-  }
-
-  @Test
-  func polygonRequestUsesPolygonSlugAndIncludesInternal() async throws {
-    let fixture = try AlchemyTestSupport.loadFixture("polygon-spam-airdrop")
-    let client = AlchemyTestSupport.makeClient { request in
-      AlchemyURLProtocolStub.captureRequest(request)
-      return (AlchemyTestSupport.okResponse(for: request), fixture)
-    }
-    _ = try await client.getAssetTransfers(
-      chain: .polygon, walletAddress: "0xdef", fromBlock: 0
-    )
-    let url = try #require(AlchemyURLProtocolStub.lastRequest?.url)
-    #expect(url.host == "polygon-mainnet.g.alchemy.com")
-    let body = AlchemyURLProtocolStub.lastBodyJSON
-    let paramsArray = try #require(body["params"] as? [[String: Any]])
-    let categories = try #require(paramsArray.first?["category"] as? [String])
-    #expect(categories.contains("internal"))
   }
 
   @Test

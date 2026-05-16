@@ -11,8 +11,9 @@ protocol AlchemyClient: Sendable {
   /// in two passes: `fromAddress = walletAddress` and
   /// `toAddress = walletAddress`. Categories include `external` and
   /// `erc20` always; `internal` is included only when
-  /// `chain.supportsInternalTransfers` is `true`. NFT categories are
-  /// always excluded at the request level.
+  /// `chain.supportsInternalTransfers` is `true` (currently no supported
+  /// chain — Blockscout owns internal ETH on all of them). NFT categories
+  /// are always excluded at the request level.
   func getAssetTransfers(
     chain: ChainConfig,
     walletAddress: String,

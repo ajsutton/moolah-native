@@ -40,12 +40,15 @@ extension ProfileSession {
   ///
   /// - `RateLimiter(permitsPerSecond: 25)` matching Alchemy's free-tier
   ///   ceiling (design §"Concurrency model").
+  /// - `RateLimiter(permitsPerSecond: 5)` for Blockscout public
+  ///   unauthenticated tier (~5 req/s per IP).
   /// - `LiveAlchemyClient` — same shape as `Backends/CoinGecko/CoinGeckoClient`.
+  /// - `LiveBlockscoutClient` — authoritative native + internal ETH index.
   /// - `CryptoTokenDiscoveryService` — actor-coalesced registry resolver.
   /// - `WalletSyncEngine` — Stage 6's read-only build orchestrator.
-  /// - `WalletApplyEngine` — Stage 7's `@MainActor` apply pass with the
-  ///   shipping `NoOpWalletImportRulesEngine`. The richer rules pass
-  ///   lands alongside the wallet rules UI in a follow-up.
+  /// - `WalletApplyEngine` — `@MainActor` apply pass with the shipping
+  ///   `NoOpWalletImportRulesEngine`; the richer rules engine is not yet
+  ///   wired.
   ///
   /// The keychain read is best-effort: the live `LiveAlchemyClient` is
   /// constructed even when the key is missing or empty so the build
@@ -80,8 +83,13 @@ extension ProfileSession {
         importSessionId: UUID(),
         parserIdentifier: "alchemy-wallet-sync")
     }
+    // Blockscout public unauthenticated tier: ~5 req/s per IP.
+    let blockscoutRateLimiter = RateLimiter(permitsPerSecond: 5)
+    let blockExplorer: any BlockExplorerClient = LiveBlockscoutClient(
+      rateLimiter: blockscoutRateLimiter)
     let walletSyncEngine = WalletSyncEngine(
       alchemy: alchemy,
+      blockExplorer: blockExplorer,
       discovery: discovery,
       walletSyncState: backend.walletSyncState,
       importOriginFactory: importOriginFactory)

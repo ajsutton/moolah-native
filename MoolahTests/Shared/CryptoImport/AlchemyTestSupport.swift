@@ -181,6 +181,9 @@ final class TestCallRecorder: @unchecked Sendable {
       bodies.append(decodeJSON(from: readAll(stream: stream)))
     } else if let data = request.httpBody {
       bodies.append(decodeJSON(from: data))
+    } else {
+      // Bodyless request (e.g. GET) — record an empty dict so captured.count reflects total requests.
+      bodies.append([:])
     }
   }
 

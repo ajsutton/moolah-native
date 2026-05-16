@@ -5,8 +5,9 @@ import Testing
 @testable import Moolah
 
 /// URL-builder contract tests for `BlockExplorerLink`. Asserts the exact
-/// canonical form per chain (Etherscan / Optimistic Etherscan / BaseScan
-/// / PolygonScan) and the `nil` defensive return for unsupported chains.
+/// canonical form per chain (Etherscan / Optimistic Etherscan / BaseScan)
+/// and the `nil` defensive return for unsupported chains. Polygon (chain 137)
+/// is unsupported — it has no first-party public Blockscout instance.
 @Suite("BlockExplorerLink")
 struct BlockExplorerLinkTests {
   /// 32-byte tx hash (64 hex chars + `0x` prefix). Reused so the
@@ -35,10 +36,10 @@ struct BlockExplorerLinkTests {
     #expect(url?.absoluteString == "https://basescan.org/tx/\(Self.txHash)")
   }
 
-  @Test("Polygon transaction URL points at polygonscan.com/tx/<hash>")
-  func polygonTransactionURL() {
+  @Test("Polygon (chain 137) transaction URL is nil — no public Blockscout instance")
+  func polygonTransactionURLIsNil() {
     let url = BlockExplorerLink.transactionURL(chainId: 137, hash: Self.txHash)
-    #expect(url?.absoluteString == "https://polygonscan.com/tx/\(Self.txHash)")
+    #expect(url == nil)
   }
 
   @Test("Unknown chain id returns nil for transactionURL")
@@ -68,10 +69,10 @@ struct BlockExplorerLinkTests {
     #expect(url?.absoluteString == "https://basescan.org/address/\(Self.address)")
   }
 
-  @Test("Polygon address URL points at polygonscan.com/address/<addr>")
-  func polygonAddressURL() {
+  @Test("Polygon (chain 137) address URL is nil — no public Blockscout instance")
+  func polygonAddressURLIsNil() {
     let url = BlockExplorerLink.addressURL(chainId: 137, address: Self.address)
-    #expect(url?.absoluteString == "https://polygonscan.com/address/\(Self.address)")
+    #expect(url == nil)
   }
 
   @Test("Unknown chain id returns nil for addressURL")
@@ -122,8 +123,8 @@ struct BlockExplorerLinkTests {
   @Test("strips gas-leg :gas suffix to recover bare hash")
   func stripsGasLegSuffix() {
     let externalId = "\(Self.txHash):gas"
-    let url = BlockExplorerLink.transactionURL(chainId: 137, externalId: externalId)
-    #expect(url?.absoluteString == "https://polygonscan.com/tx/\(Self.txHash)")
+    let url = BlockExplorerLink.transactionURL(chainId: 1, externalId: externalId)
+    #expect(url?.absoluteString == "https://etherscan.io/tx/\(Self.txHash)")
   }
 
   /// A bare hash (no colon) is valid input — the wallet importer is

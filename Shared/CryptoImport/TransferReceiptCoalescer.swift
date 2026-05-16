@@ -9,7 +9,7 @@ import OSLog
 enum TransferReceiptCoalescer {
   /// Shared static `Logger`; matches the builder's pattern so receipt
   /// failures appear under the same subsystem in Console.app.
-  static let logger = Logger(
+  private static let logger = Logger(
     subsystem: "com.moolah.app", category: "TransferEventBuilder")
 
   /// Fetches `eth_getTransactionReceipt` for every unique outbound
@@ -20,6 +20,11 @@ enum TransferReceiptCoalescer {
   /// is restricted to the from-side wallet per the design's "from-side
   /// wallet only" rule.
   ///
+  /// `extraSignedHashes` extends the fetch set with hashes for signed
+  /// transactions that produced no transfer events (e.g. `approve()`,
+  /// failed txs); deduplicated against and appended after the outbound
+  /// hashes from `groups`, preserving order.
+  ///
   /// Per-receipt fetch failures (network blip, rate limit on a single
   /// hash, malformed response) log and are dropped from the returned
   /// dictionary; affected events ship without a gas leg. This keeps a
@@ -29,11 +34,16 @@ enum TransferReceiptCoalescer {
   /// the cancellation rather than a missing leg.
   static func fetchReceipts(
     groups: [[AlchemyTransfer]],
+    extraSignedHashes: [String] = [],
     walletAddress: String,
     chain: ChainConfig,
     alchemy: any AlchemyClient
   ) async throws -> [String: AlchemyTransactionReceipt] {
-    let hashes = outboundHashes(in: groups, walletAddress: walletAddress)
+    var hashes = outboundHashes(in: groups, walletAddress: walletAddress)
+    var seen = Set(hashes)
+    for hash in extraSignedHashes where seen.insert(hash).inserted {
+      hashes.append(hash)
+    }
     guard !hashes.isEmpty else { return [:] }
     var receipts: [String: AlchemyTransactionReceipt] = [:]
     receipts.reserveCapacity(hashes.count)

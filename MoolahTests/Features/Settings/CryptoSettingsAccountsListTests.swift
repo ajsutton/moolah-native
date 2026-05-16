@@ -42,7 +42,9 @@ struct CryptoSettingsAccountsListTests {
     let discovery = CryptoTokenDiscoveryService(
       registry: registry, resolver: CountingRegistrationResolver(), alchemy: alchemy)
     let walletSyncEngine = WalletSyncEngine(
-      alchemy: alchemy, discovery: discovery,
+      alchemy: alchemy,
+      blockExplorer: BlockExplorerTestDoubles.empty,
+      discovery: discovery,
       walletSyncState: backend.walletSyncState,
       importOriginFactory: { accountId in
         ImportOrigin(

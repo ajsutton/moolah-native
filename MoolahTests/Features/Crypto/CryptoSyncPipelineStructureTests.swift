@@ -43,6 +43,7 @@ struct CryptoSyncPipelineStructureTests {
       alchemy: alchemy)
     let walletSyncEngine = WalletSyncEngine(
       alchemy: alchemy,
+      blockExplorer: BlockExplorerTestDoubles.empty,
       discovery: discovery,
       walletSyncState: backend.walletSyncState,
       importOriginFactory: { accountId in
@@ -84,16 +85,20 @@ struct CryptoSyncPipelineStructureTests {
     let walletB = "0x2222222222222222222222222222222222222222"
     let accountA = seedCryptoAccount(in: fixture.database, walletAddress: walletA)
     let accountB = seedCryptoAccount(in: fixture.database, walletAddress: walletB)
+    // Use erc20 so transfers survive the Alchemy filter (native ETH is
+    // now sourced from Blockscout; Alchemy only passes erc20).
     fixture.alchemy.setTransfersResponse(
       .transfers([
         makeAlchemyTransfer(
-          hash: "0xa", from: Self.counterparty, to: walletA, category: .external)
+          hash: "0xa", from: Self.counterparty, to: walletA, category: .erc20,
+          contractAddress: "0xtoken1", decimalsHex: "0x12")
       ]),
       for: walletA)
     fixture.alchemy.setTransfersResponse(
       .transfers([
         makeAlchemyTransfer(
-          hash: "0xb", from: Self.counterparty, to: walletB, category: .external)
+          hash: "0xb", from: Self.counterparty, to: walletB, category: .erc20,
+          contractAddress: "0xtoken2", decimalsHex: "0x12")
       ]),
       for: walletB)
     try await fixture.backend.walletSyncState.save(
@@ -120,16 +125,20 @@ struct CryptoSyncPipelineStructureTests {
     let walletB = "0x4444444444444444444444444444444444444444"
     let accountA = seedCryptoAccount(in: fixture.database, walletAddress: walletA)
     let accountB = seedCryptoAccount(in: fixture.database, walletAddress: walletB)
+    // Use erc20 so transfers survive the Alchemy filter (native ETH is
+    // now sourced from Blockscout; Alchemy only passes erc20).
     fixture.alchemy.setTransfersResponse(
       .transfers([
         makeAlchemyTransfer(
-          hash: "0xc", from: Self.counterparty, to: walletA, category: .external)
+          hash: "0xc", from: Self.counterparty, to: walletA, category: .erc20,
+          contractAddress: "0xtoken3", decimalsHex: "0x12")
       ]),
       for: walletA)
     fixture.alchemy.setTransfersResponse(
       .transfers([
         makeAlchemyTransfer(
-          hash: "0xd", from: Self.counterparty, to: walletB, category: .external)
+          hash: "0xd", from: Self.counterparty, to: walletB, category: .erc20,
+          contractAddress: "0xtoken4", decimalsHex: "0x12")
       ]),
       for: walletB)
     // Delay every Alchemy fetch a touch so the two per-account builds
