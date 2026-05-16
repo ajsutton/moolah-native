@@ -31,17 +31,6 @@ extension UITestIdentifiers {
     /// "Remove" button shown when an Alchemy key is already configured.
     public static let alchemyApiKeyRemoveButton = "crypto.settings.alchemy.remove"
 
-    /// A crypto account row in the accounts list. Qualifier is the
-    /// `Account.id` UUID.
-    public static func accountRow(_ id: UUID) -> String {
-      "crypto.settings.account.\(id.uuidString)"
-    }
-
-    /// Per-row "Sync now" button. Qualifier is the `Account.id` UUID.
-    public static func syncNowButton(_ id: UUID) -> String {
-      "crypto.settings.account.sync.\(id.uuidString)"
-    }
-
     /// Navigation row that opens the Discovered Tokens inbox.
     public static let discoveredTokensRow = "crypto.settings.discoveredTokens"
 

@@ -56,8 +56,7 @@
               CryptoSettingsView(
                 store: store,
                 cryptoSyncStore: session.cryptoSyncStore,
-                tokenDiscovery: session.cryptoTokenDiscovery,
-                accountStore: session.accountStore
+                tokenDiscovery: session.cryptoTokenDiscovery
               )
               // The embedded `AddTokenSheet` opens an `InstrumentPickerSheet`
               // whose callback variant pulls its search service, registry,
