@@ -28,7 +28,7 @@ protocol BlockExplorerClient: Sendable {
 
 /// Live `BlockExplorerClient` over Blockscout's public v2 REST API.
 /// `Sendable` struct with no mutable state — mirrors `LiveAlchemyClient`.
-struct LiveBlockscoutClient: BlockExplorerClient, Sendable {
+struct LiveBlockscoutClient: Sendable {
   private let session: URLSession
   private let rateLimiter: RateLimiter
   private let logger: Logger
@@ -39,42 +39,12 @@ struct LiveBlockscoutClient: BlockExplorerClient, Sendable {
     self.logger = Logger(subsystem: "com.moolah.app", category: "BlockscoutClient")
   }
 
-  func nativeTransactions(
-    chain: ChainConfig, walletAddress: String, fromBlock: UInt64
-  ) async throws -> [BlockscoutTransaction] {
-    try await paginate(
-      chain: chain,
-      walletAddress: walletAddress,
-      fromBlock: fromBlock,
-      pathSuffix: "transactions",
-      stage: "blockscout.transactions",
-      decode: { try JSONDecoder().decode(BlockscoutTransactionsPage.self, from: $0) },
-      items: { $0.items },
-      cursor: { $0.nextPageParams },
-      blockNumber: { $0.blockNumber })
-  }
-
-  func internalTransactions(
-    chain: ChainConfig, walletAddress: String, fromBlock: UInt64
-  ) async throws -> [BlockscoutInternalTx] {
-    try await paginate(
-      chain: chain,
-      walletAddress: walletAddress,
-      fromBlock: fromBlock,
-      pathSuffix: "internal-transactions",
-      stage: "blockscout.internalTransactions",
-      decode: { try JSONDecoder().decode(BlockscoutInternalTxPage.self, from: $0) },
-      items: { $0.items },
-      cursor: { $0.nextPageParams },
-      blockNumber: { $0.blockNumber })
-  }
-
   // MARK: - Internals
 
-  /// Generic cursor loop shared by both endpoints. Stops when the
-  /// cursor is absent, when a page is empty, when a `pageKey` repeats
-  /// (misbehaving provider guard, mirrors `LiveAlchemyClient`), or once
-  /// every item on a page predates `fromBlock` (newest-first ordering
+  /// Generic cursor loop shared by both endpoints. Stops when the cursor
+  /// is absent, when a page is empty, when a `BlockscoutPageParams` cursor
+  /// repeats (misbehaving provider guard, mirrors `LiveAlchemyClient`), or
+  /// once every item on a page predates `fromBlock` (newest-first ordering
   /// means nothing older remains worth fetching).
   private func paginate<Page, Item>(
     chain: ChainConfig,
@@ -82,7 +52,7 @@ struct LiveBlockscoutClient: BlockExplorerClient, Sendable {
     fromBlock: UInt64,
     pathSuffix: String,
     stage: String,
-    decode: @Sendable (Data) throws -> Page,
+    decode: (Data) throws -> Page,
     items: (Page) -> [Item],
     cursor: (Page) -> BlockscoutPageParams?,
     blockNumber: (Item) -> Int
@@ -114,11 +84,10 @@ struct LiveBlockscoutClient: BlockExplorerClient, Sendable {
         throw WalletSyncError.providerMalformedResponse(stage: stage)
       }
       let pageItems = items(page)
+      if pageItems.isEmpty { break }
       collected.append(contentsOf: pageItems)
       // Newest-first: if the whole page is older than fromBlock, stop.
-      if !pageItems.isEmpty,
-        pageItems.allSatisfy({ UInt64(blockNumber($0).magnitude) < fromBlock })
-      {
+      if pageItems.allSatisfy({ UInt64(blockNumber($0).magnitude) < fromBlock }) {
         break
       }
       guard let next = cursor(page) else { break }
@@ -171,7 +140,45 @@ struct LiveBlockscoutClient: BlockExplorerClient, Sendable {
       )
       throw WalletSyncError.network(underlyingDescription: error.localizedDescription)
     }
-    try AlchemyResponseValidator.validate(response: response, stage: stage, logger: logger)
+    do {
+      try AlchemyResponseValidator.validate(response: response, stage: stage, logger: logger)
+    } catch WalletSyncError.invalidApiKey {
+      logger.error(
+        "Blockscout \(stage, privacy: .public): HTTP 401/403 (public API expects no auth)")
+      throw WalletSyncError.network(underlyingDescription: "HTTP 401/403")
+    }
     return data
+  }
+}
+
+extension LiveBlockscoutClient: BlockExplorerClient {
+  func nativeTransactions(
+    chain: ChainConfig, walletAddress: String, fromBlock: UInt64
+  ) async throws -> [BlockscoutTransaction] {
+    try await paginate(
+      chain: chain,
+      walletAddress: walletAddress,
+      fromBlock: fromBlock,
+      pathSuffix: "transactions",
+      stage: "blockscout.transactions",
+      decode: { try JSONDecoder().decode(BlockscoutTransactionsPage.self, from: $0) },
+      items: { $0.items },
+      cursor: { $0.nextPageParams },
+      blockNumber: { $0.blockNumber })
+  }
+
+  func internalTransactions(
+    chain: ChainConfig, walletAddress: String, fromBlock: UInt64
+  ) async throws -> [BlockscoutInternalTx] {
+    try await paginate(
+      chain: chain,
+      walletAddress: walletAddress,
+      fromBlock: fromBlock,
+      pathSuffix: "internal-transactions",
+      stage: "blockscout.internalTransactions",
+      decode: { try JSONDecoder().decode(BlockscoutInternalTxPage.self, from: $0) },
+      items: { $0.items },
+      cursor: { $0.nextPageParams },
+      blockNumber: { $0.blockNumber })
   }
 }

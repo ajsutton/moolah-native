@@ -10,6 +10,7 @@ struct LiveBlockscoutClientTests {
     handler: @escaping @Sendable (URLRequest) throws -> (HTTPURLResponse, Data)
   ) -> LiveBlockscoutClient {
     let config = URLSessionConfiguration.ephemeral
+    // AlchemyURLProtocolStub is a generic URLProtocol stub (handles any request); reused here for Blockscout deliberately.
     config.protocolClasses = [AlchemyURLProtocolStub.self]
     let session = URLSession(configuration: config)
     AlchemyURLProtocolStub.lastRequest = nil
@@ -74,9 +75,14 @@ struct LiveBlockscoutClientTests {
     let client = makeClient { req in
       (AlchemyTestSupport.response(for: req, statusCode: 429), Data())
     }
-    await #expect(throws: WalletSyncError.self) {
+    do {
       _ = try await client.nativeTransactions(
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0)
+      Issue.record("Expected WalletSyncError.rateLimited")
+    } catch WalletSyncError.rateLimited {
+      // expected
+    } catch {
+      Issue.record("Expected WalletSyncError.rateLimited, got \(error)")
     }
   }
 
