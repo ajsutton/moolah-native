@@ -9,6 +9,7 @@ import Foundation
 enum ExchangeProvider: String, Codable, Sendable, CaseIterable {
   case coinstash
 
+  /// Human-readable name shown in account-creation UI and settings.
   var displayName: String {
     switch self {
     case .coinstash: return "Coinstash"

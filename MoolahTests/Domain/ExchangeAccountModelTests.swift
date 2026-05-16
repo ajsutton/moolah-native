@@ -4,11 +4,23 @@ import Testing
 
 struct ExchangeAccountModelTests {
   @Test
-  func exchangeTypeIsInvestmentLikeNotCurrent() {
+  func exchangeTypeIsSidebarGroupedWithInvestments() {
     #expect(AccountType.exchange.isInvestmentLike)
     #expect(!AccountType.exchange.isCurrent)
+  }
+
+  @Test
+  func exchangeTypeRawValueIsStableToken() {
     #expect(AccountType.exchange.rawValue == "exchange")
+  }
+
+  @Test
+  func exchangeTypeDisplayName() {
     #expect(AccountType.exchange.displayName == "Exchange")
+  }
+
+  @Test
+  func exchangeTypeIsRegisteredInAllCases() {
     #expect(AccountType.allCases.contains(.exchange))
   }
 
