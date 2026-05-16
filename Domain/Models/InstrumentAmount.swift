@@ -58,8 +58,16 @@ struct InstrumentAmount: Codable, Sendable, Hashable, Comparable {
   // MARK: - Storage (Int64 scaled by 10^8)
 
   var storageValue: Int64 {
-    let scaled = quantity * storageScale
-    return Int64(truncating: scaled as NSDecimalNumber)
+    var scaled = quantity * storageScale
+    // `NSDecimalNumber.int64Value` (what `Int64(truncating:)` calls)
+    // wraps mod 2^64 for a non-integer Decimal whose significand exceeds
+    // 64 bits, flipping the sign. Round to an integer Decimal first; the
+    // conversion is then exact. RoundingMode: `.down` = toward -∞,
+    // `.up` = toward +∞ — so this truncates toward zero (positive →
+    // floor, negative → ceiling; zero is already integral).
+    var rounded = Decimal()
+    NSDecimalRound(&rounded, &scaled, 0, scaled < 0 ? .up : .down)
+    return Int64(truncating: rounded as NSDecimalNumber)
   }
 
   init(quantity: Decimal, instrument: Instrument) {
