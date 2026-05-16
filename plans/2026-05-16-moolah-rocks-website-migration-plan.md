@@ -204,7 +204,11 @@ focusable screen-reader-labelled link with a plain-text fallback address.
    (`hello@moolah.rocks`, with `?subject=`); flag address for user to
    confirm. Add beta-notice line, footer, full `<head>` meta.
 5. Add `.github/workflows/deploy-site.yml` (Actions → Pages, SHA-pinned,
-   path-filtered to `site/**`).
+   path-filtered to `site/**`). **The agent environment cannot push
+   workflow files** (OAuth token lacks `workflow` scope; the GitHub App
+   API returns 404 for the same reason) — the file content is supplied in
+   the PR/chat and the **user must add it** via the web UI or a local
+   commit with `workflow` scope.
 6. Local check: open `site/index.html`; verify layout/responsive/links,
    HTML validity and contrast.
 7. Commit & push to `claude/migrate-to-moolah-native-V1Ygs`; open a PR
@@ -238,3 +242,7 @@ focusable screen-reader-labelled link with a plain-text fallback address.
 - **Legacy repo/pipeline retirement** — disabling the `ajsutton/moolah`
   CircleCI deploy and archiving that repo is outside this repo's access;
   flagged so it isn't forgotten after cutover.
+- **Workflow file must be user-added** — this environment cannot create or
+  update files under `.github/workflows/` (no `workflow` token scope). The
+  site and assets are pushed; `deploy-site.yml` content is provided
+  verbatim for the user to commit. Until it lands, no deploy runs.
