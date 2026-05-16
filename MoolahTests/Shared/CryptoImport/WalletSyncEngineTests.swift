@@ -124,7 +124,9 @@ struct WalletSyncEngineTests {
     alchemy.setTransfersResponse(
       .transfers([
         makeAlchemyTransfer(
-          // Category is irrelevant: cancellation fires in the Alchemy stub hook before the response returns, so the .erc20 filter is never reached.
+          // Category is irrelevant: cancellation fires in the Alchemy
+          // stub hook before the response returns, so the .erc20
+          // filter is never reached.
           hash: "0xa", from: Self.counterparty, to: Self.wallet, category: .external)
       ]))
     let (engine, _) = makeEngine(alchemy: alchemy)
