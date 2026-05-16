@@ -24,9 +24,12 @@ extension CryptoPriceService {
     var deltaRecords: [CryptoPriceRecord] = []
 
     if var existing = caches[tokenId] {
-      for (dateKey, price) in newPrices where existing.prices[dateKey] != price {
-        deltaRecords.append(priceRecord(tokenId: tokenId, date: dateKey, price: price))
-        existing.prices[dateKey] = price
+      for (dateKey, price) in newPrices {
+        guard let key = DateKey.from(isoString: dateKey) else { continue }  // malformed wire date — unusable as a sorted key; skip
+        if existing.prices.exact(key) != price {
+          deltaRecords.append(priceRecord(tokenId: tokenId, date: dateKey, price: price))
+          existing.prices.upsert(key, price)
+        }
       }
       if earliest < existing.earliestDate {
         existing.earliestDate = earliest
@@ -36,16 +39,19 @@ extension CryptoPriceService {
       }
       caches[tokenId] = existing
     } else {
+      var series = SortedDateSeries<Decimal>()
+      for (dateKey, price) in newPrices {
+        guard let key = DateKey.from(isoString: dateKey) else { continue }  // malformed wire date — unusable as a sorted key; skip
+        series.upsert(key, price)
+        deltaRecords.append(priceRecord(tokenId: tokenId, date: dateKey, price: price))
+      }
       caches[tokenId] = CryptoPriceCache(
         tokenId: tokenId,
         symbol: symbol,
         earliestDate: earliest,
         latestDate: latest,
-        prices: newPrices
+        prices: series
       )
-      for (dateKey, price) in newPrices {
-        deltaRecords.append(priceRecord(tokenId: tokenId, date: dateKey, price: price))
-      }
     }
 
     return deltaRecords

@@ -7,5 +7,5 @@ struct CryptoPriceCache: Codable, Sendable, Equatable {
   let symbol: String  // e.g. "ETH" — display only
   var earliestDate: String  // ISO date string "YYYY-MM-DD"
   var latestDate: String  // ISO date string "YYYY-MM-DD"
-  var prices: [String: Decimal]  // date string -> daily closing price in USD
+  var prices: SortedDateSeries<Decimal>  // DateKey -> daily closing price in USD
 }

@@ -24,20 +24,24 @@ extension CryptoPriceService {
       let priceRecords =
         try CryptoPriceRecord
         .filter(CryptoPriceRecord.Columns.tokenId == tokenId)
+        .order(CryptoPriceRecord.Columns.date)
         .fetchAll(database)
       // See `ExchangeRateService.loadCache` for the rationale on the
       // String-via-Decimal round-trip; preserves source precision instead
       // of inheriting the binary `Decimal(_: Double)` tail.
-      var prices: [String: Decimal] = [:]
+      var entries: [SortedDateSeries<Decimal>.Entry] = []
+      entries.reserveCapacity(priceRecords.count)
       for record in priceRecords {
-        prices[record.date] = Decimal(string: String(record.priceUsd)) ?? Decimal(record.priceUsd)
+        guard let key = DateKey.from(isoString: record.date) else { continue }  // malformed wire date — unusable as a sorted key; skip
+        let value = Decimal(string: String(record.priceUsd)) ?? Decimal(record.priceUsd)
+        entries.append(.init(key: key, value: value))
       }
       return CryptoPriceCache(
         tokenId: tokenId,
         symbol: metaRecord.symbol,
         earliestDate: metaRecord.earliestDate,
         latestDate: metaRecord.latestDate,
-        prices: prices
+        prices: SortedDateSeries(sortedEntries: entries)
       )
     }
     if let snapshot { caches[tokenId] = snapshot }
