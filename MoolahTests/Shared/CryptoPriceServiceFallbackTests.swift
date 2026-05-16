@@ -10,7 +10,8 @@ import Testing
 /// Mirrors the `CryptoPriceServiceCapTests` harness (`FixedCryptoPriceClient`
 /// + `ProfileIndexDatabase.openInMemory()` + injected `now` clock) — the
 /// real test double range-filters like the live providers do, so it is the
-/// faithful pin. Structure mirrors `StockPriceServiceFallbackTests`.
+/// faithful pin. Mirrors the intent/behaviour-matrix of
+/// `StockPriceServiceFallbackTests`.
 @Suite("CryptoPriceService fallback semantics")
 struct CryptoPriceServiceFallbackTests {
   private let ethInstrument = Instrument.crypto(

@@ -29,6 +29,7 @@ extension CryptoPriceService {
       // See `ExchangeRateService.loadCache` for the rationale on the
       // String-via-Decimal round-trip; preserves source precision instead
       // of inheriting the binary `Decimal(_: Double)` tail.
+      // `.order(date)` ascending satisfies `init(sortedEntries:)`.
       var entries: [SortedDateSeries<Decimal>.Entry] = []
       entries.reserveCapacity(priceRecords.count)
       for record in priceRecords {
