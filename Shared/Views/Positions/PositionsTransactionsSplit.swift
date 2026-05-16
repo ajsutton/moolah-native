@@ -30,6 +30,7 @@ struct PositionsTransactionsSplit<Positions: View, Transactions: View>: View {
 
   #if os(macOS)
     @State private var scrollCollapse = TransactionScrollCollapse()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
   #endif
 
   #if !os(macOS)
@@ -58,7 +59,8 @@ struct PositionsTransactionsSplit<Positions: View, Transactions: View>: View {
       ResizableVSplit(
         autosaveName: autosaveName,
         initialTopHeight: initialTopHeight,
-        collapsed: scrollCollapse.isCollapsed
+        collapsed: scrollCollapse.isCollapsed,
+        reduceMotion: reduceMotion
       ) {
         positions()
       } bottom: {

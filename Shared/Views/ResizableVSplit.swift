@@ -27,6 +27,9 @@ import SwiftUI
   ///     zero, preserving the user's divider position for restoration on
   ///     expand. The transition animates (~0.28s); if the divider is
   ///     already at the target the change applies instantly.
+  ///   - reduceMotion: When `true`, the collapse/expand is applied
+  ///     instantly with no animation (honours the system Reduce Motion
+  ///     accessibility setting).
   ///   - defaults: `UserDefaults` instance probed for an existing
   ///     autosaved divider position. Defaults to `.moolahShared`; tests can
   ///     inject an isolated suite to avoid leaking saved frames between
@@ -39,6 +42,7 @@ import SwiftUI
     let minTopHeight: CGFloat
     let minBottomHeight: CGFloat
     let collapsed: Bool
+    let reduceMotion: Bool
     let defaults: UserDefaults
     let top: () -> Top
     let bottom: () -> Bottom
@@ -49,6 +53,7 @@ import SwiftUI
       minTopHeight: CGFloat = 80,
       minBottomHeight: CGFloat = 200,
       collapsed: Bool = false,
+      reduceMotion: Bool = false,
       defaults: UserDefaults = .moolahShared,
       @ViewBuilder top: @escaping () -> Top,
       @ViewBuilder bottom: @escaping () -> Bottom
@@ -58,6 +63,7 @@ import SwiftUI
       self.minTopHeight = minTopHeight
       self.minBottomHeight = minBottomHeight
       self.collapsed = collapsed
+      self.reduceMotion = reduceMotion
       self.defaults = defaults
       self.top = top
       self.bottom = bottom
@@ -113,7 +119,7 @@ import SwiftUI
     func updateNSView(_ nsView: NSSplitView, context: Context) {
       context.coordinator.topHost?.rootView = top()
       context.coordinator.bottomHost?.rootView = bottom()
-      context.coordinator.setCollapsed(collapsed, animated: true)
+      context.coordinator.setCollapsed(collapsed, animated: !reduceMotion)
     }
 
     static func dismantleNSView(
