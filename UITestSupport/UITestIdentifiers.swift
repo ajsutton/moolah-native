@@ -312,6 +312,14 @@ public enum UITestIdentifiers {
     /// future tests can exercise the save path through the same
     /// resolver pattern.
     public static let saveButton = "editAccount.save"
+
+    /// Write-only `SecureField` shown only for `.exchange` accounts in
+    /// `EditAccountView.exchangeSection`. The user types a new read-only
+    /// API token to replace the stored one (blank = keep existing).
+    /// Distinct from `ExchangeAccountCreation.accessTokenField`
+    /// (`createAccount.exchange.accessTokenField`) so XCUITest matching
+    /// never resolves the wrong field across the create/edit surfaces.
+    public static let exchangeAccessTokenField = "editAccount.exchange.accessTokenField"
   }
 
   // MARK: - Autocomplete
