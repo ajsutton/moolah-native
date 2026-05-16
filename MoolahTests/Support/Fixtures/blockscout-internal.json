@@ -1,0 +1,24 @@
+{
+  "items": [
+    {
+      "transaction_hash": "0x039e6d039d65a078bdd90df9e27e73efae745e26ddb32fae42ac99e1f1da55c3",
+      "block_number": 21298374,
+      "timestamp": "2024-11-30T05:22:11.000000Z",
+      "value": "809501222242281153",
+      "index": 12,
+      "success": true,
+      "from": {
+        "hash": "0xD7f9f54194C633F36CCD5F3da84ad4a1c38cB2cB"
+      },
+      "to": {
+        "hash": "0xa4B572eA1B6F734fC88a0a004C5301F8dad54d60"
+      }
+    }
+  ],
+  "next_page_params": {
+    "block_number": 21298374,
+    "index": 12,
+    "items_count": 50,
+    "transaction_index": 28
+  }
+}

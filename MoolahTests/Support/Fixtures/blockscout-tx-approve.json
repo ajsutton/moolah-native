@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "hash": "0x3acb9c7357c3320e30bf318eaac7f35e92a5a95a21f56bf59b2bad435db4bc9e",
+      "block_number": 21833612,
+      "timestamp": "2025-02-12T23:12:59.000000Z",
+      "value": "0",
+      "status": "ok",
+      "result": "success",
+      "from": {
+        "hash": "0xa4B572eA1B6F734fC88a0a004C5301F8dad54d60"
+      },
+      "to": {
+        "hash": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+      }
+    }
+  ],
+  "next_page_params": null
+}
