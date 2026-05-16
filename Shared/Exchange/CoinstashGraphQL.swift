@@ -30,11 +30,15 @@ enum CoinstashGraphQL {
   /// - `$a` (ID) — the account ID.
   /// - `$p` (SearchAccountTransactionsPayloadInput) — pagination / filter payload.
   /// Decodes into `CoinstashGraphQLResponse<CoinstashTransactionsData>`.
+  /// `symbol` is the per-leg currency (always populated). `assetSymbol`
+  /// (the order's traded asset) is `null` on `DEPOSIT`/`WITHDRAW`/`AWARD`
+  /// rows, so it is deliberately not selected — resolution keys off
+  /// `symbol`.
   static let transactionsQuery = """
     query Q($a: ID!, $p: SearchAccountTransactionsPayloadInput) {
       accountTransactions(accountId: $a, searchAccountTransactionsPayloadInput: $p) {
         isSuccessful errorMessage totalRecordsFound
-        result { transactionId transactedOn category type assetSymbol
+        result { transactionId transactedOn category type symbol
                  amount amountType quoteBuyPrice quoteSellPrice
                  orderId orderType transactionStatus }
       }
@@ -82,7 +86,9 @@ struct CoinstashTransaction: Decodable, Sendable, Hashable {
   let transactedOn: String
   let category: String
   let type: String
-  let assetSymbol: String?
+  /// The leg's currency symbol (e.g. `AUD`, `OP`, `BTC`). Always present on
+  /// real rows; optional only to tolerate an absent field defensively.
+  let symbol: String?
   // Decimal (not Double): JSONDecoder decodes a bare JSON number into
   // Decimal losslessly. Double would corrupt amounts (3518.46 →
   // 3518.4599999999998) before they ever reach a TransactionLeg.

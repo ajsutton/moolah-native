@@ -85,12 +85,16 @@ struct CoinstashClient: ExchangeClient, Sendable {
       )
       return nil
     }
+    // Resolve the instrument from the per-leg `symbol`, NOT `assetSymbol`:
+    // `assetSymbol` carries the order's traded asset and is `null` for
+    // every DEPOSIT/WITHDRAW/AWARD, which would drop all crypto inward/
+    // outward transfers as unresolvable.
     return ExchangeImportedTransaction(
       externalId: transaction.transactionId,
       occurredAt: occurredAt,
       category: transaction.category,
       direction: direction,
-      assetSymbol: transaction.assetSymbol,
+      assetSymbol: transaction.symbol,
       amount: transaction.amount,
       isFiat: transaction.amountType == "FIAT",
       orderId: transaction.orderId)

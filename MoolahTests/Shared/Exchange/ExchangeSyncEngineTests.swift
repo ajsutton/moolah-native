@@ -73,6 +73,37 @@ struct ExchangeSyncEngineTests {
   }
 
   @Test
+  func tradeFeeLegIsExpenseNotTrade() async throws {
+    let account = Account(
+      name: "Coinstash", type: .exchange,
+      instrument: .AUD, exchangeProvider: .coinstash)
+    let imported = [
+      ExchangeImportedTransaction(
+        externalId: "t1", occurredAt: Date(timeIntervalSince1970: 100),
+        category: "TRADE", direction: .debit, assetSymbol: "OP", amount: 20167,
+        isFiat: false, orderId: "o1"),
+      ExchangeImportedTransaction(
+        externalId: "t2", occurredAt: Date(timeIntervalSince1970: 100),
+        category: "TRADE", direction: .credit, assetSymbol: nil, amount: 3518.46,
+        isFiat: true, orderId: "o1"),
+      ExchangeImportedTransaction(
+        externalId: "t3", occurredAt: Date(timeIntervalSince1970: 100),
+        category: "TRADEFEE", direction: .debit, assetSymbol: nil, amount: 21.11,
+        isFiat: true, orderId: "o1"),
+    ]
+    let engine = ExchangeSyncEngine(resolver: resolver(includeOP: true))
+    let result = try await engine.build(account: account, imported: imported)
+    let legs = try #require(result.candidates.first?.transaction.legs)
+    let feeLeg = try #require(legs.first { $0.externalId == "t3" })
+    #expect(feeLeg.type == .expense)
+    #expect(feeLeg.quantity == Decimal(string: "-21.11"))
+    // The fee stays grouped with its trade (grouping is by orderId).
+    #expect(legs.count == 3)
+    let tradeLeg = try #require(legs.first { $0.externalId == "t1" })
+    #expect(tradeLeg.type == .trade)
+  }
+
+  @Test
   func dropsEntireGroupWhenAnyLegUnresolvable() async throws {
     let account = Account(
       name: "X", type: .exchange, instrument: .AUD,

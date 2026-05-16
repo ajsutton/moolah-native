@@ -22,13 +22,15 @@ struct ExchangeSyncEngine: Sendable {
   }
 
   // Coinstash category -> Moolah leg type. DEPOSIT/AWARD are inbound
-  // (.income); WITHDRAW is outbound (.expense); TRADE/TRADEFEE and any
-  // unmapped category are swap legs (.trade). The signed quantity already
-  // encodes direction; this only selects the type bucket the UI groups by.
+  // (.income); WITHDRAW is outbound (.expense); TRADEFEE is the exchange's
+  // cut on a trade (.expense, grouped with its trade by orderId); TRADE and
+  // any unmapped category are swap legs (.trade). The signed quantity
+  // already encodes direction; this only selects the type bucket the UI
+  // groups by.
   private static func legType(for category: String) -> TransactionType {
     switch category {
     case "DEPOSIT", "AWARD": return .income
-    case "WITHDRAW": return .expense
+    case "WITHDRAW", "TRADEFEE": return .expense
     default: return .trade
     }
   }
