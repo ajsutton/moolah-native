@@ -21,13 +21,11 @@ struct ExchangeSyncEngine: Sendable {
     self.resolver = resolver
   }
 
-  /// Coinstash category -> Moolah leg type. DEPOSIT/AWARD are inbound
-  /// (`.income`); WITHDRAW is outbound (`.expense`); TRADE/TRADEFEE (and any
-  /// unmapped category) are the legs of a swap (`.trade`). The signed
-  /// quantity already encodes direction; this only sets the per-leg type
-  /// bucket the UI groups by — mirroring `TransferEventBuilder.legType(for:)`
-  /// where leg type lives on the leg, not the `Transaction`.
-  static func legType(for category: String) -> TransactionType {
+  // Coinstash category -> Moolah leg type. DEPOSIT/AWARD are inbound
+  // (.income); WITHDRAW is outbound (.expense); TRADE/TRADEFEE and any
+  // unmapped category are swap legs (.trade). The signed quantity already
+  // encodes direction; this only selects the type bucket the UI groups by.
+  private static func legType(for category: String) -> TransactionType {
     switch category {
     case "DEPOSIT", "AWARD": return .income
     case "WITHDRAW": return .expense
@@ -49,58 +47,64 @@ struct ExchangeSyncEngine: Sendable {
     // Trades share an `orderId`; deposits/withdrawals/awards have none, so
     // their `externalId` keys a singleton group (one single-leg transaction
     // each).
-    let groups = Dictionary(grouping: imported) { row -> String in
-      row.orderId ?? row.externalId
-    }
-
+    let groups = Dictionary(grouping: imported) { $0.orderId ?? $0.externalId }
     var candidates: [BuiltTransaction] = []
     for (groupKey, rows) in groups {
       try Task.checkCancellation()
-      var legs: [TransactionLeg] = []
-      var groupResolvable = true
-      for row in rows {
-        try Task.checkCancellation()
-        guard
-          let instrument = try await resolver.instrument(
-            forSymbol: row.assetSymbol, isFiat: row.isFiat)
-        else {
-          Self.logger.warning(
-            """
-            Dropping group \(groupKey, privacy: .public): unresolvable \
-            instrument externalId=\(row.externalId, privacy: .public) \
-            symbol=\(row.assetSymbol ?? "nil", privacy: .public) \
-            isFiat=\(row.isFiat, privacy: .public)
-            """)
-          groupResolvable = false
-          break
-        }
-        // `.trade` legs preserve source-entered signs: CREDIT=+, DEBIT=-.
-        // Never abs() and never auto-sign by leg position.
-        let quantity = row.direction.multiplier * row.amount
-        legs.append(
-          TransactionLeg(
-            accountId: account.id,
-            instrument: instrument,
-            quantity: quantity,
-            externalId: row.externalId,
-            type: Self.legType(for: row.category)))
+      if let candidate = try await buildCandidate(
+        groupKey: groupKey, rows: rows, account: account)
+      {
+        candidates.append(candidate)
       }
-      guard groupResolvable, !legs.isEmpty else { continue }
-      // Earliest occurrence in the group dates the transaction; no
-      // `Date()` fallback (the group always has at least one row, so
-      // `min()` is non-nil here — `guard` documents the invariant).
-      guard let date = rows.map(\.occurredAt).min() else { continue }
-      let transaction = Transaction(date: date, legs: legs)
-      candidates.append(
-        BuiltTransaction(
-          originAccountId: account.id, transaction: transaction))
     }
-
     Self.logger.info(
       """
       Built \(candidates.count, privacy: .public) candidates from \
       \(imported.count, privacy: .public) imported rows
       """)
     return WalletSyncBuildResult(candidates: candidates, headBlockNumber: 0)
+  }
+
+  /// Builds one candidate `BuiltTransaction` for a single `orderId`/
+  /// `externalId` group. Returns `nil` (dropping the WHOLE group) on the
+  /// first row whose instrument is unresolvable — a partial, unbalanced
+  /// trade is worse than no trade — and logs the drop for diagnosis.
+  private func buildCandidate(
+    groupKey: String, rows: [ExchangeImportedTransaction], account: Account
+  ) async throws -> BuiltTransaction? {
+    var legs: [TransactionLeg] = []
+    for row in rows {
+      try Task.checkCancellation()
+      guard
+        let instrument = try await resolver.instrument(
+          forSymbol: row.assetSymbol, isFiat: row.isFiat)
+      else {
+        Self.logger.warning(
+          """
+          Dropping group \(groupKey, privacy: .public): unresolvable \
+          instrument externalId=\(row.externalId, privacy: .public) \
+          symbol=\(row.assetSymbol ?? "nil", privacy: .public) \
+          isFiat=\(row.isFiat, privacy: .public)
+          """)
+        return nil
+      }
+      // `.trade` legs preserve source-entered signs: CREDIT=+, DEBIT=-.
+      // Never abs() and never auto-sign by leg position.
+      let quantity = row.direction.multiplier * row.amount
+      legs.append(
+        TransactionLeg(
+          accountId: account.id,
+          instrument: instrument,
+          quantity: quantity,
+          externalId: row.externalId,
+          type: Self.legType(for: row.category)))
+    }
+    // Earliest occurrence in the group dates the transaction; no
+    // `Date()` fallback (the group always has at least one row, so
+    // `min()` is non-nil here — `guard` documents the invariant).
+    guard let date = rows.map(\.occurredAt).min() else { return nil }
+    return BuiltTransaction(
+      originAccountId: account.id,
+      transaction: Transaction(date: date, legs: legs))
   }
 }
