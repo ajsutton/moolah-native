@@ -8,11 +8,15 @@ import Foundation
 struct ExchangeTokenStore: Sendable {
   private let synchronizable: Bool
 
+  /// - Parameter synchronizable: When `true` (the production default), the
+  ///   token is written to the iCloud-synced keychain so it follows the user
+  ///   across devices. Pass `false` in tests/development to keep entries
+  ///   device-local and avoid test-runner entitlement requirements.
   init(synchronizable: Bool = true) {
     self.synchronizable = synchronizable
   }
 
-  private func store(for accountId: UUID) -> KeychainStore {
+  private func keychainStore(for accountId: UUID) -> KeychainStore {
     KeychainStore(
       service: KeychainServices.apiKeys,
       account: "exchange-token-\(accountId.uuidString)",
@@ -20,14 +24,14 @@ struct ExchangeTokenStore: Sendable {
   }
 
   func save(token: String, for accountId: UUID) throws {
-    try store(for: accountId).saveString(token)
+    try keychainStore(for: accountId).saveString(token)
   }
 
   func token(for accountId: UUID) throws -> String? {
-    try store(for: accountId).restoreString()
+    try keychainStore(for: accountId).restoreString()
   }
 
   func delete(for accountId: UUID) {
-    store(for: accountId).clear()
+    keychainStore(for: accountId).clear()
   }
 }
