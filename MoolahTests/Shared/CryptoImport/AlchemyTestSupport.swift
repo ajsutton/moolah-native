@@ -181,6 +181,10 @@ final class TestCallRecorder: @unchecked Sendable {
       bodies.append(decodeJSON(from: readAll(stream: stream)))
     } else if let data = request.httpBody {
       bodies.append(decodeJSON(from: data))
+    } else {
+      // GET/DELETE requests have no body; record an empty dict so
+      // `captured.count` reflects the total number of requests made.
+      bodies.append([:])
     }
   }
 
