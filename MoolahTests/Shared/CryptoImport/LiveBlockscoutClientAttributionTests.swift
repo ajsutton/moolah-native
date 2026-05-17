@@ -20,7 +20,7 @@ struct LiveBlockscoutClientAttributionTests {
   }
 
   @Test("A network failure from nativeTransactions is attributed to .blockExplorer")
-  func nativeTransactionsNetworkErrorIsAttributed() async throws {
+  func nativeTransactionsErrorIsAttributed() async throws {
     let client = makeFailingClient()
     do {
       _ = try await client.nativeTransactions(
@@ -28,11 +28,13 @@ struct LiveBlockscoutClientAttributionTests {
       Issue.record("expected throw")
     } catch let error as WalletSyncError {
       #expect(error.provider == .blockExplorer)
+    } catch {
+      Issue.record("Expected WalletSyncError, got \(error)")
     }
   }
 
   @Test("A network failure from internalTransactions is attributed to .blockExplorer")
-  func internalTransactionsNetworkErrorIsAttributed() async throws {
+  func internalTransactionsErrorIsAttributed() async throws {
     let client = makeFailingClient()
     do {
       _ = try await client.internalTransactions(
@@ -40,6 +42,8 @@ struct LiveBlockscoutClientAttributionTests {
       Issue.record("expected throw")
     } catch let error as WalletSyncError {
       #expect(error.provider == .blockExplorer)
+    } catch {
+      Issue.record("Expected WalletSyncError, got \(error)")
     }
   }
 }

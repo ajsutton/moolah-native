@@ -107,6 +107,8 @@ struct LiveBlockscoutClientTests {
       }
       #expect(stage == "blockscout.transactions")
       #expect(error.provider == .blockExplorer)
+    } catch {
+      Issue.record("Expected WalletSyncError, got \(error)")
     }
   }
 }
