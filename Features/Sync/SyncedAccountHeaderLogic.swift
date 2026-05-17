@@ -85,9 +85,11 @@ enum SyncedAccountHeaderLogic {
   /// User-facing string for a `WalletSyncError` persisted on a per-
   /// account `WalletSyncState`. Returns `nil` when the state has no
   /// error so callers can skip rendering the caption row entirely.
-  static func errorCaption(for state: WalletSyncState?, account: Account) -> String? {
+  static func errorCaption(
+    for state: WalletSyncState?, account: Account, now: Date = Date()
+  ) -> String? {
     guard let error = state?.lastError else { return nil }
-    return errorCaption(for: error, account: account)
+    return errorCaption(for: error, account: account, now: now)
   }
 
   /// Branchless variant on the raw error so unit tests can pin the
@@ -101,21 +103,25 @@ enum SyncedAccountHeaderLogic {
   /// contract and its characterisation tests keep passing. `.missingApiKey`
   /// stays account-type-driven even when attributed: the actionable "add a
   /// key" instruction gains nothing from a provider prefix.
-  static func errorCaption(for error: WalletSyncError, account: Account) -> String {
+  static func errorCaption(
+    for error: WalletSyncError, account: Account, now: Date = Date()
+  ) -> String {
     switch error.kind {
     case .missingApiKey:
       return missingApiKeyCaption(account: account)
     case .invalidApiKey:
       return invalidApiKeyCaption(provider: error.provider, account: account)
     case .rateLimited(let retryAfter):
-      return rateLimitedCaption(provider: error.provider, retryAfter: retryAfter)
+      return rateLimitedCaption(provider: error.provider, retryAfter: retryAfter, now: now)
     case .network(let underlying):
       return networkCaption(provider: error.provider, underlying: underlying)
     case .providerMalformedResponse(let stage):
       return malformedCaption(provider: error.provider, stage: stage)
     }
   }
+}
 
+extension SyncedAccountHeaderLogic {
   private static func missingApiKeyCaption(account: Account) -> String {
     switch account.type {
     case .exchange:
@@ -125,6 +131,7 @@ enum SyncedAccountHeaderLogic {
     }
   }
 
+  /// Attributed → provider name; unattributed → account-type legacy wording.
   private static func invalidApiKeyCaption(
     provider: SyncProvider?, account: Account
   ) -> String {
@@ -141,23 +148,26 @@ enum SyncedAccountHeaderLogic {
   }
 
   private static func rateLimitedCaption(
-    provider: SyncProvider?, retryAfter: Date?
+    provider: SyncProvider?, retryAfter: Date?, now: Date
   ) -> String {
-    let prefix =
-      provider.map { "\($0.displayName) rate-limited" }
-      ?? "Rate-limited"
+    let prefix: String
+    if let provider {
+      prefix = "\(provider.displayName) rate-limited"
+    } else {
+      prefix = "Rate-limited"
+    }
     guard let retryAfter else { return "\(prefix). Retry shortly." }
     let formatter = RelativeDateTimeFormatter()
     formatter.unitsStyle = .short
     return
-      "\(prefix). Retry \(formatter.localizedString(for: retryAfter, relativeTo: Date()))."
+      "\(prefix). Retry \(formatter.localizedString(for: retryAfter, relativeTo: now))."
   }
 
   private static func networkCaption(
     provider: SyncProvider?, underlying: String
   ) -> String {
     if let provider {
-      return "\(provider.displayName) network error: \(underlying)"
+      return "\(provider.displayName) network error: \(underlying)."
     }
     return "Network error: \(underlying)"
   }
