@@ -895,7 +895,7 @@ git -C <wt> commit -m "feat(transfer-detection): DismissedTransferPair repositor
 
 ### Task 10: `FuzzyTransferDetector` (pure)
 
-**Files:** Create `Shared/TransferDetection/FuzzyTransferDetector.swift`; Test `MoolahTests/Shared/FuzzyTransferDetectorTests.swift`
+**Files:** Create `Shared/TransferDetection/FuzzyTransferDetector.swift` + `Shared/TransferDetection/TransferCandidatePair.swift` (the result struct is its own file — CODE_GUIDE §2 one primary type per file); Test `MoolahTests/Shared/FuzzyTransferDetectorTests.swift`
 
 Eligibility is `Transaction.isTransferDetectionEligible` / `transferDetectionValueLeg` (Extension A) — **no extra `leg.type != .transfer` guard** (a single-`.transfer`-leg on-chain transfer IS eligible and is the primary crypto pairing case; an already-merged two-`.transfer`-leg transfer yields `transferDetectionValueLeg == nil` and is skipped structurally — this is how the design's "skip what Extension B collapsed" is satisfied; see Architecture).
 
@@ -991,7 +991,7 @@ Pure transforms; **untyped `throws`** (SE-0413 default); throw on invalid input 
 - [ ] **Step 1: Failing tests** — merge: earlier date, two `.transfer` legs correct, merged origin outgoing=negative side, notes joined+deduped, payee rule, **fee legs from both sides preserved**; `notMergeable` thrown for same-account / instrument-mismatch / not-opposite; round-trip `split(merged(a,b))` → two single-leg txs whose value legs equal the originals and whose `.single` origins equal the originals; **round-trip with a cross-instrument fee leg on each side** → each fee leg returns to its originating account's split; `split` throws `.notATransfer` / `.missingMergedOrigin` appropriately.
 
 - [ ] **Step 2:** run → fails.
-- [ ] **Step 3: Implement** `struct TransferMergeBuilder: Sendable` plus the error/constant types in the same file (errors cross actor boundaries so they are explicitly `Sendable`; cases have no payload so it is trivially satisfied):
+- [ ] **Step 3: Implement** `struct TransferMergeBuilder: Sendable` (each error type in its own file — `Shared/TransferDetection/TransferMergeError.swift`, `Shared/TransferDetection/ManualMergeError.swift` — per CODE_GUIDE §2 one-primary-type-per-file and the SwiftLint `file_name` rule; errors cross actor boundaries so they are explicitly `Sendable`; cases have no payload so it is trivially satisfied; private helpers live in a trailing `extension TransferMergeBuilder` with `private func` members):
 
 ```swift
 enum TransferMergeError: Error, Equatable, Sendable {
@@ -1016,7 +1016,7 @@ struct TransferMergeBuilder: Sendable {
 }
 ```
 
-`manualMergeWindowSeconds` is a member of the primary `struct` body, not a bare non-conformance `extension` (CODE_GUIDE §2 reserves bare extensions; grouping headings only earn their keep above the 300-line threshold). Use `transferDetectionValueLeg` to locate value legs; treat every non-value leg as a fee leg preserved by `accountId`. Confirm `TransferMergeBuilder.swift` stays under the 400-line warning threshold with these additions; if not, put `ManualMergeError`/`TransferMergeError` in a sibling `TransferMergeErrors.swift` (one type per file is fine).
+`manualMergeWindowSeconds` is a member of the primary `struct` body, not a bare non-conformance `extension` (CODE_GUIDE §2 reserves bare extensions; grouping headings only earn their keep above the 300-line threshold). Use `transferDetectionValueLeg` to locate value legs; treat every non-value leg as a fee leg preserved by `accountId`. `TransferMergeError` and `ManualMergeError` are each in their own file (`TransferMergeError.swift`, `ManualMergeError.swift`) alongside `TransferMergeBuilder.swift`; `TransferMergeBuilder.swift` holds only the builder.
 
 - [ ] **Step 4:** tests pass; `format-check`.
 - [ ] **Step 5:** dispatch `code-review`; fix findings.
