@@ -167,13 +167,14 @@ actor CryptoPriceService {
       return fallback
     }
 
+    let underlyingDescription =
+      lastError.map { String(describing: $0) }
+      ?? String(
+        describing: CryptoPriceError.noPriceAvailable(
+          tokenId: tokenId, date: dateString))
     throw WalletSyncError(
       provider: lastProvider,
-      kind: .network(
-        underlyingDescription: lastError.map { String(describing: $0) }
-          ?? String(
-            describing: CryptoPriceError.noPriceAvailable(
-              tokenId: tokenId, date: dateString))))
+      kind: .network(underlyingDescription: underlyingDescription))
   }
 
   /// Resolves the request from the in-memory cache when the requested

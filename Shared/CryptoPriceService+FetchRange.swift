@@ -4,14 +4,13 @@ import Foundation
 
 // MARK: - CryptoPriceService range-fetch fallback
 
-// `fetchRange` runs the provider fallback chain
-// (CoinGecko → CryptoCompare → Binance) for a date range, tolerating
-// per-provider failures and only throwing when every client errored.
-// It is `internal` (not `private`) because it is called from
-// `prices(for:mapping:in:)` in `CryptoPriceService.swift`; it remains
-// actor-isolated.
-
 extension CryptoPriceService {
+  /// Runs the provider fallback chain
+  /// (CoinGecko → CryptoCompare → Binance) for a date range, tolerating
+  /// per-provider failures and only throwing when every client errored.
+  /// It is `internal` (not `private`) because it is called from
+  /// `prices(for:mapping:in:)` in `CryptoPriceService.swift`; it remains
+  /// actor-isolated.
   func fetchRange(
     instrument: Instrument, mapping: CryptoProviderMapping, from: Date, to: Date
   ) async throws {
