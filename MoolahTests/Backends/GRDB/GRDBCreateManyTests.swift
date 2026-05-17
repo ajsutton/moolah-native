@@ -218,4 +218,77 @@ struct GRDBCreateManyTests {
       absent,
       "createMany must not write the per-profile instrument table; v10 dropped it")
   }
+
+  // MARK: - replace hook fan-out
+
+  private func makeTxnRepo(
+    database: any DatabaseWriter, capture: HookCapture
+  ) throws -> GRDBTransactionRepository {
+    let registry = try SharedRegistryTestSupport.makeSharedRegistry()
+    return GRDBTransactionRepository(
+      database: database,
+      defaultInstrument: .AUD,
+      conversionService: FixedConversionService(),
+      instrumentResolver: registry,
+      instrumentRegistrar: registry,
+      onRecordChanged: makeChangedHook(capture),
+      onRecordDeleted: makeDeletedHook(capture))
+  }
+
+  private func expectFanOut(
+    _ emits: [(recordType: String, id: UUID)],
+    header headerId: UUID,
+    legs legIds: [UUID]
+  ) {
+    let headers = emits.filter { $0.recordType == TransactionRow.recordType }
+    #expect(headers.map(\.id) == [headerId])
+    let legs = emits.filter { $0.recordType == TransactionLegRow.recordType }
+    #expect(Set(legs.map(\.id)) == Set(legIds))
+    #expect(legs.count == legIds.count)
+  }
+
+  @Test(
+    "replace fan-out: deleted header + each deleted leg, then created header + each created leg")
+  func replaceHookFanOut() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    let capture = HookCapture()
+    let txnRepo = try makeTxnRepo(database: database, capture: capture)
+    let accountId = UUID()
+    let stub = Account(id: accountId, name: "Cash", type: .bank, instrument: .AUD)
+    try await database.write { database in
+      try AccountRow(domain: stub).insert(database)
+    }
+
+    let victim = Transaction(
+      date: Date(), payee: "Original",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD, quantity: -50, type: .expense),
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD, quantity: 50, type: .income),
+      ])
+    let created = try await txnRepo.create(victim)
+    try await drainHookHops()
+    // Isolate the replace fan-out from the seeding `create`.
+    capture.changed.removeAll()
+    capture.deleted.removeAll()
+
+    let replacement = Transaction(
+      date: Date(), payee: "Replacement",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD, quantity: -75, type: .expense)
+      ])
+    let result = try await txnRepo.replace(
+      deletingIds: [created.id], creating: [replacement])
+    try await drainHookHops()
+
+    // Victim header + each victim leg emitted onRecordDeleted with the
+    // matching record type; created header + each created leg emitted
+    // onRecordChanged with the matching record type.
+    expectFanOut(capture.deleted, header: created.id, legs: created.legs.map(\.id))
+    expectFanOut(
+      capture.changed, header: replacement.id,
+      legs: result.flatMap { $0.legs.map(\.id) })
+  }
 }

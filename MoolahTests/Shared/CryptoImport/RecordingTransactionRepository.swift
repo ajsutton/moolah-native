@@ -59,6 +59,11 @@ actor RecordingTransactionRepository: TransactionRepository {
     try await wrapped.delete(id: id)
   }
 
+  func replace(deletingIds: [UUID], creating: [Transaction]) async throws -> [Transaction] {
+    deletedIds.append(contentsOf: deletingIds)
+    return try await wrapped.replace(deletingIds: deletingIds, creating: creating)
+  }
+
   func fetchPayeeSuggestions(
     prefix: String, excludingTransactionId: UUID?
   ) async throws -> [String] {

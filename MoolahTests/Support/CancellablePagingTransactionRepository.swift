@@ -69,6 +69,9 @@ actor CancellablePagingTransactionRepository: TransactionRepository {
   func createMany(_ transactions: [Transaction]) async throws -> [Transaction] { transactions }
   func update(_ transaction: Transaction) async throws -> Transaction { transaction }
   func delete(id: UUID) async throws {}
+  func replace(deletingIds: [UUID], creating: [Transaction]) async throws -> [Transaction] {
+    creating
+  }
   func fetchPayeeSuggestions(
     prefix: String, excludingTransactionId: UUID?
   ) async throws -> [String] { [] }
