@@ -74,6 +74,16 @@ final class SyncedAccountStore {
   let walletApplyEngine: WalletApplyEngine
   let walletSyncState: any WalletSyncStateRepository
   let accounts: any AccountRepository
+
+  /// Cross-account transfer-detection coordinator. Owns every detection
+  /// and merge action; the store only orchestrates the post-apply call.
+  let transferDetection: TransferDetectionCoordinator
+
+  /// The store's own transaction-repository handle, used solely to fetch
+  /// the participating-account candidate set after the apply pass (the
+  /// apply engine's repository is private and not widened for this).
+  let transactions: any TransactionRepository
+
   let clock: @Sendable () -> Date
   let staleThreshold: TimeInterval
   let timerInterval: Duration
@@ -115,6 +125,11 @@ final class SyncedAccountStore {
   ///   - walletSyncState: Per-device sync checkpoint store.
   ///   - accounts: Account repository — read on every stale check to
   ///     filter to syncable accounts (via `sources`).
+  ///   - transferDetection: Cross-account transfer-detection
+  ///     coordinator. The store calls `runDetection` once per sync pass
+  ///     after the apply + state refresh.
+  ///   - transactions: Transaction repository handle used to fetch the
+  ///     participating-account candidate set for the detection pass.
   ///   - clock: Closure returning "now". The clock injection is for
   ///     per-account `lastSyncedAt` decisions; the timer's
   ///     `Task.sleep` uses the real Swift clock regardless. Tests pass
@@ -129,6 +144,8 @@ final class SyncedAccountStore {
     walletApplyEngine: WalletApplyEngine,
     walletSyncState: any WalletSyncStateRepository,
     accounts: any AccountRepository,
+    transferDetection: TransferDetectionCoordinator,
+    transactions: any TransactionRepository,
     clock: @Sendable @escaping () -> Date = { Date() },
     staleThreshold: TimeInterval = 86_400,
     timerInterval: Duration = .seconds(3_600),
@@ -138,6 +155,8 @@ final class SyncedAccountStore {
     self.walletApplyEngine = walletApplyEngine
     self.walletSyncState = walletSyncState
     self.accounts = accounts
+    self.transferDetection = transferDetection
+    self.transactions = transactions
     self.clock = clock
     self.staleThreshold = staleThreshold
     self.timerInterval = timerInterval
@@ -303,6 +322,12 @@ final class SyncedAccountStore {
     updateGlobalError(from: perAccountResults)
     await runApplyPass(perAccountResults: perAccountResults)
     await refreshStateFromRepository()
+    // Detection runs after the apply pass and the state refresh so the
+    // just-persisted rows are visible to the candidate fetch. Transfers
+    // already collapsed by `CrossAccountTransferMerger` (same-`externalId`
+    // opposing legs) carry a nil `transferDetectionValueLeg` and are
+    // structurally skipped by the detector.
+    await runTransferDetection(participatingAccountIds: Set(inputs.map(\.id)))
   }
 
   // MARK: - Internal mutators

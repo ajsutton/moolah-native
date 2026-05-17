@@ -79,6 +79,11 @@ struct SyncedAccountStoreTests {
       walletApplyEngine: walletApplyEngine,
       walletSyncState: backend.walletSyncState,
       accounts: backend.accounts,
+      transferDetection: TransferDetectionCoordinator(
+        transactions: backend.transactions,
+        dismissedPairs: backend.dismissedTransferPairs,
+        clock: clock),
+      transactions: backend.transactions,
       clock: clock,
       staleThreshold: staleThreshold,
       timerInterval: timerInterval,

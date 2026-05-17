@@ -115,6 +115,12 @@ final class TransferDetectionCoordinator {
     }
   }
 
+  /// Writes the `transferSuggestion` header onto `transaction` via the
+  /// general-purpose `transactions.update`, which re-queues each of the
+  /// transaction's legs to sync though only the header changes. The
+  /// write is idempotent and correct; the redundant leg re-queue is a
+  /// known sync-queue inefficiency tracked in issue #937
+  /// (https://github.com/ajsutton/moolah-native/issues/937).
   private func annotate(
     _ transaction: Transaction,
     counterpart: UUID,
