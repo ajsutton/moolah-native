@@ -869,7 +869,13 @@ protocol DismissedTransferPairRepository: Sendable {
 
 - [ ] **Step 6: `BackendProvider`** — add `var dismissedTransferPairs: any DismissedTransferPairRepository { get }`; implement on every conformer (CloudKitBackend constructs `GRDBDismissedTransferPairRepository` exactly as `categories`; `TestBackend` inherits via CloudKitBackend; `PreviewBackend` provides an in-memory analogue consistent with how it provides `categories`).
 
-- [ ] **Step 7:** contract + query-plan tests pass; `build-mac`; `format-check`.
+- [ ] **Step 6b: Required regression tests + guide upkeep** (a new syncable record type owes these — mirror the existing equivalents):
+  - `MoolahTests/Backends/GRDB/DismissedTransferPairRollbackTests.swift` — rollback tests for the two multi-statement writes (`applyRemoteChangesSync` save+delete batch; `setEncodedSystemFieldsBatchSync`), modelled on `CSVImportRollbackTests` (seed prior rows, install a `BEFORE INSERT/DELETE/UPDATE` trigger that throws on a sentinel mid-batch, assert the prior rows are unchanged after the throw).
+  - Add a `GRDBDismissedTransferPairRepository` section to `MoolahTests/Sync/GRDBRepositoryHookRecordTypeTests.swift` pinning that `create` emits `(DismissedTransferPairRow.recordType, pair.id)` via `onRecordChanged` and `delete` via `onRecordDeleted` (mirror the existing per-repo sections).
+  - Extend `MoolahTests/Sync/ProfileDataSyncHandlerQueueTests.swift` `AllRecordSeed` to seed a `DismissedTransferPairRow`, bump the exhaustive count assertion (7 → 8), and assert its `recordName` is collected (its `id` is the deterministic content-addressed id — compute it the same way).
+  - Add `DismissedTransferPairRow` to `RecordMappingTests`'s `uuidKeyedRecordsReturnNilForNonUUIDRecordName` (malformed-record-name → nil).
+  - `guides/CONCURRENCY_GUIDE.md` Carve-out 3 list (line ~121): add `GRDBDismissedTransferPairRepository` in alpha order (after `GRDBCSVImportProfileRepository`, before `GRDBImportRuleRepository`). (The `SYNC_GUIDE.md` `CD_`-prefix correction already landed in a prior commit.)
+- [ ] **Step 7:** contract + query-plan + rollback + hook-record-type + queue + mapping tests pass; the existing sync/repo regression suites pass; `build-mac`; `format-check`.
 - [ ] **Step 8:** dispatch `database-code-review` + `concurrency-review` + `sync-review` (now **full scope** for `DismissedTransferPairRow`). Fix all findings; re-run tests.
 - [ ] **Step 9: Commit**
 
