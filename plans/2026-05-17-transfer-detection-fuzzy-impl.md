@@ -363,9 +363,9 @@ import Testing
 
 @testable import Moolah
 
-@Suite("Transaction.importOrigin widening")
+@Suite("Transaction importOrigin/transferSuggestion accessors")
 struct TransactionImportOriginAccessorTests {
-  @Test("transferSuggestion defaults nil; importOrigin is the sum type")
+  @Test("transferSuggestion defaults to nil and importOrigin round-trips a .single origin")
   func defaults() {
     let leg = TransactionLeg(
       accountId: UUID(), instrument: .defaultTestInstrument, quantity: -10,
@@ -387,7 +387,7 @@ struct TransactionImportOriginAccessorTests {
 
 - [ ] **Step 5: Fix all call sites.** Construction sites wrapping an `ImportOrigin`: the `.single(...)` case. Read sites: use the `singleOrigin` accessor (`tx.importOrigin?.singleOrigin?.rawDescription`). Known non-obvious site (verify against grep; not exhaustive):
   - `Shared/CryptoImport/CrossAccountTransferMerger.swift` — `mergedImportOrigin(lower:upper:)` returns `ImportOrigin?` and is fed into `Transaction.init(…importOrigin:)`. Change its return type to `TransactionImportOrigin?` and wrap its result `.map(TransactionImportOrigin.single)` (dropping the upper side stays correct; only the wrapping changes). Rewrite the time-travel comment block (currently "v1 … `Transaction.importOrigin` is still a single value … can be revisited") as a current-fact statement, e.g. "The crypto merger records only the surviving side's origin via `.single`; the incoming side's origin is dropped here. Issue #762 tracks widening to `.merged`."
-  - `TransactionRow` (coupled — see PR2 note): apply a temporary `.single`-only mapping here so the build is green; Task 6 replaces it with the full enum mapping in the next commit (same PR).
+  - `TransactionRow` (coupled — see PR2 note): apply a `.single`-only mapping here so the build is green (Task 6, the next commit in this PR, replaces it with the full enum mapping). The in-source comment must be a **present-fact statement only** — no task numbers, no "temporary", no "will replace", no plan/PR references, no future tense, no bare `TODO` (CODE_GUIDE §19 + `feedback_no_slice_refs_in_comments`). Acceptable: `// Only the .single case is projected to the eight denormalised columns; .merged origins and transferSuggestion are not persisted by this mapping.`
 
   Re-run `just -d <wt> build-mac` until 0 errors/0 warnings — the build is the authoritative checklist for the rest.
 
