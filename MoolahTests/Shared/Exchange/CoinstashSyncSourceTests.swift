@@ -8,6 +8,11 @@ import Testing
 /// `.coinstash` exchange accounts; a missing token maps to the
 /// missing-credential error; an HTTP 401 maps to the invalid-credential
 /// error — so `SyncedAccountStore` stays provider-agnostic.
+///
+/// Error-mapping tests assert both `error.provider` and `error.kind` in a
+/// single test because the `(provider, kind)` pair is the error's single
+/// observable classification contract — splitting them would double tests for
+/// no added value.
 struct CoinstashSyncSourceTests {
   private let eth = Instrument.crypto(
     chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
@@ -102,9 +107,9 @@ struct CoinstashSyncSourceTests {
       Issue.record("Expected WalletSyncError to be thrown")
     } catch let error as WalletSyncError {
       #expect(error.provider == .coinstash)
-      if case .network = error.kind { /* ok */
-      } else {
+      guard case .network = error.kind else {
         Issue.record("Expected .network kind, got \(error.kind)")
+        return
       }
     } catch {
       Issue.record("Expected WalletSyncError, got \(error)")
