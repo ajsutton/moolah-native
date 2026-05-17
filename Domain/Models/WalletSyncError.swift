@@ -9,10 +9,10 @@ import Foundation
 /// caption can name it. It is `nil` when the failure is not attributable
 /// to a single provider (e.g. account-data validation) or when decoding a
 /// legacy row written before attribution existed.
-struct WalletSyncError: Error, Codable, Sendable, Hashable {
+struct WalletSyncError {
   /// The failure category — exactly the cases the bare enum carried
   /// before attribution was added.
-  enum Kind: Codable, Sendable, Hashable {
+  enum Kind {
     case missingApiKey
     case invalidApiKey
     case rateLimited(retryAfter: Date?)
@@ -20,8 +20,8 @@ struct WalletSyncError: Error, Codable, Sendable, Hashable {
     case providerMalformedResponse(stage: String)
   }
 
-  var provider: SyncProvider?
-  var kind: Kind
+  let provider: SyncProvider?
+  let kind: Kind
 
   /// Returns a copy attributed to `provider`, but only if it is not
   /// already attributed — the innermost (closest-to-source) provider
@@ -31,6 +31,16 @@ struct WalletSyncError: Error, Codable, Sendable, Hashable {
     return WalletSyncError(provider: provider, kind: kind)
   }
 }
+
+// MARK: - Protocol conformances
+
+extension WalletSyncError: Error {}
+extension WalletSyncError: Sendable {}
+extension WalletSyncError: Hashable {}
+
+extension WalletSyncError.Kind: Codable {}
+extension WalletSyncError.Kind: Sendable {}
+extension WalletSyncError.Kind: Hashable {}
 
 // MARK: - Call-site-preserving factories
 
@@ -67,13 +77,12 @@ extension WalletSyncError {
 // object whose key is the case name, e.g. {"network":{...}} or
 // {"missingApiKey":{}}. The decoder accepts both; the encoder only ever
 // writes the new shape.
-extension WalletSyncError {
+extension WalletSyncError: Codable {
   private enum CodingKeys: String, CodingKey { case provider, kind }
 
   init(from decoder: Decoder) throws {
-    if let container = try? decoder.container(keyedBy: CodingKeys.self),
-      container.contains(.kind)
-    {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    if container.contains(.kind) {
       let provider = try container.decodeIfPresent(
         SyncProvider.self, forKey: .provider)
       let kind = try container.decode(Kind.self, forKey: .kind)

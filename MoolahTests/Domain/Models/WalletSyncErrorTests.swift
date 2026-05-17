@@ -56,4 +56,15 @@ struct WalletSyncErrorTests {
     #expect(decoded.provider == nil)
     #expect(decoded.kind == .missingApiKey)
   }
+
+  @Test("rateLimited with a non-nil retryAfter survives JSON round-trip")
+  func rateLimitedDateRoundTrips() throws {
+    let date = Date(timeIntervalSince1970: 1_700_000_000)
+    let original = WalletSyncError(
+      provider: .alchemy, kind: .rateLimited(retryAfter: date))
+    let data = try JSONEncoder().encode(original)
+    let decoded = try JSONDecoder().decode(WalletSyncError.self, from: data)
+    #expect(decoded == original)
+    #expect(decoded.kind == .rateLimited(retryAfter: date))
+  }
 }

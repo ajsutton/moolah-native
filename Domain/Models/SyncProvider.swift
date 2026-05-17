@@ -6,7 +6,7 @@ import Foundation
 /// so it round-trips as a stable token inside the persisted
 /// `WalletSyncState.lastError` JSON. Per-device only — not a synced
 /// record, so adding a case does not touch `DataFormatVersion`.
-enum SyncProvider: String, Codable, Sendable, Hashable, CaseIterable {
+enum SyncProvider: String {
   case alchemy
   case blockExplorer
   case coinstash
@@ -29,3 +29,10 @@ enum SyncProvider: String, Codable, Sendable, Hashable, CaseIterable {
     }
   }
 }
+
+// MARK: - Protocol conformances
+
+extension SyncProvider: Codable {}
+extension SyncProvider: Sendable {}
+extension SyncProvider: Hashable {}
+extension SyncProvider: CaseIterable {}

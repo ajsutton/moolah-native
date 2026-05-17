@@ -64,17 +64,10 @@ struct LiveAlchemyClientErrorTests {
       let response = AlchemyTestSupport.response(for: request, statusCode: 429)
       return (response, Data())
     }
-    do {
+    await #expect(throws: WalletSyncError.rateLimited(retryAfter: nil)) {
       _ = try await client.getAssetTransfers(
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0
       )
-      Issue.record("Expected WalletSyncError.rateLimited")
-    } catch let error as WalletSyncError {
-      guard case .rateLimited(let retryAfter) = error.kind else {
-        Issue.record("Expected .rateLimited kind, got \(error.kind)")
-        return
-      }
-      #expect(retryAfter == nil)
     }
   }
 
