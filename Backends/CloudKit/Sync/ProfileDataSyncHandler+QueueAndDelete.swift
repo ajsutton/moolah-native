@@ -79,6 +79,7 @@ extension ProfileDataSyncHandler {
     collectTransactionLegIds(source: source, into: &recordIDs)
     collectCSVImportProfileIds(source: source, into: &recordIDs)
     collectImportRuleIds(source: source, into: &recordIDs)
+    collectDismissedTransferPairIds(source: source, into: &recordIDs)
     return recordIDs
   }
 
@@ -199,6 +200,20 @@ extension ProfileDataSyncHandler {
     collectAllGRDBUUIDs(ids: ids, recordType: ImportRuleRow.recordType, into: &recordIDs)
   }
 
+  private func collectDismissedTransferPairIds(
+    source: GRDBIdSource, into recordIDs: inout [CKRecord.ID]
+  ) {
+    let repo = grdbRepositories.dismissedTransferPairs
+    let ids: () throws -> [UUID] = {
+      switch source {
+      case .all: return try repo.allRowIdsSync()
+      case .unsynced: return try repo.unsyncedRowIdsSync()
+      }
+    }
+    collectAllGRDBUUIDs(
+      ids: ids, recordType: DismissedTransferPairRow.recordType, into: &recordIDs)
+  }
+
   // MARK: - Local Data Deletion
 
   /// Deletes all local records for this profile's zone.
@@ -236,6 +251,10 @@ extension ProfileDataSyncHandler {
         { try self.grdbRepositories.csvImportProfiles.deleteAllSync() }
       ),
       (ImportRuleRow.recordType, { try self.grdbRepositories.importRules.deleteAllSync() }),
+      (
+        DismissedTransferPairRow.recordType,
+        { try self.grdbRepositories.dismissedTransferPairs.deleteAllSync() }
+      ),
     ]
     for (recordType, wipe) in wipes {
       do {

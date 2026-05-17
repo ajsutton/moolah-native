@@ -241,6 +241,10 @@ struct RecordMappingTests {
 
     let ruleRecord = CKRecord(recordType: ImportRuleRow.recordType, recordID: malformedID)
     #expect(ImportRuleRow.fieldValues(from: ruleRecord) == nil)
+
+    let dismissedPairRecord = CKRecord(
+      recordType: DismissedTransferPairRow.recordType, recordID: malformedID)
+    #expect(DismissedTransferPairRow.fieldValues(from: dismissedPairRecord) == nil)
   }
 
   /// `InstrumentRow` is keyed by `recordName` rather than `uuid`, so any

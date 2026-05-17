@@ -159,7 +159,7 @@ final class ImportStore {
       let windowStart = now.addingTimeInterval(-86_400)
       unreviewedBadgeCount =
         page.transactions.filter { transaction in
-          guard let origin = transaction.importOrigin else { return false }
+          guard let origin = transaction.importOrigin?.singleOrigin else { return false }
           guard origin.importedAt >= windowStart && origin.importedAt <= now else {
             return false
           }

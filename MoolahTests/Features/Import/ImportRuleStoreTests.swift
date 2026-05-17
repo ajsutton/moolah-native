@@ -149,7 +149,7 @@ struct ImportRuleStoreTests {
             accountId: accountId, instrument: .AUD, quantity: -5, type: .expense,
             categoryId: nil, earmarkId: nil)
         ],
-        importOrigin: origin)
+        importOrigin: .single(origin))
     }
     let unrelated = Transaction(
       date: Date(),
@@ -158,11 +158,12 @@ struct ImportRuleStoreTests {
           accountId: accountId, instrument: .AUD, quantity: -10, type: .expense,
           categoryId: nil, earmarkId: nil)
       ],
-      importOrigin: ImportOrigin(
-        rawDescription: "AMAZON", bankReference: nil,
-        rawAmount: -10, rawBalance: nil, importedAt: Date(),
-        importSessionId: UUID(), sourceFilename: nil,
-        parserIdentifier: "generic-bank"))
+      importOrigin: .single(
+        ImportOrigin(
+          rawDescription: "AMAZON", bankReference: nil,
+          rawAmount: -10, rawBalance: nil, importedAt: Date(),
+          importSessionId: UUID(), sourceFilename: nil,
+          parserIdentifier: "generic-bank")))
     TestBackend.seed(transactions: seededTxs + [unrelated], in: database)
     let store = ImportRuleStore(repository: backend.importRules)
     let count = await store.countAffected(

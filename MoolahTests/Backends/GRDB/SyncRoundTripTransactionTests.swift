@@ -64,6 +64,89 @@ struct SyncRoundTripTransactionTests {
     #expect(resolved.encodedSystemFields == ckRecord.encodedSystemFields)
   }
 
+  /// Builds an `ImportOrigin` from integer cents so the decimals are
+  /// exact and the test body stays focused on the round-trip assertion.
+  /// `bankReference`, `sourceFilename`, and `importedAt` are derived
+  /// from `tag` — they are fixtures, not asserted individually, but the
+  /// round-trip equality check still covers them.
+  private static func makeOrigin(
+    tag: String,
+    amountCents: Int,
+    balanceCents: Int
+  ) -> ImportOrigin {
+    ImportOrigin(
+      rawDescription: "TFR \(tag)",
+      bankReference: "\(tag)-REF",
+      rawAmount: Decimal(amountCents) / 100,
+      rawBalance: Decimal(balanceCents) / 100,
+      importedAt: Date(timeIntervalSince1970: 1_699_000_000),
+      importSessionId: UUID(),
+      sourceFilename: "\(tag).csv",
+      parserIdentifier: "generic-csv")
+  }
+
+  @Test("Merged importOrigin and transferSuggestion survive the CK round trip")
+  func mergedOriginAndSuggestionRoundTrip() throws {
+    let id = UUID()
+    let date = Date(timeIntervalSince1970: 1_700_000_000)
+    let counterpartId = UUID()
+    let suggestedAt = Date(timeIntervalSince1970: 1_700_500_000)
+    let outgoing = Self.makeOrigin(
+      tag: "OUT", amountCents: -25075, balanceCents: 100_000)
+    let incoming = Self.makeOrigin(
+      tag: "IN", amountCents: 25075, balanceCents: 200_000)
+    let source = TransactionRow(
+      domain: Transaction(
+        id: id,
+        date: date,
+        payee: "Transfer",
+        notes: nil,
+        recurPeriod: nil,
+        recurEvery: nil,
+        legs: [],
+        importOrigin: .merged(
+          MergedImportOrigin(outgoing: outgoing, incoming: incoming)),
+        transferSuggestion: TransferSuggestion(
+          counterpartTransactionId: counterpartId, suggestedAt: suggestedAt)))
+    let ckRecord = source.toCKRecord(in: Self.zoneID)
+
+    let projected = try #require(TransactionRow.fieldValues(from: ckRecord))
+    let resolved = try projected.toDomain(legs: [])
+
+    #expect(
+      resolved.importOrigin
+        == .merged(MergedImportOrigin(outgoing: outgoing, incoming: incoming)))
+    #expect(
+      resolved.transferSuggestion
+        == TransferSuggestion(
+          counterpartTransactionId: counterpartId, suggestedAt: suggestedAt))
+  }
+
+  @Test("Single importOrigin survives the CK round trip")
+  func singleOriginRoundTrip() throws {
+    let id = UUID()
+    let origin = Self.makeOrigin(
+      tag: "GROCERIES", amountCents: -4210, balanceCents: 50000)
+    let source = TransactionRow(
+      domain: Transaction(
+        id: id,
+        date: Date(timeIntervalSince1970: 1_700_000_000),
+        payee: "Market",
+        notes: nil,
+        recurPeriod: nil,
+        recurEvery: nil,
+        legs: [],
+        importOrigin: .single(origin),
+        transferSuggestion: nil))
+    let ckRecord = source.toCKRecord(in: Self.zoneID)
+
+    let projected = try #require(TransactionRow.fieldValues(from: ckRecord))
+    let resolved = try projected.toDomain(legs: [])
+
+    #expect(resolved.importOrigin == .single(origin))
+    #expect(resolved.transferSuggestion == nil)
+  }
+
   // MARK: - TransactionLegRow
 
   /// Seeds the `account` and `transaction` rows the leg references so

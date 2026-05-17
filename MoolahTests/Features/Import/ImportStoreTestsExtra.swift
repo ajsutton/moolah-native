@@ -82,7 +82,7 @@ struct ImportStoreTestsExtra {
     let page = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: accountId), page: 0, pageSize: 50)
     let coffee = page.transactions.first(where: {
-      $0.importOrigin?.rawDescription == "COFFEE HUT SYDNEY"
+      $0.importOrigin?.singleOrigin?.rawDescription == "COFFEE HUT SYDNEY"
     })!
     #expect(coffee.payee == "Café")
     #expect(coffee.legs[0].categoryId == category.id)
@@ -114,7 +114,7 @@ struct ImportStoreTestsExtra {
     let page = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: sourceAccount), page: 0, pageSize: 50)
     let coffee = page.transactions.first(where: {
-      $0.importOrigin?.rawDescription == "COFFEE HUT SYDNEY"
+      $0.importOrigin?.singleOrigin?.rawDescription == "COFFEE HUT SYDNEY"
     })!
     #expect(coffee.legs.count == 2)
     #expect(coffee.legs.allSatisfy { $0.type == .transfer })
@@ -176,7 +176,7 @@ struct ImportStoreTestsExtra {
     let page = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: audSource), page: 0, pageSize: 50)
     let coffee = page.transactions.first(where: {
-      $0.importOrigin?.rawDescription == "COFFEE HUT SYDNEY"
+      $0.importOrigin?.singleOrigin?.rawDescription == "COFFEE HUT SYDNEY"
     })!
     #expect(coffee.legs.count == 2)
     let sourceLeg = coffee.legs.first(where: { $0.accountId == audSource })!
@@ -210,7 +210,9 @@ struct ImportStoreTestsExtra {
     if case .imported(_, let imported, _) = result {
       // 4 non-skip candidates; 1 coffee row dropped by rule → 3 persisted.
       #expect(imported.count == 3)
-      #expect(imported.allSatisfy { $0.importOrigin?.rawDescription != "COFFEE HUT SYDNEY" })
+      #expect(
+        imported.allSatisfy { $0.importOrigin?.singleOrigin?.rawDescription != "COFFEE HUT SYDNEY" }
+      )
     } else {
       Issue.record("expected .imported")
     }

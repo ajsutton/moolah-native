@@ -363,9 +363,9 @@ import Testing
 
 @testable import Moolah
 
-@Suite("Transaction.importOrigin widening")
+@Suite("Transaction importOrigin/transferSuggestion accessors")
 struct TransactionImportOriginAccessorTests {
-  @Test("transferSuggestion defaults nil; importOrigin is the sum type")
+  @Test("transferSuggestion defaults to nil and importOrigin round-trips a .single origin")
   func defaults() {
     let leg = TransactionLeg(
       accountId: UUID(), instrument: .defaultTestInstrument, quantity: -10,
@@ -387,7 +387,7 @@ struct TransactionImportOriginAccessorTests {
 
 - [ ] **Step 5: Fix all call sites.** Construction sites wrapping an `ImportOrigin`: the `.single(...)` case. Read sites: use the `singleOrigin` accessor (`tx.importOrigin?.singleOrigin?.rawDescription`). Known non-obvious site (verify against grep; not exhaustive):
   - `Shared/CryptoImport/CrossAccountTransferMerger.swift` — `mergedImportOrigin(lower:upper:)` returns `ImportOrigin?` and is fed into `Transaction.init(…importOrigin:)`. Change its return type to `TransactionImportOrigin?` and wrap its result `.map(TransactionImportOrigin.single)` (dropping the upper side stays correct; only the wrapping changes). Rewrite the time-travel comment block (currently "v1 … `Transaction.importOrigin` is still a single value … can be revisited") as a current-fact statement, e.g. "The crypto merger records only the surviving side's origin via `.single`; the incoming side's origin is dropped here. Issue #762 tracks widening to `.merged`."
-  - `TransactionRow` (coupled — see PR2 note): apply a temporary `.single`-only mapping here so the build is green; Task 6 replaces it with the full enum mapping in the next commit (same PR).
+  - `TransactionRow` (coupled — see PR2 note): apply a `.single`-only mapping here so the build is green (Task 6, the next commit in this PR, replaces it with the full enum mapping). The in-source comment must be a **present-fact statement only** — no task numbers, no "temporary", no "will replace", no plan/PR references, no future tense, no bare `TODO` (CODE_GUIDE §19 + `feedback_no_slice_refs_in_comments`). Acceptable: `// Only the .single case is projected to the eight denormalised columns; .merged origins and transferSuggestion are not persisted by this mapping.`
 
   Re-run `just -d <wt> build-mac` until 0 errors/0 warnings — the build is the authoritative checklist for the rest.
 
@@ -615,9 +615,11 @@ struct TransactionRowTransferDetectionMappingTests {
   - else, `guard let o = decodeOutgoing() else { return nil }; return .single(o)` (covers `kind == "single"` and the legacy `kind == nil`)
   - all-NULL → `nil` (falls out of the guard)
 
-  `decodeOutgoing()`/`decodeIncoming()` reuse the exact existing eight-column `ImportOrigin` decode (and its `Decimal(string:)`/`NSDecimalNumber(decimal:).stringValue` treatment) over the existing vs the new incoming columns. Encode: `.single(o)` → existing eight + `kind = "single"`, incoming NULL; `.merged(m)` → `m.outgoing` into existing eight, `m.incoming` into incoming eight, `kind = "merged"`; `nil` → all sixteen + kind NULL. Add `transferSuggestion` map symmetrically (reconstruct iff both columns non-nil). Phrase the in-source doc as the *rule*, not a sibling-file cross-reference.
+  `decodeOutgoing()`/`decodeIncoming()` reuse the exact existing eight-column `ImportOrigin` decode (and its `Decimal(string:)`/`NSDecimalNumber(decimal:).stringValue` treatment) over the existing vs the new incoming columns. Encode: `.single(o)` → existing eight + `kind = "single"`, incoming NULL; `.merged(m)` → `m.outgoing` into existing eight, `m.incoming` into incoming eight, `kind = "merged"`; `nil` → all sixteen + kind NULL. Add `transferSuggestion` map symmetrically (reconstruct iff both columns non-nil). Phrase the in-source doc as the *rule*, not a sibling-file cross-reference. If an explicit memberwise `init` is needed (SwiftLint forbids `var x: T? = nil`), default **only the newly-added params** to `nil` — pre-existing params keep NO default so existing call sites and the prior "all required" contract are unchanged.
 
-- [ ] **Step 4:** tests pass; full `build-mac`; `format-check`.
+- [ ] **Step 3b: Non-insert write path.** `TransactionRow` header rows are also written by `GRDBTransactionRepository+Update.swift`'s `applyMetadata(of:to:)`, which currently field-by-field-copies only the 8 legacy `import_origin_*` columns. A field-by-field extension is fragile; replace its body with the row-rebuild form that preserves the CloudKit blob: `let saved = row.encodedSystemFields; row = TransactionRow(domain: transaction); row.encodedSystemFields = saved` (the `recordName` from `init(domain:)` is deterministic and matches). Update its now-stale doc comment (drop the "eight … columns" enumeration; state the present rule). Without this, `update()` on a `.merged`/`transferSuggestion` transaction silently nulls the 11 new columns (merged reads back as single).
+
+- [ ] **Step 4:** tests pass; full `build-mac`; `format-check`. Add a **repository-level** round-trip test (extend `ImportOriginTransactionPersistenceTests` or a sibling): create then `update()` a transaction carrying `.merged` importOrigin **and** a `transferSuggestion`, fetch it back, assert both survive; and a test updating a merged transaction to a different/`nil` origin (exercises the discriminator via the update path). The mapping-layer unit tests do not cover the `update()` path.
 - [ ] **Step 5:** dispatch `database-code-review`; fix all findings.
 - [ ] **Step 6: Commit**
 
@@ -660,17 +662,17 @@ transferSuggestionSuggestedAt          TIMESTAMP QUERYABLE SORTABLE,
 
 - [ ] **Step 5: Update `TransactionRow+CloudKit.swift`** — add the eleven fields symmetrically to both directions, matching the existing `importOrigin*` passthroughs (ids as `uuidString`, timestamps as `Date`, decimals as `String`). Verify the generated wire struct's `write(to:)` omits nil-valued optionals (the established pattern); if it does not, set each field on the `CKRecord` only when non-nil, as the existing `importOriginBankReference` passthrough does.
 
-- [ ] **Step 6: Bump `DataFormatVersion`** — in `Domain/Models/DataFormatVersion.swift` set `static let current: Int = 3` and prepend a history line:
+- [ ] **Step 6: Bump `DataFormatVersion`** — in `Domain/Models/DataFormatVersion.swift` set `static let current: Int = 3` and prepend a history entry that is **present-fact at this commit** (do NOT pre-claim `DismissedTransferPairRecord` — it is not in `schema.ckdb` yet; Task 8 amends this same v3 entry to add it):
 
 ```
-/// - 3: DismissedTransferPairRecord (new synced record type, Task 8) +
-///      merged importOrigin / transferSuggestion on TransactionRecord.
-///      The importOriginKind discriminator is nil on pre-v3 records;
-///      an older build decodes a `.merged` transaction as `.single`,
-///      losing the incoming side — hence forward-incompatible.
+/// - 3: `importOriginKind` + eight `importOriginIncoming*` + two
+///      `transferSuggestion*` fields on `TransactionRecord`.
+///      `importOriginKind` is nil on pre-v3 records, so an older
+///      build decodes a `.merged` transaction as `.single` and
+///      drops the incoming side — forward-incompatible.
 ```
 
-(Match the file's existing history-comment format.)
+(Match the file's existing history-comment format/bullet style.)
 
 - [ ] **Step 7:** test passes; `build-mac`; `format-check`.
 - [ ] **Step 8:** dispatch `sync-review` (note: **partial scope** — full `TransactionRow` sync wiring already exists for the base record; this reviews only the field additions + DataFormatVersion). Fix findings.
@@ -717,7 +719,9 @@ RECORD TYPE DismissedTransferPairRecord (
 );
 ```
 
-Then `just -d <wt> generate`; confirm `Generated/DismissedTransferPairRecordCloudKitFields.swift` exists; do not hand-edit it.
+Then `just -d <wt> --justfile <wt>/justfile generate`; confirm `Generated/DismissedTransferPairRecordCloudKitFields.swift` exists; do not hand-edit it.
+
+- [ ] **Step 6a: Amend the DataFormatVersion v3 history entry.** Adding `DismissedTransferPairRecord` to `schema.ckdb` is itself a forward-incompatible trigger (new synced record type). It belongs to the **same unreleased format epoch** as Task 7's field additions, so do NOT bump to 4 — instead extend the existing `- 3:` history line in `Domain/Models/DataFormatVersion.swift` so it now also names the new record type, e.g. append a sentence: `Also adds the synced \`DismissedTransferPairRecord\`.` Keep `static let current: Int = 3`. Present-fact wording, no task/plan refs.
 
 - [ ] **Step 7:** test passes; `build-mac`; `format-check`.
 - [ ] **Step 8:** dispatch `database-schema-review` + `sync-review` (note: **partial scope** — full handler wiring lands in Task 9 Step 5; this reviews row/record/schema only). Fix findings.
@@ -865,7 +869,13 @@ protocol DismissedTransferPairRepository: Sendable {
 
 - [ ] **Step 6: `BackendProvider`** — add `var dismissedTransferPairs: any DismissedTransferPairRepository { get }`; implement on every conformer (CloudKitBackend constructs `GRDBDismissedTransferPairRepository` exactly as `categories`; `TestBackend` inherits via CloudKitBackend; `PreviewBackend` provides an in-memory analogue consistent with how it provides `categories`).
 
-- [ ] **Step 7:** contract + query-plan tests pass; `build-mac`; `format-check`.
+- [ ] **Step 6b: Required regression tests + guide upkeep** (a new syncable record type owes these — mirror the existing equivalents):
+  - `MoolahTests/Backends/GRDB/DismissedTransferPairRollbackTests.swift` — rollback tests for the two multi-statement writes (`applyRemoteChangesSync` save+delete batch; `setEncodedSystemFieldsBatchSync`), modelled on `CSVImportRollbackTests` (seed prior rows, install a `BEFORE INSERT/DELETE/UPDATE` trigger that throws on a sentinel mid-batch, assert the prior rows are unchanged after the throw).
+  - Add a `GRDBDismissedTransferPairRepository` section to `MoolahTests/Sync/GRDBRepositoryHookRecordTypeTests.swift` pinning that `create` emits `(DismissedTransferPairRow.recordType, pair.id)` via `onRecordChanged` and `delete` via `onRecordDeleted` (mirror the existing per-repo sections).
+  - Extend `MoolahTests/Sync/ProfileDataSyncHandlerQueueTests.swift` `AllRecordSeed` to seed a `DismissedTransferPairRow`, bump the exhaustive count assertion (7 → 8), and assert its `recordName` is collected (its `id` is the deterministic content-addressed id — compute it the same way).
+  - Add `DismissedTransferPairRow` to `RecordMappingTests`'s `uuidKeyedRecordsReturnNilForNonUUIDRecordName` (malformed-record-name → nil).
+  - `guides/CONCURRENCY_GUIDE.md` Carve-out 3 list (line ~121): add `GRDBDismissedTransferPairRepository` in alpha order (after `GRDBCSVImportProfileRepository`, before `GRDBImportRuleRepository`). (The `SYNC_GUIDE.md` `CD_`-prefix correction already landed in a prior commit.)
+- [ ] **Step 7:** contract + query-plan + rollback + hook-record-type + queue + mapping tests pass; the existing sync/repo regression suites pass; `build-mac`; `format-check`.
 - [ ] **Step 8:** dispatch `database-code-review` + `concurrency-review` + `sync-review` (now **full scope** for `DismissedTransferPairRow`). Fix all findings; re-run tests.
 - [ ] **Step 9: Commit**
 

@@ -32,6 +32,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
     let bundle = ProfileGRDBRepositories(
       csvImportProfiles: result.backend.grdbCSVImportProfiles,
       importRules: result.backend.grdbImportRules,
+      dismissedTransferPairs: result.backend.grdbDismissedTransferPairs,
       instruments: result.backend.grdbInstruments,
       categories: result.backend.grdbCategories,
       accounts: result.backend.grdbAccounts,

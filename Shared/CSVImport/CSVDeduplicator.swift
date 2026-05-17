@@ -48,7 +48,9 @@ enum CSVDeduplicator {
     // the initial insertion so layer-1 dedup is deterministic given the
     // caller's ordering.
     let byRef: [String: Transaction] = existingOnAccount.reduce(into: [:]) { acc, transaction in
-      if let ref = transaction.importOrigin?.bankReference, !ref.isEmpty, acc[ref] == nil {
+      if let ref = transaction.importOrigin?.singleOrigin?.bankReference, !ref.isEmpty,
+        acc[ref] == nil
+      {
         acc[ref] = transaction
       }
     }
@@ -115,7 +117,7 @@ enum CSVDeduplicator {
     }
     if let sameDay = index.byDate[index.dayKey(candidate.date)],
       let match = sameDay.first(where: { transaction in
-        let origin = transaction.importOrigin
+        let origin = transaction.importOrigin?.singleOrigin
         return normalise(origin?.rawDescription ?? "")
           == normalise(candidate.rawDescription)
           && (origin?.rawAmount ?? 0) == candidate.rawAmount
@@ -157,7 +159,7 @@ enum CSVDeduplicator {
       guard let rawBalance = candidate.rawBalance else { continue }
       let sameDay = existing.filter { dayKey($0.date) == dayKey(candidate.date) }
       if let match = sameDay.first(where: { transaction in
-        let origin = transaction.importOrigin
+        let origin = transaction.importOrigin?.singleOrigin
         return origin?.rawBalance == rawBalance && origin?.rawAmount == candidate.rawAmount
       }) {
         matches[index] = match.id

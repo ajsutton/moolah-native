@@ -3,10 +3,19 @@
 import Foundation
 import GRDB
 
-/// One row in the `"transaction"` table. Carries the eight denormalised
+/// One row in the `"transaction"` table. Carries the denormalised
 /// `import_origin_*` columns directly — one column per `ImportOrigin`
 /// field rather than a single JSON blob — so the CKRecord wire format
 /// stays stable across the codebase.
+///
+/// `import_origin_kind` discriminates the `TransactionImportOrigin`
+/// case: `"single"` projects through the eight existing
+/// `import_origin_*` columns; `"merged"` projects the outgoing side
+/// through those eight and the incoming side through the eight
+/// `import_origin_incoming_*` columns. A null kind is a pre-v12 row
+/// and reads as `.single`. `transfer_suggestion_*` carry the optional
+/// `TransferSuggestion`; both columns are non-null together or both
+/// null.
 struct TransactionRow {
   static let databaseTableName = "transaction"
 
@@ -26,6 +35,17 @@ struct TransactionRow {
     case importOriginImportSessionId = "import_origin_import_session_id"
     case importOriginSourceFilename = "import_origin_source_filename"
     case importOriginParserIdentifier = "import_origin_parser_identifier"
+    case importOriginKind = "import_origin_kind"
+    case importOriginIncomingRawDescription = "import_origin_incoming_raw_description"
+    case importOriginIncomingBankReference = "import_origin_incoming_bank_reference"
+    case importOriginIncomingRawAmount = "import_origin_incoming_raw_amount"
+    case importOriginIncomingRawBalance = "import_origin_incoming_raw_balance"
+    case importOriginIncomingImportedAt = "import_origin_incoming_imported_at"
+    case importOriginIncomingImportSessionId = "import_origin_incoming_import_session_id"
+    case importOriginIncomingSourceFilename = "import_origin_incoming_source_filename"
+    case importOriginIncomingParserIdentifier = "import_origin_incoming_parser_identifier"
+    case transferSuggestionCounterpartId = "transfer_suggestion_counterpart_id"
+    case transferSuggestionSuggestedAt = "transfer_suggestion_suggested_at"
     case encodedSystemFields = "encoded_system_fields"
   }
 
@@ -45,6 +65,17 @@ struct TransactionRow {
     case importOriginImportSessionId = "import_origin_import_session_id"
     case importOriginSourceFilename = "import_origin_source_filename"
     case importOriginParserIdentifier = "import_origin_parser_identifier"
+    case importOriginKind = "import_origin_kind"
+    case importOriginIncomingRawDescription = "import_origin_incoming_raw_description"
+    case importOriginIncomingBankReference = "import_origin_incoming_bank_reference"
+    case importOriginIncomingRawAmount = "import_origin_incoming_raw_amount"
+    case importOriginIncomingRawBalance = "import_origin_incoming_raw_balance"
+    case importOriginIncomingImportedAt = "import_origin_incoming_imported_at"
+    case importOriginIncomingImportSessionId = "import_origin_incoming_import_session_id"
+    case importOriginIncomingSourceFilename = "import_origin_incoming_source_filename"
+    case importOriginIncomingParserIdentifier = "import_origin_incoming_parser_identifier"
+    case transferSuggestionCounterpartId = "transfer_suggestion_counterpart_id"
+    case transferSuggestionSuggestedAt = "transfer_suggestion_suggested_at"
     case encodedSystemFields = "encoded_system_fields"
   }
 
@@ -67,6 +98,25 @@ struct TransactionRow {
   var importOriginImportSessionId: UUID?
   var importOriginSourceFilename: String?
   var importOriginParserIdentifier: String?
+  /// `TransactionImportOrigin` case discriminator: `"single"`,
+  /// `"merged"`, or null for a pre-v12 row (which reads as `.single`).
+  var importOriginKind: String?
+  // Incoming side of a `.merged` origin. Mirrors the eight columns
+  // above field-for-field; all null when the origin is `.single` or
+  // absent.
+  var importOriginIncomingRawDescription: String?
+  var importOriginIncomingBankReference: String?
+  var importOriginIncomingRawAmount: String?
+  var importOriginIncomingRawBalance: String?
+  var importOriginIncomingImportedAt: Date?
+  var importOriginIncomingImportSessionId: UUID?
+  var importOriginIncomingSourceFilename: String?
+  var importOriginIncomingParserIdentifier: String?
+  // TransferSuggestion denormalised. Both columns are non-null
+  // together or both null; one populated and one null reads as no
+  // suggestion.
+  var transferSuggestionCounterpartId: UUID?
+  var transferSuggestionSuggestedAt: Date?
   var encodedSystemFields: Data?
 }
 

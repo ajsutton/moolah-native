@@ -61,7 +61,7 @@ extension ImportStore {
       payee: evaluation.assignedPayee,
       notes: evaluation.appendedNotes,
       legs: legs,
-      importOrigin: origin)
+      importOrigin: .single(origin))
   }
 
   /// Rewrite placeholder-instrument legs (cash legs from parsers) to the

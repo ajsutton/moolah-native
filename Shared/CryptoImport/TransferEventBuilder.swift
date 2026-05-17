@@ -201,7 +201,7 @@ struct TransferEventBuilder: Sendable {
     let transaction = Transaction(
       date: date,
       legs: legs,
-      importOrigin: context.importOrigin)
+      importOrigin: .single(context.importOrigin))
     return BuiltTransaction(
       originAccountId: context.account.id,
       transaction: transaction)

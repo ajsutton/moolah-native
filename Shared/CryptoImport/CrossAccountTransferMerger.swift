@@ -244,16 +244,14 @@ struct LiveCrossAccountTransferMerger: CrossAccountTransferMerger {
   }
 
   private static func mergedImportOrigin(
-    lower: ImportOrigin?,
-    upper: ImportOrigin?
-  ) -> ImportOrigin? {
-    // Prefer the lower-UUID side's ImportOrigin so the merge is
-    // deterministic across replays. v1 of the crypto importer doesn't
-    // require a `MergedImportOrigin` wrapper — `Transaction.importOrigin`
-    // is still a single value — so the upper side's origin is dropped
-    // here. Once the transfer-detection design's `MergedImportOrigin`
-    // landing covers crypto (issue #762 cluster), this can be revisited.
-    lower ?? upper
+    lower: TransactionImportOrigin?,
+    upper: TransactionImportOrigin?
+  ) -> TransactionImportOrigin? {
+    // Prefer the lower-UUID side's single ImportOrigin so the merge is
+    // deterministic across replays. The crypto merger records only the
+    // surviving side's origin via .single; the incoming side's origin is
+    // dropped here. Issue #762 tracks widening to .merged.
+    (lower?.singleOrigin ?? upper?.singleOrigin).map(TransactionImportOrigin.single)
   }
 
   private static func mergedNotes(_ first: String?, _ second: String?) -> String? {

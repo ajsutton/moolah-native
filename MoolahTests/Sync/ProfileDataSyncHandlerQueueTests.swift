@@ -157,6 +157,11 @@ struct ProfileDataSyncHandlerQueueTests {
     let budgetItemId = UUID()
     let investmentValueId = UUID()
     let instrumentId = "AUD"
+    // Content-addressed id of the unordered transaction-id pair —
+    // computed exactly as production does so the queued recordName
+    // matches `DismissedTransferPairRow.recordName(for:)`.
+    let dismissedPair = DismissedTransferPair(
+      transactionIds: [UUID(), UUID()], dismissedAt: Date())
 
     func insert(into database: Database) throws {
       // No `instrumentRow`: the per-profile `instrument` table was
@@ -188,6 +193,7 @@ struct ProfileDataSyncHandlerQueueTests {
         id: legId, transactionId: txnId, accountId: accountId,
         instrumentId: instrumentId
       ).upsert(database)
+      try DismissedTransferPairRow(domain: dismissedPair).upsert(database)
     }
   }
 
@@ -204,8 +210,8 @@ struct ProfileDataSyncHandlerQueueTests {
     let recordNames = Set(recordIDs.map(\.recordName))
 
     // The per-profile handler does not enumerate instrument rows
-    // (count would be 8 if it did; the shared registry covers them).
-    #expect(recordNames.count == 7)
+    // (count would be 9 if it did; the shared registry covers them).
+    #expect(recordNames.count == 8)
     #expect(!recordNames.contains(seed.instrumentId))
     #expect(recordNames.contains("\(AccountRow.recordType)|\(seed.accountId.uuidString)"))
     #expect(recordNames.contains("\(CategoryRow.recordType)|\(seed.categoryId.uuidString)"))
@@ -218,6 +224,9 @@ struct ProfileDataSyncHandlerQueueTests {
         "\(InvestmentValueRow.recordType)|\(seed.investmentValueId.uuidString)"))
     #expect(recordNames.contains("\(TransactionRow.recordType)|\(seed.txnId.uuidString)"))
     #expect(recordNames.contains("\(TransactionLegRow.recordType)|\(seed.legId.uuidString)"))
+    #expect(
+      recordNames.contains(
+        "\(DismissedTransferPairRow.recordType)|\(seed.dismissedPair.id.uuidString)"))
     for recordID in recordIDs {
       #expect(recordID.zoneID == handler.zoneID)
     }

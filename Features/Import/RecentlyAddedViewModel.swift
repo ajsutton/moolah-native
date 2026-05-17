@@ -115,7 +115,9 @@ final class RecentlyAddedViewModel {
     now: Date = Date()
   ) -> [Transaction] {
     transactions.filter { transaction in
-      guard let origin = transaction.importOrigin else { return false }
+      // Recently Added groups by single-import session; .merged transfers
+      // (which have no single origin) are excluded.
+      guard let origin = transaction.importOrigin?.singleOrigin else { return false }
       if let range = window.dateRange(now: now) {
         return range.contains(origin.importedAt)
       }
@@ -126,13 +128,13 @@ final class RecentlyAddedViewModel {
   static func group(_ transactions: [Transaction]) -> [SessionGroup] {
     let dict = Dictionary(
       grouping: transactions,
-      by: { $0.importOrigin?.importSessionId ?? UUID() })
+      by: { $0.importOrigin?.singleOrigin?.importSessionId ?? UUID() })
     return dict.map { id, txs in
       let filenames = Array(
-        Set(txs.compactMap { $0.importOrigin?.sourceFilename })
+        Set(txs.compactMap { $0.importOrigin?.singleOrigin?.sourceFilename })
       ).sorted()
       let importedAt =
-        txs.map { $0.importOrigin?.importedAt ?? .distantPast }.max()
+        txs.map { $0.importOrigin?.singleOrigin?.importedAt ?? .distantPast }.max()
         ?? .distantPast
       return SessionGroup(
         id: id,

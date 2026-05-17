@@ -36,6 +36,10 @@ extension ProfileDataSyncHandler {
       (TransactionLegRow.recordType, grdbRepositories.transactionLegs.clearAllSystemFieldsSync),
       (CSVImportProfileRow.recordType, grdbRepositories.csvImportProfiles.clearAllSystemFieldsSync),
       (ImportRuleRow.recordType, grdbRepositories.importRules.clearAllSystemFieldsSync),
+      (
+        DismissedTransferPairRow.recordType,
+        grdbRepositories.dismissedTransferPairs.clearAllSystemFieldsSync
+      ),
     ]
   }
 
@@ -209,11 +213,20 @@ extension ProfileDataSyncHandler {
   }
 
   /// Returns the per-recordType batch system-fields setter, or `nil`
-  /// for record types not handled by the GRDB layer. Mirrors the
-  /// dispatch table that the per-row path used; replacing the per-
-  /// row setter with the batch shape is the whole point of the
-  /// refactor.
+  /// for record types not handled by the GRDB layer. The lookup is
+  /// split between `referenceSystemFieldsBatchSetter` (immutable
+  /// reference data) and `domainSystemFieldsBatchSetter` (the
+  /// financial-graph rows) so neither switch breaches the
+  /// cyclomatic-complexity ceiling — same shape as `saveHandler`.
   private func systemFieldsBatchSetter(
+    for recordType: String
+  ) -> (([(id: UUID, data: Data?)]) throws -> Int)? {
+    referenceSystemFieldsBatchSetter(for: recordType)
+      ?? domainSystemFieldsBatchSetter(for: recordType)
+  }
+
+  /// Reference-data side of the `systemFieldsBatchSetter` lookup.
+  private func referenceSystemFieldsBatchSetter(
     for recordType: String
   ) -> (([(id: UUID, data: Data?)]) throws -> Int)? {
     let repos = grdbRepositories
@@ -224,6 +237,19 @@ extension ProfileDataSyncHandler {
       return { try repos.importRules.setEncodedSystemFieldsBatchSync($0) }
     case CategoryRow.recordType:
       return { try repos.categories.setEncodedSystemFieldsBatchSync($0) }
+    case DismissedTransferPairRow.recordType:
+      return { try repos.dismissedTransferPairs.setEncodedSystemFieldsBatchSync($0) }
+    default:
+      return nil
+    }
+  }
+
+  /// Financial-graph side of the `systemFieldsBatchSetter` lookup.
+  private func domainSystemFieldsBatchSetter(
+    for recordType: String
+  ) -> (([(id: UUID, data: Data?)]) throws -> Int)? {
+    let repos = grdbRepositories
+    switch recordType {
     case AccountRow.recordType:
       return { try repos.accounts.setEncodedSystemFieldsBatchSync($0) }
     case EarmarkRow.recordType:

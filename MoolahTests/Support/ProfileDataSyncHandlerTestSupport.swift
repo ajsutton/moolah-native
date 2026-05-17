@@ -241,6 +241,7 @@ enum ProfileDataSyncHandlerTestSupport {
     return ProfileGRDBRepositories(
       csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
       importRules: GRDBImportRuleRepository(database: database),
+      dismissedTransferPairs: GRDBDismissedTransferPairRepository(database: database),
       instruments: registry,
       categories: GRDBCategoryRepository(database: database),
       accounts: GRDBAccountRepository(
