@@ -18,13 +18,13 @@ import SwiftUI
 ///   that section — a truncated `0x1234…abcd` is unsafe to verify
 ///   against because an attacker can mine a vanity address with
 ///   matching prefix and suffix.
-/// - A presentation identifier row: a truncated copyable address +
-///   chain name for crypto, or the (non-copyable) provider name for
-///   exchange, plus an inline "open externally" link (block explorer /
-///   provider website).
-/// - Last-synced relative timestamp ("Synced 2h ago") or "Never synced"
-///   when the account has no checkpoint yet.
-/// - "Sync now" button that calls `syncStore.syncAccount(account)` and
+/// - A single status row: a context label (chain name for crypto — the
+///   untruncated address already appears above, so no truncated copy is
+///   shown here; provider name for exchange) and an inline "open
+///   externally" link (block explorer / provider website) on the
+///   leading edge, with the last-synced relative timestamp ("Synced 2h
+///   ago" / "Never synced") and the "Sync now" button trailing on the
+///   *same* line. The button calls `syncStore.syncAccount(account)` and
 ///   is disabled while a sync is in flight or the account's credential
 ///   is missing.
 ///
@@ -83,6 +83,9 @@ struct SyncedAccountHeaderView: View {
   }
 
   private var lastSyncedText: String {
+    // TODO(#933): inline Date() makes the relative time stale between
+    // renders and unpinnable in view tests — drive `now` from a clock /
+    // timeline. https://github.com/ajsutton/moolah-native/issues/933
     SyncedAccountHeaderLogic.lastSyncedText(state: syncState, now: Date())
   }
 
@@ -105,16 +108,7 @@ struct SyncedAccountHeaderView: View {
       if account.type == .crypto {
         addressSection
       }
-      identifierRow(presentation)
-      HStack(spacing: 12) {
-        Spacer(minLength: 12)
-        Text(lastSyncedText)
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-          .monospacedDigit()
-          .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.lastSynced)
-        syncButton(presentation)
-      }
+      statusRow(presentation)
       // Status bar below the header showing whichever of (a) the per-
       // account sync error and (b) the missing-credential hint applies.
       // The hint takes precedence: if no credential is configured the
@@ -139,55 +133,43 @@ struct SyncedAccountHeaderView: View {
     }
   }
 
-  /// Identifier + secondary line + "open externally" link. The whole
-  /// row is suppressed for non-syncable account types (presentation
-  /// identifier is `""` there) so an empty `Text` doesn't occupy layout.
-  @ViewBuilder
-  private func identifierRow(_ presentation: SyncableAccountPresentation) -> some View {
-    if !presentation.identifier.isEmpty {
-      HStack {
-        // Identifier + chain name form one VoiceOver stop. Only this
-        // text subgroup is combined so the external Link below stays a
-        // separate focusable action, and `.textSelection` on the crypto
-        // address remains reachable to VoiceOver.
-        HStack(spacing: 4) {
-          identifierText(presentation)
-          if let secondary = presentation.secondaryIdentifier {
-            Text(secondary)
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.chainName)
-          }
-        }
-        .accessibilityElement(children: .combine)
-        if let url = presentation.externalURL,
-          let title = presentation.externalActionTitle
-        {
-          Link(title, destination: url)
-            .font(.caption)
-        }
+  /// Single-line status row. Leading edge: a context label + the
+  /// inline "open externally" link. Trailing edge: the last-synced
+  /// timestamp and the "Sync now" button — all on one line, so the
+  /// header is a single row for exchange and exactly two for crypto
+  /// (the extra row being only the untruncated address).
+  ///
+  /// For crypto the label is the chain name: the untruncated wallet
+  /// address is shown on its own line by `addressSection`, so repeating
+  /// a *truncated* copy here would be both redundant and (truncated)
+  /// unsafe to verify against. For exchange there is no address line,
+  /// so the label is the provider name. `secondaryIdentifier ??
+  /// identifier` resolves to the chain for crypto and the provider for
+  /// exchange (and degrades to the truncated address only if a crypto
+  /// account has no recognised chain) without the view branching on
+  /// `account.type` — that branching stays in
+  /// `SyncableAccountPresentation`.
+  private func statusRow(_ presentation: SyncableAccountPresentation) -> some View {
+    HStack(spacing: 12) {
+      // The label is its own VoiceOver stop; the external Link stays a
+      // separate focusable action rather than being folded into it.
+      Text(presentation.secondaryIdentifier ?? presentation.identifier)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.chainName)
+      if let url = presentation.externalURL,
+        let title = presentation.externalActionTitle
+      {
+        Link(title, destination: url)
+          .font(.caption)
       }
-    }
-  }
-
-  /// The identifier label. Crypto addresses are copyable
-  /// (security-critical — the user must be able to verify them); a
-  /// provider name is not. `TextSelectability`'s `.enabled` / `.disabled`
-  /// are distinct types, so the two cases are separate `Text` views in a
-  /// `@ViewBuilder` (not a ternary on a single `.textSelection`, which
-  /// does not type-check).
-  @ViewBuilder
-  private func identifierText(_ presentation: SyncableAccountPresentation) -> some View {
-    if presentation.isSelectableIdentifier {
-      Text(presentation.identifier)
-        .font(.caption)
+      Spacer(minLength: 12)
+      Text(lastSyncedText)
+        .font(.subheadline)
         .foregroundStyle(.secondary)
-        .textSelection(.enabled)
-    } else {
-      Text(presentation.identifier)
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .textSelection(.disabled)
+        .monospacedDigit()
+        .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.lastSynced)
+      syncButton(presentation)
     }
   }
 
@@ -235,6 +217,10 @@ struct SyncedAccountHeaderView: View {
     Text(caption)
       .font(.caption)
       .foregroundStyle(.red)
+      // Sighted users get the error affordance from the red colour;
+      // give VoiceOver the same signal since the message text itself
+      // carries no "error" marker.
+      .accessibilityLabel("Error: \(caption)")
       .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.errorCaption)
   }
 
@@ -276,12 +262,13 @@ struct SyncedAccountHeaderView: View {
         inProgress: syncStore.inProgressAccountIds,
         hasCredential: presentation.hasCredential)
     )
+    .buttonStyle(.borderless)
     .help(
       presentation.hasCredential
         ? "Sync account now"
         : (presentation.missingCredentialHint ?? "Configure this account to enable sync")
     )
-    .accessibilityLabel("Sync account now")
+    .accessibilityLabel(isSyncing ? "Syncing in progress" : "Sync account now")
     .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.syncButton)
   }
 }
@@ -314,10 +301,67 @@ extension SyncedAccountHeaderView {
 
 // MARK: - Previews
 //
-// `SyncedAccountHeaderView` has no standalone `#Preview`: it requires a
-// non-optional `SyncedAccountStore`, which `ProfileSession.preview()`
-// leaves `nil` (its crypto wiring is intentionally absent in previews —
-// see the `CryptoWalletAccountView` preview comment). The header is
-// exercised in canvas through its parents instead — the crypto path via
-// `CryptoWalletAccountView`'s `#Preview` and the exchange path via
-// `ExchangeAccountView`'s `#Preview`.
+// The parent `CryptoWalletAccountView` / `ExchangeAccountView` previews
+// render this header as `EmptyView` (their `ProfileSession.preview()`
+// leaves crypto wiring `nil`), so this standalone `#Preview` is the only
+// canvas path that exercises the layout. The header reads only
+// `SyncedAccountStore`'s observable `statePerAccount` /
+// `inProgressAccountIds`, so a minimal store over the in-memory preview
+// backend (no sync sources) covers the full layout. No checkpoint is
+// seeded, so both rows read "Never synced" — sufficient to verify the
+// single-line layout (the timestamp string does not affect the row's
+// line count). `hasCredential` resolves `false` in canvas (no
+// keychain), so each variant also shows its missing-credential hint
+// *below* the status row; that is a real state and does not change
+// whether the status row itself is a single line.
+
+#Preview("Synced account header") {
+  syncedAccountHeaderPreview()
+}
+
+// Builds the standalone-preview content. Extracted from the `#Preview`
+// closure so the (unavoidably verbose) store wiring is governed by
+// `function_body_length` rather than the stricter `closure_body_length`.
+@MainActor
+private func syncedAccountHeaderPreview() -> some View {
+  // `ProfileSession.preview()` throws only if the in-memory SwiftData
+  // container can't be created — a programmer error; crashing is correct.
+  // swiftlint:disable:next force_try
+  let session = try! ProfileSession.preview()
+  let store = SyncedAccountStore(
+    sources: [],
+    walletApplyEngine: WalletApplyEngine(
+      transactions: session.backend.transactions,
+      walletSyncState: session.backend.walletSyncState,
+      importRules: NoOpWalletImportRulesEngine()),
+    walletSyncState: session.backend.walletSyncState,
+    accounts: session.backend.accounts)
+  let exchangeTokenStore = ExchangeTokenStore()
+  let cryptoAccount = Account(
+    name: "Preview Wallet",
+    type: .crypto,
+    instrument: .AUD,
+    valuationMode: .calculatedFromTrades,
+    walletAddress: "0xa4b572ea1b6f734fc88a0a004c5301f8dad54d60",
+    chainId: 10)
+  let exchangeAccount = Account(
+    name: "Coinstash",
+    type: .exchange,
+    instrument: .AUD,
+    valuationMode: .calculatedFromTrades,
+    exchangeProvider: .coinstash)
+  return VStack(spacing: 24) {
+    SyncedAccountHeaderView(
+      account: cryptoAccount,
+      syncStore: store,
+      cryptoTokenStore: nil,
+      exchangeTokenStore: exchangeTokenStore)
+    SyncedAccountHeaderView(
+      account: exchangeAccount,
+      syncStore: store,
+      cryptoTokenStore: nil,
+      exchangeTokenStore: exchangeTokenStore)
+  }
+  .frame(width: 720)
+  .padding()
+}
