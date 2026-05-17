@@ -92,6 +92,8 @@ struct MoolahDomainCommands: Commands {
   @FocusedValue(\.editTransactionAction) private var editTransactionAction
   @FocusedValue(\.deleteTransactionAction) private var deleteTransactionAction
   @FocusedValue(\.payTransactionAction) private var payTransactionAction
+  @FocusedValue(\.mergeAsTransferAction) private var mergeAsTransferAction
+  @FocusedValue(\.unmergeTransferAction) private var unmergeTransferAction
   @Environment(\.openWindow) private var openWindow
   @Environment(\.openURL) private var openURL
 
@@ -109,6 +111,21 @@ struct MoolahDomainCommands: Commands {
 
       Button("Pay Scheduled Transaction") { payTransactionAction?() }
         .disabled(payTransactionAction == nil)
+
+      Divider()
+
+      // Transfer-lifecycle group. No keyboard shortcuts (infrequent
+      // actions, UI_GUIDE §14) and no destructive role on these
+      // menu-bar buttons — the menu bar does not render role colour and
+      // splitting a merged transfer restores data, so it does not
+      // belong in the Delete group below.
+      Button("Merge as Transfer") { mergeAsTransferAction?() }
+        .disabled(mergeAsTransferAction == nil)
+
+      Button("Split Back into Separate Transactions\u{2026}") {
+        unmergeTransferAction?()
+      }
+      .disabled(unmergeTransferAction == nil)
 
       Divider()
 

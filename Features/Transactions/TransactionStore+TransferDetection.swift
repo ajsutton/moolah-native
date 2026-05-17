@@ -47,6 +47,28 @@ extension TransactionStore {
     }
   }
 
+  /// Collapses two user-selected transactions into one merged two-leg
+  /// transfer over the looser ±14-day manual-merge window. The
+  /// coordinator performs its own validation (different accounts,
+  /// opposite-equal value legs in the same instrument, dates within
+  /// `TransferMergeBuilder.manualMergeWindowSeconds`) and records any
+  /// `ManualMergeError` on its own `error` channel without mutating —
+  /// so this is a thin pass-through with no try/catch. A no-op when no
+  /// coordinator is wired (previews / legacy tests).
+  func manualMerge(_ sideA: Transaction, _ sideB: Transaction) async {
+    guard let coordinator = transferDetection else { return }
+    await coordinator.manualMerge(sideA, sideB)
+  }
+
+  /// Splits a merged transfer back into its two original single-account
+  /// sides and records a dismissal so the next detection scan does not
+  /// immediately re-suggest the pair. The coordinator owns error state;
+  /// this is a thin pass-through. A no-op when no coordinator is wired.
+  func unmerge(_ transfer: Transaction) async {
+    guard let coordinator = transferDetection else { return }
+    await coordinator.unmerge(transfer)
+  }
+
   /// Loads the counterpart `Transaction` named by the transaction's
   /// transfer suggestion. The repository exposes no fetch-by-id, so this
   /// scans the unfiltered projection and matches on id — acceptable
