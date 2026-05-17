@@ -99,7 +99,7 @@ enum SyncedAccountHeaderLogic {
   /// enum). The generic (network / rate-limit / malformed) captions are
   /// account-neutral and unchanged.
   static func errorCaption(for error: WalletSyncError, account: Account) -> String {
-    switch error {
+    switch error.kind {
     case .missingApiKey:
       switch account.type {
       case .exchange:

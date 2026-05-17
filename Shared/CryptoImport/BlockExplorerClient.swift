@@ -161,7 +161,7 @@ struct LiveBlockscoutClient: Sendable {
     }
     do {
       try AlchemyResponseValidator.validate(response: response, stage: stage, logger: logger)
-    } catch WalletSyncError.invalidApiKey {
+    } catch let error as WalletSyncError where error.kind == .invalidApiKey {
       logger.error(
         "Blockscout \(stage, privacy: .public): HTTP 401/403 (public API expects no auth)")
       throw WalletSyncError.network(underlyingDescription: "HTTP 401/403")
