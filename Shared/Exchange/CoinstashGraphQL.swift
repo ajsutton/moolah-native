@@ -44,6 +44,20 @@ enum CoinstashGraphQL {
       }
     }
     """
+
+  /// Token metadata for a Coinstash symbol. The per-transaction `chain`
+  /// field is unreliable (observed null/empty live 2026-05-17), so the
+  /// chain + contract come from here. `defiAddresses` is the per-chain
+  /// contract list; `[]` for non-EVM-modelled assets (e.g. BTC).
+  /// Decodes into `CoinstashGraphQLResponse<CoinstashCoinData>`.
+  static let coinBySymbolQuery = """
+    query Q($s: String!) {
+      getCoinBySymbol(symbol: $s) {
+        symbol name
+        defiAddresses { chain address decimals }
+      }
+    }
+    """
 }
 
 struct CoinstashGraphQLError: Decodable, Sendable { let message: String }
@@ -110,4 +124,22 @@ struct CoinstashTransactionsData: Decodable, Sendable {
   }
 
   let accountTransactions: Page
+}
+
+struct CoinstashDefiAddress: Decodable, Sendable, Hashable {
+  let chain: String
+  /// Optional defensively: a malformed row must not fail the whole decode.
+  let address: String?
+  let decimals: Int?
+}
+
+struct CoinstashCoinMetadata: Decodable, Sendable, Hashable {
+  let symbol: String
+  let name: String
+  let defiAddresses: [CoinstashDefiAddress]
+}
+
+struct CoinstashCoinData: Decodable, Sendable {
+  /// `null` when Coinstash does not recognise the symbol.
+  let getCoinBySymbol: CoinstashCoinMetadata?
 }
