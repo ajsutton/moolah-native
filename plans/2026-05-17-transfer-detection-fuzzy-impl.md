@@ -982,10 +982,10 @@ git -C <wt> commit -m "feat(transfer-detection): pure FuzzyTransferDetector"
 
 ### Task 11: `TransferMergeBuilder` (pure)
 
-**Files:** Create `Shared/TransferDetection/TransferMergeBuilder.swift`; Test `MoolahTests/Shared/TransferMergeBuilderTests.swift`
+**Files:** Create `Shared/TransferDetection/TransferMergeBuilder.swift`; Tests `MoolahTests/Shared/TransferMergeBuilderTests.swift` (merge suite), `MoolahTests/Shared/TransferMergeBuilderSplitTests.swift` (split + round-trip suite), `MoolahTests/Shared/TransferMergeBuilderFixture.swift` (shared construction helpers). The split into two suites + a fixture keeps each test file under the SwiftLint `type_body_length`/`file_length` thresholds.
 
 Pure transforms; **untyped `throws`** (SE-0413 default); throw on invalid input — never return `[]` to signal an error.
-- `merged(from a: Transaction, _ b: Transaction) throws -> Transaction`: two `.transfer` legs (one per side's value leg, carrying its `accountId`/`instrument`/`quantity`); **fee legs from both sides preserved (union, unchanged)**; `date` = earlier of the two; `payee` = shared payee if equal else the two payees dedup-joined; `notes` = the two notes joined by `\n` with duplicates collapsed; `importOrigin = .merged(MergedImportOrigin(outgoing: <negative-value-leg side's .single>, incoming: <positive side's .single>))` (a side with no `.single` origin contributes `nil`); `transferSuggestion = nil`; new `id`. Throw `TransferMergeError.notMergeable` if either side has no `transferDetectionValueLeg`, same account, instruments differ, or quantities not opposite-equal.
+- `merged(from sideA: Transaction, _ sideB: Transaction) throws -> Transaction` (internal param names are ≥3 chars to satisfy SwiftLint `identifier_name`; external labels stay `from:` / `_`): two `.transfer` legs (one per side's value leg, carrying its `accountId`/`instrument`/`quantity`); **fee legs from both sides preserved (union, unchanged)**; `date` = earlier of the two; `payee` = shared payee if equal else the two payees dedup-joined; `notes` = the two notes joined by `\n` with duplicates collapsed; `importOrigin = .merged(MergedImportOrigin(outgoing: <negative-value-leg side's .single>, incoming: <positive side's .single>))` (a side with no `.single` origin contributes `nil`); `transferSuggestion = nil`; new `id`. Throw `TransferMergeError.notMergeable` if either side has no `transferDetectionValueLeg`, same account, instruments differ, or quantities not opposite-equal.
 - `split(_ transfer: Transaction) throws -> [Transaction]`: inverse. Two single-leg transactions, one per `.transfer` value leg, on the original account, `type` = `.expense` (negative qty) / `.income` (positive qty); each gets `importOrigin = .single` from the matching `MergedImportOrigin` side (by sign); **fee legs**: reattach each preserved fee leg to the split transaction whose value leg shares the fee leg's originating account (the merge preserved each fee leg's `accountId`; match on it; a fee leg with no resolvable side stays with the outgoing split — assert this in the round-trip test); new ids; `transferSuggestion = nil`. Throw `TransferMergeError.notATransfer` if not a 2-`.transfer`-value-leg transaction, `.missingMergedOrigin` if `importOrigin` is not `.merged`.
 
 - [ ] **Step 1: Failing tests** — merge: earlier date, two `.transfer` legs correct, merged origin outgoing=negative side, notes joined+deduped, payee rule, **fee legs from both sides preserved**; `notMergeable` thrown for same-account / instrument-mismatch / not-opposite; round-trip `split(merged(a,b))` → two single-leg txs whose value legs equal the originals and whose `.single` origins equal the originals; **round-trip with a cross-instrument fee leg on each side** → each fee leg returns to its originating account's split; `split` throws `.notATransfer` / `.missingMergedOrigin` appropriately.
@@ -1008,21 +1008,22 @@ enum ManualMergeError: Error, Equatable, Sendable {
   case datesTooFarApart       // > manualMergeWindowSeconds
 }
 
-extension TransferMergeBuilder {
+struct TransferMergeBuilder: Sendable {
   /// Manual merge tolerates a wider window than auto-detection
   /// (`FuzzyTransferDetector.windowSeconds`) — the user is asserting intent.
   static let manualMergeWindowSeconds: TimeInterval = 14 * 86_400
+  // … merged(from:_:) / split(_:) …
 }
 ```
 
-Use `transferDetectionValueLeg` to locate value legs; treat every non-value leg as a fee leg preserved by `accountId`. Confirm `TransferMergeBuilder.swift` stays under the 400-line warning threshold with these additions; if not, put `ManualMergeError`/`TransferMergeError` in a sibling `TransferMergeErrors.swift` (one type per file is fine).
+`manualMergeWindowSeconds` is a member of the primary `struct` body, not a bare non-conformance `extension` (CODE_GUIDE §2 reserves bare extensions; grouping headings only earn their keep above the 300-line threshold). Use `transferDetectionValueLeg` to locate value legs; treat every non-value leg as a fee leg preserved by `accountId`. Confirm `TransferMergeBuilder.swift` stays under the 400-line warning threshold with these additions; if not, put `ManualMergeError`/`TransferMergeError` in a sibling `TransferMergeErrors.swift` (one type per file is fine).
 
 - [ ] **Step 4:** tests pass; `format-check`.
 - [ ] **Step 5:** dispatch `code-review`; fix findings.
 - [ ] **Step 6: Commit**
 
 ```bash
-git -C <wt> add Shared/TransferDetection/TransferMergeBuilder.swift MoolahTests/Shared/TransferMergeBuilderTests.swift
+git -C <wt> add Shared/TransferDetection/TransferMergeBuilder.swift MoolahTests/Shared/TransferMergeBuilderTests.swift MoolahTests/Shared/TransferMergeBuilderSplitTests.swift MoolahTests/Shared/TransferMergeBuilderFixture.swift
 git -C <wt> commit -m "feat(transfer-detection): pure TransferMergeBuilder (merge + split)"
 ```
 
