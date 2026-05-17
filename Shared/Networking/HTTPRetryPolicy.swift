@@ -1,4 +1,3 @@
-// Shared/Networking/HTTPRetryPolicy.swift
 import Foundation
 
 /// Tunable, per-call HTTP retry/timeout policy. A plain value so each client
