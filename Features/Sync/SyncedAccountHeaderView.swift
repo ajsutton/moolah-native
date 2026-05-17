@@ -82,11 +82,13 @@ struct SyncedAccountHeaderView: View {
     syncStore.statePerAccount[account.id]
   }
 
-  private var lastSyncedText: String {
-    // TODO(#933): inline Date() makes the relative time stale between
-    // renders and unpinnable in view tests — drive `now` from a clock /
-    // timeline. https://github.com/ajsutton/moolah-native/issues/933
-    SyncedAccountHeaderLogic.lastSyncedText(state: syncState, now: Date())
+  /// Relative last-synced label for a given clock instant. `now` is
+  /// supplied by the enclosing `TimelineView` (see `statusRow`) so the
+  /// label ticks on the timeline's cadence rather than being frozen at
+  /// the last unrelated re-render. The formatting itself stays in the
+  /// unit-tested `SyncedAccountHeaderLogic`.
+  private func lastSyncedText(now: Date) -> String {
+    SyncedAccountHeaderLogic.lastSyncedText(state: syncState, now: now)
   }
 
   private var isSyncing: Bool {
@@ -164,11 +166,18 @@ struct SyncedAccountHeaderView: View {
           .font(.caption)
       }
       Spacer(minLength: 12)
-      Text(lastSyncedText)
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-        .monospacedDigit()
-        .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.lastSynced)
+      // `context.date` ticks every 60s on the timeline's schedule, so
+      // the relative label ("Synced 3 min ago") stays fresh without an
+      // unrelated re-render. `.id(context.date)` forces the `Text` to
+      // re-evaluate on each tick. Mirrors `SyncProgressFooter`.
+      TimelineView(.periodic(from: .now, by: 60)) { context in
+        Text(lastSyncedText(now: context.date))
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .monospacedDigit()
+          .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.lastSynced)
+          .id(context.date)
+      }
       syncButton(presentation)
     }
   }
