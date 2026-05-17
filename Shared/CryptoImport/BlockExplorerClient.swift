@@ -31,11 +31,23 @@ protocol BlockExplorerClient: Sendable {
 struct LiveBlockscoutClient: Sendable {
   private let session: URLSession
   private let rateLimiter: RateLimiter
+  private let retryPolicy: HTTPRetryPolicy
+  private let sleeper: @Sendable (TimeInterval) async throws -> Void
   private let logger: Logger
 
-  init(session: URLSession = .shared, rateLimiter: RateLimiter) {
+  init(
+    session: URLSession = .shared,
+    rateLimiter: RateLimiter,
+    retryPolicy: HTTPRetryPolicy = HTTPRetryPolicy(
+      honorsRetryAfterInPlace: true),
+    sleeper: @escaping @Sendable (TimeInterval) async throws -> Void = {
+      try await Task.sleep(nanoseconds: UInt64(max(0, $0) * 1_000_000_000))
+    }
+  ) {
     self.session = session
     self.rateLimiter = rateLimiter
+    self.retryPolicy = retryPolicy
+    self.sleeper = sleeper
     self.logger = Logger(subsystem: "com.moolah.app", category: "BlockscoutClient")
   }
 
@@ -147,26 +159,103 @@ struct LiveBlockscoutClient: Sendable {
   }
 
   private func send(request: URLRequest, stage: String) async throws -> Data {
-    let data: Data
-    let response: URLResponse
+    let timed: URLRequest = {
+      var request = request
+      request.timeoutInterval = retryPolicy.requestTimeout
+      return request
+    }()
     do {
-      (data, response) = try await session.data(for: request)
+      return try await withRetry(
+        policy: retryPolicy,
+        classify: { HTTPRetryClassifier.decision(for: $0, idempotent: true) },
+        sleep: sleeper,
+        operation: { @Sendable in
+          try await self.attempt(request: timed, stage: stage)
+        }
+      )
     } catch let urlError as URLError where urlError.code == .cancelled {
       throw CancellationError()
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch let walletError as WalletSyncError {
+      throw walletError
+    } catch let signal as HTTPRetrySignal {
+      if let retryAfter = signal.retryAfter {
+        logger.error(
+          "Blockscout \(stage, privacy: .public) rate-limit retry exhausted (Retry-After \(retryAfter, privacy: .public)s)"
+        )
+        throw WalletSyncError.rateLimited(
+          retryAfter: Date().addingTimeInterval(retryAfter))
+      }
+      logger.error(
+        "Blockscout \(stage, privacy: .public) retry exhausted (server error)"
+      )
+      throw WalletSyncError.network(
+        underlyingDescription: "retry exhausted (server error)")
     } catch {
       logger.error(
         "Blockscout \(stage, privacy: .public) network failure: \(error.localizedDescription, privacy: .public)"
       )
-      throw WalletSyncError.network(underlyingDescription: error.localizedDescription)
+      throw WalletSyncError.network(
+        underlyingDescription: error.localizedDescription)
     }
-    do {
-      try AlchemyResponseValidator.validate(response: response, stage: stage, logger: logger)
-    } catch let error as WalletSyncError where error.kind == .invalidApiKey {
-      logger.error(
-        "Blockscout \(stage, privacy: .public): HTTP 401/403 (public API expects no auth)")
-      throw WalletSyncError.network(underlyingDescription: "HTTP 401/403")
-    }
+  }
+
+  /// One transport attempt. Returns body on 2xx; throws `HTTPRetrySignal` when
+  /// the response is retryable, or a terminal `WalletSyncError` otherwise. A
+  /// raw transient `URLError` propagates so the classifier can retry it.
+  private func attempt(request: URLRequest, stage: String) async throws -> Data {
+    let (data, response) = try await session.data(for: request)
+    try classifyBlockscout(response: response, stage: stage)
     return data
+  }
+
+  /// Blockscout-specific HTTP status classification: 2xx is success;
+  /// 429/418/503 (and other 5xx) become an `HTTPRetrySignal` so `withRetry`
+  /// can retry or wait; everything else is a terminal `WalletSyncError`.
+  private func classifyBlockscout(
+    response: URLResponse, stage: String
+  ) throws {
+    guard let http = response as? HTTPURLResponse else {
+      throw WalletSyncError.network(underlyingDescription: "No HTTP response")
+    }
+    let retryAfter = http.retryAfterSeconds(now: Date())
+    switch http.statusCode {
+    case 200...299:
+      return
+    case 401, 403:
+      logger.error(
+        "Blockscout \(stage, privacy: .public): HTTP 401/403 (public API expects no auth)"
+      )
+      throw WalletSyncError.network(underlyingDescription: "HTTP 401/403")
+    case 429, 418:
+      if retryPolicy.honorsRetryAfterInPlace, let wait = retryAfter,
+        wait <= retryPolicy.maxRateLimitWait
+      {
+        throw HTTPRetrySignal(retryAfter: wait)
+      }
+      throw WalletSyncError.rateLimited(
+        retryAfter: retryAfter.map { Date().addingTimeInterval($0) })
+    case 503:
+      if retryPolicy.honorsRetryAfterInPlace, let wait = retryAfter,
+        wait <= retryPolicy.maxRateLimitWait
+      {
+        throw HTTPRetrySignal(retryAfter: wait)
+      }
+      if let retryAfter {
+        throw WalletSyncError.rateLimited(
+          retryAfter: Date().addingTimeInterval(retryAfter))
+      }
+      throw HTTPRetrySignal(retryAfter: nil)
+    case 500...599:
+      throw HTTPRetrySignal(retryAfter: nil)
+    default:
+      logger.error(
+        "Blockscout \(stage, privacy: .public): HTTP \(http.statusCode, privacy: .public)"
+      )
+      throw WalletSyncError.network(
+        underlyingDescription: "HTTP \(http.statusCode)")
+    }
   }
 }
 
