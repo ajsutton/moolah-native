@@ -65,18 +65,49 @@ extension ProfileSession {
     profileInstrument: Instrument
   ) -> CryptoSyncWiring? {
     guard let registry else { return nil }
-
     let rateLimiter = RateLimiter(permitsPerSecond: 25)
-    // Pass a closure rather than a resolved value so a key added in the
-    // settings UI *after* this wiring is built is visible on the next
-    // sync cycle, and so the key is never retained on the client itself
-    // — it lives only on the local stack frame of each in-flight
-    // request.
     let alchemy: any AlchemyClient = LiveAlchemyClient(
       apiKeyProvider: { ProfileSession.resolveAlchemyApiKey() },
       rateLimiter: rateLimiter)
     let discovery = CryptoTokenDiscoveryService(
       registry: registry, resolver: cryptoPriceService, alchemy: alchemy)
+    let walletSyncEngine = makeWalletSyncEngine(
+      alchemy: alchemy,
+      blockExplorer: makeLiveBlockExplorer(),
+      discovery: discovery,
+      backend: backend)
+    let walletApplyEngine = WalletApplyEngine(
+      transactions: backend.transactions,
+      walletSyncState: backend.walletSyncState,
+      importRules: NoOpWalletImportRulesEngine())
+    let coinstashSource = makeCoinstashSource(
+      registry: registry,
+      fiatInstrument: profileInstrument,
+      backend: backend,
+      discovery: discovery)
+    let store = SyncedAccountStore(
+      sources: [WalletSyncSource(engine: walletSyncEngine), coinstashSource],
+      walletApplyEngine: walletApplyEngine,
+      walletSyncState: backend.walletSyncState,
+      accounts: backend.accounts)
+    return CryptoSyncWiring(store: store, discovery: discovery)
+  }
+
+  // MARK: - Private helpers
+
+  @MainActor
+  private static func makeLiveBlockExplorer() -> any BlockExplorerClient {
+    // Blockscout public unauthenticated tier: ~5 req/s per IP.
+    LiveBlockscoutClient(rateLimiter: RateLimiter(permitsPerSecond: 5))
+  }
+
+  @MainActor
+  private static func makeWalletSyncEngine(
+    alchemy: any AlchemyClient,
+    blockExplorer: any BlockExplorerClient,
+    discovery: CryptoTokenDiscoveryService,
+    backend: BackendProvider
+  ) -> WalletSyncEngine {
     let importOriginFactory: @Sendable (UUID) -> ImportOrigin = { accountId in
       ImportOrigin(
         rawDescription: "wallet:\(accountId.uuidString)",
@@ -85,38 +116,38 @@ extension ProfileSession {
         importSessionId: UUID(),
         parserIdentifier: "alchemy-wallet-sync")
     }
-    // Blockscout public unauthenticated tier: ~5 req/s per IP.
-    let blockscoutRateLimiter = RateLimiter(permitsPerSecond: 5)
-    let blockExplorer: any BlockExplorerClient = LiveBlockscoutClient(
-      rateLimiter: blockscoutRateLimiter)
-    let walletSyncEngine = WalletSyncEngine(
+    return WalletSyncEngine(
       alchemy: alchemy,
       blockExplorer: blockExplorer,
       discovery: discovery,
       walletSyncState: backend.walletSyncState,
       importOriginFactory: importOriginFactory)
-    let walletApplyEngine = WalletApplyEngine(
-      transactions: backend.transactions,
-      walletSyncState: backend.walletSyncState,
-      importRules: NoOpWalletImportRulesEngine())
-    // Provider-neutral sources. The store asks each `handles(_:)` which
-    // accounts it can sync — it never branches on `account.type`.
-    // Future exchanges append their own `<Provider>SyncSource` here.
-    let walletSource = WalletSyncSource(engine: walletSyncEngine)
-    let coinstashSource = CoinstashSyncSource(
+  }
+
+  @MainActor
+  private static func makeCoinstashSource(
+    registry: any InstrumentRegistryRepository,
+    fiatInstrument: Instrument,
+    backend: BackendProvider,
+    discovery: CryptoTokenDiscoveryService
+  ) -> CoinstashSyncSource {
+    let coinstashClient = CoinstashClient()
+    let txRepo = backend.transactions
+    return CoinstashSyncSource(
       tokenStore: ExchangeTokenStore(synchronizable: true),
-      client: CoinstashClient(),
+      client: coinstashClient,
       engine: ExchangeSyncEngine(
         resolver: ExchangeInstrumentResolver(
           registry: registry,
           // The profile's own currency, NOT a hardcoded `.AUD` — a
           // non-AUD profile would otherwise mis-denominate.
-          fiatInstrument: profileInstrument)))
-    let store = SyncedAccountStore(
-      sources: [walletSource, coinstashSource],
-      walletApplyEngine: walletApplyEngine,
-      walletSyncState: backend.walletSyncState,
-      accounts: backend.accounts)
-    return CryptoSyncWiring(store: store, discovery: discovery)
+          fiatInstrument: fiatInstrument,
+          existingLegInstrumentIds: {
+            (try? await txRepo.distinctLegInstrumentIds()) ?? []
+          }),
+        discovery: discovery),
+      metadataResolverFactory: { token in
+        CoinstashAssetMetadataResolver(client: coinstashClient, token: token)
+      })
   }
 }

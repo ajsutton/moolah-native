@@ -12,13 +12,32 @@ import OSLog
 /// is safe to call concurrently from the orchestrator's parallel build phase.
 struct ExchangeSyncEngine: Sendable {
   private let resolver: ExchangeInstrumentResolver
+  private let discovery: CryptoTokenDiscoveryService
   /// Shared static `Logger` — `Logger` is `Sendable`, so a static let is
   /// safe across actor boundaries without per-instance allocation.
   private static let logger = Logger(
     subsystem: "com.moolah.app", category: "ExchangeSyncEngine")
 
-  init(resolver: ExchangeInstrumentResolver) {
+  // Canonical multi-chain preference: Ethereum first (product
+  // decision), then the wallet-supported chains, then the rest.
+  private static let chainPreference: [Int] =
+    [1, 10, 8453, 42161, 137, 56, 43114, 100, 250, 59144, 146]
+
+  // Non-EVM natives the app pins by convention, keyed by uppercased
+  // symbol. Resolved directly (no getCoinBySymbol call) — these are
+  // `CryptoRegistration.builtInPresets` members.
+  private static let nonEvmNatives: [String: Instrument] = [
+    "BTC": .crypto(
+      chainId: 0,
+      contractAddress: nil,
+      symbol: "BTC",
+      name: "Bitcoin",
+      decimals: 8)
+  ]
+
+  init(resolver: ExchangeInstrumentResolver, discovery: CryptoTokenDiscoveryService) {
     self.resolver = resolver
+    self.discovery = discovery
   }
 
   // Coinstash category -> Moolah leg type. DEPOSIT/AWARD are inbound
@@ -44,7 +63,9 @@ struct ExchangeSyncEngine: Sendable {
   /// per row. A cancelled task throws `CancellationError` and writes nothing
   /// anywhere — the apply pass is the single writer regardless.
   func build(
-    account: Account, imported: [ExchangeImportedTransaction]
+    account: Account,
+    imported: [ExchangeImportedTransaction],
+    metadata: any ExchangeAssetMetadataResolving
   ) async throws -> WalletSyncBuildResult {
     // Trades share an `orderId`; deposits/withdrawals/awards have none, so
     // their `externalId` keys a singleton group (one single-leg transaction
@@ -54,7 +75,7 @@ struct ExchangeSyncEngine: Sendable {
     for (groupKey, rows) in groups {
       try Task.checkCancellation()
       if let candidate = try await buildCandidate(
-        groupKey: groupKey, rows: rows, account: account)
+        groupKey: groupKey, rows: rows, account: account, metadata: metadata)
       {
         candidates.append(candidate)
       }
@@ -72,14 +93,17 @@ struct ExchangeSyncEngine: Sendable {
   /// first row whose instrument is unresolvable — a partial, unbalanced
   /// trade is worse than no trade — and logs the drop for diagnosis.
   private func buildCandidate(
-    groupKey: String, rows: [ExchangeImportedTransaction], account: Account
+    groupKey: String,
+    rows: [ExchangeImportedTransaction],
+    account: Account,
+    metadata: any ExchangeAssetMetadataResolving
   ) async throws -> BuiltTransaction? {
     var legs: [TransactionLeg] = []
     for row in rows {
       try Task.checkCancellation()
       guard
-        let instrument = try await resolver.instrument(
-          forSymbol: row.assetSymbol, isFiat: row.isFiat)
+        let instrument = try await resolveInstrument(
+          symbol: row.assetSymbol, isFiat: row.isFiat, metadata: metadata)
       else {
         Self.logger.warning(
           """
@@ -108,5 +132,56 @@ struct ExchangeSyncEngine: Sendable {
     return BuiltTransaction(
       originAccountId: account.id,
       transaction: Transaction(date: date, legs: legs))
+  }
+
+  /// Resolution pipeline:
+  /// 1. Fiat flag → fiatInstrument.
+  /// 2. Non-EVM native (e.g. BTC) → builtInPresets / discovery (no metadata call).
+  /// 3. Provider metadata call → discovery with the canonical EVM chain.
+  /// 4. Empty chains in metadata → registry fallback (non-EVM, symbol scan).
+  /// 5. No metadata at all → registry fallback.
+  /// 6. Unresolved → nil (caller drops + logs the group).
+  private func resolveInstrument(
+    symbol: String?,
+    isFiat: Bool,
+    metadata: any ExchangeAssetMetadataResolving
+  ) async throws -> Instrument? {
+    if isFiat { return resolver.fiatInstrument }
+    guard let symbol else { return nil }
+
+    if let native = Self.nonEvmNatives[symbol.uppercased()] {
+      if let existing = try await resolver.registeredInstrument(id: native.id) {
+        return existing
+      }
+      let reg = try await discovery.resolveOrLoad(
+        chainId: native.chainId ?? 0,
+        contractAddress: nil,
+        symbol: native.ticker ?? symbol,
+        name: native.name,
+        decimals: native.decimals)
+      return reg.instrument
+    }
+
+    let meta = try await metadata.assetMetadata(forSymbol: symbol)
+
+    if let meta, let chosen = Self.canonical(meta.chains) {
+      let reg = try await discovery.resolveOrLoad(
+        chainId: chosen.chainId,
+        contractAddress: chosen.contractAddress,
+        symbol: meta.symbol,
+        name: meta.name,
+        decimals: chosen.decimals)
+      return reg.instrument
+    }
+
+    return try await resolver.fallbackInstrument(forSymbol: symbol)
+  }
+
+  private static func canonical(_ chains: [ExchangeAssetChain]) -> ExchangeAssetChain? {
+    guard !chains.isEmpty else { return nil }
+    for preferred in Self.chainPreference {
+      if let hit = chains.first(where: { $0.chainId == preferred }) { return hit }
+    }
+    return chains.first
   }
 }

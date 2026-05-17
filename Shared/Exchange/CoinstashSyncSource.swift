@@ -11,17 +11,22 @@ struct CoinstashSyncSource: AccountSyncSource, Sendable {
   private let tokenStore: ExchangeTokenStore
   private let client: any ExchangeClient
   private let engine: ExchangeSyncEngine
+  private let metadataResolverFactory:
+    @Sendable (_ token: String) -> any ExchangeAssetMetadataResolving
   private static let logger = Logger(
     subsystem: "com.moolah.app", category: "CoinstashSyncSource")
 
   init(
     tokenStore: ExchangeTokenStore,
     client: any ExchangeClient,
-    engine: ExchangeSyncEngine
+    engine: ExchangeSyncEngine,
+    metadataResolverFactory:
+      @escaping @Sendable (_ token: String) -> any ExchangeAssetMetadataResolving
   ) {
     self.tokenStore = tokenStore
     self.client = client
     self.engine = engine
+    self.metadataResolverFactory = metadataResolverFactory
   }
 
   // Concrete provider check (not `!= nil`): with a second exchange's
@@ -52,7 +57,8 @@ struct CoinstashSyncSource: AccountSyncSource, Sendable {
     }
     do {
       let imported = try await client.fetchTransactions(token: token)
-      return try await engine.build(account: account, imported: imported)
+      let metadata = metadataResolverFactory(token)
+      return try await engine.build(account: account, imported: imported, metadata: metadata)
     } catch ExchangeClientError.unauthorized {
       throw WalletSyncError.invalidApiKey
     } catch let error as ExchangeClientError {

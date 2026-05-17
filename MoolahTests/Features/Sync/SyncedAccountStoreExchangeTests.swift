@@ -75,13 +75,20 @@ struct SyncedAccountStoreExchangeTests {
     let tokenStore = ExchangeTokenStore(synchronizable: false)
     try tokenStore.save(token: token, for: account.id)
     let registry = GRDBInstrumentRegistryRepository(database: fixture.database)
+    let regResolver = CountingRegistrationResolver()
+    regResolver.setDefault(.success(coingecko: "id", cryptocompare: nil, binance: nil))
+    let discovery = CryptoTokenDiscoveryService(
+      registry: registry, resolver: regResolver, alchemy: CountingAlchemyClientStub())
     fixture.store.appendSourceForTesting(
       CoinstashSyncSource(
         tokenStore: tokenStore,
         client: StubExchangeClient(deposit: 100),
         engine: ExchangeSyncEngine(
           resolver: ExchangeInstrumentResolver(
-            registry: registry, fiatInstrument: .AUD))))
+            registry: registry, fiatInstrument: .AUD,
+            existingLegInstrumentIds: { [] }),
+          discovery: discovery),
+        metadataResolverFactory: { _ in StubMetadata([:]) }))
     return account
   }
 
