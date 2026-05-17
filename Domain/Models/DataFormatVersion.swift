@@ -22,11 +22,11 @@
 ///      the "deprecated field is suddenly invisible" race.
 ///
 /// History (newest first):
-/// - 3: `DismissedTransferPairRecord` (a new synced record type) plus
-///      merged `importOrigin` and `transferSuggestion` fields on
-///      `TransactionRecord`. `importOriginKind` is nil on pre-v3
-///      records, so an older build decodes a `.merged` transaction as
-///      `.single` and drops the incoming side — forward-incompatible.
+/// - 3: `importOriginKind` + eight `importOriginIncoming*` + two
+///      `transferSuggestion*` fields on `TransactionRecord`.
+///      `importOriginKind` is nil on pre-v3 records, so an older
+///      build decodes a `.merged` transaction as `.single` and
+///      drops the incoming side — forward-incompatible.
 /// - 2: `AccountType.exchange` (centralised-exchange accounts) +
 ///      `Account.exchangeProvider` synced field (`exchangeProvider` on
 ///      `AccountRecord`). Older builds decode `.exchange` as `.asset`
