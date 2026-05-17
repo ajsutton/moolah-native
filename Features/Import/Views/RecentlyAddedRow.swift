@@ -91,7 +91,7 @@ struct RecentlyAddedRow: View {
       if transaction.transferSuggestion != nil {
         PossibleTransferPill(title: pillTitle)
       }
-      if needsReview {
+      if transaction.needsReview {
         Text("Needs review")
           .font(.caption2)
           .padding(.horizontal, 6)
@@ -108,19 +108,18 @@ struct RecentlyAddedRow: View {
     .accessibilityHint(actionHint)
   }
 
-  /// Discoverability hint for the secondary transfer actions. macOS
-  /// surfaces them in the context menu; iOS surfaces the leading swipe,
-  /// which VoiceOver announces on its own, so the hint stays generic.
+  /// Discoverability hint for the secondary transfer actions. Empty for
+  /// rows without a transfer suggestion — those carry no transfer actions,
+  /// so VoiceOver announces no hint. macOS surfaces the actions in the
+  /// context menu; iOS surfaces the leading swipe, which VoiceOver
+  /// announces on its own, so the hint stays generic.
   private var actionHint: String {
+    guard transaction.transferSuggestion != nil else { return "" }
     #if os(macOS)
       return "Transfer actions are available in the context menu"
     #else
       return "Transfer actions available"
     #endif
-  }
-
-  private var needsReview: Bool {
-    transaction.legs.allSatisfy { $0.categoryId == nil }
   }
 
   /// Pick the first leg (the source/cash leg from the importer) and build

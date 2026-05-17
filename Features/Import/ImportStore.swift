@@ -185,7 +185,7 @@ final class ImportStore {
           guard origin.importedAt >= windowStart && origin.importedAt <= now else {
             return false
           }
-          return transaction.legs.allSatisfy { $0.categoryId == nil }
+          return transaction.needsReview
         }.count
     } catch {
       logger.error(
@@ -201,6 +201,22 @@ final class ImportStore {
     } catch {
       logger.error("Staging reload failed: \(error.localizedDescription)")
     }
+  }
+
+  /// Merge a detected transfer pair through the detection coordinator,
+  /// then refresh the staging lists. Symmetric with the detail surface's
+  /// `TransactionStore` dispatch — unit-testable against `TestBackend`.
+  func mergeTransfer(_ transaction: Transaction, counterpart: Transaction) async {
+    await transferDetection.merge(transaction, counterpart)
+    await reloadStagingLists()
+  }
+
+  /// Dismiss a detected transfer pair through the detection coordinator,
+  /// then refresh the staging lists. Symmetric with the detail surface's
+  /// `TransactionStore` dispatch — unit-testable against `TestBackend`.
+  func dismissTransfer(_ transaction: Transaction, counterpart: Transaction) async {
+    await transferDetection.dismiss(transaction, counterpart)
+    await reloadStagingLists()
   }
 
   func dismissPending(id: UUID) async {

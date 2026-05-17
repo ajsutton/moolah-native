@@ -1,3 +1,4 @@
+import OSLog
 import SwiftUI
 
 /// Recently Added — landing page for CSV imports. Shows the Needs Setup /
@@ -10,9 +11,8 @@ import SwiftUI
 /// pill title live in `RecentlyAddedViewModel`; the view stays thin.
 struct RecentlyAddedView: View {
   let backend: any BackendProvider
-  // `importStore`, `accountStore`, and the row-action `@State` are
-  // module-internal (not `private`) so the `RecentlyAddedView+List.swift`
-  // extension can reference them — `private` scope does not cross files
+  // Module-internal (not `private`): the `RecentlyAddedView+List.swift`
+  // extension references these — `private` scope does not cross files
   // even within the same type's extensions.
   @Environment(ImportStore.self) var importStore
   @Environment(TransactionStore.self) private var transactionStore
@@ -25,6 +25,8 @@ struct RecentlyAddedView: View {
   @State var transactionForDetail: Transaction?
   @State var transactionPendingDelete: Transaction?
   @State var transferPendingDismiss: RecentlyAddedTransferPair?
+  private let logger = Logger(
+    subsystem: "com.moolah.app", category: "RecentlyAddedView")
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -108,8 +110,8 @@ struct RecentlyAddedView: View {
       Button("Dismiss Suggestion", role: .destructive) {
         if let pair = transferPendingDismiss {
           Task {
-            await importStore.transferDetection.dismiss(
-              pair.transaction, pair.counterpart)
+            await importStore.dismissTransfer(
+              pair.transaction, counterpart: pair.counterpart)
             await reload()
           }
         }
@@ -274,9 +276,17 @@ struct RecentlyAddedView: View {
       defer {
         if didStart { url.stopAccessingSecurityScopedResource() }
       }
-      guard let data = try? Data(contentsOf: url) else { continue }
-      _ = await importStore.ingest(
-        data: data, source: .droppedFile(url: url, forcedAccountId: nil))
+      do {
+        let data = try Data(contentsOf: url)
+        _ = await importStore.ingest(
+          data: data, source: .droppedFile(url: url, forcedAccountId: nil))
+      } catch {
+        let filename = url.lastPathComponent
+        let reason = error.localizedDescription
+        logger.error(
+          "Failed to read dropped file \(filename, privacy: .public): \(reason, privacy: .public)"
+        )
+      }
     }
     await reload()
   }

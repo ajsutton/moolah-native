@@ -22,10 +22,6 @@ import SwiftUI
 /// stays a thin renderer with one-line `Task { … }` dispatches and no
 /// `@Environment(ImportStore.self)` dependency (`ImportStore` is
 /// import-flow-scoped and is not in the detail view's environment).
-///
-/// Named without a `Section` suffix so the type name stays within
-/// SwiftLint's `type_name` length limit; the type still composes two
-/// `Section`s.
 struct TransactionDetailTransferSuggestion: View {
   let transaction: Transaction
   let transactionStore: TransactionStore

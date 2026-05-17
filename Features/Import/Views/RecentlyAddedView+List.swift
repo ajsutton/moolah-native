@@ -42,7 +42,7 @@ extension RecentlyAddedView {
         onMerge: {
           if let counterpart {
             Task {
-              await importStore.transferDetection.merge(transaction, counterpart)
+              await importStore.mergeTransfer(transaction, counterpart: counterpart)
               await reload()
             }
           }
@@ -75,7 +75,7 @@ extension RecentlyAddedView {
     if let counterpart {
       Button("Merge as Transfer", systemImage: "arrow.left.arrow.right") {
         Task {
-          await importStore.transferDetection.merge(transaction, counterpart)
+          await importStore.mergeTransfer(transaction, counterpart: counterpart)
           await reload()
         }
       }

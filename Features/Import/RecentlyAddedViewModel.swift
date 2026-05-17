@@ -53,9 +53,7 @@ final class RecentlyAddedViewModel {
     /// v1 proxy for "needs review": any transaction whose legs all lack a
     /// category. See the design doc.
     var needsReviewCount: Int {
-      transactions.filter { transaction in
-        transaction.legs.allSatisfy { $0.categoryId == nil }
-      }.count
+      transactions.filter { $0.needsReview }.count
     }
   }
 
@@ -100,10 +98,7 @@ final class RecentlyAddedViewModel {
 
     let filtered = Self.filter(all, window: window, now: now)
     sessions = Self.group(filtered)
-    badgeCount =
-      filtered.filter { transaction in
-        transaction.legs.allSatisfy { $0.categoryId == nil }
-      }.count
+    badgeCount = filtered.filter { $0.needsReview }.count
   }
 
   /// Exposed for tests and for the sidebar badge lookup — given a fully-fetched
@@ -192,7 +187,7 @@ final class RecentlyAddedViewModel {
     if transaction.transferSuggestion != nil {
       parts.append(pillTitle(counterpartAccountName: counterpartAccountName))
     }
-    if transaction.legs.allSatisfy({ $0.categoryId == nil }) {
+    if transaction.needsReview {
       parts.append("Needs review")
     }
     return parts.joined(separator: ", ")

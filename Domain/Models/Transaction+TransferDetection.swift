@@ -26,6 +26,9 @@ extension Transaction {
   ///   in the same instrument as the value-bearing leg.
   var isTransferDetectionEligible: Bool { transferDetectionValueLeg != nil }
 
+  /// `true` when every leg is uncategorised — the transaction still needs user review.
+  var needsReview: Bool { legs.allSatisfy { $0.categoryId == nil } }
+
   /// The leg that detection should pair on, or `nil` when this
   /// transaction is ineligible.
   var transferDetectionValueLeg: TransactionLeg? {
