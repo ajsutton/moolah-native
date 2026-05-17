@@ -1,12 +1,5 @@
-// Features/Sync/SyncedAccountHeaderView.swift
 import Foundation
 import SwiftUI
-
-#if os(macOS)
-  import AppKit
-#else
-  import UIKit
-#endif
 
 /// Compact header for a syncable account (`AccountType.crypto` or
 /// `.exchange`). All account-type branching lives in
@@ -134,7 +127,11 @@ struct SyncedAccountHeaderView: View {
         exchangeTokenStore: exchangeTokenStore)
     }
   }
+}
 
+// MARK: - Layout helpers
+
+extension SyncedAccountHeaderView {
   /// Single-line status row. Leading edge: a context label + the
   /// inline "open externally" link. Trailing edge: the last-synced
   /// timestamp and the "Sync now" button — all on one line, so the
@@ -152,34 +149,67 @@ struct SyncedAccountHeaderView: View {
   /// `account.type` — that branching stays in
   /// `SyncableAccountPresentation`.
   private func statusRow(_ presentation: SyncableAccountPresentation) -> some View {
-    HStack(spacing: 12) {
-      // The label is its own VoiceOver stop; the external Link stays a
-      // separate focusable action rather than being folded into it.
-      Text(presentation.secondaryIdentifier ?? presentation.identifier)
+    // Single line when it fits; at accessibility Dynamic Type sizes the
+    // four elements no longer fit one row, so fall back to a two-row
+    // arrangement (context+link above, timestamp+button below) rather
+    // than letting them overlap or clip.
+    ViewThatFits(in: .horizontal) {
+      HStack(spacing: 12) {
+        statusLeadingGroup(presentation)
+        Spacer(minLength: 12)
+        statusTrailingGroup(presentation)
+      }
+      VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 12) {
+          statusLeadingGroup(presentation)
+          Spacer(minLength: 0)
+        }
+        HStack(spacing: 12) {
+          statusTrailingGroup(presentation)
+          Spacer(minLength: 0)
+        }
+      }
+    }
+  }
+
+  /// Leading half of the status row: the context label and the inline
+  /// "open externally" link. Shared by both `ViewThatFits` branches.
+  @ViewBuilder
+  private func statusLeadingGroup(_ presentation: SyncableAccountPresentation) -> some View {
+    // The label is its own VoiceOver stop; the external Link stays a
+    // separate focusable action rather than being folded into it.
+    Text(presentation.secondaryIdentifier ?? presentation.identifier)
+      .font(.caption)
+      .foregroundStyle(.secondary)
+      .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.chainName)
+    if let url = presentation.externalURL,
+      let title = presentation.externalActionTitle
+    {
+      Link(title, destination: url)
+        .font(.caption)
+    }
+  }
+
+  /// Trailing half of the status row: the last-synced timestamp and the
+  /// "Sync now" button. Shared by both `ViewThatFits` branches.
+  @ViewBuilder
+  private func statusTrailingGroup(_ presentation: SyncableAccountPresentation) -> some View {
+    // `context.date` ticks every 60s on the timeline's schedule, so
+    // the relative label ("Synced 3 min ago") stays fresh without an
+    // unrelated re-render. `.id(context.date)` forces the `Text` to
+    // re-evaluate on each tick. Mirrors `SyncProgressFooter`.
+    TimelineView(.periodic(from: .now, by: 60)) { context in
+      Text(lastSyncedText(now: context.date))
+        // Matches the context label's `.caption`: the timestamp is
+        // peer metadata, not a higher tier. `.monospacedDigit()` keeps
+        // the relative-time string from jittering as it updates.
         .font(.caption)
         .foregroundStyle(.secondary)
-        .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.chainName)
-      if let url = presentation.externalURL,
-        let title = presentation.externalActionTitle
-      {
-        Link(title, destination: url)
-          .font(.caption)
-      }
-      Spacer(minLength: 12)
-      // `context.date` ticks every 60s on the timeline's schedule, so
-      // the relative label ("Synced 3 min ago") stays fresh without an
-      // unrelated re-render. `.id(context.date)` forces the `Text` to
-      // re-evaluate on each tick. Mirrors `SyncProgressFooter`.
-      TimelineView(.periodic(from: .now, by: 60)) { context in
-        Text(lastSyncedText(now: context.date))
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-          .monospacedDigit()
-          .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.lastSynced)
-          .id(context.date)
-      }
-      syncButton(presentation)
+        .monospacedDigit()
+        .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.lastSynced)
+        .id(context.date)
     }
+    syncButton(presentation)
   }
 
   /// Inline prompt rendered when the account's sync credential is
@@ -237,6 +267,15 @@ struct SyncedAccountHeaderView: View {
     HStack(alignment: .firstTextBaseline, spacing: 6) {
       Text(address)
         .font(.body.monospaced())
+        // The address is never truncated (a clipped 0x1234…abcd is
+        // unsafe to verify), so at large Dynamic Type sizes it must
+        // wrap, not clip. The cap is one stop below the app-wide
+        // `.accessibility3` ceiling: this is an unbreakable 42-char
+        // monospace token, and past `.accessibility2` it wraps to four-
+        // plus lines and dominates the header without aiding legibility.
+        // `.fixedSize` keeps truncation risk at zero regardless.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        .fixedSize(horizontal: false, vertical: true)
         .textSelection(.enabled)
         .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.address)
         .accessibilityLabel("Wallet address \(address)")
@@ -249,6 +288,7 @@ struct SyncedAccountHeaderView: View {
       .buttonStyle(.borderless)
       .help("Copy full wallet address")
       .accessibilityLabel("Copy wallet address")
+      .accessibilityHint(address.isEmpty ? "No wallet address configured" : "")
       .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.copyAddressButton)
       .disabled(address.isEmpty)
       Spacer(minLength: 0)
@@ -280,101 +320,4 @@ struct SyncedAccountHeaderView: View {
     .accessibilityLabel(isSyncing ? "Syncing in progress" : "Sync account now")
     .accessibilityIdentifier(UITestIdentifiers.WalletAccountHeader.syncButton)
   }
-}
-
-// MARK: - Pasteboard / browser defaults
-
-extension SyncedAccountHeaderView {
-  /// Platform-default clipboard write. Lives on the view so tests can
-  /// substitute a recording closure via the initialiser without touching
-  /// the system pasteboard.
-  static func defaultCopy(_ text: String) {
-    #if os(macOS)
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(text, forType: .string)
-    #else
-      UIPasteboard.general.string = text
-    #endif
-  }
-
-  /// Platform-default URL opener. Lives on the view so tests can
-  /// substitute a recording closure without spawning a real browser.
-  static func defaultOpen(_ url: URL) {
-    #if os(macOS)
-      NSWorkspace.shared.open(url)
-    #else
-      UIApplication.shared.open(url)
-    #endif
-  }
-}
-
-// MARK: - Previews
-//
-// The parent `CryptoWalletAccountView` / `ExchangeAccountView` previews
-// render this header as `EmptyView` (their `ProfileSession.preview()`
-// leaves crypto wiring `nil`), so this standalone `#Preview` is the only
-// canvas path that exercises the layout. The header reads only
-// `SyncedAccountStore`'s observable `statePerAccount` /
-// `inProgressAccountIds`, so a minimal store over the in-memory preview
-// backend (no sync sources) covers the full layout. No checkpoint is
-// seeded, so both rows read "Never synced" — sufficient to verify the
-// single-line layout (the timestamp string does not affect the row's
-// line count). `hasCredential` resolves `false` in canvas (no
-// keychain), so each variant also shows its missing-credential hint
-// *below* the status row; that is a real state and does not change
-// whether the status row itself is a single line.
-
-#Preview("Synced account header") {
-  syncedAccountHeaderPreview()
-}
-
-// Builds the standalone-preview content. Extracted from the `#Preview`
-// closure so the (unavoidably verbose) store wiring is governed by
-// `function_body_length` rather than the stricter `closure_body_length`.
-@MainActor
-private func syncedAccountHeaderPreview() -> some View {
-  // `ProfileSession.preview()` throws only if the in-memory SwiftData
-  // container can't be created — a programmer error; crashing is correct.
-  // swiftlint:disable:next force_try
-  let session = try! ProfileSession.preview()
-  let store = SyncedAccountStore(
-    sources: [],
-    walletApplyEngine: WalletApplyEngine(
-      transactions: session.backend.transactions,
-      walletSyncState: session.backend.walletSyncState,
-      importRules: NoOpWalletImportRulesEngine()),
-    walletSyncState: session.backend.walletSyncState,
-    accounts: session.backend.accounts,
-    transferDetection: TransferDetectionCoordinator(
-      transactions: session.backend.transactions,
-      dismissedPairs: session.backend.dismissedTransferPairs),
-    transactions: session.backend.transactions)
-  let exchangeTokenStore = ExchangeTokenStore()
-  let cryptoAccount = Account(
-    name: "Preview Wallet",
-    type: .crypto,
-    instrument: .AUD,
-    valuationMode: .calculatedFromTrades,
-    walletAddress: "0xa4b572ea1b6f734fc88a0a004c5301f8dad54d60",
-    chainId: 10)
-  let exchangeAccount = Account(
-    name: "Coinstash",
-    type: .exchange,
-    instrument: .AUD,
-    valuationMode: .calculatedFromTrades,
-    exchangeProvider: .coinstash)
-  return VStack(spacing: 24) {
-    SyncedAccountHeaderView(
-      account: cryptoAccount,
-      syncStore: store,
-      cryptoTokenStore: nil,
-      exchangeTokenStore: exchangeTokenStore)
-    SyncedAccountHeaderView(
-      account: exchangeAccount,
-      syncStore: store,
-      cryptoTokenStore: nil,
-      exchangeTokenStore: exchangeTokenStore)
-  }
-  .frame(width: 720)
-  .padding()
 }
