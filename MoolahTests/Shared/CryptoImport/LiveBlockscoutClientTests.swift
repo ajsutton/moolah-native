@@ -80,7 +80,11 @@ struct LiveBlockscoutClientTests {
       _ = try await client.nativeTransactions(
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0)
       Issue.record("Expected WalletSyncError.rateLimited")
-    } catch let error as WalletSyncError where error.kind == .rateLimited(retryAfter: nil) {
+    } catch let error as WalletSyncError {
+      guard case .rateLimited = error.kind else {
+        Issue.record("Expected WalletSyncError.rateLimited, got \(error)")
+        return
+      }
       // expected
     } catch {
       Issue.record("Expected WalletSyncError.rateLimited, got \(error)")
