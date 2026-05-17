@@ -1,6 +1,4 @@
 // Shared/CryptoImport/SyncErrorAttribution.swift
-import Foundation
-
 /// Attributes any `WalletSyncError` escaping `body` to `provider`, unless a
 /// deeper boundary already attributed it (`WalletSyncError.attributed(to:)`
 /// is innermost-wins). Non-`WalletSyncError` errors (e.g. `CancellationError`)
