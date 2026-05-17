@@ -66,6 +66,38 @@ public enum UITestIdentifiers {
     }
   }
 
+  // MARK: - RecentlyAdded
+
+  public enum RecentlyAdded {
+    /// Root container of the Recently Added view. Stable post-condition
+    /// sentinel after navigating to the import landing page — individual
+    /// rows are data-dependent, but the container renders whenever the
+    /// view does. Mirrors `TransactionList.container`.
+    public static let container = "recentlyadded.container"
+  }
+
+  // MARK: - TransferDetection
+
+  public enum TransferDetection {
+    /// Passive "possible transfer" pill on a Recently Added row. `id` is
+    /// the annotated transaction's UUID, lowercased.
+    public static func pill(_ id: UUID) -> String {
+      "transferdetection.pill.\(id.uuidString.lowercased())"
+    }
+
+    /// "Merge as Transfer" action (context menu / iOS swipe) for the
+    /// transaction with the given UUID, lowercased.
+    public static func merge(_ id: UUID) -> String {
+      "transferdetection.merge.\(id.uuidString.lowercased())"
+    }
+
+    /// "Not a Transfer" dismissal action (context menu / iOS swipe) for
+    /// the transaction with the given UUID, lowercased.
+    public static func dismiss(_ id: UUID) -> String {
+      "transferdetection.dismiss.\(id.uuidString.lowercased())"
+    }
+  }
+
   // MARK: - Detail
 
   public enum Detail {

@@ -125,6 +125,79 @@ final class RecentlyAddedViewModel {
     }
   }
 
+  /// The counterpart transaction for a detected transfer suggestion,
+  /// resolved against the currently-loaded sessions. `nil` when
+  /// `transaction` carries no suggestion or the counterpart is outside
+  /// the loaded window.
+  func counterpart(of transaction: Transaction) -> Transaction? {
+    guard let counterpartId = transaction.transferSuggestion?.counterpartTransactionId
+    else { return nil }
+    for group in sessions {
+      if let match = group.transactions.first(where: { $0.id == counterpartId }) {
+        return match
+      }
+    }
+    return nil
+  }
+
+  /// Label for the passive "possible transfer" pill (also the VoiceOver
+  /// label). `counterpartAccountName` is resolved by the view from the
+  /// loaded account list — when the counterpart account was deleted
+  /// between detection and display it is `nil` and the generic fallback
+  /// is used.
+  func pillTitle(counterpartAccountName: String?) -> String {
+    if let name = counterpartAccountName, !name.isEmpty {
+      return "Possible transfer to \(name)"
+    }
+    return "Possible transfer"
+  }
+
+  /// Resolve the counterpart account's display name from the supplied
+  /// account list. Returns `nil` when the transaction carries no
+  /// counterpart, the counterpart has no value leg, or the account was
+  /// deleted between detection and display (the pill then uses the
+  /// generic title). The value leg is the first leg — the same source
+  /// leg the row's amount is derived from.
+  func counterpartAccountName(of transaction: Transaction, accounts: Accounts) -> String? {
+    guard let counterpart = counterpart(of: transaction),
+      let accountId = counterpart.legs.first?.accountId,
+      let account = accounts.by(id: accountId)
+    else { return nil }
+    return account.name
+  }
+
+  /// Spoken VoiceOver label for one imported-transaction row. Combines
+  /// the payee (or import description), the formatted date, the formatted
+  /// amount, and — when present — the pill title and a "Needs review"
+  /// note, joined by ", ". The amount uses the same instrument formatting
+  /// the visible `InstrumentAmountView` speaks for non-spam amounts, and
+  /// the date uses the same day/month/year style the row renders.
+  func rowAccessibilityLabel(
+    for transaction: Transaction,
+    counterpartAccountName: String?
+  ) -> String {
+    var parts: [String] = []
+    let primary =
+      transaction.payee
+      ?? transaction.importOrigin?.singleOrigin?.rawDescription
+    if let primary, !primary.isEmpty {
+      parts.append(primary)
+    }
+    parts.append(
+      transaction.date.formatted(.dateTime.day().month().year()))
+    if let leg = transaction.legs.first {
+      let amount = InstrumentAmount(quantity: leg.quantity, instrument: leg.instrument)
+      parts.append(amount.accessibilityString(isSpam: false))
+    }
+    if transaction.transferSuggestion != nil {
+      parts.append(pillTitle(counterpartAccountName: counterpartAccountName))
+    }
+    if transaction.legs.allSatisfy({ $0.categoryId == nil }) {
+      parts.append("Needs review")
+    }
+    return parts.joined(separator: ", ")
+  }
+
   static func group(_ transactions: [Transaction]) -> [SessionGroup] {
     let dict = Dictionary(
       grouping: transactions,

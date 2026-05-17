@@ -3,23 +3,35 @@ import SwiftUI
 /// Recently Added — landing page for CSV imports. Shows the Needs Setup /
 /// Failed Files panel at the top and a session-grouped list of recently
 /// imported transactions below. The time window picker is in the toolbar.
+///
+/// The transfer-detection coordinator is reached via
+/// `importStore.transferDetection` (it is owned by `ImportStore`, not
+/// injected into `@Environment`). Counterpart-transaction lookup and the
+/// pill title live in `RecentlyAddedViewModel`; the view stays thin.
 struct RecentlyAddedView: View {
   let backend: any BackendProvider
-  @Environment(ImportStore.self) private var importStore
+  // `importStore`, `accountStore`, and the row-action `@State` are
+  // module-internal (not `private`) so the `RecentlyAddedView+List.swift`
+  // extension can reference them — `private` scope does not cross files
+  // even within the same type's extensions.
+  @Environment(ImportStore.self) var importStore
   @Environment(TransactionStore.self) private var transactionStore
+  @Environment(AccountStore.self) var accountStore
   @State private var viewModel: RecentlyAddedViewModel?
   @State private var window: RecentlyAddedViewModel.Window = .last24Hours
   @State private var searchText: String = ""
-  @State private var createRuleFromTransaction: Transaction?
+  @State var createRuleFromTransaction: Transaction?
   @State private var showingCreateRuleFromSearch: Bool = false
-  @State private var transactionForDetail: Transaction?
-  @State private var transactionPendingDelete: Transaction?
+  @State var transactionForDetail: Transaction?
+  @State var transactionPendingDelete: Transaction?
+  @State var transferPendingDismiss: RecentlyAddedTransferPair?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       RecentlyAddedNeedsSetupPanel(backend: backend, staging: importStore.staging)
       mainContent
     }
+    .accessibilityIdentifier(UITestIdentifiers.RecentlyAdded.container)
     // The .searchable lives at the body level (not inside sessionList) so it
     // is registered exactly once and at a stable view-tree position regardless
     // of mainContent's loading/empty/list branches. Per UI_GUIDE.md §3
@@ -45,7 +57,7 @@ struct RecentlyAddedView: View {
         .accessibilityLabel("Time window")
       }
       // Create-rule-from-search affordance: visible only when the search
-      // field is non-empty, matching the plan's Task 18.5 spec.
+      // field is non-empty so the button offers a meaningful corpus.
       if !searchText.isEmpty {
         ToolbarItem(placement: .automatic) {
           Button {
@@ -85,6 +97,30 @@ struct RecentlyAddedView: View {
     } message: {
       Text("This action cannot be undone.")
     }
+    .confirmationDialog(
+      "Not a transfer?",
+      isPresented: Binding(
+        get: { transferPendingDismiss != nil },
+        set: { if !$0 { transferPendingDismiss = nil } }
+      ),
+      titleVisibility: .visible
+    ) {
+      Button("Dismiss Suggestion", role: .destructive) {
+        if let pair = transferPendingDismiss {
+          Task {
+            await importStore.transferDetection.dismiss(
+              pair.transaction, pair.counterpart)
+            await reload()
+          }
+        }
+        transferPendingDismiss = nil
+      }
+      Button("Cancel", role: .cancel) { transferPendingDismiss = nil }
+    } message: {
+      Text(
+        "These transactions stay separate and will not be suggested as a "
+          + "transfer again. This decision is synced across your devices.")
+    }
     // `.task(id:)` fires on first appearance and re-fires (auto-cancelling
     // any in-flight load) whenever any of the tracked values change. We
     // combine `window` and `importStore.recentSessions.count` into a
@@ -123,27 +159,6 @@ struct RecentlyAddedView: View {
     }
   }
 
-  private func sessionList(_ viewModel: RecentlyAddedViewModel) -> some View {
-    List {
-      ForEach(visibleSessions(viewModel)) { session in
-        Section(header: sessionHeader(session)) {
-          ForEach(session.transactions, id: \.id) { transaction in
-            RecentlyAddedRow(transaction: transaction)
-              .contextMenu {
-                Button("Open") { transactionForDetail = transaction }
-                Button("Create rule from this\u{2026}") {
-                  createRuleFromTransaction = transaction
-                }
-                Button("Delete", role: .destructive) {
-                  transactionPendingDelete = transaction
-                }
-              }
-          }
-        }
-      }
-    }
-  }
-
   private var reloadKey: ReloadKey {
     ReloadKey(window: window, importedCount: importStore.recentSessions.count)
   }
@@ -162,7 +177,7 @@ struct RecentlyAddedView: View {
     #endif
   }
 
-  private func sessionHeader(_ session: RecentlyAddedViewModel.SessionGroup) -> some View {
+  func sessionHeader(_ session: RecentlyAddedViewModel.SessionGroup) -> some View {
     let dateText = session.importedAt.formatted(
       .dateTime.day().month().year().hour().minute())
     let counts = "\(session.transactions.count) imported"
@@ -188,7 +203,7 @@ struct RecentlyAddedView: View {
     .accessibilityLabel("Imported \(dateText), \(counts)\(needs)")
   }
 
-  private func reload() async {
+  func reload() async {
     if viewModel == nil {
       viewModel = RecentlyAddedViewModel(backend: backend)
     }
@@ -199,7 +214,7 @@ struct RecentlyAddedView: View {
   /// Apply `searchText` to the view-model's grouped sessions. Empty query
   /// returns the full list; non-empty filters each session's transactions
   /// (keeping the session shell only if at least one row matches).
-  private func visibleSessions(
+  func visibleSessions(
     _ viewModel: RecentlyAddedViewModel
   ) -> [RecentlyAddedViewModel.SessionGroup] {
     guard !searchText.isEmpty else { return viewModel.sessions }
@@ -266,52 +281,10 @@ struct RecentlyAddedView: View {
   }
 }
 
-/// Row for one imported transaction. Shows date, description, amount, and a
-/// "Needs review" badge when all legs are uncategorised.
-private struct RecentlyAddedRow: View {
-  let transaction: Transaction
+// `sessionList` and `row(for:in:)` live in `RecentlyAddedView+List.swift`.
 
-  var body: some View {
-    HStack(spacing: 12) {
-      VStack(alignment: .leading, spacing: 2) {
-        Text(transaction.payee ?? transaction.importOrigin?.singleOrigin?.rawDescription ?? "")
-          .lineLimit(1)
-        Text(transaction.date, format: .dateTime.day().month().year())
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .monospacedDigit()
-      }
-      Spacer()
-      if let primary = displayAmount {
-        InstrumentAmountView(amount: primary, font: .body)
-      }
-      if needsReview {
-        Text("Needs review")
-          .font(.caption2)
-          .padding(.horizontal, 6)
-          .padding(.vertical, 2)
-          .background(Color.orange.opacity(0.15), in: Capsule())
-          .foregroundStyle(Color.orange)
-          .accessibilityLabel("Needs review")
-      }
-    }
-    .padding(.vertical, 2)
-  }
-
-  private var needsReview: Bool {
-    transaction.legs.allSatisfy { $0.categoryId == nil }
-  }
-
-  /// Pick the first leg (the source/cash leg from the importer) and build
-  /// an `InstrumentAmount` so colour coding + per-instrument formatting
-  /// come straight from `InstrumentAmountView`. Cross-instrument transfers
-  /// intentionally show only the source-side amount here; the detail view
-  /// lists both legs.
-  private var displayAmount: InstrumentAmount? {
-    guard let leg = transaction.legs.first else { return nil }
-    return InstrumentAmount(quantity: leg.quantity, instrument: leg.instrument)
-  }
-}
+// `RecentlyAddedRow`, `PossibleTransferPill`, `TransferSwipeActions`, and
+// `RecentlyAddedTransferPair` live in `RecentlyAddedRow.swift`.
 
 // `RecentlyAddedNeedsSetupPanel`, `RecentlyAddedPendingRow`, and
 // `RecentlyAddedFailedRow` live in `RecentlyAddedNeedsSetupPanel.swift`.
