@@ -67,6 +67,8 @@ struct ProfileSchemaV10DropLegacyTests {
     "transaction_leg",
     "investment_value",
     "wallet_sync_state",
+    // v12 transfer detection
+    "dismissed_transfer_pair",
     "grdb_migrations",
   ]
 
@@ -106,6 +108,9 @@ struct ProfileSchemaV10DropLegacyTests {
     "leg_dedup_by_account_external",
     // v3 investment_value (rebuilt v5)
     "iv_by_account_date_value",
+    // v12 transfer detection
+    "dismissed_pair_by_tx_a",
+    "dismissed_pair_by_tx_b",
   ]
 
   /// `DATABASE_SCHEMA_GUIDE.md` §6 rule 1 golden gate: after the FULL
