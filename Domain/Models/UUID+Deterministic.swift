@@ -2,9 +2,14 @@ import CryptoKit
 import Foundation
 
 extension UUID {
-  /// A stable UUID derived from `seed` (first 16 bytes of its SHA-256,
-  /// RFC-4122 version/variant bits set). Same seed → same UUID on every
-  /// device. Used for content-addressed records.
+  /// Returns a UUID derived deterministically from `seed`.
+  ///
+  /// Built from the first 16 bytes of SHA-256(`seed`), with the version
+  /// (nibble 6) and variant (nibble 8) bits forced to RFC-4122 v4 /
+  /// variant-1. Identical seeds produce identical UUIDs on every
+  /// device, which is what makes idempotent cross-device upserts of
+  /// content-addressed records possible. Not a substitute for a random
+  /// UUID where unpredictability of attacker-chosen seeds matters.
   static func deterministic(from seed: String) -> UUID {
     var digest = Array(SHA256.hash(data: Data(seed.utf8)).prefix(16))
     digest[6] = (digest[6] & 0x0F) | 0x40

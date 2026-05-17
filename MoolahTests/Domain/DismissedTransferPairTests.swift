@@ -19,8 +19,8 @@ struct DismissedTransferPairTests {
     let idA = UUID()
     let idB = UUID()
     let pair = DismissedTransferPair(transactionIds: [idA, idB], dismissedAt: Date())
-    #expect(pair.covers(idA, idB))
-    #expect(pair.covers(idB, idA))
-    #expect(!pair.covers(idA, UUID()))
+    #expect(pair.covers(idA, and: idB))
+    #expect(pair.covers(idB, and: idA))
+    #expect(!pair.covers(idA, and: UUID()))
   }
 }

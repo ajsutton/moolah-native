@@ -16,7 +16,7 @@ struct DismissedTransferPair: Codable, Sendable, Identifiable, Hashable {
     self.id = Self.deterministicId(for: transactionIds)
   }
 
-  func covers(_ first: UUID, _ second: UUID) -> Bool {
+  func covers(_ first: UUID, and second: UUID) -> Bool {
     transactionIds == [first, second]
   }
 
