@@ -5,30 +5,47 @@ import Testing
 
 @Suite("HTTPRetryClassifier")
 struct HTTPRetryClassifierTests {
-  @Test
-  func transientTransportErrorsRetryWhenIdempotent() {
-    for code in [
+  @Test(
+    arguments: [
       URLError.timedOut, .networkConnectionLost, .cannotConnectToHost,
       .dnsLookupFailed, .notConnectedToInternet,
-    ] {
-      let decision = HTTPRetryClassifier.decision(
-        for: URLError(code), idempotent: true)
-      #expect(decision == .retryAfterBackoff)
-    }
+    ])
+  func transientTransportErrorRetriesWhenIdempotent(_ code: URLError.Code) {
+    #expect(
+      HTTPRetryClassifier.decision(for: URLError(code), idempotent: true)
+        == .retryAfterBackoff)
   }
 
   @Test
   func transientTransportErrorsDoNotRetryWhenNotIdempotent() {
-    let decision = HTTPRetryClassifier.decision(
-      for: URLError(.timedOut), idempotent: false)
-    #expect(decision == .doNotRetry)
+    for code in [URLError.timedOut, .networkConnectionLost] {
+      let decision = HTTPRetryClassifier.decision(
+        for: URLError(code), idempotent: false)
+      #expect(decision == .doNotRetry)
+    }
   }
 
   @Test
-  func cancellationNeverRetries() {
+  func retrySignalIgnoresIdempotency() {
+    #expect(
+      HTTPRetryClassifier.decision(
+        for: HTTPRetrySignal(retryAfter: nil), idempotent: false)
+        == .retryAfterBackoff)
+    #expect(
+      HTTPRetryClassifier.decision(
+        for: HTTPRetrySignal(retryAfter: 9), idempotent: false)
+        == .retryAfter(9))
+  }
+
+  @Test
+  func swiftCancellationErrorNeverRetries() {
     #expect(
       HTTPRetryClassifier.decision(for: CancellationError(), idempotent: true)
         == .doNotRetry)
+  }
+
+  @Test
+  func urlErrorCancelledNeverRetries() {
     #expect(
       HTTPRetryClassifier.decision(for: URLError(.cancelled), idempotent: true)
         == .doNotRetry)
