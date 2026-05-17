@@ -66,15 +66,16 @@ struct CSVImportProfileMatcherTests {
           accountId: accountId, instrument: .AUD, quantity: amount,
           type: amount >= 0 ? .income : .expense, categoryId: nil, earmarkId: nil)
       ],
-      importOrigin: ImportOrigin(
-        rawDescription: description,
-        bankReference: bankRef,
-        rawAmount: amount,
-        rawBalance: nil,
-        importedAt: Date(),
-        importSessionId: UUID(),
-        sourceFilename: nil,
-        parserIdentifier: "generic-bank"))
+      importOrigin: .single(
+        ImportOrigin(
+          rawDescription: description,
+          bankReference: bankRef,
+          rawAmount: amount,
+          rawBalance: nil,
+          importedAt: Date(),
+          importSessionId: UUID(),
+          sourceFilename: nil,
+          parserIdentifier: "generic-bank")))
   }
 
   // MARK: - Cases

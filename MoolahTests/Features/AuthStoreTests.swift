@@ -117,6 +117,7 @@ private struct TestAuthBackend: BackendProvider {
   let accounts: any AccountRepository
   let transactions: any TransactionRepository
   let categories: any CategoryRepository
+  let dismissedTransferPairs: any DismissedTransferPairRepository
   let earmarks: any EarmarkRepository
   let analysis: any AnalysisRepository
   let investments: any InvestmentRepository
@@ -131,6 +132,7 @@ private struct TestAuthBackend: BackendProvider {
     self.accounts = backend.accounts
     self.transactions = backend.transactions
     self.categories = backend.categories
+    self.dismissedTransferPairs = backend.dismissedTransferPairs
     self.earmarks = backend.earmarks
     self.analysis = backend.analysis
     self.investments = backend.investments

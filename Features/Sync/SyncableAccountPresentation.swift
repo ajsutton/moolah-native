@@ -7,11 +7,11 @@ import Foundation
 /// from `Account`.
 struct SyncableAccountPresentation: Sendable {
   let identifier: String
-  /// Secondary line (crypto: chain name, e.g. "Ethereum" — preserves the
-  /// context the removed `Text(chain.displayName)` row gave; exchange: nil).
+  /// Leading label of the header's status row (crypto: chain name,
+  /// e.g. "Ethereum"; exchange: nil — the provider name is used as the
+  /// `identifier` instead). The crypto address is shown untruncated on
+  /// its own line, never here.
   let secondaryIdentifier: String?
-  /// Crypto addresses are copyable (security-critical); a provider name is not.
-  let isSelectableIdentifier: Bool
   let externalURL: URL?
   /// `nil` when there is no external action (no empty-string sentinel).
   let externalActionTitle: String?
@@ -31,7 +31,6 @@ struct SyncableAccountPresentation: Sendable {
       secondaryIdentifier =
         account.chainId
         .flatMap(ChainConfig.config(for:))?.displayName
-      isSelectableIdentifier = true
       externalActionTitle = "Open in block explorer"
       if let chainId = account.chainId, !addr.isEmpty {
         // Reuse the existing helper (handles isDirectory:false / trailing
@@ -49,7 +48,6 @@ struct SyncableAccountPresentation: Sendable {
         ? nil : "Add an Alchemy key in Crypto preferences to enable sync."
     case .exchange:
       secondaryIdentifier = nil
-      isSelectableIdentifier = false
       if let provider = account.exchangeProvider {
         identifier = provider.displayName
         externalActionTitle = "Open \(provider.displayName)"
@@ -66,7 +64,6 @@ struct SyncableAccountPresentation: Sendable {
     case .bank, .creditCard, .asset, .investment:
       identifier = ""
       secondaryIdentifier = nil
-      isSelectableIdentifier = false
       externalActionTitle = nil
       externalURL = nil
       missingCredentialHint = nil

@@ -1,0 +1,331 @@
+/* moolah.rocks — static site styles.
+   Ported from the legacy Welcome.vue <style lang="scss"> (ajsutton/moolah):
+   SCSS nesting flattened to plain CSS, sign-in removed, header/footer/CTA
+   added. Colours/type follow guides/BRAND_GUIDE.md. */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: #02050f;
+}
+
+body {
+  margin: 0;
+  background: #02050f;
+  color: #e8edf5;
+  font-family: 'Poppins', 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: #7abdff;
+}
+
+.accent-blue {
+  color: #7abdff;
+}
+.accent-gold {
+  color: #ffd56b;
+}
+.accent-red {
+  color: #ff787f;
+}
+
+/* ---- Shared CTA button ---- */
+.cta-button {
+  display: inline-block;
+  background: #1e64ee;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  padding: 0.95rem 2.2rem;
+  border-radius: 999px;
+  box-shadow: 0 14px 40px rgba(30, 100, 238, 0.35);
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s,
+    background 0.2s;
+}
+
+.cta-button:hover {
+  transform: translateY(-2px);
+  background: #2f72f6;
+  box-shadow: 0 18px 52px rgba(30, 100, 238, 0.45);
+}
+
+a:focus-visible,
+.cta-button:focus-visible {
+  outline: 3px solid #ffd56b;
+  outline-offset: 3px;
+}
+
+/* ---- Header ---- */
+.site-header {
+  display: flex;
+  align-items: center;
+  padding: 1.1rem 1.5rem;
+  background: #07102e;
+}
+
+.site-header-brand {
+  display: inline-flex;
+  align-items: center;
+}
+
+.site-header-brand img {
+  display: block;
+}
+
+/* ---- Hero ---- */
+.hero {
+  min-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6rem 1.5rem 4rem;
+  background: radial-gradient(
+    ellipse 80% 60% at 50% 35%,
+    #132a66 0%,
+    #07102e 50%,
+    #02050f 100%
+  );
+}
+
+.hero-icon {
+  width: 140px;
+  height: 140px;
+  border-radius: 28px;
+  box-shadow:
+    0 24px 80px rgba(30, 100, 238, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  margin-bottom: 2.5rem;
+}
+
+.hero h1 {
+  font-size: clamp(2.2rem, 5.5vw, 3.8rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  max-width: 700px;
+  margin: 0 0 1.2rem;
+}
+
+.hero-sub {
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  font-weight: 400;
+  color: #aab4c8;
+  max-width: 540px;
+  line-height: 1.6;
+  margin: 0 0 2.5rem;
+}
+
+.beta-note {
+  margin: 1.6rem auto 0;
+  max-width: 460px;
+  font-size: 0.9rem;
+  color: #aab4c8;
+  line-height: 1.6;
+}
+
+/* ---- Features ---- */
+.features {
+  padding: 5rem 1.5rem;
+  background: linear-gradient(180deg, #02050f 0%, #07102e 50%, #02050f 100%);
+}
+
+.features-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.section-label {
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  color: #ffd56b;
+  text-align: center;
+  margin: 0 0 0.8rem;
+}
+
+.section-title {
+  font-size: clamp(1.6rem, 3.5vw, 2.5rem);
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: -0.02em;
+  margin: 0 0 3rem;
+  line-height: 1.15;
+}
+
+.feature-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.feature-card {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 20px;
+  padding: 2rem 1.6rem;
+  transition:
+    transform 0.3s,
+    border-color 0.3s,
+    box-shadow 0.3s;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+}
+
+.feature-card h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+
+.feature-card p {
+  font-size: 0.95rem;
+  color: #aab4c8;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.card-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.card-icon.icon-blue {
+  background: rgba(30, 100, 238, 0.15);
+  color: #7abdff;
+}
+.card-icon.icon-red {
+  background: rgba(220, 34, 59, 0.15);
+  color: #ff787f;
+}
+.card-icon.icon-gold {
+  background: rgba(255, 213, 107, 0.15);
+  color: #ffd56b;
+}
+
+/* ---- Quote strip ---- */
+.quote {
+  padding: 3.5rem 1.5rem;
+  background: #02050f;
+  text-align: center;
+}
+
+.quote p {
+  font-size: clamp(1.1rem, 2.5vw, 1.4rem);
+  font-weight: 600;
+  line-height: 1.5;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+/* ---- Privacy ---- */
+.privacy {
+  padding: 4.5rem 1.5rem;
+  background: linear-gradient(180deg, #02050f 0%, #07102e 50%, #02050f 100%);
+}
+
+.privacy-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.privacy-body {
+  font-size: clamp(1rem, 2vw, 1.15rem);
+  color: #aab4c8;
+  line-height: 1.65;
+  margin: 0;
+}
+
+/* ---- CTA ---- */
+.cta {
+  padding: 4rem 1.5rem 5rem;
+  text-align: center;
+  background: radial-gradient(
+    ellipse 70% 50% at 50% 60%,
+    #0e2458 0%,
+    #07102e 55%,
+    #02050f 100%
+  );
+}
+
+.cta h2 {
+  font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.8rem;
+}
+
+.cta-sub {
+  font-size: 1.05rem;
+  color: #aab4c8;
+  margin: 0 0 2rem;
+}
+
+.cta-email {
+  margin: 1.4rem 0 0;
+  font-size: 0.9rem;
+  color: #aab4c8;
+}
+
+/* ---- Footer ---- */
+.site-footer {
+  padding: 2.5rem 1.5rem 3rem;
+  text-align: center;
+  background: #02050f;
+}
+
+.site-footer img {
+  opacity: 0.85;
+  margin-bottom: 0.8rem;
+}
+
+.site-footer p {
+  font-size: 0.85rem;
+  color: #6a7388;
+  margin: 0;
+}
+
+.site-footer a {
+  color: #aab4c8;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 640px) {
+  .hero {
+    padding: 4rem 1.2rem 3rem;
+  }
+  .hero-icon {
+    width: 100px;
+    height: 100px;
+    border-radius: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta-button,
+  .feature-card {
+    transition: none;
+  }
+}

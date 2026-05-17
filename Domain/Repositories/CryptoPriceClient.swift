@@ -7,6 +7,19 @@ enum CryptoPriceError: Error, Equatable {
   case allProvidersFailed(tokenId: String)
 }
 
+extension CryptoPriceError: LocalizedError {
+  var errorDescription: String? {
+    switch self {
+    case let .noPriceAvailable(tokenId, date):
+      return "No price available for \(tokenId) on \(date)."
+    case let .noProviderMapping(tokenId, provider):
+      return "No price source is configured for \(tokenId) (provider: \(provider))."
+    case let .allProvidersFailed(tokenId):
+      return "Unable to fetch a price for \(tokenId) from any source."
+    }
+  }
+}
+
 /// Abstraction for fetching cryptocurrency prices from an external source.
 /// Implementations: CryptoCompareClient (default), BinanceClient (fallback), CoinGeckoClient (premium).
 /// All prices are denominated in USD.

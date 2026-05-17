@@ -73,9 +73,10 @@ struct ImportStoreTestsMoreSecondHalf {
       Issue.record("expected .imported")
       return
     }
-    #expect(imported.allSatisfy { $0.importOrigin?.importSessionId == sessionId })
-    #expect(imported.allSatisfy { $0.importOrigin?.parserIdentifier == "generic-bank" })
-    #expect(imported.allSatisfy { $0.importOrigin?.sourceFilename == "cba.csv" })
+    #expect(imported.allSatisfy { $0.importOrigin?.singleOrigin?.importSessionId == sessionId })
+    #expect(
+      imported.allSatisfy { $0.importOrigin?.singleOrigin?.parserIdentifier == "generic-bank" })
+    #expect(imported.allSatisfy { $0.importOrigin?.singleOrigin?.sourceFilename == "cba.csv" })
   }
 
   @Test("profile lastUsedAt is bumped after a successful routed import")
@@ -151,12 +152,12 @@ struct ImportStoreTestsMoreSecondHalf {
     let imported = try await ingestMovementsFixture()
     #expect(
       imported.allSatisfy {
-        $0.importOrigin?.parserIdentifier == "selfwealth-movements"
+        $0.importOrigin?.singleOrigin?.parserIdentifier == "selfwealth-movements"
       })
     let buy = try #require(
       imported.first(where: {
-        $0.importOrigin?.rawDescription.contains("Buy") == true
-          && $0.importOrigin?.rawDescription.contains("WXYZ") == true
+        $0.importOrigin?.singleOrigin?.rawDescription.contains("Buy") == true
+          && $0.importOrigin?.singleOrigin?.rawDescription.contains("WXYZ") == true
       }))
     #expect(buy.legs.count == 3)
     let cashLeg = buy.legs.first(where: {
@@ -176,8 +177,8 @@ struct ImportStoreTestsMoreSecondHalf {
   func selfWealthMovementsSellAndInEndToEnd() async throws {
     let imported = try await ingestMovementsFixture()
     let sell = imported.first(where: {
-      $0.importOrigin?.rawDescription.contains("Sell") == true
-        && $0.importOrigin?.rawDescription.contains("ABCD") == true
+      $0.importOrigin?.singleOrigin?.rawDescription.contains("Sell") == true
+        && $0.importOrigin?.singleOrigin?.rawDescription.contains("ABCD") == true
     })
     let sellPosition = sell?.legs.first(where: { $0.instrument.id == "ASX:ABCD.AX" })
     #expect(sellPosition?.quantity == -50)

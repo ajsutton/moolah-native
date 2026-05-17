@@ -42,7 +42,7 @@ struct RecentlyAddedDetailSheet: View {
             }
           }
         }
-        if let origin = transaction.importOrigin {
+        if let origin = transaction.importOrigin?.singleOrigin {
           Section("Import origin") {
             LabeledContent("Source", value: origin.sourceFilename ?? origin.parserIdentifier)
             LabeledContent("Raw description", value: origin.rawDescription)

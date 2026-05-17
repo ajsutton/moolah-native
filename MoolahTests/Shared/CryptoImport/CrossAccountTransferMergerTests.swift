@@ -273,12 +273,13 @@ struct CrossAccountTransferMergerTests {
     let transaction = Transaction(
       date: date,
       legs: [transferLeg] + extraLegs,
-      importOrigin: ImportOrigin(
-        rawDescription: "wallet:\(accountId.uuidString)",
-        rawAmount: 0,
-        importedAt: date,
-        importSessionId: UUID(),
-        parserIdentifier: "alchemy-wallet-sync"))
+      importOrigin: .single(
+        ImportOrigin(
+          rawDescription: "wallet:\(accountId.uuidString)",
+          rawAmount: 0,
+          importedAt: date,
+          importSessionId: UUID(),
+          parserIdentifier: "alchemy-wallet-sync")))
     return BuiltTransaction(originAccountId: accountId, transaction: transaction)
   }
 }

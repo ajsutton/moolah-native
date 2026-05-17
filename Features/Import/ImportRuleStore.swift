@@ -230,7 +230,7 @@ final class ImportRuleStore {
         var count = 0
         var lastMatchedAt: Date?
         for transaction in page.transactions {
-          guard let origin = transaction.importOrigin,
+          guard let origin = transaction.importOrigin?.singleOrigin,
             let routingAccount = transaction.legs.first?.accountId
           else { continue }
           let parsed = ParsedTransaction(
@@ -284,7 +284,7 @@ final class ImportRuleStore {
         actions: [],
         accountScope: accountScope)
       return page.transactions.reduce(0) { count, transaction in
-        guard let origin = transaction.importOrigin,
+        guard let origin = transaction.importOrigin?.singleOrigin,
           let routingAccount = transaction.legs.first?.accountId
         else {
           return count

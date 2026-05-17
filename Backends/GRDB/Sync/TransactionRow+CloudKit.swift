@@ -20,6 +20,16 @@ extension TransactionRow: CloudKitRecordConvertible {
       importOriginBankReference: importOriginBankReference,
       importOriginImportSessionId: importOriginImportSessionId?.uuidString,
       importOriginImportedAt: importOriginImportedAt,
+      importOriginIncomingBankReference: importOriginIncomingBankReference,
+      importOriginIncomingImportSessionId: importOriginIncomingImportSessionId?
+        .uuidString,
+      importOriginIncomingImportedAt: importOriginIncomingImportedAt,
+      importOriginIncomingParserIdentifier: importOriginIncomingParserIdentifier,
+      importOriginIncomingRawAmount: importOriginIncomingRawAmount,
+      importOriginIncomingRawBalance: importOriginIncomingRawBalance,
+      importOriginIncomingRawDescription: importOriginIncomingRawDescription,
+      importOriginIncomingSourceFilename: importOriginIncomingSourceFilename,
+      importOriginKind: importOriginKind,
       importOriginParserIdentifier: importOriginParserIdentifier,
       importOriginRawAmount: importOriginRawAmount,
       importOriginRawBalance: importOriginRawBalance,
@@ -28,7 +38,10 @@ extension TransactionRow: CloudKitRecordConvertible {
       notes: notes,
       payee: payee,
       recurEvery: recurEvery.map(Int64.init),
-      recurPeriod: recurPeriod
+      recurPeriod: recurPeriod,
+      transferSuggestionCounterpartId: transferSuggestionCounterpartId?
+        .uuidString,
+      transferSuggestionSuggestedAt: transferSuggestionSuggestedAt
     ).write(to: record)
     return record
   }
@@ -53,6 +66,25 @@ extension TransactionRow: CloudKitRecordConvertible {
         fields.importOriginImportSessionId.flatMap(UUID.init(uuidString:)),
       importOriginSourceFilename: fields.importOriginSourceFilename,
       importOriginParserIdentifier: fields.importOriginParserIdentifier,
+      importOriginKind: fields.importOriginKind,
+      importOriginIncomingRawDescription:
+        fields.importOriginIncomingRawDescription,
+      importOriginIncomingBankReference:
+        fields.importOriginIncomingBankReference,
+      importOriginIncomingRawAmount: fields.importOriginIncomingRawAmount,
+      importOriginIncomingRawBalance: fields.importOriginIncomingRawBalance,
+      importOriginIncomingImportedAt: fields.importOriginIncomingImportedAt,
+      importOriginIncomingImportSessionId:
+        fields.importOriginIncomingImportSessionId
+        .flatMap(UUID.init(uuidString:)),
+      importOriginIncomingSourceFilename:
+        fields.importOriginIncomingSourceFilename,
+      importOriginIncomingParserIdentifier:
+        fields.importOriginIncomingParserIdentifier,
+      transferSuggestionCounterpartId:
+        fields.transferSuggestionCounterpartId
+        .flatMap(UUID.init(uuidString:)),
+      transferSuggestionSuggestedAt: fields.transferSuggestionSuggestedAt,
       // Stamped by applyGRDBBatchSave after upsert; never read from the
       // CKRecord itself.
       encodedSystemFields: nil

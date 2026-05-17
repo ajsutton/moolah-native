@@ -199,12 +199,13 @@ struct WalletApplyEngineTests {
     let transaction = Transaction(
       date: Self.pinnedNow,
       legs: [leg],
-      importOrigin: ImportOrigin(
-        rawDescription: "wallet:\(accountId.uuidString)",
-        rawAmount: 0,
-        importedAt: Self.pinnedNow,
-        importSessionId: UUID(),
-        parserIdentifier: "alchemy-wallet-sync"))
+      importOrigin: .single(
+        ImportOrigin(
+          rawDescription: "wallet:\(accountId.uuidString)",
+          rawAmount: 0,
+          importedAt: Self.pinnedNow,
+          importSessionId: UUID(),
+          parserIdentifier: "alchemy-wallet-sync")))
     return BuiltTransaction(originAccountId: accountId, transaction: transaction)
   }
 }

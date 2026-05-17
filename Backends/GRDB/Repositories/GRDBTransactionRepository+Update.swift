@@ -112,26 +112,15 @@ extension GRDBTransactionRepository {
       upsertedLegIds: upsertedLegIds)
   }
 
-  /// Mirrors `CloudKitTransactionRepository.applyMetadata`. Copies the
-  /// header fields (including the eight denormalised
-  /// `import_origin_*` columns) from the domain object onto the
-  /// existing row.
+  /// Rewrites the row from the domain transaction, preserving the
+  /// CloudKit system-fields blob. Using the canonical encoder keeps
+  /// every denormalised column (incl. import-origin discriminator and
+  /// transfer-suggestion) in sync without per-column maintenance.
   private static func applyMetadata(
     of transaction: Transaction, to row: inout TransactionRow
   ) {
-    let fresh = TransactionRow(domain: transaction)
-    row.date = fresh.date
-    row.payee = fresh.payee
-    row.notes = fresh.notes
-    row.recurPeriod = fresh.recurPeriod
-    row.recurEvery = fresh.recurEvery
-    row.importOriginRawDescription = fresh.importOriginRawDescription
-    row.importOriginBankReference = fresh.importOriginBankReference
-    row.importOriginRawAmount = fresh.importOriginRawAmount
-    row.importOriginRawBalance = fresh.importOriginRawBalance
-    row.importOriginImportedAt = fresh.importOriginImportedAt
-    row.importOriginImportSessionId = fresh.importOriginImportSessionId
-    row.importOriginSourceFilename = fresh.importOriginSourceFilename
-    row.importOriginParserIdentifier = fresh.importOriginParserIdentifier
+    let savedSystemFields = row.encodedSystemFields
+    row = TransactionRow(domain: transaction)
+    row.encodedSystemFields = savedSystemFields
   }
 }

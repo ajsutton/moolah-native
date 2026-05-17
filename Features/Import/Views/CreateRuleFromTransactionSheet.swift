@@ -18,7 +18,7 @@ struct CreateRuleFromTransactionSheet: View {
   }
 
   private func prefilledRule() -> ImportRule {
-    let rawDescription = transaction.importOrigin?.rawDescription ?? ""
+    let rawDescription = transaction.importOrigin?.singleOrigin?.rawDescription ?? ""
     let tokens = DistinguishingTokens.extract(
       from: rawDescription, corpus: corpus, limit: 3)
     var actions: [RuleAction] = []

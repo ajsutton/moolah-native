@@ -57,6 +57,10 @@ extension ProfileDataSyncHandler {
       return { handler in handler.applyBatchSaveInstrument(ckRecords:systemFields:in:) }
     case CategoryRow.recordType:
       return { handler in handler.applyBatchSaveCategory(ckRecords:systemFields:in:) }
+    case DismissedTransferPairRow.recordType:
+      return { handler in
+        handler.applyBatchSaveDismissedTransferPair(ckRecords:systemFields:in:)
+      }
     default:
       return nil
     }
@@ -134,6 +138,13 @@ extension ProfileDataSyncHandler {
       return { handler, ids, database in
         try handler.writeRemote(site: "applyGRDBBatchDeletion[Category]") {
           try handler.grdbRepositories.categories.applyRemoteChangesSync(
+            saved: [], deleted: ids, in: database)
+        }
+      }
+    case DismissedTransferPairRow.recordType:
+      return { handler, ids, database in
+        try handler.writeRemote(site: "applyGRDBBatchDeletion[DismissedTransferPair]") {
+          try handler.grdbRepositories.dismissedTransferPairs.applyRemoteChangesSync(
             saved: [], deleted: ids, in: database)
         }
       }

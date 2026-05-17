@@ -67,8 +67,55 @@ extension ProfileDataSyncHandler {
 
   // MARK: - Per-Type Dispatch
 
-  /// Single-record dispatcher. Returns nil for unknown recordType strings.
+  /// Single-record dispatcher. Returns nil for unknown recordType
+  /// strings. The lookup is split between a reference-data half and a
+  /// financial-graph half (each returning a double-optional: outer
+  /// `.none` = "not this half's record type", inner `nil` = "handled,
+  /// no such row") so neither switch breaches the cyclomatic-complexity
+  /// ceiling — same shape as `saveHandler` in `+GRDBDispatch`.
   private func fetchAndBuild(recordType: String, uuid: UUID) -> CKRecord? {
+    if let referenceResult = fetchAndBuildReference(recordType: recordType, uuid: uuid) {
+      return referenceResult
+    }
+    if let domainResult = fetchAndBuildDomain(recordType: recordType, uuid: uuid) {
+      return domainResult
+    }
+    logger.warning(
+      "Unknown recordType '\(recordType, privacy: .public)' in prefixed recordID — skipping"
+    )
+    return nil
+  }
+
+  /// Reference-data side of the `fetchAndBuild` dispatch.
+  private func fetchAndBuildReference(
+    recordType: String, uuid: UUID
+  ) -> CKRecord?? {
+    switch recordType {
+    case CategoryRow.recordType:
+      return fetchCategoryRow(id: uuid).map { row in
+        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
+      }
+    case DismissedTransferPairRow.recordType:
+      return fetchDismissedTransferPairRow(id: uuid).map { row in
+        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
+      }
+    case CSVImportProfileRow.recordType:
+      return fetchCSVImportProfileRow(id: uuid).map { row in
+        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
+      }
+    case ImportRuleRow.recordType:
+      return fetchImportRuleRow(id: uuid).map { row in
+        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
+      }
+    default:
+      return nil
+    }
+  }
+
+  /// Financial-graph side of the `fetchAndBuild` dispatch.
+  private func fetchAndBuildDomain(
+    recordType: String, uuid: UUID
+  ) -> CKRecord?? {
     switch recordType {
     case AccountRow.recordType:
       return fetchAccountRow(id: uuid).map { row in
@@ -80,10 +127,6 @@ extension ProfileDataSyncHandler {
       }
     case TransactionLegRow.recordType:
       return fetchTransactionLegRow(id: uuid).map { row in
-        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
-      }
-    case CategoryRow.recordType:
-      return fetchCategoryRow(id: uuid).map { row in
         buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
       }
     case EarmarkRow.recordType:
@@ -98,60 +141,114 @@ extension ProfileDataSyncHandler {
       return fetchInvestmentValueRow(id: uuid).map { row in
         buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
       }
-    case CSVImportProfileRow.recordType:
-      return fetchCSVImportProfileRow(id: uuid).map { row in
-        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
-      }
-    case ImportRuleRow.recordType:
-      return fetchImportRuleRow(id: uuid).map { row in
-        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
-      }
     default:
-      logger.warning(
-        "Unknown recordType '\(recordType, privacy: .public)' in prefixed recordID — skipping"
-      )
       return nil
     }
   }
 
   /// Batch-fetch dispatcher. One batch fetch per type, mapped into
-  /// `[UUID: CKRecord]` via `buildCKRecord`.
+  /// `[UUID: CKRecord]` via `buildCKRecord`. Split into a reference-data
+  /// half and a financial-graph half (each returning `nil` for "not this
+  /// half's record type") so neither switch breaches the
+  /// cyclomatic-complexity ceiling — same shape as `saveHandler` in
+  /// `+GRDBDispatch`.
   private func batchFetchByType(
     recordType: String, uuids: Set<UUID>
   ) -> [UUID: CKRecord] {
     let ids = Array(uuids)
-    switch recordType {
-    case AccountRow.recordType:
-      return mapBuiltRows(fetchRowsBatch { try grdbRepositories.accounts.fetchRowsSync(ids: ids) })
-    case TransactionRow.recordType:
-      return mapBuiltRows(
-        fetchRowsBatch { try grdbRepositories.transactions.fetchRowsSync(ids: ids) })
-    case TransactionLegRow.recordType:
-      return mapBuiltRows(
-        fetchRowsBatch { try grdbRepositories.transactionLegs.fetchRowsSync(ids: ids) })
-    case CategoryRow.recordType:
-      return mapBuiltRows(
-        fetchRowsBatch { try grdbRepositories.categories.fetchRowsSync(ids: ids) })
-    case EarmarkRow.recordType:
-      return mapBuiltRows(
-        fetchRowsBatch { try grdbRepositories.earmarks.fetchRowsSync(ids: ids) })
-    case EarmarkBudgetItemRow.recordType:
-      return mapBuiltRows(
-        fetchRowsBatch { try grdbRepositories.earmarkBudgetItems.fetchRowsSync(ids: ids) })
-    case InvestmentValueRow.recordType:
-      return mapBuiltRows(
-        fetchRowsBatch { try grdbRepositories.investmentValues.fetchRowsSync(ids: ids) })
-    case CSVImportProfileRow.recordType:
-      return mapBuiltRows(
-        fetchRowsBatch { try grdbRepositories.csvImportProfiles.fetchRowsSync(ids: ids) })
-    case ImportRuleRow.recordType:
-      return mapBuiltRows(
-        fetchRowsBatch { try grdbRepositories.importRules.fetchRowsSync(ids: ids) })
-    default:
+    guard
+      let fetch =
+        batchFetchReference(for: recordType, ids: ids)
+        ?? batchFetchDomain(for: recordType, ids: ids)
+    else {
       logger.warning(
         "Unknown recordType '\(recordType, privacy: .public)' in batch lookup — skipping"
       )
       return [:]
+    }
+    return fetch()
+  }
+
+  /// Reference-data side of the `batchFetchByType` dispatch. Returns the
+  /// batch-fetch thunk, or `nil` when `recordType` is not reference data.
+  private func batchFetchReference(
+    for recordType: String, ids: [UUID]
+  ) -> (() -> [UUID: CKRecord])? {
+    switch recordType {
+    case CategoryRow.recordType:
+      return {
+        self.mapBuiltRows(
+          self.fetchRowsBatch { try self.grdbRepositories.categories.fetchRowsSync(ids: ids) })
+      }
+    case DismissedTransferPairRow.recordType:
+      return {
+        self.mapBuiltRows(
+          self.fetchRowsBatch {
+            try self.grdbRepositories.dismissedTransferPairs.fetchRowsSync(ids: ids)
+          })
+      }
+    case CSVImportProfileRow.recordType:
+      return {
+        self.mapBuiltRows(
+          self.fetchRowsBatch {
+            try self.grdbRepositories.csvImportProfiles.fetchRowsSync(ids: ids)
+          })
+      }
+    case ImportRuleRow.recordType:
+      return {
+        self.mapBuiltRows(
+          self.fetchRowsBatch { try self.grdbRepositories.importRules.fetchRowsSync(ids: ids) })
+      }
+    default:
+      return nil
+    }
+  }
+
+  /// Financial-graph side of the `batchFetchByType` dispatch. Returns
+  /// the batch-fetch thunk, or `nil` when `recordType` is not a
+  /// financial-graph row.
+  private func batchFetchDomain(
+    for recordType: String, ids: [UUID]
+  ) -> (() -> [UUID: CKRecord])? {
+    switch recordType {
+    case AccountRow.recordType:
+      return {
+        self.mapBuiltRows(
+          self.fetchRowsBatch { try self.grdbRepositories.accounts.fetchRowsSync(ids: ids) })
+      }
+    case TransactionRow.recordType:
+      return {
+        self.mapBuiltRows(
+          self.fetchRowsBatch { try self.grdbRepositories.transactions.fetchRowsSync(ids: ids) })
+      }
+    case TransactionLegRow.recordType:
+      return {
+        self.mapBuiltRows(
+          self.fetchRowsBatch {
+            try self.grdbRepositories.transactionLegs.fetchRowsSync(ids: ids)
+          })
+      }
+    case EarmarkRow.recordType:
+      return {
+        self.mapBuiltRows(
+          self.fetchRowsBatch { try self.grdbRepositories.earmarks.fetchRowsSync(ids: ids) })
+      }
+    case EarmarkBudgetItemRow.recordType:
+      return {
+        self.mapBuiltRows(
+          self.fetchRowsBatch {
+            try self.grdbRepositories.earmarkBudgetItems.fetchRowsSync(ids: ids)
+          })
+      }
+    case InvestmentValueRow.recordType:
+      return {
+        self.mapBuiltRows(
+          self.fetchRowsBatch {
+            try self.grdbRepositories.investmentValues.fetchRowsSync(ids: ids)
+          })
+      }
+    default:
+      return nil
     }
   }
 
@@ -201,6 +298,10 @@ extension ProfileDataSyncHandler {
 
   private func fetchCategoryRow(id: UUID) -> CategoryRow? {
     fetchRowOrLog { try grdbRepositories.categories.fetchRowSync(id: id) }
+  }
+
+  private func fetchDismissedTransferPairRow(id: UUID) -> DismissedTransferPairRow? {
+    fetchRowOrLog { try grdbRepositories.dismissedTransferPairs.fetchRowSync(id: id) }
   }
 
   private func fetchEarmarkRow(id: UUID) -> EarmarkRow? {

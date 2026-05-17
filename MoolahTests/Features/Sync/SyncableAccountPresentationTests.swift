@@ -13,7 +13,7 @@ struct SyncableAccountPresentationTests {
     chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
 
   @Test
-  func cryptoShowsTruncatedSelectableAddressAndExplorer() {
+  func cryptoShowsTruncatedAddressAndExplorer() {
     let addr = "0x" + String(repeating: "a", count: 40)
     let account = Account(
       name: "W", type: .crypto, instrument: eth,
@@ -21,7 +21,6 @@ struct SyncableAccountPresentationTests {
     let presentation = SyncableAccountPresentation(account: account, hasCredential: true)
     #expect(presentation.identifier.hasPrefix("0xaa"))
     #expect(presentation.identifier.contains("…"))
-    #expect(presentation.isSelectableIdentifier)
     #expect(presentation.externalActionTitle == "Open in block explorer")
     #expect(presentation.externalURL?.absoluteString.contains(addr) == true)
     #expect(presentation.missingCredentialHint == nil)
@@ -29,13 +28,12 @@ struct SyncableAccountPresentationTests {
   }
 
   @Test
-  func exchangeShowsProviderWebsiteAndNonSelectableID() {
+  func exchangeShowsProviderWebsiteAndIdentifier() {
     let account = Account(
       name: "C", type: .exchange, instrument: .AUD,
       exchangeProvider: .coinstash)
     let presentation = SyncableAccountPresentation(account: account, hasCredential: false)
     #expect(presentation.identifier == "Coinstash")
-    #expect(!presentation.isSelectableIdentifier)
     #expect(presentation.externalActionTitle == "Open Coinstash")
     #expect(presentation.externalURL?.host?.contains("coinstash") == true)
     #expect(presentation.secondaryIdentifier == nil)
