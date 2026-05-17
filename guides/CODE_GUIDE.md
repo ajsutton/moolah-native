@@ -37,7 +37,7 @@ This guide is a rule set, not a tutorial. When a topic is richer than a rule —
   - DTO families — closely-related `Codable` request/response structs may share a file when they exist only to serialise a single endpoint.
   - Delegate protocols — a single-consumer delegate protocol lives with its delegator.
 - **Delegate ordering.** When a delegate protocol is co-located with its delegator, the **protocol is declared before the delegator**. Reading top-to-bottom, the protocol is established before any code that references it. See [NetNewsWire CodingGuidelines.md](https://github.com/Ranchero-Software/NetNewsWire/blob/main/Technotes/CodingGuidelines.md) §Delegates.
-- **Conformance lives in an extension. One protocol per extension.** Never inline multiple conformances on the primary declaration, and never combine conformances in a single extension.
+- **Conformance lives in an extension. One protocol per extension — for non-trivial conformances.** A conformance is *trivial* when it is satisfied entirely by the compiler-synthesised implementation and adds no members: `Sendable`, `Codable`, `Equatable`, `Hashable`, and `Identifiable` *when `id` is an existing stored property* (no hand-written `id`, `==`, `hash(into:)`, `encode`/`init(from:)`, or `CodingKeys`). Trivial conformances **may** be declared inline on the primary declaration of a small value type (`struct Foo: Codable, Sendable, Hashable`) — this matches the established `Domain/Models/` norm (e.g. `Category`) and keeps tiny data types readable. Any **non-trivial** conformance (one that requires a real implementation, computed members, or a custom `CodingKeys`) lives in its **own** `extension`, one protocol per extension, never combined. A type that has *any* non-trivial conformance puts *all* of its conformances in separate extensions (don't mix inline + extension on one type). `*Row`/backend and reference types follow the separate-extension form regardless, since their conformances are rarely trivial.
 - **Trailing `private extension Self`** for file-private helpers — groups helpers at the end of the file rather than scattering `private func` throughout the type.
 - **`// MARK: - Section Name`** for sections in files longer than 300 lines. Below that threshold, headings add noise without orientation value.
 
@@ -56,9 +56,18 @@ private extension AccountStore {
 ```
 
 ```swift
-// Bad: inline conformance list and combined extension.
+// Bad: inline non-trivial conformances + combined extension.
 final class AccountStore: Identifiable, CustomStringConvertible { /* ... */ }
 extension AccountStore: Equatable, Hashable { /* ... */ }
+```
+
+```swift
+// OK: a small value type whose conformances are all trivial
+// (synthesised, no members) — inline is allowed.
+struct TransferSuggestion: Codable, Sendable, Hashable {
+    let counterpartTransactionId: UUID
+    let suggestedAt: Date
+}
 ```
 
 ---

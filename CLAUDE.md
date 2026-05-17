@@ -8,6 +8,18 @@
 - **Ship via PR.** Push the feature branch and open a pull request with `gh pr create`. Do not attempt `git push origin main` — it will be rejected by branch protection.
 - **Exceptions:** Read-only inspection and investigation can happen on the `main` checkout without a worktree. If you're unsure whether a task will require edits, create the worktree up front.
 
+### `EnterWorktree` refuses to nest — `ExitWorktree` first
+
+`EnterWorktree` fails with "Already in a worktree session" if the session is **already** inside a worktree (common when a previous task's worktree is still active, or a new task arrives in an existing worktree). It refuses to create or enter a nested worktree.
+
+`ExitWorktree` is **not** limited to worktrees created by `EnterWorktree` in the current session — calling it returns the session to the original `main` checkout regardless, leaving the old worktree's branch and files intact on disk. So the reliable sequence when you need a *different* worktree than the one you're in:
+
+1. Create the new worktree up front with `git -C <repo> worktree add --no-track .claude/worktrees/<name> -b <branch> origin/main` (the manual fallback; do this *before* exiting so the old worktree's context is still available while you set up).
+2. `ExitWorktree` with `action: "keep"` — returns the session to the `main` checkout without disturbing the old worktree.
+3. `EnterWorktree` with `path:` pointing at the worktree you just created — the session switches into it cleanly.
+
+Do **not** try to operate on a second worktree purely via absolute paths while the session CWD is stuck in the first one: skill, plan, and memory resolution all key off the session CWD, so they will silently target the wrong tree.
+
 ### Stacked-PR worktrees: don't accidentally push into the parent PR
 
 When you create a worktree branched off another PR's head (e.g. stacking a fix-up PR on top of an open PR), `git worktree add -b <new-local> <remote-tracking-branch>` silently sets the new local branch to **track the parent's remote branch**. A subsequent `git push -u origin <new-local>` then pushes your commits *into the parent PR's branch* — overwriting or extending the wrong PR. This has happened; recovery requires a force-push to restore the parent.
