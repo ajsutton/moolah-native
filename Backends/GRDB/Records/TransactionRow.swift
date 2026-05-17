@@ -119,26 +119,26 @@ struct TransactionRow {
   var transferSuggestionSuggestedAt: Date?
   var encodedSystemFields: Data?
 
-  // Explicit memberwise initializer. The transfer-detection columns
-  // default to nil so call sites that predate them — and the
-  // CloudKit field projection, which does not carry them — construct
-  // a row without naming every column.
+  // Explicit memberwise initializer. The eleven transfer-detection
+  // columns default to nil so the CloudKit field projection — which
+  // does not carry them — constructs a row without naming them. Every
+  // pre-existing parameter stays required.
   init(
     id: UUID,
     recordName: String,
     date: Date,
-    payee: String? = nil,
-    notes: String? = nil,
-    recurPeriod: String? = nil,
-    recurEvery: Int? = nil,
-    importOriginRawDescription: String? = nil,
-    importOriginBankReference: String? = nil,
-    importOriginRawAmount: String? = nil,
-    importOriginRawBalance: String? = nil,
-    importOriginImportedAt: Date? = nil,
-    importOriginImportSessionId: UUID? = nil,
-    importOriginSourceFilename: String? = nil,
-    importOriginParserIdentifier: String? = nil,
+    payee: String?,
+    notes: String?,
+    recurPeriod: String?,
+    recurEvery: Int?,
+    importOriginRawDescription: String?,
+    importOriginBankReference: String?,
+    importOriginRawAmount: String?,
+    importOriginRawBalance: String?,
+    importOriginImportedAt: Date?,
+    importOriginImportSessionId: UUID?,
+    importOriginSourceFilename: String?,
+    importOriginParserIdentifier: String?,
     importOriginKind: String? = nil,
     importOriginIncomingRawDescription: String? = nil,
     importOriginIncomingBankReference: String? = nil,
@@ -150,7 +150,7 @@ struct TransactionRow {
     importOriginIncomingParserIdentifier: String? = nil,
     transferSuggestionCounterpartId: UUID? = nil,
     transferSuggestionSuggestedAt: Date? = nil,
-    encodedSystemFields: Data? = nil
+    encodedSystemFields: Data?
   ) {
     self.id = id
     self.recordName = recordName
