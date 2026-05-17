@@ -257,4 +257,55 @@ struct GRDBCreatePathRegistersInstrumentTests {
       absent,
       "resolution must come from the shared registry; the per-profile table is dropped")
   }
+
+  @Test("distinctLegInstrumentIds returns a de-duplicated set across all persisted legs")
+  func distinctLegInstrumentIdsReturnsDistinctSet() async throws {
+    let perProfile = try ProfileDatabase.openInMemory()
+    let sharedQueue = try ProfileIndexDatabase.openInMemory()
+    let registry = GRDBInstrumentRegistryRepository(database: sharedQueue)
+
+    let repo = GRDBTransactionRepository(
+      database: perProfile,
+      defaultInstrument: Instrument.fiat(code: "AUD"),
+      conversionService: FixedConversionService(),
+      instrumentResolver: registry,
+      instrumentRegistrar: registry)
+
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum",
+      decimals: 18)
+    let aud = Instrument.fiat(code: "AUD")
+    let account = Account(
+      name: "Test Account", type: .crypto, instrument: eth,
+      valuationMode: .calculatedFromTrades, walletAddress: "0xtest",
+      chainId: 1)
+
+    // Seed the account row so FK-like constraints are satisfied, mirroring
+    // `sharedRegistryPreservesResolution` which inserts an `AccountRow`
+    // before creating any transactions.
+    try await perProfile.write { database in
+      try AccountRow(domain: account).insert(database)
+    }
+
+    // Two transactions: one with an ETH leg, one with an AUD leg and an ETH leg.
+    // Distinct ids should be exactly {eth.id, aud.id}, with no duplicates.
+    let txn1 = Transaction(
+      date: Date(), payee: "Buy ETH",
+      legs: [
+        TransactionLeg(accountId: account.id, instrument: eth, quantity: 1, type: .income)
+      ])
+    let txn2 = Transaction(
+      date: Date(), payee: "Fee",
+      legs: [
+        TransactionLeg(accountId: account.id, instrument: aud, quantity: -10, type: .expense),
+        TransactionLeg(accountId: account.id, instrument: eth, quantity: -1, type: .expense),
+      ])
+    _ = try await repo.create(txn1)
+    _ = try await repo.create(txn2)
+
+    let ids = try await repo.distinctLegInstrumentIds()
+    #expect(ids.contains(eth.id))
+    #expect(ids.contains(aud.id))
+    #expect(ids.count == 2)
+  }
 }

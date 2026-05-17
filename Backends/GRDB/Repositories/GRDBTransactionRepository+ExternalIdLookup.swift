@@ -78,4 +78,12 @@ extension GRDBTransactionRepository {
         > 0
     }
   }
+
+  func distinctLegInstrumentIds() async throws -> Set<String> {
+    try await database.read { database in
+      let rows = try String.fetchAll(
+        database, sql: "SELECT DISTINCT instrument_id FROM transaction_leg")
+      return Set(rows)
+    }
+  }
 }
