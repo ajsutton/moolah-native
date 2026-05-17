@@ -1,39 +1,37 @@
+// MoolahTests/Domain/TransactionImportOriginTests.swift
 import Foundation
 import Testing
 
 @testable import Moolah
 
-@Suite("Transaction.importOrigin")
+@Suite("TransactionImportOrigin")
 struct TransactionImportOriginTests {
-
-  @Test("Transaction carries optional ImportOrigin; nil by default")
-  func defaultsToNil() {
-    let transaction = Transaction(date: Date(), legs: [])
-    #expect(transaction.importOrigin == nil)
+  private func sample(_ tag: String) -> ImportOrigin {
+    ImportOrigin(
+      rawDescription: tag, rawAmount: 1, importedAt: Date(timeIntervalSince1970: 0),
+      importSessionId: UUID(), parserIdentifier: "p")
   }
 
-  @Test("Transaction.importOrigin survives Codable round-trip")
-  func codableRoundTrip() throws {
-    let origin = ImportOrigin(
-      rawDescription: "COFFEE",
-      bankReference: "REF1",
-      rawAmount: dec("-12.34"),
-      rawBalance: dec("100.00"),
-      importedAt: Date(timeIntervalSince1970: 1_700_000_000),
-      importSessionId: UUID(),
-      sourceFilename: "transactions.csv",
-      parserIdentifier: "generic-bank")
-    let transaction = Transaction(date: Date(), legs: [], importOrigin: origin)
-    let data = try JSONEncoder().encode(transaction)
-    let decoded = try JSONDecoder().decode(Transaction.self, from: data)
-    #expect(decoded.importOrigin == origin)
+  @Test("single round-trips and exposes its origin")
+  func single() throws {
+    let origin = sample("a")
+    let value = TransactionImportOrigin.single(origin)
+    #expect(value.single == origin)
+    #expect(value.merged == nil)
+    #expect(
+      try JSONDecoder().decode(
+        TransactionImportOrigin.self, from: JSONEncoder().encode(value)) == value)
   }
 
-  @Test("nil importOrigin still round-trips cleanly")
-  func nilCodableRoundTrip() throws {
-    let transaction = Transaction(date: Date(), legs: [])
-    let data = try JSONEncoder().encode(transaction)
-    let decoded = try JSONDecoder().decode(Transaction.self, from: data)
-    #expect(decoded.importOrigin == nil)
+  @Test("merged carries both sides and round-trips")
+  func merged() throws {
+    let value = TransactionImportOrigin.merged(
+      MergedImportOrigin(outgoing: sample("out"), incoming: sample("in")))
+    #expect(value.merged?.outgoing?.rawDescription == "out")
+    #expect(value.merged?.incoming?.rawDescription == "in")
+    #expect(value.single == nil)
+    #expect(
+      try JSONDecoder().decode(
+        TransactionImportOrigin.self, from: JSONEncoder().encode(value)) == value)
   }
 }
