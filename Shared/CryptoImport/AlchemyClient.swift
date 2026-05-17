@@ -90,8 +90,12 @@ private struct AlchemyTransferQuery: Sendable {
 /// addresses → `.private`; the API key is never logged.
 struct LiveAlchemyClient: AlchemyClient, Sendable {
   private let session: URLSession
-  /// Resolved per-request so a key added after construction is visible
-  /// on the next call; never cached on the struct.
+  /// Closure that yields the current Alchemy API key, or `nil` when the
+  /// keychain has none. Resolved per-request inside each public method
+  /// so a key added in settings *after* the client was constructed is
+  /// visible on the next call, and so the client never retains the key
+  /// in an instance-level field. The resolved key only lives in the
+  /// local stack frame of the in-flight request.
   private let apiKeyProvider: @Sendable () -> String?
   private let rateLimiter: RateLimiter
   private let logger: Logger
@@ -252,8 +256,18 @@ struct LiveAlchemyClient: AlchemyClient, Sendable {
 
   // MARK: - Internals
 
-  /// Resolves the current API key and throws `.missingApiKey` when absent.
-  /// Called at the start of every network method; never cached on `self`.
+  /// Resolves the current API key from the closure provider and rejects
+  /// missing / empty values with `.missingApiKey`. Called at the top of
+  /// every public method; the returned string is held only on the local
+  /// stack frame and passed down to `fetchTransfers` / `buildRequest`.
+  /// The client never stores the resolved value on `self`.
+  ///
+  /// The wiring at `ProfileSession.makeCryptoSyncWiring` reads the
+  /// keychain on each call (rather than at construction) so a key added
+  /// in settings *after* the client was built is visible on the next
+  /// request. Without this freshness guarantee the user sees Sync now
+  /// 401 with a stale empty-string key even after configuring a valid
+  /// one.
   private func resolveApiKey() throws -> String {
     let key = apiKeyProvider() ?? ""
     guard !key.isEmpty else { throw WalletSyncError.missingApiKey }
@@ -377,21 +391,5 @@ struct LiveAlchemyClient: AlchemyClient, Sendable {
   private func validate(response: URLResponse, stage: String) throws {
     try AlchemyResponseValidator.validate(
       response: response, stage: stage, logger: logger)
-  }
-}
-
-// MARK: - Attribution helper
-
-/// Attributes any `WalletSyncError` escaping `body` to `provider`, unless it
-/// was already attributed by a deeper boundary (innermost wins). Non-
-/// `WalletSyncError` errors (e.g. `CancellationError`) pass through untouched.
-private func attributingErrors<T>(
-  to provider: SyncProvider,
-  _ body: () async throws -> T
-) async throws -> T {
-  do {
-    return try await body()
-  } catch let error as WalletSyncError {
-    throw error.attributed(to: provider)
   }
 }
