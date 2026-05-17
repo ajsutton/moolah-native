@@ -14,6 +14,7 @@ struct HTTPRetryPolicy: Sendable, Equatable {
   /// Exponential backoff base; ceiling for attempt `n` is
   /// `min(backoffCap, backoffBase * 2^(n-1))`, then jittered.
   var backoffBase: TimeInterval = 0.5
+  /// Upper bound for the pre-jitter backoff ceiling; see `backoffBase`.
   var backoffCap: TimeInterval = 5
   /// Hard ceiling across all attempts so a dead provider cannot stall one
   /// request for `maxAttempts * requestTimeout`. Retrying stops when either

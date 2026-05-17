@@ -22,11 +22,13 @@ struct HTTPRetryPolicyTests {
     let blockscout = HTTPRetryPolicy(honorsRetryAfterInPlace: true)
     #expect(blockscout.honorsRetryAfterInPlace == true)
     #expect(blockscout.requestTimeout == 120)
+    #expect(blockscout.maxRateLimitWait == 60)
     #expect(HTTPRetryPolicy().honorsRetryAfterInPlace == false)
   }
 
   @Test
-  func backoffIsExponentialJitteredAndCapped() {
+  func backoffCeilingIsExponentialAndCapped() {
+    // backoffCeiling returns the pre-jitter upper bound; withRetry applies jitter.
     let policy = HTTPRetryPolicy()
     #expect(policy.backoffCeiling(forAttempt: 1) == 0.5)
     #expect(policy.backoffCeiling(forAttempt: 2) == 1.0)
