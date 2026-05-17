@@ -131,34 +131,61 @@ struct HTTPRetryTests {
   }
 
   @Test
-  func stopsOnCancellationMidBackoff() async throws {
-    let sched = FakeScheduler()
+  func cancellationDuringBackoffStopsBeforeNextOperation() async throws {
+    let opCount = Counter()
+    let sleepEntered = Gate()
     let task = Task {
       try await withRetry(
         policy: HTTPRetryPolicy(),
-        isRetryable: {
-          HTTPRetryClassifier.decision(for: $0, idempotent: true)
-        },
-        clock: { sched.now() },
+        isRetryable: { HTTPRetryClassifier.decision(for: $0, idempotent: true) },
+        clock: { Date() },
         sleep: { _ in
-          try Task.checkCancellation()
-          throw URLError(.timedOut)
+          await sleepEntered.signal()
+          // Long real sleep so the only way out is cancellation arriving
+          // mid-backoff.
+          try await Task.sleep(nanoseconds: 10_000_000_000)
         },
         jitter: { $0 },
-        operation: { throw URLError(.timedOut) })
+        operation: {
+          _ = await opCount.next()
+          throw URLError(.timedOut)
+        }
+      )
     }
-    task.cancel()
-    await #expect(throws: (any Error).self) { try await task.value }
+    await sleepEntered.wait()  // first operation ran; we are now in backoff
+    task.cancel()  // cancel mid-backoff
+    await #expect(throws: CancellationError.self) { try await task.value }
+    let count = await opCount.value()
+    #expect(count == 1)  // operation NOT retried after cancellation
   }
 
   /// Minimal async counter so the closures stay `Sendable`.
   actor Counter {
 
-    private var value = 0
+    private var count = 0
 
     func next() -> Int {
-      defer { value += 1 }
-      return value
+      defer { count += 1 }
+      return count
+    }
+
+    func value() -> Int { count }
+  }
+
+  /// One-shot async rendezvous: `wait()` suspends until `signal()` fires.
+  actor Gate {
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+    private var signaled = false
+
+    func signal() {
+      signaled = true
+      for continuation in continuations { continuation.resume() }
+      continuations.removeAll()
+    }
+
+    func wait() async {
+      if signaled { return }
+      await withCheckedContinuation { continuations.append($0) }
     }
   }
 }

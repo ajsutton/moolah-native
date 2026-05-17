@@ -7,7 +7,7 @@ private let retryLogger = Logger(
 /// Runs `operation`, retrying per `policy` while `isRetryable` says so.
 ///
 /// - Backoff is the policy's exponential ceiling passed through `jitter`
-///   (default: uniform full jitter in `0...ceiling`; tests pass identity).
+///   (default: uniform full jitter in `0...ceiling` — `0...0` is a valid closed range, so a zero ceiling collapses to 0; tests pass identity).
 /// - `clock` / `sleep` are injected so tests advance a fake clock and never
 ///   block. The default `sleep` is `Task.sleep`, which throws on cancellation.
 /// - Stops when `maxAttempts` is reached, when the next delay would exceed
