@@ -274,9 +274,9 @@ extension SyncedAccountStore {
   /// which reflects the post-apply checkpoint, not the imported window.
   /// `TransactionFilter` cannot express an account-set membership
   /// predicate, so the participating-account candidate set is filtered
-  /// in-memory over the date-floored superset, mirroring the
-  /// same-limitation in-memory approach
-  /// `TransferDetectionCoordinator.runDetection` documents.
+  /// in-memory over the date-floored superset, mirroring the same
+  /// in-memory approach that `TransferDetectionCoordinator.runDetection`
+  /// uses for the same reason.
   ///
   /// The orchestration is intentionally thin: a single candidate fetch,
   /// an empty-set skip, and one `runDetection` call. All detection and

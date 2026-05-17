@@ -1,23 +1,5 @@
 import Foundation
 
-/// Auto-merge / split validation failure.
-///
-/// Errors cross actor boundaries so they are explicitly `Sendable`;
-/// cases carry no payload so it is trivially satisfied.
-enum TransferMergeError: Error, Equatable, Sendable {
-  case notMergeable  // detection-time / auto-merge precondition failed
-  case notATransfer  // split() input is not a 2-transfer-leg tx
-  case missingMergedOrigin  // split() input has no .merged importOrigin
-  case mutationInProgress  // a merge/unmerge is already running (re-entrancy guard)
-}
-
-/// Manual-merge validation failure (looser ±14-day window; user asserts intent).
-enum ManualMergeError: Error, Equatable, Sendable {
-  case sameAccount
-  case notOppositeAmount  // value legs not opposite-equal / instrument mismatch
-  case datesTooFarApart  // > manualMergeWindowSeconds
-}
-
 /// Pure merge/split transforms for cross-account transfers. No I/O.
 ///
 /// `merged(from:_:)` collapses two single-account import sides into one
@@ -114,6 +96,12 @@ struct TransferMergeBuilder: Sendable {
     return [outgoingSplit, incomingSplit]
   }
 
+  /// Manual merge tolerates a wider window than auto-detection
+  /// (`FuzzyTransferDetector.windowSeconds`) — the user is asserting intent.
+  static let manualMergeWindowSeconds: TimeInterval = 14 * 86_400
+}
+
+extension TransferMergeBuilder {
   private func transferLeg(from valueLeg: TransactionLeg) -> TransactionLeg {
     TransactionLeg(
       accountId: valueLeg.accountId,
@@ -164,8 +152,4 @@ struct TransferMergeBuilder: Sendable {
     let deduped = lines.filter { seen.insert($0).inserted }
     return deduped.joined(separator: "\n")
   }
-
-  /// Manual merge tolerates a wider window than auto-detection
-  /// (`FuzzyTransferDetector.windowSeconds`) — the user is asserting intent.
-  static let manualMergeWindowSeconds: TimeInterval = 14 * 86_400
 }

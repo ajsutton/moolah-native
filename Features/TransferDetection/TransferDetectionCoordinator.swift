@@ -115,24 +115,6 @@ final class TransferDetectionCoordinator {
     }
   }
 
-  /// Writes the `transferSuggestion` header onto `transaction` via the
-  /// general-purpose `transactions.update`, which re-queues each of the
-  /// transaction's legs to sync though only the header changes. The
-  /// write is idempotent and correct; the redundant leg re-queue is a
-  /// known sync-queue inefficiency tracked in issue #937
-  /// (https://github.com/ajsutton/moolah-native/issues/937).
-  private func annotate(
-    _ transaction: Transaction,
-    counterpart: UUID,
-    at stamp: Date
-  ) async throws {
-    var annotated = transaction
-    annotated.transferSuggestion = TransferSuggestion(
-      counterpartTransactionId: counterpart,
-      suggestedAt: stamp)
-    _ = try await transactions.update(annotated)
-  }
-
   /// Collapses an auto-detected pair into one merged two-`.transfer`-leg
   /// transaction, deleting both single-account sources in the same
   /// atomic write. Re-entrancy is rejected, not queued.
@@ -198,6 +180,27 @@ final class TransferDetectionCoordinator {
       try await self.clearSuggestion(sideA)
       try await self.clearSuggestion(sideB)
     }
+  }
+
+}
+
+extension TransferDetectionCoordinator {
+  /// Writes the `transferSuggestion` header onto `transaction` via the
+  /// general-purpose `transactions.update`, which re-queues each of the
+  /// transaction's legs to sync even though only the header changes. The
+  /// write is idempotent and correct; the redundant leg re-queue is a
+  /// known sync-queue inefficiency tracked in issue #937
+  /// (https://github.com/ajsutton/moolah-native/issues/937).
+  private func annotate(
+    _ transaction: Transaction,
+    counterpart: UUID,
+    at stamp: Date
+  ) async throws {
+    var annotated = transaction
+    annotated.transferSuggestion = TransferSuggestion(
+      counterpartTransactionId: counterpart,
+      suggestedAt: stamp)
+    _ = try await transactions.update(annotated)
   }
 
   private func clearSuggestion(_ transaction: Transaction) async throws {
