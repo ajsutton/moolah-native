@@ -201,7 +201,7 @@ final class TransferDetectionCoordinator {
     _ = try await transactions.update(cleared)
   }
 
-  private nonisolated func validateManualMerge(
+  nonisolated private func validateManualMerge(
     _ sideA: Transaction,
     _ sideB: Transaction
   ) throws {

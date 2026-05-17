@@ -96,9 +96,13 @@ extension ProfileSession {
     profileId: UUID,
     logger: Logger
   ) -> ImportStore {
+    let transferDetection = TransferDetectionCoordinator(
+      transactions: backend.transactions,
+      dismissedPairs: backend.dismissedTransferPairs)
     do {
       let staging = try ImportStagingStore(directory: stagingDirectory)
-      return ImportStore(backend: backend, staging: staging)
+      return ImportStore(
+        backend: backend, staging: staging, transferDetection: transferDetection)
     } catch {
       let fallback = FileManager.default.temporaryDirectory
         .appendingPathComponent("csv-staging-fallback-\(profileId.uuidString)")
@@ -113,7 +117,8 @@ extension ProfileSession {
         fatalError(
           "ImportStagingStore failed to open at both primary and tmp fallback paths.")
       }
-      return ImportStore(backend: backend, staging: staging)
+      return ImportStore(
+        backend: backend, staging: staging, transferDetection: transferDetection)
     }
   }
 }

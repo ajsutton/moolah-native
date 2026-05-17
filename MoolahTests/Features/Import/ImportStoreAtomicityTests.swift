@@ -24,7 +24,12 @@ struct ImportStoreAtomicityTests {
   ) throws -> (ImportStore, URL) {
     let dir = tempStagingDirectory()
     let staging = try ImportStagingStore(directory: dir)
-    return (ImportStore(backend: backend, staging: staging), dir)
+    let store = ImportStore(
+      backend: backend, staging: staging,
+      transferDetection: TransferDetectionCoordinator(
+        transactions: backend.transactions,
+        dismissedPairs: backend.dismissedTransferPairs))
+    return (store, dir)
   }
 
   @Test("ingest fails atomically when the bulk insert throws — no rows land")

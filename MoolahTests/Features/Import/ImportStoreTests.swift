@@ -20,7 +20,12 @@ struct ImportStoreTests {
   ) throws -> (ImportStore, URL) {
     let dir = directory ?? tempStagingDirectory()
     let staging = try ImportStagingStore(directory: dir)
-    return (ImportStore(backend: backend, staging: staging), dir)
+    let store = ImportStore(
+      backend: backend, staging: staging,
+      transferDetection: TransferDetectionCoordinator(
+        transactions: backend.transactions,
+        dismissedPairs: backend.dismissedTransferPairs))
+    return (store, dir)
   }
 
   private func seedAccount(
@@ -149,6 +154,56 @@ struct ImportStoreTests {
     } else {
       Issue.record("expected .imported; got \(result)")
     }
+  }
+
+  // MARK: - Transfer detection
+
+  @Test("ingesting both legs of an internal transfer suggests the pair on both rows")
+  func crossAccountTransferSuggestedAfterImport() async throws {
+    let (backend, _) = try TestBackend.create()
+    let everydayId = UUID()
+    let savingsId = UUID()
+    try await seedAccount(backend, id: everydayId, name: "Everyday")
+    try await seedAccount(backend, id: savingsId, name: "Savings")
+    _ = try await seedProfile(
+      backend, accountId: everydayId, filenamePattern: "*everyday-transfer*")
+    _ = try await seedProfile(
+      backend, accountId: savingsId, filenamePattern: "*savings-transfer*")
+    let (store, dir) = try makeStore(backend: backend)
+    defer { try? FileManager.default.removeItem(at: dir) }
+
+    let result1 = await store.ingest(
+      data: try CSVFixtureLoader.data("cba-everyday-transfer"),
+      source: .pickedFile(
+        url: URL(fileURLWithPath: "/tmp/cba-everyday-transfer.csv"),
+        securityScoped: false))
+    guard case .imported = result1 else {
+      Issue.record("first ingest expected .imported; got \(result1)")
+      return
+    }
+    let result2 = await store.ingest(
+      data: try CSVFixtureLoader.data("cba-savings-transfer"),
+      source: .pickedFile(
+        url: URL(fileURLWithPath: "/tmp/cba-savings-transfer.csv"),
+        securityScoped: false))
+    guard case .imported = result2 else {
+      Issue.record("second ingest expected .imported; got \(result2)")
+      return
+    }
+
+    let everyday = try await backend.transactions.fetch(
+      filter: TransactionFilter(accountId: everydayId), page: 0, pageSize: 50
+    ).transactions
+    let savings = try await backend.transactions.fetch(
+      filter: TransactionFilter(accountId: savingsId), page: 0, pageSize: 50
+    ).transactions
+    let everydayTx = try #require(everyday.first)
+    let savingsTx = try #require(savings.first)
+
+    #expect(
+      everydayTx.transferSuggestion?.counterpartTransactionId == savingsTx.id)
+    #expect(
+      savingsTx.transferSuggestion?.counterpartTransactionId == everydayTx.id)
   }
 
   // MARK: - Rules engine integration
