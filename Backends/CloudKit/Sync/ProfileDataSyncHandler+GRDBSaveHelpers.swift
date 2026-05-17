@@ -107,6 +107,24 @@ extension ProfileDataSyncHandler {
     }
   }
 
+  nonisolated func applyBatchSaveDismissedTransferPair(
+    ckRecords: [CKRecord], systemFields: [String: Data], in database: Database
+  ) throws {
+    let context = GRDBBatchSaveContext(
+      ckRecords: ckRecords,
+      systemFields: systemFields,
+      site: "applyGRDBBatchSave[DismissedTransferPair]")
+    let rows = mapRows(
+      context: context,
+      fieldValues: DismissedTransferPairRow.fieldValues(from:),
+      idKey: { $0.id.uuidString },
+      stamp: stampSystemFields)
+    try writeRemote(site: context.site) {
+      try grdbRepositories.dismissedTransferPairs.applyRemoteChangesSync(
+        saved: rows, deleted: [], in: database)
+    }
+  }
+
   nonisolated func applyBatchSaveEarmark(
     ckRecords: [CKRecord], systemFields: [String: Data], in database: Database
   ) throws {
