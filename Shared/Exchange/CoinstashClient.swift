@@ -96,7 +96,7 @@ struct CoinstashClient: ExchangeClient, Sendable {
       return ExchangeAssetChain(
         chainId: chainId,
         contractAddress: isSentinel ? nil : address,
-        decimals: entry.decimals ?? 18)
+        decimals: entry.decimals ?? 18)  // EVM default; most ERC-20s are 18-decimal
     }
     return ExchangeAssetMetadata(symbol: coin.symbol, name: coin.name, chains: chains)
   }

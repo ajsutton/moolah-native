@@ -117,10 +117,7 @@ struct CoinstashClientCoinMetadataTests {
 
   @Test
   func providerErrorThrows() async throws {
-    let response = try makeOKResponse()
-    let sut = CoinstashClient(transport: { _ in
-      (Data(#"{"errors":[{"message":"boom"}]}"#.utf8), response)
-    })
+    let sut = try makeClient(returning: #"{"errors":[{"message":"boom"}]}"#)
     await #expect(throws: ExchangeClientError.self) {
       _ = try await sut.coinMetadata(symbol: "OP", token: "t")
     }
