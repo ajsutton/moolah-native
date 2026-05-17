@@ -159,10 +159,10 @@ struct TransactionImportOriginTests {
 
   @Test("single round-trips and exposes its origin")
   func single() throws {
-    let o = sample("a")
-    let value = TransactionImportOrigin.single(o)
-    #expect(value.single == o)
-    #expect(value.merged == nil)
+    let origin = sample("a")
+    let value = TransactionImportOrigin.single(origin)
+    #expect(value.singleOrigin == origin)
+    #expect(value.mergedOrigin == nil)
     #expect(try JSONDecoder().decode(
       TransactionImportOrigin.self, from: JSONEncoder().encode(value)) == value)
   }
@@ -171,9 +171,9 @@ struct TransactionImportOriginTests {
   func merged() throws {
     let value = TransactionImportOrigin.merged(
       MergedImportOrigin(outgoing: sample("out"), incoming: sample("in")))
-    #expect(value.merged?.outgoing?.rawDescription == "out")
-    #expect(value.merged?.incoming?.rawDescription == "in")
-    #expect(value.single == nil)
+    #expect(value.mergedOrigin?.outgoing?.rawDescription == "out")
+    #expect(value.mergedOrigin?.incoming?.rawDescription == "in")
+    #expect(value.singleOrigin == nil)
     #expect(try JSONDecoder().decode(
       TransactionImportOrigin.self, from: JSONEncoder().encode(value)) == value)
   }
@@ -214,13 +214,15 @@ enum TransactionImportOrigin: Codable, Sendable, Hashable {
   case merged(MergedImportOrigin)
 
   /// The origin if this is a single-account import, else nil.
-  var single: ImportOrigin? {
+  /// (Named `singleOrigin`, not `single`, so it does not shadow the
+  /// `single` case at use sites.)
+  var singleOrigin: ImportOrigin? {
     if case let .single(value) = self { return value }
     return nil
   }
 
   /// The merged origins if this is a merged transfer, else nil.
-  var merged: MergedImportOrigin? {
+  var mergedOrigin: MergedImportOrigin? {
     if case let .merged(value) = self { return value }
     return nil
   }
@@ -375,7 +377,7 @@ struct TransactionImportOriginAccessorTests {
       rawDescription: "x", rawAmount: 10, importedAt: Date(),
       importSessionId: UUID(), parserIdentifier: "p")
     tx.importOrigin = .single(origin)
-    #expect(tx.importOrigin?.single == origin)
+    #expect(tx.importOrigin?.singleOrigin == origin)
   }
 }
 ```
@@ -383,7 +385,7 @@ struct TransactionImportOriginAccessorTests {
 - [ ] **Step 3:** run → fails.
 - [ ] **Step 4: Modify `Transaction.swift`** — change `var importOrigin: ImportOrigin?` to `var importOrigin: TransactionImportOrigin?`; add `var transferSuggestion: TransferSuggestion?` directly below. Update every initialiser in that file to carry both with `= nil` defaults, matching the existing init style.
 
-- [ ] **Step 5: Fix all call sites.** Construction sites wrapping an `ImportOrigin`: `.single(...)`. Read sites: insert `.single` (`tx.importOrigin?.single?.rawDescription`). Known non-obvious site (verify against grep; not exhaustive):
+- [ ] **Step 5: Fix all call sites.** Construction sites wrapping an `ImportOrigin`: the `.single(...)` case. Read sites: use the `singleOrigin` accessor (`tx.importOrigin?.singleOrigin?.rawDescription`). Known non-obvious site (verify against grep; not exhaustive):
   - `Shared/CryptoImport/CrossAccountTransferMerger.swift` — `mergedImportOrigin(lower:upper:)` returns `ImportOrigin?` and is fed into `Transaction.init(…importOrigin:)`. Change its return type to `TransactionImportOrigin?` and wrap its result `.map(TransactionImportOrigin.single)` (dropping the upper side stays correct; only the wrapping changes). Rewrite the time-travel comment block (currently "v1 … `Transaction.importOrigin` is still a single value … can be revisited") as a current-fact statement, e.g. "The crypto merger records only the surviving side's origin via `.single`; the incoming side's origin is dropped here. Issue #762 tracks widening to `.merged`."
   - `TransactionRow` (coupled — see PR2 note): apply a temporary `.single`-only mapping here so the build is green; Task 6 replaces it with the full enum mapping in the next commit (same PR).
 
@@ -596,7 +598,7 @@ struct TransactionRowTransferDetectionMappingTests {
     row.importOriginImportSessionId = UUID()
     row.importOriginParserIdentifier = "p"
     let back = try row.toDomain(legs: tx.legs)
-    #expect(back.importOrigin?.single?.rawDescription == "legacy")
+    #expect(back.importOrigin?.singleOrigin?.rawDescription == "legacy")
   }
 }
 ```
