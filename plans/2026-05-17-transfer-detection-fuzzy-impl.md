@@ -917,13 +917,14 @@ struct TransferCandidatePair: Sendable, Hashable {
   let existingCounterpart: Transaction
 }
 
-/// Pure fuzzy candidate finder. No I/O. Eligibility via Extension A
-/// (`transferDetectionValueLeg`). Already-collapsed same-`externalId`
-/// transfers (Extension B, run by the import pipelines before
-/// persistence) are two-`.transfer`-leg transactions whose
-/// `transferDetectionValueLeg` is nil, so they are skipped here.
+/// Pure fuzzy candidate finder. No I/O.
+///
+/// Eligibility is determined by `Transaction.transferDetectionValueLeg`.
+/// Transactions already collapsed by `CrossAccountTransferMerger`
+/// (two `.transfer`-leg transactions) have a nil value leg and are
+/// silently skipped.
 struct FuzzyTransferDetector: Sendable {
-  /// ±3-day window, inclusive (design §Algorithm).
+  /// Maximum absolute date gap for a candidate pair, inclusive on both edges.
   static let windowSeconds: TimeInterval = 3 * 86_400
 
   func detect(
