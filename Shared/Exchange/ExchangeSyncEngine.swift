@@ -150,13 +150,17 @@ struct ExchangeSyncEngine: Sendable {
     guard let symbol else { return nil }
 
     if let native = Self.nonEvmNatives[symbol.uppercased()] {
+      guard let chainId = native.chainId, let ticker = native.ticker else {
+        preconditionFailure(
+          "nonEvmNatives entry \(native.id) must be a crypto instrument with chainId+ticker")
+      }
       if let existing = try await resolver.registeredInstrument(id: native.id) {
         return existing
       }
       let reg = try await discovery.resolveOrLoad(
-        chainId: native.chainId ?? 0,
+        chainId: chainId,
         contractAddress: nil,
-        symbol: native.ticker ?? symbol,
+        symbol: ticker,
         name: native.name,
         decimals: native.decimals)
       return reg.instrument

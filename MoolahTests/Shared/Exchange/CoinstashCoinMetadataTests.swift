@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import os
 
 @testable import Moolah
 
@@ -122,29 +123,117 @@ struct CoinstashClientCoinMetadataTests {
       _ = try await sut.coinMetadata(symbol: "OP", token: "t")
     }
   }
+
+  @Test
+  func avalanceMisspellingMapsToChainId43114() async throws {
+    // Coinstash spells it "AVALANCE" (missing the H). The client must still
+    // map it to EVM chain id 43114.
+    let sut = try makeClient(
+      returning: """
+        {"data":{"getCoinBySymbol":{"symbol":"AVAX","name":"Avalanche",
+        "defiAddresses":[{"chain":"AVALANCE",
+        "address":"0x1CE0c2827e2eF14D5C4f29a091d735A204794041","decimals":18}]}}}
+        """)
+    let meta = try #require(try await sut.coinMetadata(symbol: "AVAX", token: "t"))
+    #expect(
+      meta.chains == [
+        ExchangeAssetChain(
+          chainId: 43114,
+          contractAddress: "0x1CE0c2827e2eF14D5C4f29a091d735A204794041",
+          decimals: 18)
+      ])
+  }
 }
 
 @Suite("CoinstashAssetMetadataResolver")
 struct CoinstashAssetMetadataResolverTests {
-  @Test
-  func forwardsToClientWithBoundToken() async throws {
-    let response = try #require(
+  private func makeOKResponse() throws -> HTTPURLResponse {
+    try #require(
       HTTPURLResponse(
         url: CoinstashGraphQL.endpoint, statusCode: 200,
         httpVersion: nil, headerFields: nil))
+  }
+
+  private static let opBody = """
+    {"data":{"getCoinBySymbol":{"symbol":"OP","name":"Optimism",
+    "defiAddresses":[{"chain":"OPTIMISM",
+    "address":"0x4200000000000000000000000000000000000042","decimals":18}]}}}
+    """
+
+  @Test
+  func forwardsToClientWithBoundToken() async throws {
+    let response = try makeOKResponse()
     let client = CoinstashClient(transport: { _ in
-      (
-        Data(
-          """
-          {"data":{"getCoinBySymbol":{"symbol":"OP","name":"Optimism",
-          "defiAddresses":[{"chain":"OPTIMISM",
-          "address":"0x4200000000000000000000000000000000000042","decimals":18}]}}}
-          """.utf8), response
-      )
+      (Data(Self.opBody.utf8), response)
     })
     let resolver: any ExchangeAssetMetadataResolving =
       CoinstashAssetMetadataResolver(client: client, token: "secret")
     let meta = try #require(try await resolver.assetMetadata(forSymbol: "OP"))
     #expect(meta.chains.first?.chainId == 10)
+  }
+
+  /// The transport is invoked exactly once for two calls with the same symbol.
+  /// Both results must be identical (value returned from cache on second call).
+  @Test
+  func cachesResultsWithinOneBuildRun() async throws {
+    let response = try makeOKResponse()
+    let callCount = OSAllocatedUnfairLock<Int>(initialState: 0)
+    let client = CoinstashClient(transport: { _ in
+      callCount.withLock { $0 += 1 }
+      return (Data(Self.opBody.utf8), response)
+    })
+    let resolver = CoinstashAssetMetadataResolver(client: client, token: "t")
+
+    let first = try await resolver.assetMetadata(forSymbol: "OP")
+    let second = try await resolver.assetMetadata(forSymbol: "OP")
+
+    #expect(callCount.withLock { $0 } == 1, "transport should be called once")
+    #expect(first == second)
+    #expect(first?.symbol == "OP")
+  }
+
+  /// Uppercased key: calling with "op" and "OP" hits the transport only once.
+  @Test
+  func cachesSymbolCaseInsensitively() async throws {
+    let response = try makeOKResponse()
+    let callCount = OSAllocatedUnfairLock<Int>(initialState: 0)
+    let client = CoinstashClient(transport: { _ in
+      callCount.withLock { $0 += 1 }
+      return (Data(Self.opBody.utf8), response)
+    })
+    let resolver = CoinstashAssetMetadataResolver(client: client, token: "t")
+
+    _ = try await resolver.assetMetadata(forSymbol: "op")
+    _ = try await resolver.assetMetadata(forSymbol: "OP")
+
+    #expect(callCount.withLock { $0 } == 1, "transport should be called once for both cases")
+  }
+
+  /// A transient error (thrown by transport) must NOT be cached. The second
+  /// call must attempt the transport again and succeed.
+  @Test
+  func transientErrorIsNotCached() async throws {
+    struct TransportError: Error {}
+    let response = try makeOKResponse()
+    let callCount = OSAllocatedUnfairLock<Int>(initialState: 0)
+    let client = CoinstashClient(transport: { _ in
+      let count = callCount.withLock { count -> Int in
+        let current = count
+        count += 1
+        return current
+      }
+      if count == 0 { throw ExchangeClientError.providerError("transient") }
+      return (Data(Self.opBody.utf8), response)
+    })
+    let resolver = CoinstashAssetMetadataResolver(client: client, token: "t")
+
+    // First call throws.
+    await #expect(throws: ExchangeClientError.self) {
+      _ = try await resolver.assetMetadata(forSymbol: "OP")
+    }
+    // Second call must reach transport again (no poisoned cache entry).
+    let second = try await resolver.assetMetadata(forSymbol: "OP")
+    #expect(second?.symbol == "OP")
+    #expect(callCount.withLock { $0 } == 2, "transport must be called twice (no cached error)")
   }
 }

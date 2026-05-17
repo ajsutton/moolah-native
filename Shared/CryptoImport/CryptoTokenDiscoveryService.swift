@@ -172,7 +172,7 @@ actor CryptoTokenDiscoveryService {
     if isSpam {
       status = .spam
       mapping = resolved?.mapping ?? emptyMapping(for: instrument.id)
-    } else if let resolved, hasAnyMapping(resolved.mapping) {
+    } else if let resolved, resolved.mapping.hasProviderMapping {
       status = .priced
       mapping = resolved.mapping
     } else {
@@ -293,9 +293,4 @@ actor CryptoTokenDiscoveryService {
       binanceSymbol: nil)
   }
 
-  private func hasAnyMapping(_ mapping: CryptoProviderMapping) -> Bool {
-    mapping.coingeckoId != nil
-      || mapping.cryptocompareSymbol != nil
-      || mapping.binanceSymbol != nil
-  }
 }

@@ -136,9 +136,34 @@ struct ExchangeSyncEngineResolutionTests {
   }
 
   @Test
+  func multiChainNoEthereumPicksOptimismOverBase() async throws {
+    // Chain preference: Ethereum (1) first, then Optimism (10), then Base (8453).
+    // When Ethereum is absent, Optimism must win over Base.
+    let registry = StubInstrumentRegistry()
+    let meta = StubMetadataResolver([
+      "OP": ExchangeAssetMetadata(
+        symbol: "OP", name: "Optimism",
+        chains: [
+          ExchangeAssetChain(
+            chainId: 8453,
+            contractAddress: "0x4200000000000000000000000000000000000042",
+            decimals: 18),
+          ExchangeAssetChain(
+            chainId: 10,
+            contractAddress: "0x4200000000000000000000000000000000000042",
+            decimals: 18),
+        ])
+    ])
+    let result = try await makeExchangeSyncEngine(registry: registry).build(
+      account: account(), imported: [depositRow("OP", 5)], metadata: meta)
+    let leg = try #require(result.candidates.first?.transaction.legs.first)
+    #expect(leg.instrument.id.hasPrefix("10:"))
+  }
+
+  @Test
   func transientMetadataErrorThrows() async throws {
     struct Boom: Error {}
-    final class Throwing: ExchangeAssetMetadataResolving {
+    struct Throwing: ExchangeAssetMetadataResolving {
       func assetMetadata(forSymbol symbol: String) async throws
         -> ExchangeAssetMetadata?
       { throw Boom() }

@@ -74,17 +74,12 @@ struct ExchangeInstrumentResolver: Sendable {
     than rhs: CryptoRegistration,
     usedIds: Set<String>
   ) -> Bool {
-    let lhsPriced = (lhs.pricingStatus == .priced && hasMapping(lhs.mapping)) ? 0 : 1
-    let rhsPriced = (rhs.pricingStatus == .priced && hasMapping(rhs.mapping)) ? 0 : 1
+    let lhsPriced = (lhs.pricingStatus == .priced && lhs.mapping.hasProviderMapping) ? 0 : 1
+    let rhsPriced = (rhs.pricingStatus == .priced && rhs.mapping.hasProviderMapping) ? 0 : 1
     if lhsPriced != rhsPriced { return lhsPriced < rhsPriced }
     let lhsUsed = usedIds.contains(lhs.instrument.id) ? 0 : 1
     let rhsUsed = usedIds.contains(rhs.instrument.id) ? 0 : 1
     if lhsUsed != rhsUsed { return lhsUsed < rhsUsed }
     return lhs.instrument.id < rhs.instrument.id
-  }
-
-  private static func hasMapping(_ mapping: CryptoProviderMapping) -> Bool {
-    mapping.coingeckoId != nil || mapping.cryptocompareSymbol != nil
-      || mapping.binanceSymbol != nil
   }
 }
