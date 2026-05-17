@@ -123,3 +123,28 @@ struct CoinstashClientCoinMetadataTests {
     }
   }
 }
+
+@Suite("CoinstashAssetMetadataResolver")
+struct CoinstashAssetMetadataResolverTests {
+  @Test
+  func forwardsToClientWithBoundToken() async throws {
+    let response = try #require(
+      HTTPURLResponse(
+        url: CoinstashGraphQL.endpoint, statusCode: 200,
+        httpVersion: nil, headerFields: nil))
+    let client = CoinstashClient(transport: { _ in
+      (
+        Data(
+          """
+          {"data":{"getCoinBySymbol":{"symbol":"OP","name":"Optimism",
+          "defiAddresses":[{"chain":"OPTIMISM",
+          "address":"0x4200000000000000000000000000000000000042","decimals":18}]}}}
+          """.utf8), response
+      )
+    })
+    let resolver: any ExchangeAssetMetadataResolving =
+      CoinstashAssetMetadataResolver(client: client, token: "secret")
+    let meta = try #require(try await resolver.assetMetadata(forSymbol: "OP"))
+    #expect(meta.chains.first?.chainId == 10)
+  }
+}
