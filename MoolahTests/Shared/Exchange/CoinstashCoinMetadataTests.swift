@@ -49,3 +49,80 @@ struct CoinstashCoinMetadataDecodeTests {
     #expect(coin.defiAddresses.isEmpty)
   }
 }
+
+@Suite("CoinstashClient.coinMetadata mapping")
+struct CoinstashClientCoinMetadataTests {
+  private func makeOKResponse() throws -> HTTPURLResponse {
+    try #require(
+      HTTPURLResponse(
+        url: CoinstashGraphQL.endpoint, statusCode: 200,
+        httpVersion: nil, headerFields: nil))
+  }
+
+  private func makeClient(returning body: String) throws -> CoinstashClient {
+    let response = try makeOKResponse()
+    return CoinstashClient(transport: { _ in (Data(body.utf8), response) })
+  }
+
+  @Test
+  func mapsSingleChainOptimismToken() async throws {
+    let sut = try makeClient(
+      returning: """
+        {"data":{"getCoinBySymbol":{"symbol":"OP","name":"Optimism",
+        "defiAddresses":[{"chain":"OPTIMISM",
+        "address":"0x4200000000000000000000000000000000000042","decimals":18}]}}}
+        """)
+    let meta = try #require(try await sut.coinMetadata(symbol: "OP", token: "t"))
+    #expect(meta.symbol == "OP")
+    #expect(
+      meta.chains == [
+        ExchangeAssetChain(
+          chainId: 10,
+          contractAddress: "0x4200000000000000000000000000000000000042",
+          decimals: 18)
+      ])
+  }
+
+  @Test
+  func collapsesNativeSentinelToNilContract() async throws {
+    let sut = try makeClient(
+      returning: """
+        {"data":{"getCoinBySymbol":{"symbol":"ETH","name":"Ethereum",
+        "defiAddresses":[
+        {"chain":"ETHEREUM","address":"0xEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE","decimals":18},
+        {"chain":"SOLANA","address":"So111","decimals":9}]}}}
+        """)
+    let meta = try #require(try await sut.coinMetadata(symbol: "ETH", token: "t"))
+    #expect(
+      meta.chains == [
+        ExchangeAssetChain(chainId: 1, contractAddress: nil, decimals: 18)
+      ])
+  }
+
+  @Test
+  func unknownSymbolReturnsNil() async throws {
+    let sut = try makeClient(returning: #"{"data":{"getCoinBySymbol":null}}"#)
+    #expect(try await sut.coinMetadata(symbol: "ZZZ", token: "t") == nil)
+  }
+
+  @Test
+  func emptyDefiAddressesReturnsMetadataWithNoChains() async throws {
+    let sut = try makeClient(
+      returning: """
+        {"data":{"getCoinBySymbol":{"symbol":"BTC","name":"Bitcoin","defiAddresses":[]}}}
+        """)
+    let meta = try #require(try await sut.coinMetadata(symbol: "BTC", token: "t"))
+    #expect(meta.chains.isEmpty)
+  }
+
+  @Test
+  func providerErrorThrows() async throws {
+    let response = try makeOKResponse()
+    let sut = CoinstashClient(transport: { _ in
+      (Data(#"{"errors":[{"message":"boom"}]}"#.utf8), response)
+    })
+    await #expect(throws: ExchangeClientError.self) {
+      _ = try await sut.coinMetadata(symbol: "OP", token: "t")
+    }
+  }
+}

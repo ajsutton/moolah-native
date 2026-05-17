@@ -9,6 +9,19 @@ struct CoinstashClient: ExchangeClient, Sendable {
   private static let logger = Logger(
     subsystem: "com.moolah.app", category: "CoinstashClient")
 
+  // Coinstash `Chain` enum → EVM chain id. Non-EVM (SOLANA) and any
+  // value absent here are intentionally excluded: a symbol that lists
+  // only excluded chains falls through to the caller's registry
+  // fallback. `AVALANCE` is Coinstash's spelling.
+  private static let evmChainIds: [String: Int] = [
+    "ETHEREUM": 1, "OPTIMISM": 10, "BASE": 8453, "ARBITRUM": 42161,
+    "POLYGON": 137, "BSC": 56, "AVALANCE": 43114, "GNOSIS": 100,
+    "FANTOM": 250, "LINEA": 59144, "SONIC": 146,
+  ]
+
+  /// The well-known "native asset" sentinel address (`0x` + forty `e`).
+  private static let nativeSentinel = "0x" + String(repeating: "e", count: 40)
+
   init(
     transport: @escaping Transport = { try await URLSession.shared.data(for: $0) }
   ) {
@@ -58,6 +71,34 @@ struct CoinstashClient: ExchangeClient, Sendable {
       pageIndex += 1
     }
     return all.compactMap(Self.map(_:))
+  }
+
+  // MARK: - Coin metadata
+
+  /// Token metadata for `symbol`, or `nil` when Coinstash does not
+  /// recognise the symbol (definitive — caller takes the registry
+  /// fallback). Throws on transport / provider error (transient — the
+  /// sync retries). Non-EVM and unknown chains are dropped; the native
+  /// sentinel collapses to `contractAddress == nil`; Coinstash's listing
+  /// order is preserved.
+  func coinMetadata(symbol: String, token: String) async throws -> ExchangeAssetMetadata? {
+    let data = try await query(
+      CoinstashGraphQL.coinBySymbolQuery,
+      variables: ["s": .string(symbol)],
+      token: token,
+      decoding: CoinstashCoinData.self)
+    guard let coin = data.getCoinBySymbol else { return nil }
+
+    let chains: [ExchangeAssetChain] = coin.defiAddresses.compactMap { entry in
+      guard let chainId = Self.evmChainIds[entry.chain] else { return nil }
+      guard let address = entry.address else { return nil }
+      let isSentinel = address.caseInsensitiveCompare(Self.nativeSentinel) == .orderedSame
+      return ExchangeAssetChain(
+        chainId: chainId,
+        contractAddress: isSentinel ? nil : address,
+        decimals: entry.decimals ?? 18)
+    }
+    return ExchangeAssetMetadata(symbol: coin.symbol, name: coin.name, chains: chains)
   }
 
   // MARK: - Mapping
