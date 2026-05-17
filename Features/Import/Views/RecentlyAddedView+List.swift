@@ -34,6 +34,7 @@ extension RecentlyAddedView {
       accessibilityLabel: viewModel.rowAccessibilityLabel(
         for: transaction, counterpartAccountName: accountName)
     )
+    .accessibilityIdentifier(UITestIdentifiers.RecentlyAdded.row(transaction.id))
     .contextMenu { rowContextMenu(for: transaction, counterpart: counterpart) }
     .modifier(
       TransferSwipeActions(

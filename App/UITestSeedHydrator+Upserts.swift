@@ -69,6 +69,25 @@ extension UITestSeedHydrator {
     let accountId: UUID
   }
 
+  /// One imported single-account side of a detected transfer pair. The
+  /// transaction has a single value leg, a `.single` import origin (so
+  /// it shows in Recently Added), and a `TransferSuggestion` pointing at
+  /// `counterpartId` (so the passive pill renders without any
+  /// detection-timing dependency).
+  struct SuggestedTransferSpec {
+    let id: UUID
+    let payee: String
+    let date: Date
+    let accountId: UUID
+    /// Signed amount in the profile instrument (negative = outflow).
+    let amount: InstrumentAmount
+    let type: TransactionType
+    let counterpartId: UUID
+    let suggestedAt: Date
+    let importedAt: Date
+    let importSessionId: UUID
+  }
+
   // MARK: - Profile (GRDB profile-index DB)
 
   /// Writes a `ProfileRow` into `profile-index.sqlite`. Idempotent —
@@ -224,6 +243,45 @@ extension UITestSeedHydrator {
     try TransactionLegRow(domain: legA, transactionId: spec.id, sortOrder: 0)
       .insert(database)
     try TransactionLegRow(domain: legB, transactionId: spec.id, sortOrder: 1)
+      .insert(database)
+  }
+
+  /// Inserts one imported single-account side of a detected transfer
+  /// pair: a single value leg, a `.single` import origin (so the row
+  /// surfaces in Recently Added's window), and a `TransferSuggestion`
+  /// denormalised onto the transaction record pointing at the
+  /// counterpart. Idempotent via the parent-existence guard, matching
+  /// the other transaction upserts.
+  static func upsertSuggestedTransfer(
+    _ spec: SuggestedTransferSpec,
+    in database: Database
+  ) throws {
+    if try TransactionRow.fetchOne(database, key: spec.id) != nil { return }
+
+    let origin = ImportOrigin(
+      rawDescription: spec.payee,
+      rawAmount: spec.amount.quantity,
+      importedAt: spec.importedAt,
+      importSessionId: spec.importSessionId,
+      sourceFilename: UITestFixtures.TransferDetection.sourceFilename,
+      parserIdentifier: UITestFixtures.TransferDetection.parserIdentifier)
+    let txn = Transaction(
+      id: spec.id,
+      date: spec.date,
+      payee: spec.payee,
+      legs: [],
+      importOrigin: .single(origin),
+      transferSuggestion: TransferSuggestion(
+        counterpartTransactionId: spec.counterpartId,
+        suggestedAt: spec.suggestedAt))
+    try TransactionRow(domain: txn).insert(database)
+
+    let leg = TransactionLeg(
+      accountId: spec.accountId,
+      instrument: spec.amount.instrument,
+      quantity: spec.amount.quantity,
+      type: spec.type)
+    try TransactionLegRow(domain: leg, transactionId: spec.id, sortOrder: 0)
       .insert(database)
   }
 

@@ -115,6 +115,7 @@ struct RecentlyAddedView: View {
         }
         transferPendingDismiss = nil
       }
+      .accessibilityIdentifier(UITestIdentifiers.TransferDetection.dismissConfirm)
       Button("Cancel", role: .cancel) { transferPendingDismiss = nil }
     } message: {
       Text(

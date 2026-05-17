@@ -39,7 +39,8 @@ enum UITestSeedCryptoOverrides {
       .sidebarFooterReceiving,
       .sidebarFooterSending,
       .tradeReady,
-      .incompatibleProfile:
+      .incompatibleProfile,
+      .transferDetectionBaseline:
       return nil
     }
   }

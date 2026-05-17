@@ -208,6 +208,8 @@ extension MoolahUITestCase {
       appendTradeReadyFixtures(into: &lines)
     case .incompatibleProfile:
       appendIncompatibleProfileFixtures(into: &lines)
+    case .transferDetectionBaseline:
+      appendTransferDetectionFixtures(into: &lines)
     }
     return lines.joined(separator: "\n") + "\n"
   }
@@ -306,6 +308,40 @@ extension MoolahUITestCase {
       "splitShop.legA.cents / legB.cents = "
         + "\(fixtures.splitShopLegAAmountCents) / \(fixtures.splitShopLegBAmountCents)"
     )
+  }
+
+  private func appendTransferDetectionFixtures(into lines: inout [String]) {
+    let fixtures = UITestFixtures.TransferDetection.self
+    lines.append("# fixtures")
+    lines.append("profile.id       = \(fixtures.profileId)")
+    lines.append("profile.label    = \(fixtures.profileLabel)")
+    lines.append("profile.currency = \(fixtures.profileCurrencyCode)")
+    lines.append("everyday.id      = \(fixtures.everydayAccountId)")
+    lines.append("everyday.name    = \(fixtures.everydayAccountName)")
+    lines.append("savings.id       = \(fixtures.savingsAccountId)")
+    lines.append("savings.name     = \(fixtures.savingsAccountName)")
+    lines.append(
+      "merge.outgoing.id/payee/cents/date = "
+        + "\(fixtures.mergeOutgoingId) / \(fixtures.mergeOutgoingPayee) "
+        + "/ \(fixtures.mergeOutgoingCents) / \(fixtures.mergeOutgoingDate)")
+    lines.append(
+      "merge.incoming.id/payee/cents/date = "
+        + "\(fixtures.mergeIncomingId) / \(fixtures.mergeIncomingPayee) "
+        + "/ \(fixtures.mergeIncomingCents) / \(fixtures.mergeIncomingDate)")
+    lines.append(
+      "dismiss.outgoing.id/payee/cents/date = "
+        + "\(fixtures.dismissOutgoingId) / \(fixtures.dismissOutgoingPayee) "
+        + "/ \(fixtures.dismissOutgoingCents) / \(fixtures.dismissOutgoingDate)")
+    lines.append(
+      "dismiss.incoming.id/payee/cents/date = "
+        + "\(fixtures.dismissIncomingId) / \(fixtures.dismissIncomingPayee) "
+        + "/ \(fixtures.dismissIncomingCents) / \(fixtures.dismissIncomingDate)")
+    lines.append("suggestion.suggestedAt = \(fixtures.suggestedAt)")
+    lines.append(
+      "importedAt    = launch time − 1h (inside the 24h Recently Added "
+        + "window; wall-clock-relative by design — one shared value "
+        + "across all four transactions)")
+    lines.append("# import origin: .single")
   }
 
   private func appendWelcomeSingleProfileFixtures(into lines: inout [String]) {

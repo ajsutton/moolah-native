@@ -131,7 +131,8 @@ extension MoolahApp {
       .welcomeMultipleCloudProfiles,
       .cryptoCatalogPreloaded,
       .tradeReady,
-      .incompatibleProfile:
+      .incompatibleProfile,
+      .transferDetectionBaseline:
       break
     case .welcomeDownloading:
       // Override iCloudAvailability to `.available` so the WelcomeStateResolver

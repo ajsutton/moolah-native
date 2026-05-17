@@ -43,7 +43,6 @@ struct TransferSwipeActions: ViewModifier {
 /// with the transfer-icon semantic colour.
 private struct PossibleTransferPill: View {
   let title: String
-  let transactionId: UUID
 
   var body: some View {
     Label {
@@ -61,7 +60,6 @@ private struct PossibleTransferPill: View {
     .foregroundStyle(Color.blue)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(title)
-    .accessibilityIdentifier(UITestIdentifiers.TransferDetection.pill(transactionId))
   }
 }
 
@@ -91,7 +89,7 @@ struct RecentlyAddedRow: View {
         InstrumentAmountView(amount: primary, font: .body)
       }
       if transaction.transferSuggestion != nil {
-        PossibleTransferPill(title: pillTitle, transactionId: transaction.id)
+        PossibleTransferPill(title: pillTitle)
       }
       if needsReview {
         Text("Needs review")
