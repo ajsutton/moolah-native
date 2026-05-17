@@ -51,6 +51,9 @@ actor CryptoTokenDiscoveryService {
   /// `(chain, contractAddress)`, otherwise resolves and persists a new one.
   /// Concurrent callers for the same key all `await` the same in-flight
   /// `Task`; the underlying network round-trip executes once.
+  ///
+  /// Delegates to `resolveOrLoad(chainId:...)` with `chain.chainId` so all
+  /// wallet-import call sites are unchanged behaviourally.
   func resolveOrLoad(
     chain: ChainConfig,
     contractAddress: String?,
@@ -58,60 +61,82 @@ actor CryptoTokenDiscoveryService {
     name: String,
     decimals: Int
   ) async throws -> CryptoRegistration {
-    let id =
-      Instrument.crypto(
-        chainId: chain.chainId,
-        contractAddress: contractAddress,
-        symbol: symbol,
-        name: name,
-        decimals: decimals
-      ).id
+    try await resolveOrLoad(
+      chainId: chain.chainId,
+      contractAddress: contractAddress,
+      symbol: symbol,
+      name: name,
+      decimals: decimals)
+  }
 
-    if let existing = try await registry.cryptoRegistration(byId: id) {
+  /// Resolves by raw EVM chain id. For chains without a `ChainConfig`
+  /// (e.g. Arbitrum, Polygon, BSC) the Alchemy spam-flag step is skipped
+  /// because Alchemy has no network slug for those chains; CoinGecko
+  /// by-contract pricing still applies.
+  ///
+  /// Concurrent callers for the same `(chainId, contractAddress)` are
+  /// coalesced via the in-flight `Task` pattern — the actor serialises the
+  /// "check repository → launch resolution → store result" critical section
+  /// so at most one new row per unique key reaches the registry.
+  func resolveOrLoad(
+    chainId: Int,
+    contractAddress: String?,
+    symbol: String,
+    name: String,
+    decimals: Int
+  ) async throws -> CryptoRegistration {
+    let instrument = Instrument.crypto(
+      chainId: chainId,
+      contractAddress: contractAddress,
+      symbol: symbol,
+      name: name,
+      decimals: decimals)
+
+    if let existing = try await registry.cryptoRegistration(byId: instrument.id) {
       return existing
     }
-    if let task = inFlight[id] {
+    if let task = inFlight[instrument.id] {
       return try await task.value
     }
 
     let task = Task<CryptoRegistration, Error> { [self] in
       try await performResolution(
-        chain: chain,
-        contractAddress: contractAddress,
-        symbol: symbol,
-        name: name,
-        decimals: decimals)
+        instrument: instrument,
+        chain: ChainConfig.config(for: chainId))
     }
-    inFlight[id] = task
+    inFlight[instrument.id] = task
     do {
       let result = try await task.value
       // Actor-serialised — every coalesced waiter resumed before this
       // line, so clearing the slot now is race-free without a detached
       // cleanup task.
-      inFlight[id] = nil
+      inFlight[instrument.id] = nil
       return result
     } catch {
-      inFlight[id] = nil
+      inFlight[instrument.id] = nil
       throw error
     }
   }
 
   // MARK: - Resolution algorithm
 
+  /// Performs the full resolution algorithm for a token.
+  ///
+  /// - Parameters:
+  ///   - instrument: Pre-built crypto instrument (carries chainId,
+  ///     contractAddress, symbol, name, decimals).
+  ///   - chain: The `ChainConfig` for the instrument's chain, or `nil` for
+  ///     chains without a config (e.g. Arbitrum, Polygon, BSC). When `nil`
+  ///     the Alchemy spam-flag step is skipped because Alchemy has no
+  ///     network slug for those chains.
   private func performResolution(
-    chain: ChainConfig,
-    contractAddress: String?,
-    symbol: String,
-    name: String,
-    decimals: Int
+    instrument: Instrument,
+    chain: ChainConfig?
   ) async throws -> CryptoRegistration {
-    let isNative = contractAddress == nil
-    let instrument = Instrument.crypto(
-      chainId: chain.chainId,
-      contractAddress: contractAddress,
-      symbol: symbol,
-      name: name,
-      decimals: decimals)
+    let isNative = instrument.contractAddress == nil
+    // Crypto instruments always carry a non-nil chainId (set by
+    // `Instrument.crypto`); other kinds are never passed to this method.
+    let chainId = instrument.chainId ?? chain?.chainId ?? 0
 
     // Resolution via provider chain. A non-cancellation throw means "no
     // mapping" — a normal outcome (e.g. an obscure ERC-20 with no listing
@@ -119,15 +144,17 @@ actor CryptoTokenDiscoveryService {
     // `nil`; only `CancellationError` propagates so a cancelled sync
     // never writes a half-resolved row.
     let resolved = try await resolveSilently(
-      chainId: chain.chainId,
-      contractAddress: contractAddress,
-      symbol: symbol,
+      chainId: chainId,
+      contractAddress: instrument.contractAddress,
+      symbol: instrument.ticker ?? instrument.name,
       isNative: isNative)
 
     // Native gas tokens are never classified as spam — Alchemy's spam
     // database only covers token contracts. Skip the metadata round-trip.
+    // Also skip when there is no ChainConfig: Alchemy has no network slug
+    // for those chains (e.g. Arbitrum, Polygon, BSC).
     let isSpam: Bool
-    if let contractAddress, !isNative {
+    if let chain, let contractAddress = instrument.contractAddress, !isNative {
       isSpam = try await fetchSpamFlag(chain: chain, contractAddress: contractAddress)
     } else {
       isSpam = false
@@ -186,13 +213,7 @@ actor CryptoTokenDiscoveryService {
     let current = try await registry.cryptoRegistration(byId: id) ?? registration
     guard current.pricingStatus == .unpriced else { return current }
 
-    let instrument = current.instrument
-    return try await performResolution(
-      chain: chain,
-      contractAddress: instrument.contractAddress,
-      symbol: instrument.ticker ?? instrument.name,
-      name: instrument.name,
-      decimals: instrument.decimals)
+    return try await performResolution(instrument: current.instrument, chain: chain)
   }
 
   // MARK: - Helpers
