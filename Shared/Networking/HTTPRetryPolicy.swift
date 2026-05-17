@@ -34,16 +34,6 @@ struct HTTPRetryPolicy: Sendable, Equatable {
   }
 }
 
-/// What `withRetry` should do with a thrown error.
-enum HTTPRetryDecision: Sendable, Equatable {
-  /// Surface the error to the caller now.
-  case doNotRetry
-  /// Retry after the policy's jittered exponential backoff.
-  case retryAfterBackoff
-  /// Retry after a server-specified delay (a vetted `Retry-After`).
-  case retryAfter(TimeInterval)
-}
-
 /// Internal error an operation throws to ask `withRetry` for a retry. The
 /// integration layer (e.g. `LiveBlockscoutClient`) only throws this when it
 /// has *decided* a retry is wanted; a terminal error is thrown directly so it

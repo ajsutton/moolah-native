@@ -167,9 +167,9 @@ struct LiveBlockscoutClient: Sendable {
     do {
       return try await withRetry(
         policy: retryPolicy,
-        isRetryable: { HTTPRetryClassifier.decision(for: $0, idempotent: true) },
+        classify: { HTTPRetryClassifier.decision(for: $0, idempotent: true) },
         sleep: sleeper,
-        operation: {
+        operation: { @Sendable in
           try await self.attempt(request: timed, stage: stage)
         }
       )
@@ -210,9 +210,9 @@ struct LiveBlockscoutClient: Sendable {
     return data
   }
 
-  /// Blockscout-specific status classification. Mirrors the old
-  /// `AlchemyResponseValidator` mapping but converts retryable statuses into
-  /// `HTTPRetrySignal` so `withRetry` can act on them.
+  /// Blockscout-specific HTTP status classification: 2xx is success;
+  /// 429/418/503 (and other 5xx) become an `HTTPRetrySignal` so `withRetry`
+  /// can retry or wait; everything else is a terminal `WalletSyncError`.
   private func classifyBlockscout(
     response: URLResponse, stage: String
   ) throws {

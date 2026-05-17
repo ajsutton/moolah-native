@@ -30,7 +30,7 @@ struct HTTPRetryTests {
     let sched = FakeScheduler()
     let result = try await withRetry(
       policy: HTTPRetryPolicy(),
-      isRetryable: { HTTPRetryClassifier.decision(for: $0, idempotent: true) },
+      classify: { HTTPRetryClassifier.decision(for: $0, idempotent: true) },
       clock: { sched.now() },
       sleep: { try await sched.sleep($0) },
       jitter: { $0 },
@@ -45,7 +45,7 @@ struct HTTPRetryTests {
     let attempts = Counter()
     let result = try await withRetry(
       policy: HTTPRetryPolicy(),
-      isRetryable: { HTTPRetryClassifier.decision(for: $0, idempotent: true) },
+      classify: { HTTPRetryClassifier.decision(for: $0, idempotent: true) },
       clock: { sched.now() },
       sleep: { try await sched.sleep($0) },
       jitter: { $0 },
@@ -63,7 +63,7 @@ struct HTTPRetryTests {
     await #expect(throws: URLError.self) {
       try await withRetry(
         policy: HTTPRetryPolicy(),
-        isRetryable: {
+        classify: {
           HTTPRetryClassifier.decision(for: $0, idempotent: true)
         },
         clock: { sched.now() },
@@ -81,7 +81,7 @@ struct HTTPRetryTests {
     await #expect(throws: Boom.self) {
       try await withRetry(
         policy: HTTPRetryPolicy(),
-        isRetryable: {
+        classify: {
           HTTPRetryClassifier.decision(for: $0, idempotent: true)
         },
         clock: { sched.now() },
@@ -98,7 +98,7 @@ struct HTTPRetryTests {
     let attempts = Counter()
     _ = try await withRetry(
       policy: HTTPRetryPolicy(honorsRetryAfterInPlace: true),
-      isRetryable: { HTTPRetryClassifier.decision(for: $0, idempotent: true) },
+      classify: { HTTPRetryClassifier.decision(for: $0, idempotent: true) },
       clock: { sched.now() },
       sleep: { try await sched.sleep($0) },
       jitter: { $0 },
@@ -119,7 +119,7 @@ struct HTTPRetryTests {
     await #expect(throws: URLError.self) {
       try await withRetry(
         policy: policy,
-        isRetryable: {
+        classify: {
           HTTPRetryClassifier.decision(for: $0, idempotent: true)
         },
         clock: { sched.now() },
@@ -137,7 +137,7 @@ struct HTTPRetryTests {
     let task = Task {
       try await withRetry(
         policy: HTTPRetryPolicy(),
-        isRetryable: { HTTPRetryClassifier.decision(for: $0, idempotent: true) },
+        classify: { HTTPRetryClassifier.decision(for: $0, idempotent: true) },
         clock: { Date() },
         sleep: { _ in
           await sleepEntered.signal()

@@ -4,10 +4,21 @@ import OSLog
 private let retryLogger = Logger(
   subsystem: "com.moolah.app", category: "HTTPRetry")
 
-/// Runs `operation`, retrying per `policy` while `isRetryable` says so.
+/// What `withRetry` should do with a thrown error.
+enum HTTPRetryDecision: Sendable, Equatable {
+  /// Surface the error to the caller now.
+  case doNotRetry
+  /// Retry after the policy's jittered exponential backoff.
+  case retryAfterBackoff
+  /// Retry after a server-specified delay (a vetted `Retry-After`).
+  case retryAfter(TimeInterval)
+}
+
+/// Runs `operation`, retrying per `policy` while `classify` says so.
 ///
 /// - Backoff is the policy's exponential ceiling passed through `jitter`
-///   (default: uniform full jitter in `0...ceiling` — `0...0` is a valid closed range, so a zero ceiling collapses to 0; tests pass identity).
+///   (default: uniform full jitter in `0...ceiling` — `0...0` is a valid
+///   closed range, so a zero ceiling collapses to 0; tests pass identity).
 /// - `clock` / `sleep` are injected so tests advance a fake clock and never
 ///   block. The default `sleep` is `Task.sleep`, which throws on cancellation.
 /// - Stops when `maxAttempts` is reached, when the next delay would exceed
@@ -15,7 +26,7 @@ private let retryLogger = Logger(
 ///   any stop the **last** thrown error propagates unchanged.
 func withRetry<T: Sendable>(
   policy: HTTPRetryPolicy,
-  isRetryable: @Sendable (any Error) -> HTTPRetryDecision,
+  classify: @Sendable (any Error) -> HTTPRetryDecision,
   clock: @Sendable () -> Date = { Date() },
   sleep: @Sendable (TimeInterval) async throws -> Void = {
     try await Task.sleep(nanoseconds: UInt64(max(0, $0) * 1_000_000_000))
@@ -33,7 +44,7 @@ func withRetry<T: Sendable>(
     } catch {
       // A cancellation thrown by the operation is terminal.
       try Task.checkCancellation()
-      let decision = isRetryable(error)
+      let decision = classify(error)
       let delay: TimeInterval
       switch decision {
       case .doNotRetry:
@@ -55,6 +66,7 @@ func withRetry<T: Sendable>(
         """
       )
       try await sleep(delay)
+      try Task.checkCancellation()
       attempt += 1
     }
   }
