@@ -96,11 +96,17 @@ struct LiveBlockscoutClientTests {
     let client = makeClient { req in
       (AlchemyTestSupport.okResponse(for: req), Data("not json".utf8))
     }
-    await #expect(
-      throws: WalletSyncError.providerMalformedResponse(stage: "blockscout.transactions")
-    ) {
+    do {
       _ = try await client.nativeTransactions(
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0)
+      Issue.record("Expected WalletSyncError.providerMalformedResponse")
+    } catch let error as WalletSyncError {
+      guard case .providerMalformedResponse(let stage) = error.kind else {
+        Issue.record("Expected .providerMalformedResponse, got \(error.kind)")
+        return
+      }
+      #expect(stage == "blockscout.transactions")
+      #expect(error.provider == .blockExplorer)
     }
   }
 }
