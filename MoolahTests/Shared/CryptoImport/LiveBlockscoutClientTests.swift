@@ -43,7 +43,7 @@ struct LiveBlockscoutClientTests {
     _ = try await client.internalTransactions(
       chain: .optimism, walletAddress: "0xABC", fromBlock: 0)
     let url = try #require(BlockscoutURLProtocolStub.lastRequest?.url)
-    #expect(url.host == "optimism.blockscout.com")
+    #expect(url.host == "explorer.optimism.io")
     #expect(url.path == "/api/v2/addresses/0xABC/internal-transactions")
   }
 
