@@ -256,19 +256,19 @@ import Testing
 struct DismissedTransferPairTests {
   @Test("id is order-independent for the same two ids")
   func deterministicId() {
-    let a = UUID(); let b = UUID()
-    let first = DismissedTransferPair(transactionIds: [a, b], dismissedAt: Date())
-    let second = DismissedTransferPair(transactionIds: [b, a], dismissedAt: Date())
+    let idA = UUID(); let idB = UUID()
+    let first = DismissedTransferPair(transactionIds: [idA, idB], dismissedAt: Date())
+    let second = DismissedTransferPair(transactionIds: [idB, idA], dismissedAt: Date())
     #expect(first.id == second.id)
   }
 
   @Test("covers a candidate pair regardless of order")
   func covers() {
-    let a = UUID(); let b = UUID()
-    let pair = DismissedTransferPair(transactionIds: [a, b], dismissedAt: Date())
-    #expect(pair.covers(a, b))
-    #expect(pair.covers(b, a))
-    #expect(!pair.covers(a, UUID()))
+    let idA = UUID(); let idB = UUID()
+    let pair = DismissedTransferPair(transactionIds: [idA, idB], dismissedAt: Date())
+    #expect(pair.covers(idA, and: idB))
+    #expect(pair.covers(idB, and: idA))
+    #expect(!pair.covers(idA, and: UUID()))
   }
 }
 ```
@@ -320,7 +320,7 @@ struct DismissedTransferPair: Codable, Sendable, Identifiable, Hashable {
     self.id = Self.deterministicId(for: transactionIds)
   }
 
-  func covers(_ first: UUID, _ second: UUID) -> Bool {
+  func covers(_ first: UUID, and second: UUID) -> Bool {
     transactionIds == [first, second]
   }
 
@@ -750,40 +750,40 @@ struct DismissedTransferPairRepositoryContractTests {
   @Test("create then fetchAll")
   func createFetch() async throws {
     let repo = try TestBackend.create().backend.dismissedTransferPairs
-    let a = UUID(); let b = UUID()
-    _ = try await repo.create(DismissedTransferPair(transactionIds: [a, b], dismissedAt: Date()))
+    let idA = UUID(); let idB = UUID()
+    _ = try await repo.create(DismissedTransferPair(transactionIds: [idA, idB], dismissedAt: Date()))
     let all = try await repo.fetchAll()
     #expect(all.count == 1)
-    #expect(all[0].covers(a, b))
+    #expect(all[0].covers(idA, and: idB))
   }
 
   @Test("re-dismissing the same pair is idempotent (deterministic id upsert)")
   func idempotent() async throws {
     let repo = try TestBackend.create().backend.dismissedTransferPairs
-    let a = UUID(); let b = UUID(); let now = Date()
-    _ = try await repo.create(DismissedTransferPair(transactionIds: [a, b], dismissedAt: now))
-    _ = try await repo.create(DismissedTransferPair(transactionIds: [b, a], dismissedAt: now))
+    let idA = UUID(); let idB = UUID(); let now = Date()
+    _ = try await repo.create(DismissedTransferPair(transactionIds: [idA, idB], dismissedAt: now))
+    _ = try await repo.create(DismissedTransferPair(transactionIds: [idB, idA], dismissedAt: now))
     #expect(try await repo.fetchAll().count == 1)
   }
 
   @Test("pairs(touching:) finds dismissals by either id")
   func touching() async throws {
     let repo = try TestBackend.create().backend.dismissedTransferPairs
-    let a = UUID(); let b = UUID(); let c = UUID()
-    _ = try await repo.create(DismissedTransferPair(transactionIds: [a, b], dismissedAt: Date()))
-    #expect(try await repo.pairs(touching: a).count == 1)
-    #expect(try await repo.pairs(touching: c).isEmpty)
+    let idA = UUID(); let idB = UUID(); let idC = UUID()
+    _ = try await repo.create(DismissedTransferPair(transactionIds: [idA, idB], dismissedAt: Date()))
+    #expect(try await repo.pairs(touching: idA).count == 1)
+    #expect(try await repo.pairs(touching: idC).isEmpty)
   }
 
   @Test("observeAll emits after a create")
   func observe() async throws {
     let repo = try TestBackend.create().backend.dismissedTransferPairs
-    var it = repo.observeAll().makeAsyncIterator()
-    _ = await it.next()  // initial
-    let a = UUID(); let b = UUID()
-    _ = try await repo.create(DismissedTransferPair(transactionIds: [a, b], dismissedAt: Date()))
-    let next = await it.next()
-    #expect((next ?? []).contains { $0.covers(a, b) })
+    var iterator = repo.observeAll().makeAsyncIterator()
+    _ = await iterator.next()  // initial
+    let idA = UUID(); let idB = UUID()
+    _ = try await repo.create(DismissedTransferPair(transactionIds: [idA, idB], dismissedAt: Date()))
+    let next = await iterator.next()
+    #expect((next ?? []).contains { $0.covers(idA, and: idB) })
   }
 }
 ```
