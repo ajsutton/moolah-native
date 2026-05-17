@@ -7,7 +7,7 @@
 /// invoked the client.
 func attributingErrors<T>(
   to provider: SyncProvider,
-  _ body: () async throws -> T
+  _ body: @Sendable () async throws -> T
 ) async throws -> T {
   do {
     return try await body()
