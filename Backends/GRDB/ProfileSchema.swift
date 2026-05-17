@@ -57,6 +57,13 @@ import GRDB
 /// type CHECK to include `'exchange'` and adds the CHECK-pinned
 /// `exchange_provider` column. See
 /// `ProfileSchema+ExchangeAccountFields.swift`.
+/// `v12_add_transfer_detection` — fuzzy transfer detection. Adds
+/// `transfer_suggestion_*` and `import_origin_kind` +
+/// `import_origin_incoming_*` to `transaction` (all additive nullable;
+/// NULL kind = legacy single-origin), and the synced
+/// `dismissed_transfer_pair` table (content-addressed `id`, two
+/// tx-id columns + indexes). See
+/// `ProfileSchema+TransferDetection.swift`.
 ///
 /// **Retention policy for the cache tables.** The six rate-cache
 /// tables are kept forever — needed for historic-conversion
@@ -77,7 +84,7 @@ enum ProfileSchema {
   /// Bumped each time a migration is added. Surfaced for open-time
   /// integrity checks; not used by `DatabaseMigrator` (which keys on
   /// the stable string IDs of registered migrations).
-  static let version = 11
+  static let version = 12
 
   static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
@@ -107,6 +114,8 @@ enum ProfileSchema {
       "v10_drop_shared_instrument_legacy", migrate: dropSharedInstrumentLegacy)
     migrator.registerMigration(
       "v11_add_exchange_account_fields", migrate: addExchangeAccountFields)
+    migrator.registerMigration(
+      "v12_add_transfer_detection", migrate: addTransferDetection)
 
     return migrator
   }
