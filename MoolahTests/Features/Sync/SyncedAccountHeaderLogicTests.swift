@@ -178,4 +178,40 @@ struct SyncedAccountHeaderLogicTests {
         for: .providerMalformedResponse(stage: "decode"), account: exchangeAccount)
         == "Provider returned a malformed response (decode).")
   }
+
+  // MARK: - Provider-attributed captions
+
+  @Test("Attributed invalidApiKey names the provider")
+  func attributedInvalidApiKeyNamesProvider() {
+    let error = WalletSyncError(provider: .coinstash, kind: .invalidApiKey)
+    let caption = SyncedAccountHeaderLogic.errorCaption(
+      for: error, account: exchangeAccount)
+    #expect(caption == "Coinstash rejected the API token.")
+  }
+
+  @Test("Attributed network error is prefixed with the provider")
+  func attributedNetworkNamesProvider() {
+    let error = WalletSyncError(
+      provider: .blockExplorer, kind: .network(underlyingDescription: "timeout"))
+    let caption = SyncedAccountHeaderLogic.errorCaption(
+      for: error, account: cryptoAccount)
+    #expect(caption == "Blockscout network error: timeout")
+  }
+
+  @Test("Unattributed network error keeps the legacy byte-identical string")
+  func unattributedNetworkIsByteIdentical() {
+    let error = WalletSyncError(
+      provider: nil, kind: .network(underlyingDescription: "timeout"))
+    let caption = SyncedAccountHeaderLogic.errorCaption(
+      for: error, account: cryptoAccount)
+    #expect(caption == "Network error: timeout")
+  }
+
+  @Test("Unattributed crypto invalidApiKey keeps the legacy Alchemy string")
+  func unattributedCryptoInvalidApiKeyIsLegacy() {
+    let error = WalletSyncError(provider: nil, kind: .invalidApiKey)
+    let caption = SyncedAccountHeaderLogic.errorCaption(
+      for: error, account: cryptoAccount)
+    #expect(caption == "Alchemy rejected the API key.")
+  }
 }
