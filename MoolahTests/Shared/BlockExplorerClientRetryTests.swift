@@ -188,7 +188,7 @@ struct BlockExplorerClientRetryTests {
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0)
       Issue.record("expected a thrown error")
     } catch let error as WalletSyncError {
-      guard case .rateLimited = error else {
+      guard case .rateLimited = error.kind else {
         Issue.record("expected .rateLimited, got \(error)")
         return
       }
@@ -216,7 +216,7 @@ struct BlockExplorerClientRetryTests {
       Issue.record("expected a thrown error")
     } catch let error as WalletSyncError {
       guard
-        case .network(let description) = error,
+        case .network(let description) = error.kind,
         description == "retry exhausted (server error)"
       else {
         Issue.record(
