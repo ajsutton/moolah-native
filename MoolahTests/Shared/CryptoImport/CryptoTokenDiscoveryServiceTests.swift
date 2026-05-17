@@ -198,7 +198,7 @@ struct CryptoTokenDiscoveryServiceTests {
     #expect(registration.instrument.id == "42161:0xff970a61a04b1ca14834a43f5de4533ebddb5cc8")
     #expect(registration.instrument.decimals == 6)
     #expect(registration.pricingStatus == .priced)
-    #expect(subject.alchemy.getTokenMetadataCallCount == 0)  // spam step skipped: no ChainConfig
+    #expect(subject.alchemy.tokenMetadataCallCount == 0)
     let snap = subject.registry.snapshot()
     #expect(snap.registeredCryptos.contains { $0.id == registration.instrument.id })
   }

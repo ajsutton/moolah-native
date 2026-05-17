@@ -52,8 +52,8 @@ actor CryptoTokenDiscoveryService {
   /// Concurrent callers for the same key all `await` the same in-flight
   /// `Task`; the underlying network round-trip executes once.
   ///
-  /// Delegates to `resolveOrLoad(chainId:...)` with `chain.chainId` so all
-  /// wallet-import call sites are unchanged behaviourally.
+  /// Thin wrapper around `resolveOrLoad(chainId:...)` for callers that
+  /// already hold a `ChainConfig`.
   func resolveOrLoad(
     chain: ChainConfig,
     contractAddress: String?,
@@ -107,9 +107,9 @@ actor CryptoTokenDiscoveryService {
     inFlight[instrument.id] = task
     do {
       let result = try await task.value
-      // Actor-serialised — every coalesced waiter resumed before this
-      // line, so clearing the slot now is race-free without a detached
-      // cleanup task.
+      // Waiters capture the Task by value before awaiting `.value` and
+      // never re-read `inFlight` after resuming, so clearing the slot
+      // here is safe regardless of waiter resume order.
       inFlight[instrument.id] = nil
       return result
     } catch {
@@ -134,9 +134,12 @@ actor CryptoTokenDiscoveryService {
     chain: ChainConfig?
   ) async throws -> CryptoRegistration {
     let isNative = instrument.contractAddress == nil
-    // Crypto instruments always carry a non-nil chainId (set by
-    // `Instrument.crypto`); other kinds are never passed to this method.
-    let chainId = instrument.chainId ?? chain?.chainId ?? 0
+    // Crypto instruments always carry a non-nil chainId; non-crypto
+    // instruments must never be passed to this method.
+    guard let chainId = instrument.chainId else {
+      preconditionFailure(
+        "performResolution requires a crypto instrument with a chainId; got \(instrument.id)")
+    }
 
     // Resolution via provider chain. A non-cancellation throw means "no
     // mapping" — a normal outcome (e.g. an obscure ERC-20 with no listing
@@ -148,6 +151,10 @@ actor CryptoTokenDiscoveryService {
       contractAddress: instrument.contractAddress,
       symbol: instrument.ticker ?? instrument.name,
       isNative: isNative)
+
+    // Check cancellation before the Alchemy round-trip so a cancelled
+    // task skips the spam-flag network call entirely.
+    try Task.checkCancellation()
 
     // Native gas tokens are never classified as spam — Alchemy's spam
     // database only covers token contracts. Skip the metadata round-trip.
@@ -213,7 +220,24 @@ actor CryptoTokenDiscoveryService {
     let current = try await registry.cryptoRegistration(byId: id) ?? registration
     guard current.pricingStatus == .unpriced else { return current }
 
-    return try await performResolution(instrument: current.instrument, chain: chain)
+    // Coalescing mirrors `resolveOrLoad`: concurrent callers for the same
+    // instrument id share one in-flight resolution Task.
+    if let task = inFlight[id] { return try await task.value }
+    let task = Task<CryptoRegistration, Error> {
+      try await self.performResolution(instrument: current.instrument, chain: chain)
+    }
+    inFlight[id] = task
+    do {
+      let result = try await task.value
+      // Waiters capture the Task by value before awaiting `.value` and
+      // never re-read `inFlight` after resuming, so clearing the slot
+      // here is safe regardless of waiter resume order.
+      inFlight[id] = nil
+      return result
+    } catch {
+      inFlight[id] = nil
+      throw error
+    }
   }
 
   // MARK: - Helpers

@@ -106,7 +106,7 @@ final class CountingAlchemyClientStub: AlchemyClient, @unchecked Sendable {
   private var totalGetTokenMetadataCalls: Int = 0
 
   /// Total number of `getTokenMetadata` calls across all keys.
-  var getTokenMetadataCallCount: Int {
+  var tokenMetadataCallCount: Int {
     lock.withLock { totalGetTokenMetadataCalls }
   }
 
