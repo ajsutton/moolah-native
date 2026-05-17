@@ -46,6 +46,19 @@ protocol TransactionRepository: Sendable {
   func createMany(_ transactions: [Transaction]) async throws -> [Transaction]
   func update(_ transaction: Transaction) async throws -> Transaction
   func delete(id: UUID) async throws
+  /// Atomically deletes every transaction in `deletingIds` (header + its
+  /// legs) and inserts every transaction in `creating` (header + its
+  /// legs) inside a single write transaction. On any failure none of the
+  /// deletes or inserts persist. Returns the created transactions in
+  /// input order. Change / instrument hooks fire once per deleted and
+  /// per created row after the write commits, matching the per-row
+  /// fan-out of `delete(id:)` / `createMany(_:)`. Used by transfer
+  /// merge (delete two sources, create one merged transfer) and unmerge
+  /// (delete the merged transfer, create two split sides) so a partially
+  /// applied collapse can never be left on disk. A missing id in
+  /// `deletingIds` throws `BackendError.notFound` and rolls the whole
+  /// write back.
+  func replace(deletingIds: [UUID], creating: [Transaction]) async throws -> [Transaction]
   /// Frequency-sorted payee strings beginning with `prefix`. When
   /// `excludingTransactionId` is supplied, the matching transaction does
   /// not contribute to the frequency count and its payee will not appear

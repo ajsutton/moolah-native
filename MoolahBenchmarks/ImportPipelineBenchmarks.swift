@@ -212,7 +212,11 @@ final class ImportPipelineBenchmarks: XCTestCase {
         let dir = FileManager.default.temporaryDirectory
           .appendingPathComponent("bench-\(UUID().uuidString)")
         let staging = try ImportStagingStore(directory: dir)
-        let importStore = ImportStore(backend: backend, staging: staging)
+        let importStore = ImportStore(
+          backend: backend, staging: staging,
+          transferDetection: TransferDetectionCoordinator(
+            transactions: backend.transactions,
+            dismissedPairs: backend.dismissedTransferPairs))
         for _ in 0..<10 {
           _ = await importStore.ingest(
             data: data,

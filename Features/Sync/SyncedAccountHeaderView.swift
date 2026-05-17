@@ -335,7 +335,11 @@ private func syncedAccountHeaderPreview() -> some View {
       walletSyncState: session.backend.walletSyncState,
       importRules: NoOpWalletImportRulesEngine()),
     walletSyncState: session.backend.walletSyncState,
-    accounts: session.backend.accounts)
+    accounts: session.backend.accounts,
+    transferDetection: TransferDetectionCoordinator(
+      transactions: session.backend.transactions,
+      dismissedPairs: session.backend.dismissedTransferPairs),
+    transactions: session.backend.transactions)
   let exchangeTokenStore = ExchangeTokenStore()
   let cryptoAccount = Account(
     name: "Preview Wallet",

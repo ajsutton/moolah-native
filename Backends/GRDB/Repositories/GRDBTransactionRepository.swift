@@ -53,10 +53,12 @@ import OSLog
 /// Carve-out 3 (GRDB repositories).
 final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendable {
   // `database`, `defaultInstrument`, `conversionService`,
-  // `instrumentResolver`, and `errorChannel` are deliberately not
+  // `instrumentResolver`, `errorChannel`, `instrumentRegistrar`,
+  // `onRecordChanged`, and `onRecordDeleted` are deliberately not
   // `private` so the sibling `+Observation.swift` /
-  // `+ExternalIdLookup.swift` extensions can reach them. Treat them as
-  // private-by-convention from elsewhere in the module.
+  // `+ExternalIdLookup.swift` / `+Replace.swift` extensions can reach
+  // them. Treat them as private-by-convention from elsewhere in the
+  // module.
   let database: any DatabaseWriter
   /// Profile instrument used to label the running balance for global
   /// (non-account-scoped) fetches. Mirrors
@@ -87,7 +89,7 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   /// canonical registry and CloudKit); nothing writes the
   /// per-profile `instrument` table
   /// `v10_drop_shared_instrument_legacy` removed.
-  private let instrumentRegistrar: any InstrumentRegistering
+  let instrumentRegistrar: any InstrumentRegistering
   /// Single shared error channel for every observation subscription
   /// returned by this repo instance. The bridge in
   /// `Backends/GRDB/Observation/AsyncValueObservation+AsyncStream.swift`
@@ -102,8 +104,8 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   /// `TransactionLegRow.recordType` (per leg) ids from the same
   /// mutation, so the callback must carry the type — see
   /// `RepositoryHookRecordTypeTests`.
-  private let onRecordChanged: @Sendable (String, UUID) -> Void
-  private let onRecordDeleted: @Sendable (String, UUID) -> Void
+  let onRecordChanged: @Sendable (String, UUID) -> Void
+  let onRecordDeleted: @Sendable (String, UUID) -> Void
 
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "GRDBTransactionRepository")
@@ -371,4 +373,6 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
   //     `GRDBTransactionRepository+Fetch.swift`
   //   `registerNonFiatLegInstruments(_:using:)` →
   //     `GRDBTransactionRepository+CreateMany.swift`
+  //   `ReplaceOutcome`, `replace(deletingIds:creating:)` →
+  //     `GRDBTransactionRepository+Replace.swift`
 }

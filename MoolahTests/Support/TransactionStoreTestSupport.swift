@@ -189,6 +189,10 @@ struct FailingTransactionRepository: TransactionRepository {
     throw BackendError.networkUnavailable
   }
 
+  func replace(deletingIds: [UUID], creating: [Transaction]) async throws -> [Transaction] {
+    throw BackendError.networkUnavailable
+  }
+
   func fetchPayeeSuggestions(
     prefix: String, excludingTransactionId: UUID?
   ) async throws -> [String] {

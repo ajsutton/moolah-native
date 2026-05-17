@@ -895,7 +895,7 @@ git -C <wt> commit -m "feat(transfer-detection): DismissedTransferPair repositor
 
 ### Task 10: `FuzzyTransferDetector` (pure)
 
-**Files:** Create `Shared/TransferDetection/FuzzyTransferDetector.swift`; Test `MoolahTests/Shared/FuzzyTransferDetectorTests.swift`
+**Files:** Create `Shared/TransferDetection/FuzzyTransferDetector.swift` + `Shared/TransferDetection/TransferCandidatePair.swift` (the result struct is its own file — CODE_GUIDE §2 one primary type per file); Test `MoolahTests/Shared/FuzzyTransferDetectorTests.swift`
 
 Eligibility is `Transaction.isTransferDetectionEligible` / `transferDetectionValueLeg` (Extension A) — **no extra `leg.type != .transfer` guard** (a single-`.transfer`-leg on-chain transfer IS eligible and is the primary crypto pairing case; an already-merged two-`.transfer`-leg transfer yields `transferDetectionValueLeg == nil` and is skipped structurally — this is how the design's "skip what Extension B collapsed" is satisfied; see Architecture).
 
@@ -917,13 +917,14 @@ struct TransferCandidatePair: Sendable, Hashable {
   let existingCounterpart: Transaction
 }
 
-/// Pure fuzzy candidate finder. No I/O. Eligibility via Extension A
-/// (`transferDetectionValueLeg`). Already-collapsed same-`externalId`
-/// transfers (Extension B, run by the import pipelines before
-/// persistence) are two-`.transfer`-leg transactions whose
-/// `transferDetectionValueLeg` is nil, so they are skipped here.
+/// Pure fuzzy candidate finder. No I/O.
+///
+/// Eligibility is determined by `Transaction.transferDetectionValueLeg`.
+/// Transactions already collapsed by `CrossAccountTransferMerger`
+/// (two `.transfer`-leg transactions) have a nil value leg and are
+/// silently skipped.
 struct FuzzyTransferDetector: Sendable {
-  /// ±3-day window, inclusive (design §Algorithm).
+  /// Maximum absolute date gap for a candidate pair, inclusive on both edges.
   static let windowSeconds: TimeInterval = 3 * 86_400
 
   func detect(
@@ -981,16 +982,16 @@ git -C <wt> commit -m "feat(transfer-detection): pure FuzzyTransferDetector"
 
 ### Task 11: `TransferMergeBuilder` (pure)
 
-**Files:** Create `Shared/TransferDetection/TransferMergeBuilder.swift`; Test `MoolahTests/Shared/TransferMergeBuilderTests.swift`
+**Files:** Create `Shared/TransferDetection/TransferMergeBuilder.swift`; Tests `MoolahTests/Shared/TransferMergeBuilderTests.swift` (merge suite), `MoolahTests/Shared/TransferMergeBuilderSplitTests.swift` (split + round-trip suite), `MoolahTests/Shared/TransferMergeBuilderFixture.swift` (shared construction helpers). The split into two suites + a fixture keeps each test file under the SwiftLint `type_body_length`/`file_length` thresholds.
 
 Pure transforms; **untyped `throws`** (SE-0413 default); throw on invalid input — never return `[]` to signal an error.
-- `merged(from a: Transaction, _ b: Transaction) throws -> Transaction`: two `.transfer` legs (one per side's value leg, carrying its `accountId`/`instrument`/`quantity`); **fee legs from both sides preserved (union, unchanged)**; `date` = earlier of the two; `payee` = shared payee if equal else the two payees dedup-joined; `notes` = the two notes joined by `\n` with duplicates collapsed; `importOrigin = .merged(MergedImportOrigin(outgoing: <negative-value-leg side's .single>, incoming: <positive side's .single>))` (a side with no `.single` origin contributes `nil`); `transferSuggestion = nil`; new `id`. Throw `TransferMergeError.notMergeable` if either side has no `transferDetectionValueLeg`, same account, instruments differ, or quantities not opposite-equal.
+- `merged(from sideA: Transaction, _ sideB: Transaction) throws -> Transaction` (internal param names are ≥3 chars to satisfy SwiftLint `identifier_name`; external labels stay `from:` / `_`): two `.transfer` legs (one per side's value leg, carrying its `accountId`/`instrument`/`quantity`); **fee legs from both sides preserved (union, unchanged)**; `date` = earlier of the two; `payee` = shared payee if equal else the two payees dedup-joined; `notes` = the two notes joined by `\n` with duplicates collapsed; `importOrigin = .merged(MergedImportOrigin(outgoing: <negative-value-leg side's .single>, incoming: <positive side's .single>))` (a side with no `.single` origin contributes `nil`); `transferSuggestion = nil`; new `id`. Throw `TransferMergeError.notMergeable` if either side has no `transferDetectionValueLeg`, same account, instruments differ, or quantities not opposite-equal.
 - `split(_ transfer: Transaction) throws -> [Transaction]`: inverse. Two single-leg transactions, one per `.transfer` value leg, on the original account, `type` = `.expense` (negative qty) / `.income` (positive qty); each gets `importOrigin = .single` from the matching `MergedImportOrigin` side (by sign); **fee legs**: reattach each preserved fee leg to the split transaction whose value leg shares the fee leg's originating account (the merge preserved each fee leg's `accountId`; match on it; a fee leg with no resolvable side stays with the outgoing split — assert this in the round-trip test); new ids; `transferSuggestion = nil`. Throw `TransferMergeError.notATransfer` if not a 2-`.transfer`-value-leg transaction, `.missingMergedOrigin` if `importOrigin` is not `.merged`.
 
 - [ ] **Step 1: Failing tests** — merge: earlier date, two `.transfer` legs correct, merged origin outgoing=negative side, notes joined+deduped, payee rule, **fee legs from both sides preserved**; `notMergeable` thrown for same-account / instrument-mismatch / not-opposite; round-trip `split(merged(a,b))` → two single-leg txs whose value legs equal the originals and whose `.single` origins equal the originals; **round-trip with a cross-instrument fee leg on each side** → each fee leg returns to its originating account's split; `split` throws `.notATransfer` / `.missingMergedOrigin` appropriately.
 
 - [ ] **Step 2:** run → fails.
-- [ ] **Step 3: Implement** `struct TransferMergeBuilder: Sendable` plus the error/constant types in the same file (errors cross actor boundaries so they are explicitly `Sendable`; cases have no payload so it is trivially satisfied):
+- [ ] **Step 3: Implement** `struct TransferMergeBuilder: Sendable` (each error type in its own file — `Shared/TransferDetection/TransferMergeError.swift`, `Shared/TransferDetection/ManualMergeError.swift` — per CODE_GUIDE §2 one-primary-type-per-file and the SwiftLint `file_name` rule; errors cross actor boundaries so they are explicitly `Sendable`; cases have no payload so it is trivially satisfied; private helpers live in a trailing `extension TransferMergeBuilder` with `private func` members):
 
 ```swift
 enum TransferMergeError: Error, Equatable, Sendable {
@@ -1007,21 +1008,22 @@ enum ManualMergeError: Error, Equatable, Sendable {
   case datesTooFarApart       // > manualMergeWindowSeconds
 }
 
-extension TransferMergeBuilder {
+struct TransferMergeBuilder: Sendable {
   /// Manual merge tolerates a wider window than auto-detection
   /// (`FuzzyTransferDetector.windowSeconds`) — the user is asserting intent.
   static let manualMergeWindowSeconds: TimeInterval = 14 * 86_400
+  // … merged(from:_:) / split(_:) …
 }
 ```
 
-Use `transferDetectionValueLeg` to locate value legs; treat every non-value leg as a fee leg preserved by `accountId`. Confirm `TransferMergeBuilder.swift` stays under the 400-line warning threshold with these additions; if not, put `ManualMergeError`/`TransferMergeError` in a sibling `TransferMergeErrors.swift` (one type per file is fine).
+`manualMergeWindowSeconds` is a member of the primary `struct` body, not a bare non-conformance `extension` (CODE_GUIDE §2 reserves bare extensions; grouping headings only earn their keep above the 300-line threshold). Use `transferDetectionValueLeg` to locate value legs; treat every non-value leg as a fee leg preserved by `accountId`. `TransferMergeError` and `ManualMergeError` are each in their own file (`TransferMergeError.swift`, `ManualMergeError.swift`) alongside `TransferMergeBuilder.swift`; `TransferMergeBuilder.swift` holds only the builder.
 
 - [ ] **Step 4:** tests pass; `format-check`.
 - [ ] **Step 5:** dispatch `code-review`; fix findings.
 - [ ] **Step 6: Commit**
 
 ```bash
-git -C <wt> add Shared/TransferDetection/TransferMergeBuilder.swift MoolahTests/Shared/TransferMergeBuilderTests.swift
+git -C <wt> add Shared/TransferDetection/TransferMergeBuilder.swift MoolahTests/Shared/TransferMergeBuilderTests.swift MoolahTests/Shared/TransferMergeBuilderSplitTests.swift MoolahTests/Shared/TransferMergeBuilderFixture.swift
 git -C <wt> commit -m "feat(transfer-detection): pure TransferMergeBuilder (merge + split)"
 ```
 
@@ -1031,7 +1033,7 @@ git -C <wt> commit -m "feat(transfer-detection): pure TransferMergeBuilder (merg
 
 **Files:** Create `Features/TransferDetection/TransferDetectionCoordinator.swift`; Test `MoolahTests/Features/TransferDetectionCoordinatorTests.swift`
 
-- [ ] **Step 0: Verify repo Sendability** — confirm `TransactionRepository`, `AccountRepository`, `DismissedTransferPairRepository` all declare `: Sendable`. If any does not, add the conformance (the existential the coordinator stores must be `Sendable`).
+- [ ] **Step 0: Verify repo Sendability** — confirm `TransactionRepository` and `DismissedTransferPairRepository` (the two existentials the coordinator stores) declare `: Sendable`. If either does not, add the conformance.
 
 Responsibilities (all logic here; views stay thin):
 - `runDetection(newlyImported:participatingAccountIds:windowLowerBound:)`: fetch `existingNearby` via `TransactionRepository.fetchAll(filter:)` for accounts NOT among the newly-imported set's accounts, dated `>= windowLowerBound` (caller supplies; see Tasks 13/14); build `isDismissed` capturing a `[DismissedTransferPair]` snapshot from `dismissedTransferPairs.fetchAll()` (a `@Sendable` closure over `Sendable` value types); run `FuzzyTransferDetector.detect`; for each `TransferCandidatePair`, write a `TransferSuggestion` (counterpart id + `clock()`) on **both** transactions via `TransactionRepository.update`. Idempotent: re-running over already-suggested pairs rewrites the same annotation, no duplicates. (No `CrossAccountTransferMerger` call — already-collapsed transfers are ineligible; see Architecture.)
@@ -1042,14 +1044,14 @@ Responsibilities (all logic here; views stay thin):
 - [ ] **Step 1: Failing tests** (Swift Testing, `TestBackend`, seed two accounts + opposing txs; one behaviour per `@Test`): detection writes `transferSuggestion` on both sides; skips dismissed pairs; is idempotent; an already-merged transfer is not re-suggested; `merge` produces the two-leg transfer and removes both sources (assert via repository fetch); `unmerge` round-trips and records a dismissal that prevents immediate re-suggestion; `manualMerge` rejects >14-day / same-account / not-opposite with the right `ManualMergeError` and mutates nothing; **merge atomicity** — wrap the transaction repo in a decorator that throws on the create; assert neither source was deleted and `error` is set; concurrent-mutation guard — a second `merge` while `isMutating` is rejected/queued without corrupting state.
 
 - [ ] **Step 2:** run → fails.
-- [ ] **Step 3: Implement** `@MainActor @Observable final class TransferDetectionCoordinator`. Inject `transactions: any TransactionRepository`, `dismissedPairs: any DismissedTransferPairRepository`, `accounts: any AccountRepository`, `detector: FuzzyTransferDetector = .init()`, `builder: TransferMergeBuilder = .init()`, `let clock: @Sendable () -> Date = { Date() }`. **Atomicity rule:** prefer a single transactional `TransactionRepository` API for delete-both-and-create / delete-and-create-two; `grep` the protocol for an existing batch/transactional method (e.g. a `perform`/`transaction`/`createMany`+atomic-delete). If one exists, use it. If none exists, add a transactional method to `TransactionRepository` + `GRDB…TransactionRepository` (single `database.write` performing both deletes and the insert(s)) — do not use a bare `await delete` then `await create` sequence (non-atomic across suspension points). Implement the optimistic-rollback pattern (save old state; on throw, restore and set `error`) as defence in depth. **Re-entrancy: reject, do not serialize.** If `isMutating == true` when `merge`/`manualMerge`/`unmerge`/`dismiss` is called, set `error = TransferMergeError.mutationInProgress` and return immediately — do not queue a second `Task`. The Step 1 guard test must assert `error` is set (not merely that state is uncorrupted). `manualMerge` validates against `TransferMergeBuilder.manualMergeWindowSeconds` and throws `ManualMergeError` (`.sameAccount`/`.notOppositeAmount`/`.datesTooFarApart`).
+- [ ] **Step 3: Implement** `@MainActor @Observable final class TransferDetectionCoordinator`. Inject `transactions: any TransactionRepository`, `dismissedPairs: any DismissedTransferPairRepository`, `detector: FuzzyTransferDetector = .init()`, `builder: TransferMergeBuilder = .init()`, `let clock: @Sendable () -> Date = { Date() }`. (No `accounts` repository — the coordinator never reads account state; injecting an unused existential is dead state.) `runDetection` writes annotations across suspension points, so it shares the single-flight re-entrancy gate with the mutations (not a separate unguarded path). **Atomicity rule:** prefer a single transactional `TransactionRepository` API for delete-both-and-create / delete-and-create-two; `grep` the protocol for an existing batch/transactional method (e.g. a `perform`/`transaction`/`createMany`+atomic-delete). If one exists, use it. If none exists, add a transactional method to `TransactionRepository` + `GRDB…TransactionRepository` (single `database.write` performing both deletes and the insert(s)) — do not use a bare `await delete` then `await create` sequence (non-atomic across suspension points). Implement the optimistic-rollback pattern (save old state; on throw, restore and set `error`) as defence in depth. **Re-entrancy: reject, do not serialize.** If `isMutating == true` when `runDetection`/`merge`/`manualMerge`/`unmerge`/`dismiss` is called, set `error = TransferMergeError.mutationInProgress` and return immediately — do not queue a second `Task`. (`runDetection` participates in the same gate because it also writes.) The Step 1 guard test must assert `error` is set (not merely that state is uncorrupted). `manualMerge` validates against `TransferMergeBuilder.manualMergeWindowSeconds` and throws `ManualMergeError` (`.sameAccount`/`.notOppositeAmount`/`.datesTooFarApart`).
 
 **Unmerge cross-table note (not fully atomic — document inline):** the transactional `TransactionRepository` method spans only the `transaction` table (delete the merged tx + create the two splits). The follow-on `DismissedTransferPair` write is a *separate* repository/table write, so it is best-effort after the split. This is acceptable and is NOT a data-loss path: if the process dies between the split and the dismissal, the worst case is the just-split pair being re-suggested on a later scan (annoying, not corrupting) — the user can dismiss again. State this explicitly in a doc comment on `unmerge`; do not claim single-transaction atomicity across both tables. (A future tightening could fold both into one `DatabaseWriter` write behind a new repository method; out of scope here.)
 
 Errors are caught here, stored in `error` (untyped `catch`; `ManualMergeError`/`TransferMergeError` surfaced via `error`), never in the view. Follow `guides/CONCURRENCY_GUIDE.md`.
 
 - [ ] **Step 4:** all tests pass; `test-mac TransferDetectionCoordinatorTests`; `build-mac`; `format-check`.
-- [ ] **Step 5:** dispatch `code-review` + `concurrency-review`; fix all findings.
+- [ ] **Step 5:** dispatch `code-review` + `concurrency-review` + `database-code-review` (the latter because this task adds a transactional GRDB method — `replace(deletingIds:creating:)` — touching `database.write`, leg/header delete ordering, and post-commit sync-hook fan-out); fix all findings.
 - [ ] **Step 6: Commit**
 
 ```bash
@@ -1068,7 +1070,7 @@ git -C <wt> commit -m "feat(transfer-detection): TransferDetectionCoordinator (d
 - [ ] **Step 1: Failing e2e test** — using `TestBackend` + the existing CSV-import harness/fixtures: ingest two single-account CSVs each containing one row of an internal transfer between the two accounts (opposite-equal, same instrument, dates within 3 days). Add paired fixtures if none exist, modelled on the existing CSV fixture pattern (design references `cba-everyday.csv` + `cba-savings.csv` with a known 2026-03-10 internal transfer). Assert both persisted rows carry a `transferSuggestion` referencing each other.
 
 - [ ] **Step 2:** run → fails.
-- [ ] **Step 3: Implement** — inject a **non-optional** `transferDetection: TransferDetectionCoordinator` into `ImportStore` (constructed in the `ProfileSession` import-pipeline factory from `backend`; `PreviewBackend`/preview wiring gets a real in-memory coordinator, not nil). After a successful `ingest` (the established post-pipeline completion point where `sessionId` + the persisted set are in hand — same place `refreshBadge()` is called), call `await transferDetection.runDetection(newlyImported: persisted, participatingAccountIds: Set(persisted.compactMap { $0.transferDetectionValueLeg?.accountId }), windowLowerBound: minPersistedDate - 3d)`. Document inline that detection runs inside the `isImporting == true` window deliberately (the badge refresh already does; a concurrent second `ingest` is correctly guarded by `isImporting`). Keep `ImportStore` thin — orchestration is in the coordinator.
+- [ ] **Step 3: Implement** — inject a **non-optional** `transferDetection: TransferDetectionCoordinator` into `ImportStore` (constructed in the `ProfileSession` import-pipeline factory from `backend`; `PreviewBackend`/preview wiring gets a real in-memory coordinator, not nil). After a successful `ingest` (the established post-pipeline completion point where `sessionId` + the persisted set are in hand — same place `refreshBadge()` is called), call `await transferDetection.runDetection(newlyImported: persisted, participatingAccountIds: Set(persisted.compactMap { $0.transferDetectionValueLeg?.accountId }), windowLowerBound: minPersistedDate − FuzzyTransferDetector.windowSeconds)` (derive the window from the constant, not a hardcoded `3d`/`3*86400` literal). Use `if let earliest = persisted.min(by: { $0.date < $1.date })` so an empty persisted set skips detection with no dead clock-read fallback. Document inline that detection runs inside the `isImporting == true` window deliberately (the badge refresh already does; a concurrent second `ingest` is correctly guarded by `isImporting`). Keep `ImportStore` thin — orchestration is in the coordinator. (Step-0 note for the PR body: `CrossAccountTransferMerger` is not in the CSV pipeline; acceptable — CSV rows rarely share an `externalId`, fuzzy covers the concrete cases.)
 
 - [ ] **Step 4:** e2e passes; `build-mac`; `format-check`.
 - [ ] **Step 5:** dispatch `code-review` + `concurrency-review`; fix findings.
@@ -1083,12 +1085,12 @@ git -C <wt> commit -m "feat(transfer-detection): run fuzzy detection at end of C
 
 ### Task 14: Crypto-wallet + exchange trigger (`SyncedAccountStore`)
 
-**Files:** Modify `Features/Sync/SyncedAccountStore.swift` (+`+Internals`) + `ProfileSession+CryptoSync.swift`; Test `MoolahTests/Features/SyncedAccountStoreTransferDetectionTests.swift` (mirror the existing `SyncedAccountStore` harness)
+**Files:** Modify `Features/Sync/SyncedAccountStore.swift` (+`+Internals`) + `ProfileSession+CryptoSync.swift`; Test `MoolahTests/Features/Sync/SyncedAccountStoreTransferDetectionTests.swift` (under `Features/Sync/`, alongside the sibling `SyncedAccountStore*Tests`; mirror the existing `SyncedAccountStore` harness)
 
 - [ ] **Step 1: Failing test** — seed an exchange-style + a wallet-style account with opposing same-instrument transactions whose value legs have **different** `externalId`s (Extension B does NOT collapse them); run the store's sync; assert both get `transferSuggestion`. Also: a same-`externalId` opposing pair is auto-merged by Extension B in the apply pass and gets **no** suggestion (regression guard for the structural skip).
 
 - [ ] **Step 2:** run → fails.
-- [ ] **Step 3: Implement** — inject a **non-optional** `transferDetection: TransferDetectionCoordinator` into `SyncedAccountStore` (constructed in `ProfileSession+CryptoSync.makeCryptoSyncWiring` from `backend`). After `runApplyPass` AND after `refreshStateFromRepository()` (so persisted rows are visible), compute the window concretely: `participatingAccountIds` = the account ids that went through this apply pass; `windowLowerBound = clock() - FuzzyTransferDetector.windowSeconds` (do NOT derive from `statePerAccount` — it now reflects the new checkpoint, not the imported window). Fetch the candidate set for those accounts via the repository and call `transferDetection.runDetection(...)`. Keep the store thin.
+- [ ] **Step 3: Implement** — inject **two non-optional** deps into `SyncedAccountStore` (constructed in `ProfileSession+CryptoSync.makeCryptoSyncWiring` from `backend`): `transferDetection: TransferDetectionCoordinator` and `transactions: any TransactionRepository` (the store has no direct repo handle — `walletApplyEngine`'s is private and must not be widened — so it needs its own to fetch the candidate set). After `runApplyPass` AND after `refreshStateFromRepository()` (so persisted rows are visible), compute the window concretely: `participatingAccountIds` = the account ids that went through this apply pass; `windowLowerBound = clock() - FuzzyTransferDetector.windowSeconds` (do NOT derive from `statePerAccount` — it reflects the post-apply checkpoint, not the imported window). Fetch the candidate superset via `TransactionFilter(dateRange: windowLowerBound...Date.distantFuture)` and filter in-memory to the participating accounts (same `TransactionFilter` set-exclusion limitation the coordinator documents); empty participating set ⇒ skip. **Before calling `runDetection`, pre-check `guard !transferDetection.isMutating`** (log + return) so a background sync pass does not write `mutationInProgress` into the coordinator's user-visible `error`; the coordinator's `mutate` gate remains the final arbiter. Keep the store thin. **Carve-out (tracked):** annotation via the general-purpose `update` re-queues the transaction's legs to sync though only the header changes — correct/idempotent but a sync-queue inefficiency; deferred as issue #937 (header-only `updateTransferSuggestion` repo method), not done in this stack.
 
 - [ ] **Step 4:** test passes; `build-mac`; `format-check`.
 - [ ] **Step 5:** dispatch `code-review` + `concurrency-review` + `sync-review`; fix findings.
@@ -1215,7 +1217,7 @@ git -C <wt> commit -m "test(transfer-detection): e2e UI — suggest, merge, dism
 
 - [ ] **Step 1:** `just -d <wt> format-check` clean; `build-mac`; `build-ios` — zero warnings.
 - [ ] **Step 2:** scoped tests for the PR's tasks; before PR4 merges, full `just -d <wt> test 2>&1 | tee .agent-tmp/full-test.txt`; `grep -i 'failed\|error:'`; fix regressions (`superpowers:systematic-debugging` for non-obvious); `rm` when green.
-- [ ] **Step 3:** dispatch the review agents relevant to that PR's surface, against the working tree, fix every finding (ask before deferring): PR1 `code-review`; PR2 `database-schema-review`+`database-code-review`+`sync-review`+`concurrency-review`+`code-review`; PR3 `code-review`+`concurrency-review`+`instrument-conversion-review`+`sync-review`; PR4 `ui-review`+`ui-test-review`+`code-review`. Before PR4 merges, re-run `ui-test-review` and `code-review` across the whole feature tree to catch anything missed in per-task dispatches.
+- [ ] **Step 3:** dispatch the review agents relevant to that PR's surface, against the working tree, fix every finding (ask before deferring): PR1 `code-review`; PR2 `database-schema-review`+`database-code-review`+`sync-review`+`concurrency-review`+`code-review`; PR3 `code-review`+`concurrency-review`+`database-code-review` (Task 12 adds a transactional GRDB `replace` method)+`instrument-conversion-review`+`sync-review`; PR4 `ui-review`+`ui-test-review`+`code-review`. Before PR4 merges, re-run `ui-test-review` and `code-review` across the whole feature tree to catch anything missed in per-task dispatches.
 - [ ] **Step 4 (before PR4 merges): Acceptance check vs issue #928** — each bullet maps to a passing test: suggestions both sides post-import (Tasks 12–14); pill + Merge/Not-a-transfer; merge → two-leg transfer; dismiss permanent across relaunch (Tasks 15, 18); manual merge + unmerge (Tasks 12, 17); the Coinstash↔Macquarie and OP-shape pairs detected once instruments match (add explicitly-named Task 10/12 tests constructing matching-instrument opposing pairs); suggestions + dismissals sync (Tasks 7, 8, 9 round-trip/contract). Add any missing test before the PR merges.
 - [ ] **Step 5: Per PR — push + open PR + queue**
 

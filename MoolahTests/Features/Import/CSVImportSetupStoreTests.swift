@@ -38,7 +38,11 @@ struct CSVImportSetupStoreTests {
     let dir = tempDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
     let staging = try ImportStagingStore(directory: dir)
-    let importStore = ImportStore(backend: backend, staging: staging)
+    let importStore = ImportStore(
+      backend: backend, staging: staging,
+      transferDetection: TransferDetectionCoordinator(
+        transactions: backend.transactions,
+        dismissedPairs: backend.dismissedTransferPairs))
     let bytes = try CSVFixtureLoader.data("cba-everyday-standard")
     let pending = try await seedPending(staging, bytes: bytes)
 
@@ -62,7 +66,11 @@ struct CSVImportSetupStoreTests {
     let dir = tempDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
     let staging = try ImportStagingStore(directory: dir)
-    let importStore = ImportStore(backend: backend, staging: staging)
+    let importStore = ImportStore(
+      backend: backend, staging: staging,
+      transferDetection: TransferDetectionCoordinator(
+        transactions: backend.transactions,
+        dismissedPairs: backend.dismissedTransferPairs))
     let bytes = try CSVFixtureLoader.data("cba-everyday-standard")
     let pending = try await seedPending(staging, bytes: bytes)
     let store = CSVImportSetupStore(
@@ -89,7 +97,11 @@ struct CSVImportSetupStoreTests {
     let dir = tempDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
     let staging = try ImportStagingStore(directory: dir)
-    let importStore = ImportStore(backend: backend, staging: staging)
+    let importStore = ImportStore(
+      backend: backend, staging: staging,
+      transferDetection: TransferDetectionCoordinator(
+        transactions: backend.transactions,
+        dismissedPairs: backend.dismissedTransferPairs))
     let bytes = try CSVFixtureLoader.data("cba-everyday-standard")
     let pending = try await seedPending(staging, bytes: bytes)
     let store = CSVImportSetupStore(
@@ -133,7 +145,11 @@ struct CSVImportSetupStoreTests {
     let dir = tempDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
     let staging = try ImportStagingStore(directory: dir)
-    let importStore = ImportStore(backend: backend, staging: staging)
+    let importStore = ImportStore(
+      backend: backend, staging: staging,
+      transferDetection: TransferDetectionCoordinator(
+        transactions: backend.transactions,
+        dismissedPairs: backend.dismissedTransferPairs))
     let bytes = try CSVFixtureLoader.data("cba-everyday-standard")
     let pending = try await seedPending(staging, bytes: bytes)
 
@@ -156,7 +172,11 @@ struct CSVImportSetupStoreTests {
     let dir = tempDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
     let staging = try ImportStagingStore(directory: dir)
-    let importStore = ImportStore(backend: backend, staging: staging)
+    let importStore = ImportStore(
+      backend: backend, staging: staging,
+      transferDetection: TransferDetectionCoordinator(
+        transactions: backend.transactions,
+        dismissedPairs: backend.dismissedTransferPairs))
     let bytes = try CSVFixtureLoader.data("cba-everyday-standard")
     let pending = try await seedPending(staging, bytes: bytes)
     let store = CSVImportSetupStore(
@@ -182,7 +202,11 @@ struct CSVImportSetupStoreTests {
     let dir = tempDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
     let staging = try ImportStagingStore(directory: dir)
-    let importStore = ImportStore(backend: backend, staging: staging)
+    let importStore = ImportStore(
+      backend: backend, staging: staging,
+      transferDetection: TransferDetectionCoordinator(
+        transactions: backend.transactions,
+        dismissedPairs: backend.dismissedTransferPairs))
     let bytes = try CSVFixtureLoader.data("cba-everyday-standard")
     let pending = try await seedPending(staging, bytes: bytes)
     let store = CSVImportSetupStore(
@@ -215,7 +239,11 @@ struct CSVImportSetupStoreTests {
     let dir = tempDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
     let staging = try ImportStagingStore(directory: dir)
-    let importStore = ImportStore(backend: backend, staging: staging)
+    let importStore = ImportStore(
+      backend: backend, staging: staging,
+      transferDetection: TransferDetectionCoordinator(
+        transactions: backend.transactions,
+        dismissedPairs: backend.dismissedTransferPairs))
     let bytes = try CSVFixtureLoader.data("cba-everyday-standard")
     let pending = try await seedPending(staging, bytes: bytes)
     let store = CSVImportSetupStore(

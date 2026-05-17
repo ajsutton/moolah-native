@@ -82,8 +82,8 @@ final class ImportStore {
   private(set) var unreviewedBadgeCount: Int = 0
   private(set) var lastError: String?
 
-  // internal (was private) so the pipeline / resolution / transactions
-  // extension files can reach the injected dependencies + logger.
+  // Package-internal: the pipeline / resolution / transactions extension
+  // files reach the injected dependencies and logger.
   let backend: any BackendProvider
   let registry: CSVParserRegistry
   /// Exposed so the Needs Setup sheet can re-read staged bytes via its own
@@ -95,16 +95,22 @@ final class ImportStore {
   /// so `.folderWatch` ingests honour the setting even when the matched
   /// profile's own `deleteAfterImport` is false.
   var folderWatchDeleteAfterImport: (@MainActor () -> Bool)?
+  /// Runs the fuzzy cross-account transfer scan over each imported batch.
+  /// Non-optional: every construction site builds a real coordinator from
+  /// the same backend so detection always runs after an import.
+  let transferDetection: TransferDetectionCoordinator
   let logger = Logger(subsystem: "com.moolah.app", category: "ImportStore")
 
   init(
     backend: any BackendProvider,
     staging: ImportStagingStore,
+    transferDetection: TransferDetectionCoordinator,
     registry: CSVParserRegistry = .default
   ) {
     self.backend = backend
     self.registry = registry
     self.staging = staging
+    self.transferDetection = transferDetection
   }
 
   // MARK: - Public API
@@ -130,6 +136,22 @@ final class ImportStore {
             filename: source.filename),
           at: 0)
         await refreshBadge()
+        // Detection runs inside the `isImporting == true` window
+        // deliberately, exactly as the badge refresh above does: a
+        // concurrent second `ingest` is rejected by the `isImporting`
+        // guard, so the persisted set here is the only batch in flight.
+        // The coordinator owns all detection logic; this is the single
+        // orchestration call. Skipped when nothing was persisted —
+        // there is no batch to scan.
+        if let earliest = imported.min(by: { $0.date < $1.date }) {
+          let windowLowerBound = earliest.date
+            .addingTimeInterval(-FuzzyTransferDetector.windowSeconds)
+          await transferDetection.runDetection(
+            newlyImported: imported,
+            participatingAccountIds: Set(
+              imported.compactMap { $0.transferDetectionValueLeg?.accountId }),
+            windowLowerBound: windowLowerBound)
+        }
       }
       if case .needsSetup = result {
         await reloadStagingLists()

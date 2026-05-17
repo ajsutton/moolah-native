@@ -46,10 +46,9 @@ extension ProfileSession {
   /// - `LiveAlchemyClient` — same shape as `Backends/CoinGecko/CoinGeckoClient`.
   /// - `LiveBlockscoutClient` — authoritative native + internal ETH index.
   /// - `CryptoTokenDiscoveryService` — actor-coalesced registry resolver.
-  /// - `WalletSyncEngine` — Stage 6's read-only build orchestrator.
-  /// - `WalletApplyEngine` — `@MainActor` apply pass with the shipping
-  ///   `NoOpWalletImportRulesEngine`; the richer rules engine is not yet
-  ///   wired.
+  /// - `WalletSyncEngine` — read-only build orchestrator for wallet sync.
+  /// - `WalletApplyEngine` — `@MainActor` apply pass with
+  ///   `NoOpWalletImportRulesEngine`.
   ///
   /// The keychain read is best-effort: the live `LiveAlchemyClient` is
   /// constructed even when the key is missing or empty so the build
@@ -88,11 +87,16 @@ extension ProfileSession {
       fiatInstrument: profileInstrument,
       backend: backend,
       discovery: discovery)
+    let transferDetection = TransferDetectionCoordinator(
+      transactions: backend.transactions,
+      dismissedPairs: backend.dismissedTransferPairs)
     let store = SyncedAccountStore(
       sources: [WalletSyncSource(engine: walletSyncEngine), coinstashSource],
       walletApplyEngine: walletApplyEngine,
       walletSyncState: backend.walletSyncState,
-      accounts: backend.accounts)
+      accounts: backend.accounts,
+      transferDetection: transferDetection,
+      transactions: backend.transactions)
     return CryptoSyncWiring(store: store, discovery: discovery)
   }
 

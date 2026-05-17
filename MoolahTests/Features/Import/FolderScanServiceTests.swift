@@ -43,7 +43,11 @@ struct FolderScanServiceTests {
         headerSignature: ["date", "description", "debit", "credit", "balance"]))
     let stagingDirectory = tempDirectory()
     let staging = try ImportStagingStore(directory: stagingDirectory)
-    let store = ImportStore(backend: backend, staging: staging)
+    let store = ImportStore(
+      backend: backend, staging: staging,
+      transferDetection: TransferDetectionCoordinator(
+        transactions: backend.transactions,
+        dismissedPairs: backend.dismissedTransferPairs))
     let preferences = ImportPreferences(directory: tempDirectory())
     preferences.setWatchedFolder(watchedFolder)
     let scanner = FolderScanService(
@@ -177,7 +181,11 @@ struct FolderScanServiceTests {
         positions: [], position: 0, isHidden: false),
       openingBalance: nil)
     let staging = try ImportStagingStore(directory: tempDirectory())
-    let store = ImportStore(backend: backend, staging: staging)
+    let store = ImportStore(
+      backend: backend, staging: staging,
+      transferDetection: TransferDetectionCoordinator(
+        transactions: backend.transactions,
+        dismissedPairs: backend.dismissedTransferPairs))
     let preferences = ImportPreferences(directory: tempDirectory())
     // No setWatchedFolder → nothing to scan.
     let scanner = FolderScanService(

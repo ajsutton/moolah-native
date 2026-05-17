@@ -268,6 +268,73 @@ extension SyncedAccountStore {
     await reloadStatePerAccount(failureLogPrefix: "WalletSyncState refresh")
   }
 
+  // MARK: - Transfer detection
+
+  /// Runs the cross-account fuzzy transfer-detection pass for the
+  /// accounts that went through this sync cycle. Called once per
+  /// `syncAccounts` pass, after the apply pass and the state refresh so
+  /// the persisted rows are visible.
+  ///
+  /// The window lower bound is derived concretely from `clock()` and
+  /// `FuzzyTransferDetector.windowSeconds` — not from `statePerAccount`,
+  /// which reflects the post-apply checkpoint, not the imported window.
+  /// `TransactionFilter` cannot express an account-set membership
+  /// predicate, so the participating-account candidate set is filtered
+  /// in-memory over the date-floored superset, mirroring the same
+  /// in-memory approach that `TransferDetectionCoordinator.runDetection`
+  /// uses for the same reason.
+  ///
+  /// The orchestration is intentionally thin: a single candidate fetch,
+  /// an empty-set skip, and one `runDetection` call. All detection and
+  /// merge logic lives in the coordinator / detector.
+  ///
+  /// The pre-check on `transferDetection.isMutating` exists so a
+  /// background sync pass does not write `mutationInProgress` into the
+  /// coordinator's user-visible `error` when the user is mid-merge /
+  /// mid-dismiss or an overlapping detection pass is in flight; it also
+  /// skips the candidate fetch in that case. The coordinator's `mutate`
+  /// gate remains the final arbiter.
+  func runTransferDetection(participatingAccountIds: Set<UUID>) async {
+    guard !transferDetection.isMutating else {
+      Self.internalsLogger.notice(
+        "Transfer detection skipped — coordinator busy; the next sync pass covers this window")
+      return
+    }
+    let windowLowerBound = clock().addingTimeInterval(
+      -FuzzyTransferDetector.windowSeconds)
+    let newlyImported: [Transaction]
+    do {
+      // The coordinator's `runDetection` independently re-fetches this
+      // same date range for `existingNearby`. This second fetch here is
+      // a deliberate trade-off: it enables the empty-participating-set
+      // early-out and supplies `newlyImported` per the coordinator's
+      // caller-supplies-`newlyImported` contract. The window is a
+      // bounded 3 days over an in-memory GRDB store, so the duplicate
+      // read is cheap — not an accidental double fetch.
+      let candidates = try await transactions.fetchAll(
+        filter: TransactionFilter(
+          dateRange: windowLowerBound...Date.distantFuture))
+      // `TransactionFilter` has no account-set field, so the
+      // participating-account restriction is applied in-memory over the
+      // date-floored superset.
+      newlyImported = candidates.filter { transaction in
+        guard let accountId = transaction.transferDetectionValueLeg?.accountId
+        else { return false }
+        return participatingAccountIds.contains(accountId)
+      }
+    } catch {
+      Self.internalsLogger.error(
+        "Transfer-detection candidate fetch failed: \(error.localizedDescription, privacy: .public)"
+      )
+      return
+    }
+    guard !newlyImported.isEmpty else { return }
+    await transferDetection.runDetection(
+      newlyImported: newlyImported,
+      participatingAccountIds: participatingAccountIds,
+      windowLowerBound: windowLowerBound)
+  }
+
   // MARK: - Timer
 
   /// Cancels any prior `timerTask` and starts a fresh one. Centralised

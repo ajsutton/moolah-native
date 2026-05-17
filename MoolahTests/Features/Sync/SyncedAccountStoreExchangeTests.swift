@@ -59,6 +59,11 @@ struct SyncedAccountStoreExchangeTests {
       walletApplyEngine: walletApplyEngine,
       walletSyncState: backend.walletSyncState,
       accounts: backend.accounts,
+      transferDetection: TransferDetectionCoordinator(
+        transactions: backend.transactions,
+        dismissedPairs: backend.dismissedTransferPairs,
+        clock: { Self.pinnedNow }),
+      transactions: backend.transactions,
       clock: { Self.pinnedNow })
     return Fixture(store: store, backend: backend, database: database)
   }

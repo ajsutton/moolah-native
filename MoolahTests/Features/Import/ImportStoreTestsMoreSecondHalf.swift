@@ -20,7 +20,12 @@ struct ImportStoreTestsMoreSecondHalf {
   ) throws -> (ImportStore, URL) {
     let dir = directory ?? tempStagingDirectory()
     let staging = try ImportStagingStore(directory: dir)
-    return (ImportStore(backend: backend, staging: staging), dir)
+    let store = ImportStore(
+      backend: backend, staging: staging,
+      transferDetection: TransferDetectionCoordinator(
+        transactions: backend.transactions,
+        dismissedPairs: backend.dismissedTransferPairs))
+    return (store, dir)
   }
 
   private func seedAccount(
