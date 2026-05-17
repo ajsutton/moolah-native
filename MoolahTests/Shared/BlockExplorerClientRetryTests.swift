@@ -195,4 +195,35 @@ struct BlockExplorerClientRetryTests {
     }
     #expect(script.calls == 3)
   }
+
+  @Test
+  func exhaustedServerErrorMapsToNetwork() async throws {
+    defer { BlockscoutRetryStubURLProtocol.script = nil }
+    let script = BlockscoutRetryScript([
+      .respond(status: 500, body: Data(), headers: [:]),
+      .respond(status: 500, body: Data(), headers: [:]),
+      .respond(status: 500, body: Data(), headers: [:]),
+    ])
+    BlockscoutRetryStubURLProtocol.script = script
+    let client = LiveBlockscoutClient(
+      session: makeSession(),
+      rateLimiter: RateLimiter(permitsPerSecond: 1000),
+      retryPolicy: HTTPRetryPolicy(),
+      sleeper: { _ in })
+    do {
+      _ = try await client.nativeTransactions(
+        chain: .ethereum, walletAddress: "0xabc", fromBlock: 0)
+      Issue.record("expected a thrown error")
+    } catch let error as WalletSyncError {
+      guard
+        case .network(let description) = error,
+        description == "retry exhausted (server error)"
+      else {
+        Issue.record(
+          "expected .network(retry exhausted (server error)), got \(error)")
+        return
+      }
+    }
+    #expect(script.calls == 3)
+  }
 }

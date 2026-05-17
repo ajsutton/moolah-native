@@ -242,8 +242,11 @@ struct LiveBlockscoutClient: Sendable {
       {
         throw HTTPRetrySignal(retryAfter: wait)
       }
-      if retryAfter == nil { throw HTTPRetrySignal(retryAfter: nil) }
-      throw WalletSyncError.network(underlyingDescription: "HTTP 503")
+      if let retryAfter {
+        throw WalletSyncError.rateLimited(
+          retryAfter: Date().addingTimeInterval(retryAfter))
+      }
+      throw HTTPRetrySignal(retryAfter: nil)
     case 500...599:
       throw HTTPRetrySignal(retryAfter: nil)
     default:
