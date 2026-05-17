@@ -16,8 +16,8 @@ struct TransactionImportOriginTests {
   func single() throws {
     let origin = sample("a")
     let value = TransactionImportOrigin.single(origin)
-    #expect(value.single == origin)
-    #expect(value.merged == nil)
+    #expect(value.singleOrigin == origin)
+    #expect(value.mergedOrigin == nil)
     #expect(
       try JSONDecoder().decode(
         TransactionImportOrigin.self, from: JSONEncoder().encode(value)) == value)
@@ -27,9 +27,9 @@ struct TransactionImportOriginTests {
   func merged() throws {
     let value = TransactionImportOrigin.merged(
       MergedImportOrigin(outgoing: sample("out"), incoming: sample("in")))
-    #expect(value.merged?.outgoing?.rawDescription == "out")
-    #expect(value.merged?.incoming?.rawDescription == "in")
-    #expect(value.single == nil)
+    #expect(value.mergedOrigin?.outgoing?.rawDescription == "out")
+    #expect(value.mergedOrigin?.incoming?.rawDescription == "in")
+    #expect(value.singleOrigin == nil)
     #expect(
       try JSONDecoder().decode(
         TransactionImportOrigin.self, from: JSONEncoder().encode(value)) == value)

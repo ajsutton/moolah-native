@@ -13,13 +13,15 @@ enum TransactionImportOrigin: Codable, Sendable, Hashable {
   case merged(MergedImportOrigin)
 
   /// The origin if this is a single-account import, else nil.
-  var single: ImportOrigin? {
+  /// (Named `singleOrigin`, not `single`, so it does not shadow the
+  /// `single` case at use sites.)
+  var singleOrigin: ImportOrigin? {
     if case let .single(value) = self { return value }
     return nil
   }
 
   /// The merged origins if this is a merged transfer, else nil.
-  var merged: MergedImportOrigin? {
+  var mergedOrigin: MergedImportOrigin? {
     if case let .merged(value) = self { return value }
     return nil
   }
