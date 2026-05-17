@@ -3,9 +3,9 @@ import Testing
 
 @testable import Moolah
 
-@Suite("Transaction.importOrigin widening")
+@Suite("Transaction importOrigin/transferSuggestion accessors")
 struct TransactionImportOriginAccessorTests {
-  @Test("transferSuggestion defaults nil; importOrigin is the sum type")
+  @Test("transferSuggestion defaults to nil and importOrigin round-trips a .single origin")
   func defaults() {
     let leg = TransactionLeg(
       accountId: UUID(), instrument: .defaultTestInstrument, quantity: -10,
