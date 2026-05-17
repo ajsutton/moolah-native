@@ -25,18 +25,24 @@ extension TransactionRow {
     // ImportOrigin denormalisation: every required field flips through
     // its own column so the optional struct rebuilds cleanly in the
     // computed `importOrigin` accessor below.
-    self.importOriginRawDescription = domain.importOrigin?.rawDescription
-    self.importOriginBankReference = domain.importOrigin?.bankReference
-    self.importOriginRawAmount = domain.importOrigin.map {
+    //
+    // Temporary single-only mapping: only the `.single` case projects to
+    // the eight columns; a `.merged` value writes nothing extra here and
+    // `transferSuggestion` is not persisted yet. Task 6 (next commit,
+    // same PR) replaces this with the full enum mapping plus new columns.
+    let singleOrigin = domain.importOrigin?.singleOrigin
+    self.importOriginRawDescription = singleOrigin?.rawDescription
+    self.importOriginBankReference = singleOrigin?.bankReference
+    self.importOriginRawAmount = singleOrigin.map {
       NSDecimalNumber(decimal: $0.rawAmount).stringValue
     }
-    self.importOriginRawBalance = domain.importOrigin?.rawBalance.map {
+    self.importOriginRawBalance = singleOrigin?.rawBalance.map {
       NSDecimalNumber(decimal: $0).stringValue
     }
-    self.importOriginImportedAt = domain.importOrigin?.importedAt
-    self.importOriginImportSessionId = domain.importOrigin?.importSessionId
-    self.importOriginSourceFilename = domain.importOrigin?.sourceFilename
-    self.importOriginParserIdentifier = domain.importOrigin?.parserIdentifier
+    self.importOriginImportedAt = singleOrigin?.importedAt
+    self.importOriginImportSessionId = singleOrigin?.importSessionId
+    self.importOriginSourceFilename = singleOrigin?.sourceFilename
+    self.importOriginParserIdentifier = singleOrigin?.parserIdentifier
     self.encodedSystemFields = nil
   }
 
@@ -82,6 +88,6 @@ extension TransactionRow {
       recurPeriod: try recurPeriod.map { try RecurPeriod.decoded(rawValue: $0) },
       recurEvery: recurEvery,
       legs: legs,
-      importOrigin: importOrigin)
+      importOrigin: importOrigin.map(TransactionImportOrigin.single))
   }
 }

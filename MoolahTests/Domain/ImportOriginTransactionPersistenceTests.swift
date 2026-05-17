@@ -33,13 +33,13 @@ struct ImportOriginTransactionPersistenceTests {
           quantity: dec("-12.34"), type: .expense,
           categoryId: nil, earmarkId: nil)
       ],
-      importOrigin: origin)
+      importOrigin: .single(origin))
     _ = try await backend.transactions.create(transaction)
 
     let page = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: accountId),
       page: 0, pageSize: 10)
-    #expect(page.transactions.first?.importOrigin == origin)
+    #expect(page.transactions.first?.importOrigin == .single(origin))
   }
 
   @Test("create + fetch of a transaction without importOrigin returns nil")
@@ -96,13 +96,13 @@ struct ImportOriginTransactionPersistenceTests {
       importSessionId: sessionId,
       sourceFilename: nil,
       parserIdentifier: "generic-bank")
-    transaction.importOrigin = origin
+    transaction.importOrigin = .single(origin)
     _ = try await backend.transactions.update(transaction)
 
     var page = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: accountId),
       page: 0, pageSize: 10)
-    #expect(page.transactions.first?.importOrigin == origin)
+    #expect(page.transactions.first?.importOrigin == .single(origin))
 
     transaction.importOrigin = nil
     _ = try await backend.transactions.update(transaction)

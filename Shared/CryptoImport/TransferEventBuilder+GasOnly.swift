@@ -80,7 +80,7 @@ extension TransferEventBuilder {
       let transaction = Transaction(
         date: signed.blockTimestamp,
         legs: [gasLeg],
-        importOrigin: context.importOrigin)
+        importOrigin: .single(context.importOrigin))
       results.append(
         BuiltTransaction(
           originAccountId: context.account.id, transaction: transaction))

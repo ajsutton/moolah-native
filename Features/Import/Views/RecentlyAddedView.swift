@@ -224,7 +224,7 @@ struct RecentlyAddedView: View {
     let haystack: [String] = [
       transaction.payee ?? "",
       transaction.notes ?? "",
-      transaction.importOrigin?.rawDescription ?? "",
+      transaction.importOrigin?.singleOrigin?.rawDescription ?? "",
     ]
     return haystack.contains { $0.lowercased().contains(query) }
   }
@@ -235,7 +235,7 @@ struct RecentlyAddedView: View {
   private func corpusFromViewModel() -> [String] {
     guard let viewModel else { return [] }
     return viewModel.sessions.flatMap { group in
-      group.transactions.compactMap { $0.importOrigin?.rawDescription }
+      group.transactions.compactMap { $0.importOrigin?.singleOrigin?.rawDescription }
     }
   }
 
@@ -274,7 +274,7 @@ private struct RecentlyAddedRow: View {
   var body: some View {
     HStack(spacing: 12) {
       VStack(alignment: .leading, spacing: 2) {
-        Text(transaction.payee ?? transaction.importOrigin?.rawDescription ?? "")
+        Text(transaction.payee ?? transaction.importOrigin?.singleOrigin?.rawDescription ?? "")
           .lineLimit(1)
         Text(transaction.date, format: .dateTime.day().month().year())
           .font(.caption)

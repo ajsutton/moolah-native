@@ -16,7 +16,7 @@ struct RecentlyAddedViewModelTests {
     legs: [TransactionLeg] = [],
     date: Date = Date()
   ) -> Transaction {
-    Transaction(date: date, legs: legs, importOrigin: origin)
+    Transaction(date: date, legs: legs, importOrigin: origin.map(TransactionImportOrigin.single))
   }
 
   private func origin(
@@ -115,7 +115,7 @@ struct RecentlyAddedViewModelTests {
             accountId: accountId, instrument: .AUD, quantity: amount, type: .expense,
             categoryId: UUID(), earmarkId: nil)
         ],
-        importOrigin: categorisedOrigin)
+        importOrigin: .single(categorisedOrigin))
     }
     let uncategorised = [-3, -4, -2].map { (amount: Decimal) in
       Transaction(
@@ -125,7 +125,7 @@ struct RecentlyAddedViewModelTests {
             accountId: accountId, instrument: .AUD, quantity: amount, type: .expense,
             categoryId: nil, earmarkId: nil)
         ],
-        importOrigin: uncategorisedOrigin)
+        importOrigin: .single(uncategorisedOrigin))
     }
     let outside = Transaction(
       date: now.addingTimeInterval(-86_400 * 2),
@@ -134,7 +134,7 @@ struct RecentlyAddedViewModelTests {
           accountId: accountId, instrument: .AUD, quantity: -1, type: .expense,
           categoryId: nil, earmarkId: nil)
       ],
-      importOrigin: outsideOrigin)
+      importOrigin: .single(outsideOrigin))
     return categorised + uncategorised + [outside]
   }
 }

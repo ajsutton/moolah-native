@@ -37,15 +37,16 @@ struct CSVDeduplicatorTests {
           categoryId: nil,
           earmarkId: nil)
       ],
-      importOrigin: ImportOrigin(
-        rawDescription: description,
-        bankReference: bankRef,
-        rawAmount: amount,
-        rawBalance: balance,
-        importedAt: Date(),
-        importSessionId: UUID(),
-        sourceFilename: nil,
-        parserIdentifier: "generic-bank"))
+      importOrigin: .single(
+        ImportOrigin(
+          rawDescription: description,
+          bankReference: bankRef,
+          rawAmount: amount,
+          rawBalance: balance,
+          importedAt: Date(),
+          importSessionId: UUID(),
+          sourceFilename: nil,
+          parserIdentifier: "generic-bank")))
   }
 
   private func candidate(

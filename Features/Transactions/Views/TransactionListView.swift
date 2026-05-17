@@ -212,7 +212,7 @@ struct TransactionListView: View {
           createRuleFromTransaction: $createRuleFromTransaction,
           corpusProvider: {
             transactionStore.transactions.compactMap {
-              $0.transaction.importOrigin?.rawDescription
+              $0.transaction.importOrigin?.singleOrigin?.rawDescription
             }
           },
           forcedAccountId: filter.accountId,

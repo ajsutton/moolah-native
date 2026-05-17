@@ -251,7 +251,7 @@ extension TransactionListView {
     // Only offer "Create rule from this…" for CSV-imported rows —
     // ImportOrigin is how we extract distinguishing tokens, and
     // manually-entered transactions don't have one.
-    if transaction.importOrigin != nil {
+    if transaction.importOrigin?.singleOrigin != nil {
       Button("Create rule from this\u{2026}", systemImage: "plus.rectangle.on.folder") {
         createRuleFromTransaction = transaction
       }
