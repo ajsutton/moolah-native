@@ -11,9 +11,18 @@ struct FixedCryptoPriceClient: CryptoPriceClient, Sendable {
   /// If true, throws on any fetch call (simulates network failure).
   let shouldFail: Bool
 
-  init(prices: [String: [String: Decimal]] = [:], shouldFail: Bool = false) {
+  /// Provider identity this stub reports — lets attribution tests order
+  /// stubs so a known provider is last in the fallback chain.
+  let syncProvider: SyncProvider
+
+  init(
+    prices: [String: [String: Decimal]] = [:],
+    shouldFail: Bool = false,
+    syncProvider: SyncProvider = .coinGecko
+  ) {
     self.prices = prices
     self.shouldFail = shouldFail
+    self.syncProvider = syncProvider
   }
 
   func dailyPrice(for mapping: CryptoProviderMapping, on date: Date) async throws -> Decimal {

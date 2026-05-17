@@ -20,6 +20,19 @@ import Testing
 struct SyncedAccountStoreGlobalErrorTests {
   nonisolated static let pinnedNow = Date(timeIntervalSince1970: 1_700_000_000)
 
+  /// Crypto-path errors injected into the Alchemy stub must carry
+  /// `provider: .alchemy` — that is exactly the shape a real failure
+  /// reaches `updateGlobalError` with, because `LiveAlchemyClient` stamps
+  /// every error at its client boundary (`attributingErrors(to: .alchemy)`).
+  /// Injecting the *unattributed* factory value here would let a
+  /// whole-`WalletSyncError`-value `switch` in the global-error dispatch
+  /// pass these tests while silently failing in production; the attributed
+  /// form makes the tests fail if anyone reverts the `.kind` match.
+  nonisolated static let alchemyMissingApiKey = WalletSyncError(
+    provider: .alchemy, kind: .missingApiKey)
+  nonisolated static let alchemyInvalidApiKey = WalletSyncError(
+    provider: .alchemy, kind: .invalidApiKey)
+
   private struct Fixture {
     let store: SyncedAccountStore
     let backend: CloudKitBackend
@@ -106,7 +119,7 @@ struct SyncedAccountStoreGlobalErrorTests {
     await fixture.store.loadInitialState()
     let address = try #require(account.walletAddress)
     fixture.alchemy.setTransfersResponse(
-      .failure(WalletSyncError.invalidApiKey), for: address)
+      .failure(Self.alchemyInvalidApiKey), for: address)
 
     await fixture.store.syncStaleAccounts()
 
@@ -124,7 +137,7 @@ struct SyncedAccountStoreGlobalErrorTests {
     await fixture.store.loadInitialState()
     let address = try #require(account.walletAddress)
     fixture.alchemy.setTransfersResponse(
-      .failure(WalletSyncError.missingApiKey), for: address)
+      .failure(Self.alchemyMissingApiKey), for: address)
 
     await fixture.store.syncStaleAccounts()
 
@@ -148,9 +161,9 @@ struct SyncedAccountStoreGlobalErrorTests {
     let invalidAddress = try #require(invalidAccount.walletAddress)
     let missingAddress = try #require(missingAccount.walletAddress)
     fixture.alchemy.setTransfersResponse(
-      .failure(WalletSyncError.invalidApiKey), for: invalidAddress)
+      .failure(Self.alchemyInvalidApiKey), for: invalidAddress)
     fixture.alchemy.setTransfersResponse(
-      .failure(WalletSyncError.missingApiKey), for: missingAddress)
+      .failure(Self.alchemyMissingApiKey), for: missingAddress)
 
     await fixture.store.syncStaleAccounts()
 
@@ -187,7 +200,7 @@ struct SyncedAccountStoreGlobalErrorTests {
     await fixture.store.loadInitialState()
     let address = try #require(account.walletAddress)
     fixture.alchemy.setTransfersResponse(
-      .failure(WalletSyncError.invalidApiKey), for: address)
+      .failure(Self.alchemyInvalidApiKey), for: address)
 
     await fixture.store.syncStaleAccounts()
     #expect(fixture.store.globalError == .invalidApiKey)
@@ -250,7 +263,8 @@ struct SyncedAccountStoreGlobalErrorTests {
     #expect(fixture.store.globalError == nil)
     let state = try #require(
       try await fixture.backend.walletSyncState.load(accountId: exchange.id))
-    #expect(state.lastError == .invalidApiKey)
+    #expect(state.lastError?.kind == .invalidApiKey)
+    #expect(state.lastError?.provider == .coinstash)
   }
 
   @Test("Crypto .invalidApiKey still sets globalError even alongside a failing exchange")
@@ -270,7 +284,7 @@ struct SyncedAccountStoreGlobalErrorTests {
     await fixture.store.loadInitialState()
     let address = try #require(crypto.walletAddress)
     fixture.alchemy.setTransfersResponse(
-      .failure(WalletSyncError.invalidApiKey), for: address)
+      .failure(Self.alchemyInvalidApiKey), for: address)
 
     await fixture.store.syncStaleAccounts()
 

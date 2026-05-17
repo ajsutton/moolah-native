@@ -115,6 +115,8 @@ struct ConvertCacheInvalidationTests {
 /// `actor` so concurrent reads / writes from the conversion-service
 /// pipeline stay race-free without any `@unchecked Sendable` waiver.
 actor ToggleableCryptoPriceClient: CryptoPriceClient {
+  nonisolated var syncProvider: SyncProvider { .coinGecko }
+
   private var prices: [String: [String: Decimal]] = [:]
   private var shouldFail: Bool = false
 

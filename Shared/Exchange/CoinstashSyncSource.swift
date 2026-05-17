@@ -49,20 +49,23 @@ struct CoinstashSyncSource: AccountSyncSource, Sendable {
     } catch {
       Self.logger.error(
         "Keychain read failed for \(account.id, privacy: .public): \(error, privacy: .public)")
-      throw WalletSyncError.network(
-        underlyingDescription: "Keychain read failed: \(error)")
+      throw WalletSyncError(
+        provider: .coinstash,
+        kind: .network(underlyingDescription: "Keychain read failed: \(error)"))
     }
     guard let token, !token.isEmpty else {
-      throw WalletSyncError.missingApiKey
+      throw WalletSyncError(provider: .coinstash, kind: .missingApiKey)
     }
     do {
       let imported = try await client.fetchTransactions(token: token)
       let metadata = metadataResolverFactory(token)
       return try await engine.build(account: account, imported: imported, metadata: metadata)
     } catch ExchangeClientError.unauthorized {
-      throw WalletSyncError.invalidApiKey
+      throw WalletSyncError(provider: .coinstash, kind: .invalidApiKey)
     } catch let error as ExchangeClientError {
-      throw WalletSyncError.network(underlyingDescription: String(describing: error))
+      throw WalletSyncError(
+        provider: .coinstash,
+        kind: .network(underlyingDescription: String(describing: error)))
     }
   }
 }

@@ -24,6 +24,10 @@ extension CryptoPriceError: LocalizedError {
 /// Implementations: CryptoCompareClient (default), BinanceClient (fallback), CoinGeckoClient (premium).
 /// All prices are denominated in USD.
 protocol CryptoPriceClient: Sendable {
+  /// Which provider this client represents, used to attribute a
+  /// total-price-failure error to the last provider attempted.
+  var syncProvider: SyncProvider { get }
+
   /// Fetch the daily closing price for a token in USD on a specific date.
   func dailyPrice(for mapping: CryptoProviderMapping, on date: Date) async throws -> Decimal
 

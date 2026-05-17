@@ -161,7 +161,7 @@ struct LiveBlockscoutClient: Sendable {
     }
     do {
       try AlchemyResponseValidator.validate(response: response, stage: stage, logger: logger)
-    } catch WalletSyncError.invalidApiKey {
+    } catch let error as WalletSyncError where error.kind == .invalidApiKey {
       logger.error(
         "Blockscout \(stage, privacy: .public): HTTP 401/403 (public API expects no auth)")
       throw WalletSyncError.network(underlyingDescription: "HTTP 401/403")
@@ -174,32 +174,36 @@ extension LiveBlockscoutClient: BlockExplorerClient {
   func nativeTransactions(
     chain: ChainConfig, walletAddress: String, fromBlock: UInt64
   ) async throws -> [BlockscoutTransaction] {
-    try await paginate(
-      chain: chain,
-      walletAddress: walletAddress,
-      fromBlock: fromBlock,
-      config: PaginateConfig(
-        pathSuffix: "transactions",
-        stage: "blockscout.transactions",
-        decode: { try JSONDecoder().decode(BlockscoutTransactionsPage.self, from: $0) },
-        items: { $0.items },
-        cursor: { $0.nextPageParams },
-        blockNumber: { $0.blockNumber }))
+    try await attributingErrors(to: .blockExplorer) {
+      try await paginate(
+        chain: chain,
+        walletAddress: walletAddress,
+        fromBlock: fromBlock,
+        config: PaginateConfig(
+          pathSuffix: "transactions",
+          stage: "blockscout.transactions",
+          decode: { try JSONDecoder().decode(BlockscoutTransactionsPage.self, from: $0) },
+          items: { $0.items },
+          cursor: { $0.nextPageParams },
+          blockNumber: { $0.blockNumber }))
+    }
   }
 
   func internalTransactions(
     chain: ChainConfig, walletAddress: String, fromBlock: UInt64
   ) async throws -> [BlockscoutInternalTx] {
-    try await paginate(
-      chain: chain,
-      walletAddress: walletAddress,
-      fromBlock: fromBlock,
-      config: PaginateConfig(
-        pathSuffix: "internal-transactions",
-        stage: "blockscout.internalTransactions",
-        decode: { try JSONDecoder().decode(BlockscoutInternalTxPage.self, from: $0) },
-        items: { $0.items },
-        cursor: { $0.nextPageParams },
-        blockNumber: { $0.blockNumber }))
+    try await attributingErrors(to: .blockExplorer) {
+      try await paginate(
+        chain: chain,
+        walletAddress: walletAddress,
+        fromBlock: fromBlock,
+        config: PaginateConfig(
+          pathSuffix: "internal-transactions",
+          stage: "blockscout.internalTransactions",
+          decode: { try JSONDecoder().decode(BlockscoutInternalTxPage.self, from: $0) },
+          items: { $0.items },
+          cursor: { $0.nextPageParams },
+          blockNumber: { $0.blockNumber }))
+    }
   }
 }

@@ -2,6 +2,8 @@
 import Foundation
 
 struct CoinGeckoClient: CryptoPriceClient, Sendable {
+  var syncProvider: SyncProvider { .coinGecko }
+
   /// Pro-tier base URL. Used whenever the user has supplied a CoinGecko
   /// Pro API key. Authenticated via the `x_cg_pro_api_key` query item.
   private static let proBaseURL =

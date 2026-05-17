@@ -43,9 +43,13 @@ struct LiveAlchemyClientKeyProviderTests {
       })
     // Initial state: provider returns nil → first call short-circuits
     // with `.missingApiKey` before any network work.
-    await #expect(throws: WalletSyncError.missingApiKey) {
+    do {
       _ = try await client.getAssetTransfers(
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0)
+      Issue.record("Expected WalletSyncError.missingApiKey")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .missingApiKey)
+      #expect(error.provider == .alchemy)
     }
     #expect(recorder.urls.isEmpty, "Pre-flight should not touch the network")
 
@@ -79,9 +83,13 @@ struct LiveAlchemyClientKeyProviderTests {
 
     // Simulate a settings flow that clears the keychain.
     key.set(nil)
-    await #expect(throws: WalletSyncError.missingApiKey) {
+    do {
       _ = try await client.getAssetTransfers(
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0)
+      Issue.record("Expected WalletSyncError.missingApiKey")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .missingApiKey)
+      #expect(error.provider == .alchemy)
     }
   }
 }

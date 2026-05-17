@@ -12,10 +12,14 @@ struct LiveAlchemyClientErrorTests {
       let response = AlchemyTestSupport.response(for: request, statusCode: 401)
       return (response, Data())
     }
-    await #expect(throws: WalletSyncError.invalidApiKey) {
+    do {
       _ = try await client.getAssetTransfers(
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0
       )
+      Issue.record("Expected WalletSyncError.invalidApiKey")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .invalidApiKey)
+      #expect(error.provider == .alchemy)
     }
   }
 
@@ -25,10 +29,14 @@ struct LiveAlchemyClientErrorTests {
       let response = AlchemyTestSupport.response(for: request, statusCode: 403)
       return (response, Data())
     }
-    await #expect(throws: WalletSyncError.invalidApiKey) {
+    do {
       _ = try await client.getAssetTransfers(
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0
       )
+      Issue.record("Expected WalletSyncError.invalidApiKey")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .invalidApiKey)
+      #expect(error.provider == .alchemy)
     }
   }
 
@@ -47,7 +55,11 @@ struct LiveAlchemyClientErrorTests {
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0
       )
       Issue.record("Expected WalletSyncError.rateLimited")
-    } catch let WalletSyncError.rateLimited(retryAfter) {
+    } catch let error as WalletSyncError {
+      guard case .rateLimited(let retryAfter) = error.kind else {
+        Issue.record("Expected .rateLimited kind, got \(error.kind)")
+        return
+      }
       let date = try #require(retryAfter)
       #expect(date.timeIntervalSinceNow > 5)
       #expect(date.timeIntervalSinceNow < 15)
@@ -65,8 +77,9 @@ struct LiveAlchemyClientErrorTests {
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0
       )
       Issue.record("Expected WalletSyncError.rateLimited")
-    } catch let WalletSyncError.rateLimited(retryAfter) {
-      #expect(retryAfter == nil)
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .rateLimited(retryAfter: nil))
+      #expect(error.provider == .alchemy)
     }
   }
 
@@ -81,7 +94,11 @@ struct LiveAlchemyClientErrorTests {
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0
       )
       Issue.record("Expected WalletSyncError.network")
-    } catch let WalletSyncError.network(description) {
+    } catch let error as WalletSyncError {
+      guard case .network(let description) = error.kind else {
+        Issue.record("Expected .network kind, got \(error.kind)")
+        return
+      }
       #expect(description.contains("503"))
     }
   }
@@ -96,7 +113,11 @@ struct LiveAlchemyClientErrorTests {
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0
       )
       Issue.record("Expected WalletSyncError.network")
-    } catch let WalletSyncError.network(description) {
+    } catch let error as WalletSyncError {
+      guard case .network(let description) = error.kind else {
+        Issue.record("Expected .network kind, got \(error.kind)")
+        return
+      }
       #expect(description.isEmpty == false)
     }
   }
@@ -107,10 +128,14 @@ struct LiveAlchemyClientErrorTests {
       let response = AlchemyTestSupport.okResponse(for: request)
       return (response, Data("not json".utf8))
     }
-    await #expect(throws: WalletSyncError.providerMalformedResponse(stage: "getAssetTransfers")) {
+    do {
       _ = try await client.getAssetTransfers(
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0
       )
+      Issue.record("Expected WalletSyncError.providerMalformedResponse")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .providerMalformedResponse(stage: "getAssetTransfers"))
+      #expect(error.provider == .alchemy)
     }
   }
 
@@ -134,10 +159,14 @@ struct LiveAlchemyClientErrorTests {
       let response = AlchemyTestSupport.response(for: request, statusCode: 401)
       return (response, Data())
     }
-    await #expect(throws: WalletSyncError.missingApiKey) {
+    do {
       _ = try await client.getAssetTransfers(
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0
       )
+      Issue.record("Expected WalletSyncError.missingApiKey")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .missingApiKey)
+      #expect(error.provider == .alchemy)
     }
     #expect(touched.wasTouched == false)
   }
@@ -150,10 +179,14 @@ struct LiveAlchemyClientErrorTests {
       let response = AlchemyTestSupport.response(for: request, statusCode: 401)
       return (response, Data())
     }
-    await #expect(throws: WalletSyncError.missingApiKey) {
+    do {
       _ = try await client.getTokenMetadata(
         chain: .ethereum, contractAddress: "0xabc"
       )
+      Issue.record("Expected WalletSyncError.missingApiKey")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .missingApiKey)
+      #expect(error.provider == .alchemy)
     }
     #expect(touched.wasTouched == false)
   }
@@ -166,10 +199,14 @@ struct LiveAlchemyClientErrorTests {
       let response = AlchemyTestSupport.response(for: request, statusCode: 401)
       return (response, Data())
     }
-    await #expect(throws: WalletSyncError.missingApiKey) {
+    do {
       _ = try await client.getTransactionReceipt(
         chain: .ethereum, hash: "0xdead"
       )
+      Issue.record("Expected WalletSyncError.missingApiKey")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .missingApiKey)
+      #expect(error.provider == .alchemy)
     }
     #expect(touched.wasTouched == false)
   }

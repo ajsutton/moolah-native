@@ -88,7 +88,7 @@ private struct AlchemyTransferQuery: Sendable {
 /// Privacy classifications follow the design table:
 /// `chainId` and block numbers → `.public`; wallet addresses and contract
 /// addresses → `.private`; the API key is never logged.
-struct LiveAlchemyClient: AlchemyClient, Sendable {
+struct LiveAlchemyClient: Sendable {
   private let session: URLSession
   /// Closure that yields the current Alchemy API key, or `nil` when the
   /// keychain has none. Resolved per-request inside each public method
@@ -120,71 +120,7 @@ struct LiveAlchemyClient: AlchemyClient, Sendable {
     self.logger = Logger(subsystem: "com.moolah.app", category: "AlchemyClient")
   }
 
-  func getAssetTransfers(
-    chain: ChainConfig,
-    walletAddress: String,
-    fromBlock: UInt64
-  ) async throws -> [AlchemyTransfer] {
-    let apiKey = try resolveApiKey()
-    let signpostID = OSSignpostID(log: Signposts.cryptoSync)
-    os_signpost(
-      .begin,
-      log: Signposts.cryptoSync,
-      name: "alchemy.getAssetTransfers",
-      signpostID: signpostID,
-      "chain %{public}d",
-      chain.chainId)
-    defer {
-      os_signpost(
-        .end,
-        log: Signposts.cryptoSync,
-        name: "alchemy.getAssetTransfers",
-        signpostID: signpostID)
-    }
-    var transfers: [AlchemyTransfer] = []
-    for isFromAddress in [true, false] {
-      transfers.append(
-        contentsOf: try await fetchTransfers(
-          AlchemyTransferQuery(
-            chain: chain,
-            address: walletAddress,
-            isFromAddress: isFromAddress,
-            fromBlock: fromBlock,
-            apiKey: apiKey)))
-    }
-    return transfers
-  }
-
-  func getTokenMetadata(
-    chain: ChainConfig,
-    contractAddress: String
-  ) async throws -> AlchemyTokenMetadata {
-    let apiKey = try resolveApiKey()
-    try await rateLimiter.acquire()
-    let body = AlchemyJSONRPCRequest<AlchemyJSONRPCParams>(
-      method: "alchemy_getTokenMetadata",
-      params: .tokenMetadata(contractAddress: contractAddress)
-    )
-    let request = try buildRequest(chain: chain, body: body, apiKey: apiKey)
-    logger.debug(
-      "Alchemy token metadata: chain \(chain.chainId, privacy: .public) contract \(contractAddress, privacy: .private)"
-    )
-    let data = try await send(request: request, stage: "getTokenMetadata")
-    do {
-      let envelope = try JSONDecoder().decode(
-        AlchemyJSONRPCResponse<AlchemyTokenMetadata>.self,
-        from: data
-      )
-      return envelope.result
-    } catch {
-      logger.error(
-        "Alchemy token metadata decode failed for chain \(chain.chainId, privacy: .public): \(error.localizedDescription, privacy: .public)"
-      )
-      throw WalletSyncError.providerMalformedResponse(stage: "getTokenMetadata")
-    }
-  }
-
-  func getTransactionReceipt(
+  private func fetchReceipt(
     chain: ChainConfig,
     hash: String
   ) async throws -> AlchemyTransactionReceipt {
@@ -261,12 +197,9 @@ struct LiveAlchemyClient: AlchemyClient, Sendable {
     return key
   }
 
-  /// Fetches every transfer for one direction. Alchemy caps
-  /// `alchemy_getAssetTransfers` at `maxCount` (1000) transfers per
-  /// response, oldest-block-first, and returns a `pageKey` when more
-  /// remain. This follows the cursor until it is absent — otherwise a
-  /// wallet with heavy (often spam-airdrop) history truncates at the
-  /// oldest 1000 per direction and the balance is wrong.
+  /// Follows Alchemy's cursor until all transfers for one direction have been
+  /// collected. Truncating at the first page would break balance for wallets
+  /// with heavy history.
   private func fetchTransfers(
     _ query: AlchemyTransferQuery
   ) async throws -> [AlchemyTransfer] {
@@ -288,9 +221,7 @@ struct LiveAlchemyClient: AlchemyClient, Sendable {
     return collected
   }
 
-  /// One rate-limited `alchemy_getAssetTransfers` round-trip for a
-  /// single direction and page. `pageKey` is `nil` for the first page;
-  /// the caller threads back `result.pageKey` for subsequent pages.
+  /// One rate-limited round-trip for a single direction and page.
   private func fetchTransferPage(
     _ query: AlchemyTransferQuery,
     pageKey: String?
@@ -383,5 +314,86 @@ struct LiveAlchemyClient: AlchemyClient, Sendable {
   private func validate(response: URLResponse, stage: String) throws {
     try AlchemyResponseValidator.validate(
       response: response, stage: stage, logger: logger)
+  }
+}
+
+// MARK: - AlchemyClient
+
+extension LiveAlchemyClient: AlchemyClient {
+  func getAssetTransfers(
+    chain: ChainConfig,
+    walletAddress: String,
+    fromBlock: UInt64
+  ) async throws -> [AlchemyTransfer] {
+    try await attributingErrors(to: .alchemy) {
+      let apiKey = try resolveApiKey()
+      let signpostID = OSSignpostID(log: Signposts.cryptoSync)
+      os_signpost(
+        .begin,
+        log: Signposts.cryptoSync,
+        name: "alchemy.getAssetTransfers",
+        signpostID: signpostID,
+        "chain %{public}d",
+        chain.chainId)
+      defer {
+        os_signpost(
+          .end,
+          log: Signposts.cryptoSync,
+          name: "alchemy.getAssetTransfers",
+          signpostID: signpostID)
+      }
+      var transfers: [AlchemyTransfer] = []
+      for isFromAddress in [true, false] {
+        transfers.append(
+          contentsOf: try await fetchTransfers(
+            AlchemyTransferQuery(
+              chain: chain,
+              address: walletAddress,
+              isFromAddress: isFromAddress,
+              fromBlock: fromBlock,
+              apiKey: apiKey)))
+      }
+      return transfers
+    }
+  }
+
+  func getTokenMetadata(
+    chain: ChainConfig,
+    contractAddress: String
+  ) async throws -> AlchemyTokenMetadata {
+    try await attributingErrors(to: .alchemy) {
+      let apiKey = try resolveApiKey()
+      try await rateLimiter.acquire()
+      let body = AlchemyJSONRPCRequest<AlchemyJSONRPCParams>(
+        method: "alchemy_getTokenMetadata",
+        params: .tokenMetadata(contractAddress: contractAddress)
+      )
+      let request = try buildRequest(chain: chain, body: body, apiKey: apiKey)
+      logger.debug(
+        "Alchemy token metadata: chain \(chain.chainId, privacy: .public) contract \(contractAddress, privacy: .private)"
+      )
+      let data = try await send(request: request, stage: "getTokenMetadata")
+      do {
+        let envelope = try JSONDecoder().decode(
+          AlchemyJSONRPCResponse<AlchemyTokenMetadata>.self,
+          from: data
+        )
+        return envelope.result
+      } catch {
+        logger.error(
+          "Alchemy token metadata decode failed for chain \(chain.chainId, privacy: .public): \(error.localizedDescription, privacy: .public)"
+        )
+        throw WalletSyncError.providerMalformedResponse(stage: "getTokenMetadata")
+      }
+    }
+  }
+
+  func getTransactionReceipt(
+    chain: ChainConfig,
+    hash: String
+  ) async throws -> AlchemyTransactionReceipt {
+    try await attributingErrors(to: .alchemy) {
+      try await fetchReceipt(chain: chain, hash: hash)
+    }
   }
 }

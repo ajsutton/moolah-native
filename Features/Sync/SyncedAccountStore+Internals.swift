@@ -235,7 +235,13 @@ extension SyncedAccountStore {
     var sawInvalid = false
     for result in results {
       if case let .failed(_, error, accountType) = result, accountType == .crypto {
-        switch error {
+        // Match on `.kind`, not the whole `WalletSyncError`: production
+        // errors are stamped with a `provider` at the client boundary
+        // (e.g. `attributingErrors(to: .alchemy)`), so a whole-value
+        // expression-pattern match against the unattributed
+        // `WalletSyncError.missingApiKey` factory would never fire on a
+        // real Alchemy failure and the global banner would silently break.
+        switch error.kind {
         case .missingApiKey:
           sawMissing = true
         case .invalidApiKey:

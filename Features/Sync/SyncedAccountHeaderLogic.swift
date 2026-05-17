@@ -85,48 +85,99 @@ enum SyncedAccountHeaderLogic {
   /// User-facing string for a `WalletSyncError` persisted on a per-
   /// account `WalletSyncState`. Returns `nil` when the state has no
   /// error so callers can skip rendering the caption row entirely.
-  static func errorCaption(for state: WalletSyncState?, account: Account) -> String? {
+  static func errorCaption(
+    for state: WalletSyncState?, account: Account, now: Date = Date()
+  ) -> String? {
     guard let error = state?.lastError else { return nil }
-    return errorCaption(for: error, account: account)
+    return errorCaption(for: error, account: account, now: now)
   }
 
   /// Branchless variant on the raw error so unit tests can pin the
   /// message for each case without constructing a `WalletSyncState`.
   ///
-  /// The two credential-key cases are account-type-aware: a crypto
-  /// account keeps the byte-verbatim Alchemy strings; an exchange
-  /// account interpolates its provider's display name (never the raw
-  /// enum). The generic (network / rate-limit / malformed) captions are
-  /// account-neutral and unchanged.
-  static func errorCaption(for error: WalletSyncError, account: Account) -> String {
-    switch error {
+  /// When the error is attributed (`error.provider != nil`) the caption
+  /// names the failing provider so the user knows which integration broke.
+  /// When it is unattributed (`provider == nil` — legacy persisted rows or
+  /// errors not tied to one provider) the caption falls back to the
+  /// byte-identical pre-attribution strings so the `WalletAccountHeaderLogic`
+  /// contract and its characterisation tests keep passing. `.missingApiKey`
+  /// stays account-type-driven even when attributed: the actionable "add a
+  /// key" instruction gains nothing from a provider prefix.
+  static func errorCaption(
+    for error: WalletSyncError, account: Account, now: Date = Date()
+  ) -> String {
+    switch error.kind {
     case .missingApiKey:
-      switch account.type {
-      case .exchange:
-        return "Add your read-only API token to sync."
-      case .crypto, .bank, .creditCard, .asset, .investment:
-        return "Add an Alchemy API key to enable sync."
-      }
+      return missingApiKeyCaption(account: account)
     case .invalidApiKey:
-      switch account.type {
-      case .exchange:
-        let provider = account.exchangeProvider?.displayName ?? "The exchange"
-        return "\(provider) rejected the API token."
-      case .crypto, .bank, .creditCard, .asset, .investment:
-        return "Alchemy rejected the API key."
-      }
+      return invalidApiKeyCaption(provider: error.provider, account: account)
     case .rateLimited(let retryAfter):
-      if let retryAfter {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return
-          "Rate-limited. Retry \(formatter.localizedString(for: retryAfter, relativeTo: Date()))."
-      }
-      return "Rate-limited. Retry shortly."
+      return rateLimitedCaption(provider: error.provider, retryAfter: retryAfter, now: now)
     case .network(let underlying):
-      return "Network error: \(underlying)"
+      return networkCaption(provider: error.provider, underlying: underlying)
     case .providerMalformedResponse(let stage):
-      return "Provider returned a malformed response (\(stage))."
+      return malformedCaption(provider: error.provider, stage: stage)
     }
+  }
+}
+
+extension SyncedAccountHeaderLogic {
+  private static func missingApiKeyCaption(account: Account) -> String {
+    switch account.type {
+    case .exchange:
+      return "Add your read-only API token to sync."
+    case .crypto, .bank, .creditCard, .asset, .investment:
+      return "Add an Alchemy API key to enable sync."
+    }
+  }
+
+  /// Attributed → provider name; unattributed → account-type legacy wording.
+  private static func invalidApiKeyCaption(
+    provider: SyncProvider?, account: Account
+  ) -> String {
+    if let provider {
+      return "\(provider.displayName) rejected the API token."
+    }
+    switch account.type {
+    case .exchange:
+      let provider = account.exchangeProvider?.displayName ?? "The exchange"
+      return "\(provider) rejected the API token."
+    case .crypto, .bank, .creditCard, .asset, .investment:
+      return "Alchemy rejected the API key."
+    }
+  }
+
+  private static func rateLimitedCaption(
+    provider: SyncProvider?, retryAfter: Date?, now: Date
+  ) -> String {
+    let prefix: String
+    if let provider {
+      prefix = "\(provider.displayName) rate-limited"
+    } else {
+      prefix = "Rate-limited"
+    }
+    guard let retryAfter else { return "\(prefix). Retry shortly." }
+    let formatter = RelativeDateTimeFormatter()
+    formatter.unitsStyle = .short
+    return
+      "\(prefix). Retry \(formatter.localizedString(for: retryAfter, relativeTo: now))."
+  }
+
+  private static func networkCaption(
+    provider: SyncProvider?, underlying: String
+  ) -> String {
+    if let provider {
+      return "\(provider.displayName) network error: \(underlying)."
+    }
+    return "Network error: \(underlying)"
+  }
+
+  private static func malformedCaption(
+    provider: SyncProvider?, stage: String
+  ) -> String {
+    if let provider {
+      return "\(provider.displayName) returned a malformed response (\(stage))."
+    }
+    return "Provider returned a malformed response (\(stage))."
   }
 }

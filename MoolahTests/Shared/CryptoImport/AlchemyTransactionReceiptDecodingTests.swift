@@ -70,10 +70,13 @@ struct AlchemyTransactionReceiptDecodingTests {
     let client = AlchemyTestSupport.makeClient { request in
       (AlchemyTestSupport.okResponse(for: request), payload)
     }
-    await #expect(throws: WalletSyncError.providerMalformedResponse(stage: "getTransactionReceipt"))
-    {
+    do {
       _ = try await client.getTransactionReceipt(
         chain: .ethereum, hash: "0xnope")
+      Issue.record("Expected WalletSyncError.providerMalformedResponse")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .providerMalformedResponse(stage: "getTransactionReceipt"))
+      #expect(error.provider == .alchemy)
     }
   }
 
@@ -96,10 +99,13 @@ struct AlchemyTransactionReceiptDecodingTests {
     let client = AlchemyTestSupport.makeClient { request in
       (AlchemyTestSupport.okResponse(for: request), payload)
     }
-    await #expect(throws: WalletSyncError.providerMalformedResponse(stage: "getTransactionReceipt"))
-    {
+    do {
       _ = try await client.getTransactionReceipt(
         chain: .ethereum, hash: "0xnope")
+      Issue.record("Expected WalletSyncError.providerMalformedResponse")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .providerMalformedResponse(stage: "getTransactionReceipt"))
+      #expect(error.provider == .alchemy)
     }
   }
 
@@ -120,10 +126,13 @@ struct AlchemyTransactionReceiptDecodingTests {
     let client = AlchemyTestSupport.makeClient { request in
       (AlchemyTestSupport.okResponse(for: request), payload)
     }
-    await #expect(throws: WalletSyncError.providerMalformedResponse(stage: "getTransactionReceipt"))
-    {
+    do {
       _ = try await client.getTransactionReceipt(
         chain: .ethereum, hash: "0xnope")
+      Issue.record("Expected WalletSyncError.providerMalformedResponse")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .providerMalformedResponse(stage: "getTransactionReceipt"))
+      #expect(error.provider == .alchemy)
     }
   }
 
@@ -149,10 +158,13 @@ struct AlchemyTransactionReceiptDecodingTests {
     let client = AlchemyTestSupport.makeClient { request in
       (AlchemyTestSupport.okResponse(for: request), payload)
     }
-    await #expect(throws: WalletSyncError.providerMalformedResponse(stage: "getTransactionReceipt"))
-    {
+    do {
       _ = try await client.getTransactionReceipt(
         chain: .optimism, hash: "0xnope")
+      Issue.record("Expected WalletSyncError.providerMalformedResponse")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .providerMalformedResponse(stage: "getTransactionReceipt"))
+      #expect(error.provider == .alchemy)
     }
   }
 
@@ -204,10 +216,13 @@ struct AlchemyTransactionReceiptDecodingTests {
     let client = AlchemyTestSupport.makeClient { request in
       (AlchemyTestSupport.okResponse(for: request), payload)
     }
-    await #expect(throws: WalletSyncError.providerMalformedResponse(stage: "getTransactionReceipt"))
-    {
+    do {
       _ = try await client.getTransactionReceipt(
         chain: .ethereum, hash: "0xnope")
+      Issue.record("Expected WalletSyncError.providerMalformedResponse")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .providerMalformedResponse(stage: "getTransactionReceipt"))
+      #expect(error.provider == .alchemy)
     }
   }
 

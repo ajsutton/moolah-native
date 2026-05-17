@@ -8,6 +8,11 @@ import Testing
 /// `.coinstash` exchange accounts; a missing token maps to the
 /// missing-credential error; an HTTP 401 maps to the invalid-credential
 /// error — so `SyncedAccountStore` stays provider-agnostic.
+///
+/// Error-mapping tests assert both `error.provider` and `error.kind` in a
+/// single test because the `(provider, kind)` pair is the error's single
+/// observable classification contract — splitting them would double tests for
+/// no added value.
 struct CoinstashSyncSourceTests {
   private let eth = Instrument.crypto(
     chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
@@ -53,10 +58,15 @@ struct CoinstashSyncSourceTests {
     let exchange = Account(
       name: "C", type: .exchange, instrument: .AUD,
       exchangeProvider: .coinstash)
-    let error = await #expect(throws: WalletSyncError.self) {
+    do {
       _ = try await src.build(account: exchange)
+      Issue.record("Expected WalletSyncError to be thrown")
+    } catch let error as WalletSyncError {
+      #expect(error.provider == .coinstash)
+      #expect(error.kind == .missingApiKey)
+    } catch {
+      Issue.record("Expected WalletSyncError, got \(error)")
     }
-    #expect(error == .missingApiKey)
   }
 
   @Test
@@ -70,9 +80,39 @@ struct CoinstashSyncSourceTests {
     let src = makeSource(
       client: StubExchangeClient(error: ExchangeClientError.unauthorized),
       store: store)
-    let error = await #expect(throws: WalletSyncError.self) {
+    do {
       _ = try await src.build(account: exchange)
+      Issue.record("Expected WalletSyncError to be thrown")
+    } catch let error as WalletSyncError {
+      #expect(error.provider == .coinstash)
+      #expect(error.kind == .invalidApiKey)
+    } catch {
+      Issue.record("Expected WalletSyncError, got \(error)")
     }
-    #expect(error == .invalidApiKey)
+  }
+
+  @Test
+  func genericClientErrorMapsToNetwork() async throws {
+    let store = ExchangeTokenStore(synchronizable: false)
+    let exchange = Account(
+      name: "C", type: .exchange, instrument: .AUD,
+      exchangeProvider: .coinstash)
+    try store.save(token: "TOK", for: exchange.id)
+    defer { store.delete(for: exchange.id) }
+    let src = makeSource(
+      client: StubExchangeClient(error: ExchangeClientError.malformedResponse),
+      store: store)
+    do {
+      _ = try await src.build(account: exchange)
+      Issue.record("Expected WalletSyncError to be thrown")
+    } catch let error as WalletSyncError {
+      #expect(error.provider == .coinstash)
+      guard case .network = error.kind else {
+        Issue.record("Expected .network kind, got \(error.kind)")
+        return
+      }
+    } catch {
+      Issue.record("Expected WalletSyncError, got \(error)")
+    }
   }
 }
