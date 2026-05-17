@@ -76,27 +76,8 @@ public enum UITestIdentifiers {
     public static let container = "recentlyadded.container"
   }
 
-  // MARK: - TransferDetection
-
-  public enum TransferDetection {
-    /// Passive "possible transfer" pill on a Recently Added row. `id` is
-    /// the annotated transaction's UUID, lowercased.
-    public static func pill(_ id: UUID) -> String {
-      "transferdetection.pill.\(id.uuidString.lowercased())"
-    }
-
-    /// "Merge as Transfer" action (context menu / iOS swipe) for the
-    /// transaction with the given UUID, lowercased.
-    public static func merge(_ id: UUID) -> String {
-      "transferdetection.merge.\(id.uuidString.lowercased())"
-    }
-
-    /// "Not a Transfer" dismissal action (context menu / iOS swipe) for
-    /// the transaction with the given UUID, lowercased.
-    public static func dismiss(_ id: UUID) -> String {
-      "transferdetection.dismiss.\(id.uuidString.lowercased())"
-    }
-  }
+  // The `TransferDetection` namespace lives in
+  // `UITestIdentifiers+TransferDetection.swift`.
 
   // MARK: - Detail
 
@@ -151,7 +132,7 @@ public enum UITestIdentifiers {
     /// Instrument picker button next to the Received amount field.
     public static let tradeReceivedInstrument = "transactionDetail.trade.receivedInstrument"
 
-    /// "+ Add fee" button in the trade-mode section. Added by Task 15.
+    /// "+ Add fee" button in the trade-mode section.
     public static let tradeAddFeeButton = "transactionDetail.trade.addFee"
 
     /// Amount text field for fee leg at `index` (absolute index into `legDrafts`).

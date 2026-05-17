@@ -113,6 +113,16 @@ final class TransactionStore {
   /// alongside `rateObservationTask`.
   private var instrumentChangeObservationTask: Task<Void, Never>?
 
+  // internal so the `+TransferDetection` extension reaches it.
+  /// Owns the merge / dismiss actions a transfer suggestion offers from
+  /// the transaction-detail surface. Built once from the transaction
+  /// repository and the dismissed-pair repository the store is wired
+  /// with. `nil` when the store is constructed without a dismissed-pair
+  /// repository (previews and legacy tests that never exercise transfer
+  /// suggestions); the suggestion section self-hides and its actions
+  /// no-op in that case.
+  let transferDetection: TransferDetectionCoordinator?
+
   /// The long-lived data-subscription task for the current filter. Owned
   /// by the store (not by the view's `.task`) so `load(filter:)` and
   /// `observe(filter:)` callers see the same active subscription, and
@@ -133,10 +143,17 @@ final class TransactionStore {
     targetInstrument: Instrument,
     pageSize: Int = 50,
     debounceInterval: Duration = .milliseconds(300),
-    instrumentChanges: (any InstrumentChangeObserving)? = nil
+    instrumentChanges: (any InstrumentChangeObserving)? = nil,
+    dismissedTransferPairs: (any DismissedTransferPairRepository)? = nil
   ) {
     self.repository = repository
     self.payeeSuggestionSource = PayeeSuggestionSource(repository: repository)
+    if let dismissedTransferPairs {
+      self.transferDetection = TransferDetectionCoordinator(
+        transactions: repository, dismissedPairs: dismissedTransferPairs)
+    } else {
+      self.transferDetection = nil
+    }
     self.conversionService = conversionService
     self.targetInstrument = targetInstrument
     self.currentTargetInstrument = targetInstrument

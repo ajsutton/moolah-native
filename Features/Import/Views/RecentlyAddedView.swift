@@ -98,7 +98,7 @@ struct RecentlyAddedView: View {
       Text("This action cannot be undone.")
     }
     .confirmationDialog(
-      "Not a transfer?",
+      "Dismiss Transfer Suggestion",
       isPresented: Binding(
         get: { transferPendingDismiss != nil },
         set: { if !$0 { transferPendingDismiss = nil } }
