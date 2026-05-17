@@ -662,17 +662,17 @@ transferSuggestionSuggestedAt          TIMESTAMP QUERYABLE SORTABLE,
 
 - [ ] **Step 5: Update `TransactionRow+CloudKit.swift`** — add the eleven fields symmetrically to both directions, matching the existing `importOrigin*` passthroughs (ids as `uuidString`, timestamps as `Date`, decimals as `String`). Verify the generated wire struct's `write(to:)` omits nil-valued optionals (the established pattern); if it does not, set each field on the `CKRecord` only when non-nil, as the existing `importOriginBankReference` passthrough does.
 
-- [ ] **Step 6: Bump `DataFormatVersion`** — in `Domain/Models/DataFormatVersion.swift` set `static let current: Int = 3` and prepend a history line:
+- [ ] **Step 6: Bump `DataFormatVersion`** — in `Domain/Models/DataFormatVersion.swift` set `static let current: Int = 3` and prepend a history entry that is **present-fact at this commit** (do NOT pre-claim `DismissedTransferPairRecord` — it is not in `schema.ckdb` yet; Task 8 amends this same v3 entry to add it):
 
 ```
-/// - 3: DismissedTransferPairRecord (new synced record type, Task 8) +
-///      merged importOrigin / transferSuggestion on TransactionRecord.
-///      The importOriginKind discriminator is nil on pre-v3 records;
-///      an older build decodes a `.merged` transaction as `.single`,
-///      losing the incoming side — hence forward-incompatible.
+/// - 3: `importOriginKind` + eight `importOriginIncoming*` + two
+///      `transferSuggestion*` fields on `TransactionRecord`.
+///      `importOriginKind` is nil on pre-v3 records, so an older
+///      build decodes a `.merged` transaction as `.single` and
+///      drops the incoming side — forward-incompatible.
 ```
 
-(Match the file's existing history-comment format.)
+(Match the file's existing history-comment format/bullet style.)
 
 - [ ] **Step 7:** test passes; `build-mac`; `format-check`.
 - [ ] **Step 8:** dispatch `sync-review` (note: **partial scope** — full `TransactionRow` sync wiring already exists for the base record; this reviews only the field additions + DataFormatVersion). Fix findings.
@@ -719,7 +719,9 @@ RECORD TYPE DismissedTransferPairRecord (
 );
 ```
 
-Then `just -d <wt> generate`; confirm `Generated/DismissedTransferPairRecordCloudKitFields.swift` exists; do not hand-edit it.
+Then `just -d <wt> --justfile <wt>/justfile generate`; confirm `Generated/DismissedTransferPairRecordCloudKitFields.swift` exists; do not hand-edit it.
+
+- [ ] **Step 6a: Amend the DataFormatVersion v3 history entry.** Adding `DismissedTransferPairRecord` to `schema.ckdb` is itself a forward-incompatible trigger (new synced record type). It belongs to the **same unreleased format epoch** as Task 7's field additions, so do NOT bump to 4 — instead extend the existing `- 3:` history line in `Domain/Models/DataFormatVersion.swift` so it now also names the new record type, e.g. append a sentence: `Also adds the synced \`DismissedTransferPairRecord\`.` Keep `static let current: Int = 3`. Present-fact wording, no task/plan refs.
 
 - [ ] **Step 7:** test passes; `build-mac`; `format-check`.
 - [ ] **Step 8:** dispatch `database-schema-review` + `sync-review` (note: **partial scope** — full handler wiring lands in Task 9 Step 5; this reviews row/record/schema only). Fix findings.
