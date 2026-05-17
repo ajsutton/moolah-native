@@ -14,9 +14,10 @@ enum SyncProvider: String, Codable, Sendable, Hashable, CaseIterable {
   case cryptoCompare
   case binance
 
-  /// User-facing brand name shown in the synced-account error caption.
-  /// `.blockExplorer` is "Blockscout" — the codebase already surfaces the
-  /// concrete brand "Alchemy" in captions, so this stays consistent.
+  /// Returns the user-facing brand name for each case, shown in the
+  /// synced-account error caption. `.blockExplorer` resolves to the concrete
+  /// brand "Blockscout" for consistency with captions that already surface the
+  /// concrete brand "Alchemy".
   var displayName: String {
     switch self {
     case .alchemy: return "Alchemy"
