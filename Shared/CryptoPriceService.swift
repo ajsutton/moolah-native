@@ -142,7 +142,9 @@ actor CryptoPriceService {
     let fetchInterval = extensionWindow(
       for: tokenId, requestedDate: date, dateString: dateString)
     var lastError: (any Error)?
+    var lastProvider: SyncProvider?
     for client in clients {
+      lastProvider = client.syncProvider
       do {
         let fetched = try await client.dailyPrices(for: mapping, in: fetchInterval)
         if !fetched.isEmpty {
@@ -165,7 +167,13 @@ actor CryptoPriceService {
       return fallback
     }
 
-    throw lastError ?? CryptoPriceError.noPriceAvailable(tokenId: tokenId, date: dateString)
+    throw WalletSyncError(
+      provider: lastProvider,
+      kind: .network(
+        underlyingDescription: lastError.map { String(describing: $0) }
+          ?? String(
+            describing: CryptoPriceError.noPriceAvailable(
+              tokenId: tokenId, date: dateString))))
   }
 
   /// Resolves the request from the in-memory cache when the requested
@@ -364,31 +372,8 @@ extension CryptoPriceService {
     return dates
   }
 
-  private func fetchRange(
-    instrument: Instrument, mapping: CryptoProviderMapping, from: Date, to: Date
-  ) async throws {
-    let tokenId = instrument.id
-    let symbol = instrument.ticker ?? instrument.name
-    var lastError: (any Error)?
-    for client in clients {
-      do {
-        let fetched = try await client.dailyPrices(for: mapping, in: from...to)
-        if !fetched.isEmpty {
-          let delta = mergeReturningDelta(
-            tokenId: tokenId, symbol: symbol, newPrices: fetched)
-          if !delta.isEmpty {
-            try await persistDelta(tokenId: tokenId, deltaRecords: delta)
-          }
-          return
-        }
-      } catch {
-        lastError = error
-        continue
-      }
-    }
-    if let error = lastError { throw error }
-  }
-
-  // `mergeReturningDelta` lives in `CryptoPriceService+Merge.swift` and
-  // `NoOpTokenResolutionClient` lives in its own sibling file.
+  // `fetchRange(instrument:mapping:from:to:)` lives in
+  // `CryptoPriceService+FetchRange.swift`, `mergeReturningDelta` lives in
+  // `CryptoPriceService+Merge.swift`, and `NoOpTokenResolutionClient`
+  // lives in its own sibling file.
 }

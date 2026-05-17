@@ -16,6 +16,8 @@ final class CountingCryptoPriceClient: CryptoPriceClient {
     self.inner = inner
   }
 
+  var syncProvider: SyncProvider { inner.syncProvider }
+
   var fetchCount: Int {
     count.withLock { $0 }
   }

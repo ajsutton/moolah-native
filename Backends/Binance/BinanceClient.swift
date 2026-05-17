@@ -2,6 +2,8 @@
 import Foundation
 
 struct BinanceClient: CryptoPriceClient, Sendable {
+  var syncProvider: SyncProvider { .binance }
+
   private static let baseURLString = "https://api.binance.com"
   private static let baseURL =
     URL(string: baseURLString) ?? URL(fileURLWithPath: "/")

@@ -2,6 +2,8 @@
 import Foundation
 
 struct CryptoCompareClient: CryptoPriceClient, Sendable {
+  var syncProvider: SyncProvider { .cryptoCompare }
+
   private static let baseURL =
     URL(string: "https://min-api.cryptocompare.com") ?? URL(fileURLWithPath: "/")
   private let session: URLSession
