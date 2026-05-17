@@ -92,7 +92,10 @@ extension ChainConfig {
     supportsInternalTransfers: false,
     chargesL1DataFee: true,
     blockExplorerBaseURL: requireURL("https://optimistic.etherscan.io"),
-    blockscoutAPIBaseURL: requireURL("https://optimism.blockscout.com"),
+    // Optimism's Blockscout instance was rehosted: optimism.blockscout.com
+    // now 301-redirects every path to explorer.optimism.io. Point directly
+    // at the canonical host (Ethereum/Base still use *.blockscout.com).
+    blockscoutAPIBaseURL: requireURL("https://explorer.optimism.io"),
     displayName: "OP Mainnet"
   )
 

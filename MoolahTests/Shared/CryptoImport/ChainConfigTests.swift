@@ -29,7 +29,7 @@ struct ChainConfigTests {
     #expect(config.supportsInternalTransfers == false)
     #expect(config.displayName == "OP Mainnet")
     #expect(config.blockExplorerBaseURL.absoluteString == "https://optimistic.etherscan.io")
-    #expect(config.blockscoutAPIBaseURL.absoluteString == "https://optimism.blockscout.com")
+    #expect(config.blockscoutAPIBaseURL.absoluteString == "https://explorer.optimism.io")
     #expect(config.nativeInstrument.ticker == "ETH")
     #expect(config.nativeInstrument.chainId == 10)
   }
