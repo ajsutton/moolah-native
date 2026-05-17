@@ -77,4 +77,8 @@ actor RecordingTransactionRepository: TransactionRepository {
   func legExists(accountId: UUID, externalId: String) async throws -> Bool {
     try await wrapped.legExists(accountId: accountId, externalId: externalId)
   }
+
+  func distinctLegInstrumentIds() async throws -> Set<String> {
+    try await wrapped.distinctLegInstrumentIds()
+  }
 }

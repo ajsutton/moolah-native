@@ -82,6 +82,10 @@ protocol TransactionRepository: Sendable {
   /// imported transactions, so each leg is checked against the partial
   /// unique index before insertion.
   func legExists(accountId: UUID, externalId: String) async throws -> Bool
+  /// Distinct instrument ids appearing on any persisted transaction leg.
+  /// Used only by exchange-import resolution's rare registry-fallback
+  /// tie-break; cheap (`SELECT DISTINCT`), not on a hot path.
+  func distinctLegInstrumentIds() async throws -> Set<String>
 }
 
 extension TransactionRepository {

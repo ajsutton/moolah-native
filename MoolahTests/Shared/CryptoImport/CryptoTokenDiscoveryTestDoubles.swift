@@ -103,6 +103,12 @@ final class CountingAlchemyClientStub: AlchemyClient, @unchecked Sendable {
   private var responses: [Key: Response] = [:]
   private var callCounts: [Key: Int] = [:]
   private var defaultIsSpam: Bool = false
+  private var totalGetTokenMetadataCalls: Int = 0
+
+  /// Total number of `getTokenMetadata` calls across all keys.
+  var tokenMetadataCallCount: Int {
+    lock.withLock { totalGetTokenMetadataCalls }
+  }
 
   func setDefaultSpam(_ isSpam: Bool) {
     lock.withLock { self.defaultIsSpam = isSpam }
@@ -131,6 +137,7 @@ final class CountingAlchemyClientStub: AlchemyClient, @unchecked Sendable {
     let key = Key(chainId: chain.chainId, contractAddress: contractAddress.lowercased())
     let (response, fallbackSpam): (Response?, Bool) = lock.withLock {
       callCounts[key, default: 0] += 1
+      totalGetTokenMetadataCalls += 1
       return (responses[key], defaultIsSpam)
     }
 

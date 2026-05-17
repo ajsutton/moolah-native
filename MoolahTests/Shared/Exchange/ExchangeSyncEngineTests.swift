@@ -9,10 +9,28 @@ struct ExchangeSyncEngineTests {
     chainId: 10, contractAddress: "0x4200000000000000000000000000000000000042",
     symbol: "OP", name: "Optimism", decimals: 18)
 
-  private func resolver(includeOP: Bool = false) -> ExchangeInstrumentResolver {
-    ExchangeInstrumentResolver(
-      registry: StubInstrumentRegistry(instruments: includeOP ? [Self.optimism] : []),
-      fiatInstrument: .AUD)
+  /// Metadata stub that returns real OP EVM chain data for "OP", and nil
+  /// for anything else. Used by tests that include OP asset legs.
+  private static let opMetadata = StubMetadataResolver([
+    "OP": ExchangeAssetMetadata(
+      symbol: "OP", name: "Optimism",
+      chains: [
+        ExchangeAssetChain(
+          chainId: 10,
+          contractAddress: "0x4200000000000000000000000000000000000042",
+          decimals: 18)
+      ])
+  ])
+
+  /// Empty metadata stub: returns nil for every symbol, so only the
+  /// registry-fallback path is exercised (fiat legs still short-circuit
+  /// before any metadata call).
+  private static let emptyMetadata = StubMetadataResolver([:])
+
+  private func makeEngine(
+    registry: StubInstrumentRegistry = StubInstrumentRegistry()
+  ) -> ExchangeSyncEngine {
+    makeExchangeSyncEngine(registry: registry)
   }
 
   private func tradeAndDepositResult() async throws -> WalletSyncBuildResult {
@@ -33,8 +51,8 @@ struct ExchangeSyncEngineTests {
         category: "DEPOSIT", direction: .credit, assetSymbol: nil, amount: 500,
         isFiat: true, orderId: nil),
     ]
-    return try await ExchangeSyncEngine(resolver: resolver(includeOP: true))
-      .build(account: account, imported: imported)
+    return try await makeEngine()
+      .build(account: account, imported: imported, metadata: Self.opMetadata)
   }
 
   @Test
@@ -66,8 +84,8 @@ struct ExchangeSyncEngineTests {
         category: "DEPOSIT", direction: .debit, assetSymbol: nil,
         amount: 100, isFiat: true, orderId: nil)
     ]
-    let engine = ExchangeSyncEngine(resolver: resolver())
-    let result = try await engine.build(account: account, imported: imported)
+    let result = try await makeEngine()
+      .build(account: account, imported: imported, metadata: Self.emptyMetadata)
     let leg = try #require(result.candidates.first?.transaction.legs.first)
     #expect(leg.quantity == -100)
   }
@@ -91,8 +109,8 @@ struct ExchangeSyncEngineTests {
         category: "TRADEFEE", direction: .debit, assetSymbol: nil, amount: 21.11,
         isFiat: true, orderId: "o1"),
     ]
-    let engine = ExchangeSyncEngine(resolver: resolver(includeOP: true))
-    let result = try await engine.build(account: account, imported: imported)
+    let result = try await makeEngine()
+      .build(account: account, imported: imported, metadata: Self.opMetadata)
     let legs = try #require(result.candidates.first?.transaction.legs)
     let feeLeg = try #require(legs.first { $0.externalId == "t3" })
     #expect(feeLeg.type == .expense)
@@ -118,8 +136,10 @@ struct ExchangeSyncEngineTests {
         category: "TRADE", direction: .debit, assetSymbol: nil,
         amount: 100, isFiat: true, orderId: "o1"),
     ]
-    let engine = ExchangeSyncEngine(resolver: resolver())
-    let result = try await engine.build(account: account, imported: imported)
+    // emptyMetadata returns nil for UNKNOWNCOIN; registry is empty too →
+    // fallbackInstrument returns nil → whole group is dropped.
+    let result = try await makeEngine()
+      .build(account: account, imported: imported, metadata: Self.emptyMetadata)
     #expect(result.candidates.isEmpty)
   }
 }

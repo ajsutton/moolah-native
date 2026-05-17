@@ -206,4 +206,8 @@ struct FailingTransactionRepository: TransactionRepository {
   func legExists(accountId: UUID, externalId: String) async throws -> Bool {
     throw BackendError.networkUnavailable
   }
+
+  func distinctLegInstrumentIds() async throws -> Set<String> {
+    throw BackendError.networkUnavailable
+  }
 }

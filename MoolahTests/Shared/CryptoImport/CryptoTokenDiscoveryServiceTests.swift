@@ -180,6 +180,29 @@ struct CryptoTokenDiscoveryServiceTests {
         for: .init(chainId: 1, contractAddress: Self.usdcAddress.lowercased())) == 0)
   }
 
+  // MARK: - Chain-id entry point
+
+  @Test("resolveOrLoad(chainId:) without ChainConfig skips Alchemy and registers")
+  func resolveByChainIdWithoutChainConfigSkipsAlchemyAndRegisters() async throws {
+    let subject = makeDiscoverySubject()
+    subject.resolver.setDefault(.success(coingecko: "usd-coin", cryptocompare: nil, binance: nil))
+
+    // Arbitrum (chain 42161) has no ChainConfig.
+    let registration = try await subject.service.resolveOrLoad(
+      chainId: 42161,
+      contractAddress: "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
+      symbol: "USDC",
+      name: "USDC",
+      decimals: 6)
+
+    #expect(registration.instrument.id == "42161:0xff970a61a04b1ca14834a43f5de4533ebddb5cc8")
+    #expect(registration.instrument.decimals == 6)
+    #expect(registration.pricingStatus == .priced)
+    #expect(subject.alchemy.tokenMetadataCallCount == 0)
+    let snap = subject.registry.snapshot()
+    #expect(snap.registeredCryptos.contains { $0.id == registration.instrument.id })
+  }
+
   // MARK: - Re-resolution
 
   @Test("reResolve(.unpriced → .priced) flips status when provider now succeeds")

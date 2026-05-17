@@ -213,13 +213,21 @@ struct SyncedAccountStoreGlobalErrorTests {
     _ = TestBackend.seed(accounts: [account], in: fixture.database)
     let tokenStore = ExchangeTokenStore(synchronizable: false)
     try tokenStore.save(token: token, for: account.id)
+    let registry = StubInstrumentRegistry()
+    let regResolver = CountingRegistrationResolver()
+    regResolver.setDefault(.success(coingecko: "id", cryptocompare: nil, binance: nil))
+    let discovery = CryptoTokenDiscoveryService(
+      registry: registry, resolver: regResolver, alchemy: CountingAlchemyClientStub())
     fixture.store.appendSourceForTesting(
       CoinstashSyncSource(
         tokenStore: tokenStore,
         client: StubExchangeClient(error: error),
         engine: ExchangeSyncEngine(
           resolver: ExchangeInstrumentResolver(
-            registry: StubInstrumentRegistry(), fiatInstrument: .AUD))))
+            registry: registry, fiatInstrument: .AUD,
+            existingLegInstrumentIds: { [] }),
+          discovery: discovery),
+        metadataResolverFactory: { _ in StubMetadataResolver([:]) }))
     return account
   }
 

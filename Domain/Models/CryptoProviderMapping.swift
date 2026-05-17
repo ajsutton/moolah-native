@@ -13,6 +13,15 @@ struct CryptoProviderMapping: Codable, Sendable, Hashable, Identifiable {
 
   var id: String { instrumentId }
 
+  /// Returns `true` when at least one provider identifier is populated —
+  /// i.e. this instrument has a price-provider mapping. The callers
+  /// (`ExchangeInstrumentResolver`, `CryptoTokenDiscoveryService`) use
+  /// this to distinguish a mapped/`.priced` registration from an
+  /// `.unpriced` stub.
+  var hasProviderMapping: Bool {
+    coingeckoId != nil || cryptocompareSymbol != nil || binanceSymbol != nil
+  }
+
   /// Built-in presets for common tokens.
   static let builtInPresets: [CryptoProviderMapping] =
     CryptoRegistration.builtInPresets.map(\.mapping)

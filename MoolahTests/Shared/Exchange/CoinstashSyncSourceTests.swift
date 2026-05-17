@@ -12,14 +12,17 @@ struct CoinstashSyncSourceTests {
   private let eth = Instrument.crypto(
     chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
 
+  private func makeEngine() -> ExchangeSyncEngine {
+    makeExchangeSyncEngine()
+  }
+
   private func makeSource(
     client: any ExchangeClient, store: ExchangeTokenStore
   ) -> CoinstashSyncSource {
     CoinstashSyncSource(
       tokenStore: store, client: client,
-      engine: ExchangeSyncEngine(
-        resolver: ExchangeInstrumentResolver(
-          registry: StubInstrumentRegistry(), fiatInstrument: .AUD)))
+      engine: makeEngine(),
+      metadataResolverFactory: { _ in StubMetadataResolver([:]) })
   }
 
   @Test

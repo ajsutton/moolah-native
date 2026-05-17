@@ -68,20 +68,49 @@ struct SyncedAccountStoreExchangeTests {
   private func makeExchangeAccount(
     in fixture: Fixture, token: String
   ) throws -> Account {
+    try makeExchangeAccount(
+      in: fixture, token: token,
+      client: StubExchangeClient(deposit: 100),
+      metadataResolver: StubMetadataResolver([:]))
+  }
+
+  /// Seeds an `.exchange` account and registers a `CoinstashSyncSource`
+  /// wired with the supplied `client` and `metadataResolver`. Used by
+  /// tests that need to exercise the crypto (non-fiat) resolution path.
+  ///
+  /// Uses `fixture.backend.grdbInstruments` — the shared profile-index
+  /// registry — so instrument lookup/registration targets the correct DB
+  /// (the per-profile `data.sqlite` has no `instrument` table).
+  private func makeExchangeAccount(
+    in fixture: Fixture,
+    token: String,
+    client: any ExchangeClient,
+    metadataResolver: any ExchangeAssetMetadataResolving
+  ) throws -> Account {
     let account = Account(
       name: "Coinstash", type: .exchange, instrument: .AUD,
       valuationMode: .calculatedFromTrades, exchangeProvider: .coinstash)
     _ = TestBackend.seed(accounts: [account], in: fixture.database)
     let tokenStore = ExchangeTokenStore(synchronizable: false)
     try tokenStore.save(token: token, for: account.id)
-    let registry = GRDBInstrumentRegistryRepository(database: fixture.database)
+    // Instrument identity lives on the shared profile-index registry, not on
+    // the per-profile data.sqlite. Use the backend's own registry instance so
+    // crypto registrations land in the same DB the transaction reader resolves from.
+    let registry = fixture.backend.grdbInstruments
+    let regResolver = CountingRegistrationResolver()
+    regResolver.setDefault(.success(coingecko: "id", cryptocompare: nil, binance: nil))
+    let discovery = CryptoTokenDiscoveryService(
+      registry: registry, resolver: regResolver, alchemy: CountingAlchemyClientStub())
     fixture.store.appendSourceForTesting(
       CoinstashSyncSource(
         tokenStore: tokenStore,
-        client: StubExchangeClient(deposit: 100),
+        client: client,
         engine: ExchangeSyncEngine(
           resolver: ExchangeInstrumentResolver(
-            registry: registry, fiatInstrument: .AUD))))
+            registry: registry, fiatInstrument: .AUD,
+            existingLegInstrumentIds: { [] }),
+          discovery: discovery),
+        metadataResolverFactory: { _ in metadataResolver }))
     return account
   }
 
@@ -105,5 +134,60 @@ struct SyncedAccountStoreExchangeTests {
     let txns = try await fixture.backend.transactions.fetchAll(
       filter: TransactionFilter())
     #expect(txns.contains { txn in txn.legs.contains { $0.externalId != nil } })
+  }
+
+  /// End-to-end: a crypto OP deposit resolves to the canonical Optimism
+  /// instrument id and is NOT spam-flagged.
+  @Test("Store syncs a crypto OP deposit to the correct instrument id")
+  func storeSyncsCryptoDepositToCorrectInstrumentId() async throws {
+    let fixture = try makeFixture()
+    let opTransaction = ExchangeImportedTransaction(
+      externalId: "op-dep-1",
+      occurredAt: Self.pinnedNow,
+      category: "DEPOSIT",
+      direction: .credit,
+      assetSymbol: "OP",
+      amount: 40167,
+      isFiat: false,
+      orderId: nil)
+    let opMetadata = StubMetadataResolver([
+      "OP": ExchangeAssetMetadata(
+        symbol: "OP", name: "Optimism",
+        chains: [
+          ExchangeAssetChain(
+            chainId: 10,
+            contractAddress: "0x4200000000000000000000000000000000000042",
+            decimals: 18)
+        ])
+    ])
+    let account = try makeExchangeAccount(
+      in: fixture, token: "TOK",
+      client: StubExchangeClient(transactions: [opTransaction]),
+      metadataResolver: opMetadata)
+    try await fixture.backend.walletSyncState.save(
+      WalletSyncState(
+        id: account.id, lastSyncedBlockNumber: 0,
+        lastSyncedAt: .distantPast, lastError: nil))
+    await fixture.store.loadInitialState()
+
+    await fixture.store.syncAccount(account)
+
+    // No error recorded — the crypto build + apply landed.
+    let state = try await fixture.backend.walletSyncState.load(accountId: account.id)
+    #expect(state?.lastError == nil)
+
+    let txns = try await fixture.backend.transactions.fetchAll(filter: TransactionFilter())
+    let leg = try #require(
+      txns.flatMap(\.legs).first { $0.externalId == "op-dep-1" },
+      "OP deposit leg must be persisted with its externalId")
+    #expect(
+      leg.instrument.id == "10:0x4200000000000000000000000000000000000042",
+      "leg must resolve to canonical Optimism OP instrument id")
+    // Verify it is not spam-flagged (CountingAlchemyClientStub returns isSpam=false).
+    let regs = try await fixture.backend.grdbInstruments.allCryptoRegistrations()
+    let opReg = try #require(
+      regs.first { $0.instrument.id == "10:0x4200000000000000000000000000000000000042" },
+      "OP instrument must be registered in the instrument registry")
+    #expect(opReg.pricingStatus != .spam)
   }
 }
