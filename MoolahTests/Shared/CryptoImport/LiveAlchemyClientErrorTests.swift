@@ -12,10 +12,14 @@ struct LiveAlchemyClientErrorTests {
       let response = AlchemyTestSupport.response(for: request, statusCode: 401)
       return (response, Data())
     }
-    await #expect(throws: WalletSyncError.invalidApiKey) {
+    do {
       _ = try await client.getAssetTransfers(
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0
       )
+      Issue.record("Expected WalletSyncError.invalidApiKey")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .invalidApiKey)
+      #expect(error.provider == .alchemy)
     }
   }
 
@@ -25,10 +29,14 @@ struct LiveAlchemyClientErrorTests {
       let response = AlchemyTestSupport.response(for: request, statusCode: 403)
       return (response, Data())
     }
-    await #expect(throws: WalletSyncError.invalidApiKey) {
+    do {
       _ = try await client.getAssetTransfers(
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0
       )
+      Issue.record("Expected WalletSyncError.invalidApiKey")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .invalidApiKey)
+      #expect(error.provider == .alchemy)
     }
   }
 
@@ -64,10 +72,14 @@ struct LiveAlchemyClientErrorTests {
       let response = AlchemyTestSupport.response(for: request, statusCode: 429)
       return (response, Data())
     }
-    await #expect(throws: WalletSyncError.rateLimited(retryAfter: nil)) {
+    do {
       _ = try await client.getAssetTransfers(
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0
       )
+      Issue.record("Expected WalletSyncError.rateLimited")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .rateLimited(retryAfter: nil))
+      #expect(error.provider == .alchemy)
     }
   }
 
@@ -116,10 +128,14 @@ struct LiveAlchemyClientErrorTests {
       let response = AlchemyTestSupport.okResponse(for: request)
       return (response, Data("not json".utf8))
     }
-    await #expect(throws: WalletSyncError.providerMalformedResponse(stage: "getAssetTransfers")) {
+    do {
       _ = try await client.getAssetTransfers(
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0
       )
+      Issue.record("Expected WalletSyncError.providerMalformedResponse")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .providerMalformedResponse(stage: "getAssetTransfers"))
+      #expect(error.provider == .alchemy)
     }
   }
 
@@ -143,10 +159,14 @@ struct LiveAlchemyClientErrorTests {
       let response = AlchemyTestSupport.response(for: request, statusCode: 401)
       return (response, Data())
     }
-    await #expect(throws: WalletSyncError.missingApiKey) {
+    do {
       _ = try await client.getAssetTransfers(
         chain: .ethereum, walletAddress: "0xabc", fromBlock: 0
       )
+      Issue.record("Expected WalletSyncError.missingApiKey")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .missingApiKey)
+      #expect(error.provider == .alchemy)
     }
     #expect(touched.wasTouched == false)
   }
@@ -159,10 +179,14 @@ struct LiveAlchemyClientErrorTests {
       let response = AlchemyTestSupport.response(for: request, statusCode: 401)
       return (response, Data())
     }
-    await #expect(throws: WalletSyncError.missingApiKey) {
+    do {
       _ = try await client.getTokenMetadata(
         chain: .ethereum, contractAddress: "0xabc"
       )
+      Issue.record("Expected WalletSyncError.missingApiKey")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .missingApiKey)
+      #expect(error.provider == .alchemy)
     }
     #expect(touched.wasTouched == false)
   }
@@ -175,10 +199,14 @@ struct LiveAlchemyClientErrorTests {
       let response = AlchemyTestSupport.response(for: request, statusCode: 401)
       return (response, Data())
     }
-    await #expect(throws: WalletSyncError.missingApiKey) {
+    do {
       _ = try await client.getTransactionReceipt(
         chain: .ethereum, hash: "0xdead"
       )
+      Issue.record("Expected WalletSyncError.missingApiKey")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .missingApiKey)
+      #expect(error.provider == .alchemy)
     }
     #expect(touched.wasTouched == false)
   }

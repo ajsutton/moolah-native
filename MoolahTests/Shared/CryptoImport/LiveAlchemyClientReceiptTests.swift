@@ -51,9 +51,13 @@ struct LiveAlchemyClientReceiptTests {
       let response = AlchemyTestSupport.response(for: request, statusCode: 401)
       return (response, Data())
     }
-    await #expect(throws: WalletSyncError.invalidApiKey) {
+    do {
       _ = try await client.getTransactionReceipt(
         chain: .ethereum, hash: "0xabc")
+      Issue.record("Expected WalletSyncError.invalidApiKey")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .invalidApiKey)
+      #expect(error.provider == .alchemy)
     }
   }
 
@@ -63,9 +67,13 @@ struct LiveAlchemyClientReceiptTests {
       let response = AlchemyTestSupport.response(for: request, statusCode: 403)
       return (response, Data())
     }
-    await #expect(throws: WalletSyncError.invalidApiKey) {
+    do {
       _ = try await client.getTransactionReceipt(
         chain: .ethereum, hash: "0xabc")
+      Issue.record("Expected WalletSyncError.invalidApiKey")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .invalidApiKey)
+      #expect(error.provider == .alchemy)
     }
   }
 
@@ -119,10 +127,13 @@ struct LiveAlchemyClientReceiptTests {
       let response = AlchemyTestSupport.okResponse(for: request)
       return (response, Data("not json".utf8))
     }
-    await #expect(throws: WalletSyncError.providerMalformedResponse(stage: "getTransactionReceipt"))
-    {
+    do {
       _ = try await client.getTransactionReceipt(
         chain: .ethereum, hash: "0xabc")
+      Issue.record("Expected WalletSyncError.providerMalformedResponse")
+    } catch let error as WalletSyncError {
+      #expect(error.kind == .providerMalformedResponse(stage: "getTransactionReceipt"))
+      #expect(error.provider == .alchemy)
     }
   }
 }
