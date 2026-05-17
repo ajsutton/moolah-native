@@ -65,7 +65,7 @@ class BlockscoutRetryStubURLProtocol: URLProtocol {
   override func stopLoading() {}
 }
 
-@Suite("LiveBlockscoutClient retry")
+@Suite("LiveBlockscoutClient retry", .serialized)
 struct BlockExplorerClientRetryTests {
   private func makeSession() -> URLSession {
     let config = URLSessionConfiguration.ephemeral
@@ -78,6 +78,7 @@ struct BlockExplorerClientRetryTests {
 
   @Test
   func transientTimeoutIsRetriedThenSucceeds() async throws {
+    defer { BlockscoutRetryStubURLProtocol.script = nil }
     let script = BlockscoutRetryScript([
       .fail(.timedOut),
       .respond(status: 200, body: Self.emptyPage, headers: [:]),
@@ -96,6 +97,7 @@ struct BlockExplorerClientRetryTests {
 
   @Test
   func longRetryAfterFailsCleanly() async throws {
+    defer { BlockscoutRetryStubURLProtocol.script = nil }
     let script = BlockscoutRetryScript([
       .respond(status: 429, body: Data(), headers: ["Retry-After": "999"])
     ])
@@ -114,6 +116,7 @@ struct BlockExplorerClientRetryTests {
 
   @Test
   func shortRetryAfterIsWaitedOutThenSucceeds() async throws {
+    defer { BlockscoutRetryStubURLProtocol.script = nil }
     let script = BlockscoutRetryScript([
       .respond(status: 429, body: Data(), headers: ["Retry-After": "5"]),
       .respond(status: 200, body: Self.emptyPage, headers: [:]),
@@ -128,5 +131,68 @@ struct BlockExplorerClientRetryTests {
       chain: .ethereum, walletAddress: "0xabc", fromBlock: 0)
     #expect(txs.isEmpty)
     #expect(script.calls == 2)
+  }
+
+  @Test
+  func transientServerErrorIsRetriedThenSucceeds() async throws {
+    defer { BlockscoutRetryStubURLProtocol.script = nil }
+    let script = BlockscoutRetryScript([
+      .respond(status: 500, body: Data(), headers: [:]),
+      .respond(status: 200, body: Self.emptyPage, headers: [:]),
+    ])
+    BlockscoutRetryStubURLProtocol.script = script
+    let client = LiveBlockscoutClient(
+      session: makeSession(),
+      rateLimiter: RateLimiter(permitsPerSecond: 1000),
+      retryPolicy: HTTPRetryPolicy(),
+      sleeper: { _ in })
+    let txs = try await client.nativeTransactions(
+      chain: .ethereum, walletAddress: "0xabc", fromBlock: 0)
+    #expect(txs.isEmpty)
+    #expect(script.calls == 2)
+  }
+
+  @Test
+  func urlCancellationSurfacesAsCancellationError() async throws {
+    defer { BlockscoutRetryStubURLProtocol.script = nil }
+    let script = BlockscoutRetryScript([.fail(.cancelled)])
+    BlockscoutRetryStubURLProtocol.script = script
+    let client = LiveBlockscoutClient(
+      session: makeSession(),
+      rateLimiter: RateLimiter(permitsPerSecond: 1000),
+      retryPolicy: HTTPRetryPolicy(),
+      sleeper: { _ in })
+    await #expect(throws: CancellationError.self) {
+      _ = try await client.nativeTransactions(
+        chain: .ethereum, walletAddress: "0xabc", fromBlock: 0)
+    }
+    #expect(script.calls == 1)
+  }
+
+  @Test
+  func exhaustedRateLimitMapsToRateLimited() async throws {
+    defer { BlockscoutRetryStubURLProtocol.script = nil }
+    let script = BlockscoutRetryScript([
+      .respond(status: 429, body: Data(), headers: ["Retry-After": "5"]),
+      .respond(status: 429, body: Data(), headers: ["Retry-After": "5"]),
+      .respond(status: 429, body: Data(), headers: ["Retry-After": "5"]),
+    ])
+    BlockscoutRetryStubURLProtocol.script = script
+    let client = LiveBlockscoutClient(
+      session: makeSession(),
+      rateLimiter: RateLimiter(permitsPerSecond: 1000),
+      retryPolicy: HTTPRetryPolicy(honorsRetryAfterInPlace: true),
+      sleeper: { _ in })
+    do {
+      _ = try await client.nativeTransactions(
+        chain: .ethereum, walletAddress: "0xabc", fromBlock: 0)
+      Issue.record("expected a thrown error")
+    } catch let error as WalletSyncError {
+      guard case .rateLimited = error else {
+        Issue.record("expected .rateLimited, got \(error)")
+        return
+      }
+    }
+    #expect(script.calls == 3)
   }
 }

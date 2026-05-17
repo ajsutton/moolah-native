@@ -180,13 +180,18 @@ struct LiveBlockscoutClient: Sendable {
     } catch let walletError as WalletSyncError {
       throw walletError
     } catch let signal as HTTPRetrySignal {
-      let reason =
-        signal.retryAfter.map { "Retry-After \($0)s" } ?? "server error"
+      if let retryAfter = signal.retryAfter {
+        logger.error(
+          "Blockscout \(stage, privacy: .public) rate-limit retry exhausted (Retry-After \(retryAfter, privacy: .public)s)"
+        )
+        throw WalletSyncError.rateLimited(
+          retryAfter: Date().addingTimeInterval(retryAfter))
+      }
       logger.error(
-        "Blockscout \(stage, privacy: .public) retry exhausted (\(reason, privacy: .public))"
+        "Blockscout \(stage, privacy: .public) retry exhausted (server error)"
       )
       throw WalletSyncError.network(
-        underlyingDescription: "retry exhausted (\(reason))")
+        underlyingDescription: "retry exhausted (server error)")
     } catch {
       logger.error(
         "Blockscout \(stage, privacy: .public) network failure: \(error.localizedDescription, privacy: .public)"
