@@ -11,7 +11,7 @@ struct ExchangeSyncEngineTests {
 
   /// Metadata stub that returns real OP EVM chain data for "OP", and nil
   /// for anything else. Used by tests that include OP asset legs.
-  private static let opMetadata = StubMetadata([
+  private static let opMetadata = StubMetadataResolver([
     "OP": ExchangeAssetMetadata(
       symbol: "OP", name: "Optimism",
       chains: [
@@ -25,20 +25,12 @@ struct ExchangeSyncEngineTests {
   /// Empty metadata stub: returns nil for every symbol, so only the
   /// registry-fallback path is exercised (fiat legs still short-circuit
   /// before any metadata call).
-  private static let emptyMetadata = StubMetadata([:])
+  private static let emptyMetadata = StubMetadataResolver([:])
 
   private func makeEngine(
     registry: StubInstrumentRegistry = StubInstrumentRegistry()
   ) -> ExchangeSyncEngine {
-    let regResolver = CountingRegistrationResolver()
-    regResolver.setDefault(.success(coingecko: "id", cryptocompare: nil, binance: nil))
-    let discovery = CryptoTokenDiscoveryService(
-      registry: registry, resolver: regResolver, alchemy: CountingAlchemyClientStub())
-    return ExchangeSyncEngine(
-      resolver: ExchangeInstrumentResolver(
-        registry: registry, fiatInstrument: .AUD,
-        existingLegInstrumentIds: { [] }),
-      discovery: discovery)
+    makeExchangeSyncEngine(registry: registry)
   }
 
   private func tradeAndDepositResult() async throws -> WalletSyncBuildResult {

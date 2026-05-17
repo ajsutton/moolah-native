@@ -33,7 +33,7 @@ struct ExchangeInstrumentResolverTests {
 
   @Test
   func fiatAccessorReturnsInjectedInstrument() {
-    #expect(resolver([]).fiatInstrument == .AUD)
+    #expect(resolver([]).fiatDenomination() == .AUD)
   }
 
   @Test

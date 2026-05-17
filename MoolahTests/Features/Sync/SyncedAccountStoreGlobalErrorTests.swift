@@ -227,7 +227,7 @@ struct SyncedAccountStoreGlobalErrorTests {
             registry: registry, fiatInstrument: .AUD,
             existingLegInstrumentIds: { [] }),
           discovery: discovery),
-        metadataResolverFactory: { _ in StubMetadata([:]) }))
+        metadataResolverFactory: { _ in StubMetadataResolver([:]) }))
     return account
   }
 

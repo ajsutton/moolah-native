@@ -67,6 +67,9 @@ extension ProfileSession {
     guard let registry else { return nil }
     let rateLimiter = RateLimiter(permitsPerSecond: 25)
     let alchemy: any AlchemyClient = LiveAlchemyClient(
+      // Closure (not a resolved value): a key entered in Settings after this
+      // wiring is built is visible on the next sync cycle without a rebuild,
+      // and the key never lives on the client object itself.
       apiKeyProvider: { ProfileSession.resolveAlchemyApiKey() },
       rateLimiter: rateLimiter)
     let discovery = CryptoTokenDiscoveryService(
@@ -143,11 +146,20 @@ extension ProfileSession {
           // non-AUD profile would otherwise mis-denominate.
           fiatInstrument: fiatInstrument,
           existingLegInstrumentIds: {
-            (try? await txRepo.distinctLegInstrumentIds()) ?? []
+            do {
+              return try await txRepo.distinctLegInstrumentIds()
+            } catch {
+              Self.logger.error(
+                "distinctLegInstrumentIds failed: \(error, privacy: .public)")
+              throw error
+            }
           }),
         discovery: discovery),
       metadataResolverFactory: { token in
         CoinstashAssetMetadataResolver(client: coinstashClient, token: token)
       })
   }
+
+  nonisolated private static let logger = Logger(
+    subsystem: "com.moolah.app", category: "CryptoSyncWiring")
 }

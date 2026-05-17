@@ -146,7 +146,7 @@ struct ExchangeSyncEngine: Sendable {
     isFiat: Bool,
     metadata: any ExchangeAssetMetadataResolving
   ) async throws -> Instrument? {
-    if isFiat { return resolver.fiatInstrument }
+    if isFiat { return resolver.fiatDenomination() }
     guard let symbol else { return nil }
 
     if let native = Self.nonEvmNatives[symbol.uppercased()] {

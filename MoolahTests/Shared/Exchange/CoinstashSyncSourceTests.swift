@@ -13,16 +13,7 @@ struct CoinstashSyncSourceTests {
     chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
 
   private func makeEngine() -> ExchangeSyncEngine {
-    let registry = StubInstrumentRegistry()
-    let regResolver = CountingRegistrationResolver()
-    regResolver.setDefault(.success(coingecko: "id", cryptocompare: nil, binance: nil))
-    let discovery = CryptoTokenDiscoveryService(
-      registry: registry, resolver: regResolver, alchemy: CountingAlchemyClientStub())
-    return ExchangeSyncEngine(
-      resolver: ExchangeInstrumentResolver(
-        registry: registry, fiatInstrument: .AUD,
-        existingLegInstrumentIds: { [] }),
-      discovery: discovery)
+    makeExchangeSyncEngine()
   }
 
   private func makeSource(
@@ -31,7 +22,7 @@ struct CoinstashSyncSourceTests {
     CoinstashSyncSource(
       tokenStore: store, client: client,
       engine: makeEngine(),
-      metadataResolverFactory: { _ in StubMetadata([:]) })
+      metadataResolverFactory: { _ in StubMetadataResolver([:]) })
   }
 
   @Test

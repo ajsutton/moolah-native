@@ -7,7 +7,7 @@ import OSLog
 /// instrument, a registry lookup by id, and the *fallback* used when the
 /// provider gives no usable EVM metadata (e.g. non-EVM-modelled assets).
 struct ExchangeInstrumentResolver: Sendable {
-  let fiatInstrument: Instrument
+  private let fiat: Instrument
   private let registry: any InstrumentRegistryRepository
   private let existingLegInstrumentIds: @Sendable () async throws -> Set<String>
   private static let logger = Logger(
@@ -19,9 +19,13 @@ struct ExchangeInstrumentResolver: Sendable {
     existingLegInstrumentIds: @escaping @Sendable () async throws -> Set<String>
   ) {
     self.registry = registry
-    self.fiatInstrument = fiatInstrument
+    self.fiat = fiatInstrument
     self.existingLegInstrumentIds = existingLegInstrumentIds
   }
+
+  /// The profile's fiat denomination. Read by `ExchangeSyncEngine`'s
+  /// fiat-leg branch; intentional API surface, not raw field access.
+  func fiatDenomination() -> Instrument { fiat }
 
   /// The registered instrument for `id`, if any (used for the explicit
   /// non-EVM native short-circuit in `ExchangeSyncEngine`).
@@ -59,8 +63,12 @@ struct ExchangeInstrumentResolver: Sendable {
     }?.instrument
   }
 
-  /// Lexicographic rank comparison for fallback selection.
-  /// Priority: priced+mapped > unpriced; used id > unused; lower id > higher id.
+  /// Returns `true` when `lhs` is the better registry-fallback candidate.
+  /// Priced+mapped beats unpriced/unmapped (it has a visible price
+  /// history); an instrument already on an existing leg beats an unused
+  /// one (same coin resolves to the same registry entry across import
+  /// cycles — avoids phantom duplicates); lowest id breaks ties
+  /// deterministically across sync runs.
   private static func isBetterFallback(
     _ lhs: CryptoRegistration,
     than rhs: CryptoRegistration,
