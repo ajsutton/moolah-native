@@ -53,10 +53,15 @@ struct CoinstashSyncSourceTests {
     let exchange = Account(
       name: "C", type: .exchange, instrument: .AUD,
       exchangeProvider: .coinstash)
-    let error = await #expect(throws: WalletSyncError.self) {
+    do {
       _ = try await src.build(account: exchange)
+      Issue.record("Expected WalletSyncError to be thrown")
+    } catch let error as WalletSyncError {
+      #expect(error.provider == .coinstash)
+      #expect(error.kind == .missingApiKey)
+    } catch {
+      Issue.record("Expected WalletSyncError, got \(error)")
     }
-    #expect(error == .missingApiKey)
   }
 
   @Test
@@ -70,9 +75,39 @@ struct CoinstashSyncSourceTests {
     let src = makeSource(
       client: StubExchangeClient(error: ExchangeClientError.unauthorized),
       store: store)
-    let error = await #expect(throws: WalletSyncError.self) {
+    do {
       _ = try await src.build(account: exchange)
+      Issue.record("Expected WalletSyncError to be thrown")
+    } catch let error as WalletSyncError {
+      #expect(error.provider == .coinstash)
+      #expect(error.kind == .invalidApiKey)
+    } catch {
+      Issue.record("Expected WalletSyncError, got \(error)")
     }
-    #expect(error == .invalidApiKey)
+  }
+
+  @Test
+  func genericClientErrorMapsToNetwork() async throws {
+    let store = ExchangeTokenStore(synchronizable: false)
+    let exchange = Account(
+      name: "C", type: .exchange, instrument: .AUD,
+      exchangeProvider: .coinstash)
+    try store.save(token: "TOK", for: exchange.id)
+    defer { store.delete(for: exchange.id) }
+    let src = makeSource(
+      client: StubExchangeClient(error: ExchangeClientError.malformedResponse),
+      store: store)
+    do {
+      _ = try await src.build(account: exchange)
+      Issue.record("Expected WalletSyncError to be thrown")
+    } catch let error as WalletSyncError {
+      #expect(error.provider == .coinstash)
+      if case .network = error.kind { /* ok */
+      } else {
+        Issue.record("Expected .network kind, got \(error.kind)")
+      }
+    } catch {
+      Issue.record("Expected WalletSyncError, got \(error)")
+    }
   }
 }
