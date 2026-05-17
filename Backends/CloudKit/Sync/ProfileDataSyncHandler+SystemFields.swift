@@ -213,12 +213,10 @@ extension ProfileDataSyncHandler {
   }
 
   /// Returns the per-recordType batch system-fields setter, or `nil`
-  /// for record types not handled by the GRDB layer. Mirrors the
-  /// dispatch table that the per-row path used; replacing the per-
-  /// row setter with the batch shape is the whole point of the
-  /// refactor. The lookup is split between `referenceSystemFieldsBatchSetter`
-  /// (immutable reference data) and `domainSystemFieldsBatchSetter`
-  /// (the financial-graph rows) so neither switch breaches the
+  /// for record types not handled by the GRDB layer. The lookup is
+  /// split between `referenceSystemFieldsBatchSetter` (immutable
+  /// reference data) and `domainSystemFieldsBatchSetter` (the
+  /// financial-graph rows) so neither switch breaches the
   /// cyclomatic-complexity ceiling — same shape as `saveHandler`.
   private func systemFieldsBatchSetter(
     for recordType: String

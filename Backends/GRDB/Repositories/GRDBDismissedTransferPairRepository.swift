@@ -105,7 +105,8 @@ final class GRDBDismissedTransferPairRepository: DismissedTransferPairRepository
     }
   }
 
-  /// In-transaction variant — see `GRDBCSVImportProfileRepository.applyRemoteChangesSync(...:in:)`
+  /// In-transaction variant — see
+  /// `GRDBCSVImportProfileRepository.applyRemoteChangesSync(...:in:)`
   /// for the rationale (one commit per `applyRemoteChanges` batch, issue #872).
   func applyRemoteChangesSync(
     saved rows: [DismissedTransferPairRow], deleted ids: [UUID], in database: Database

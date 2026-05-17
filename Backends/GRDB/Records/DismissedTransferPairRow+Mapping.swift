@@ -15,6 +15,9 @@ extension DismissedTransferPairRow {
     let sorted = domain.transactionIds.sorted { $0.uuidString < $1.uuidString }
     self.id = domain.id
     self.recordName = Self.recordName(for: domain.id)
+    precondition(
+      sorted.count == 2,
+      "DismissedTransferPair must contain exactly two transaction ids; got \(sorted.count)")
     self.transactionIdA = sorted[0]
     self.transactionIdB = sorted[1]
     self.dismissedAt = domain.dismissedAt

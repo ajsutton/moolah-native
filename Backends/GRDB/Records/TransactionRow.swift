@@ -118,68 +118,6 @@ struct TransactionRow {
   var transferSuggestionCounterpartId: UUID?
   var transferSuggestionSuggestedAt: Date?
   var encodedSystemFields: Data?
-
-  // Explicit memberwise initializer. The eleven transfer-detection
-  // columns default to nil so the CloudKit field projection — which
-  // does not carry them — constructs a row without naming them. Every
-  // pre-existing parameter stays required.
-  init(
-    id: UUID,
-    recordName: String,
-    date: Date,
-    payee: String?,
-    notes: String?,
-    recurPeriod: String?,
-    recurEvery: Int?,
-    importOriginRawDescription: String?,
-    importOriginBankReference: String?,
-    importOriginRawAmount: String?,
-    importOriginRawBalance: String?,
-    importOriginImportedAt: Date?,
-    importOriginImportSessionId: UUID?,
-    importOriginSourceFilename: String?,
-    importOriginParserIdentifier: String?,
-    importOriginKind: String? = nil,
-    importOriginIncomingRawDescription: String? = nil,
-    importOriginIncomingBankReference: String? = nil,
-    importOriginIncomingRawAmount: String? = nil,
-    importOriginIncomingRawBalance: String? = nil,
-    importOriginIncomingImportedAt: Date? = nil,
-    importOriginIncomingImportSessionId: UUID? = nil,
-    importOriginIncomingSourceFilename: String? = nil,
-    importOriginIncomingParserIdentifier: String? = nil,
-    transferSuggestionCounterpartId: UUID? = nil,
-    transferSuggestionSuggestedAt: Date? = nil,
-    encodedSystemFields: Data?
-  ) {
-    self.id = id
-    self.recordName = recordName
-    self.date = date
-    self.payee = payee
-    self.notes = notes
-    self.recurPeriod = recurPeriod
-    self.recurEvery = recurEvery
-    self.importOriginRawDescription = importOriginRawDescription
-    self.importOriginBankReference = importOriginBankReference
-    self.importOriginRawAmount = importOriginRawAmount
-    self.importOriginRawBalance = importOriginRawBalance
-    self.importOriginImportedAt = importOriginImportedAt
-    self.importOriginImportSessionId = importOriginImportSessionId
-    self.importOriginSourceFilename = importOriginSourceFilename
-    self.importOriginParserIdentifier = importOriginParserIdentifier
-    self.importOriginKind = importOriginKind
-    self.importOriginIncomingRawDescription = importOriginIncomingRawDescription
-    self.importOriginIncomingBankReference = importOriginIncomingBankReference
-    self.importOriginIncomingRawAmount = importOriginIncomingRawAmount
-    self.importOriginIncomingRawBalance = importOriginIncomingRawBalance
-    self.importOriginIncomingImportedAt = importOriginIncomingImportedAt
-    self.importOriginIncomingImportSessionId = importOriginIncomingImportSessionId
-    self.importOriginIncomingSourceFilename = importOriginIncomingSourceFilename
-    self.importOriginIncomingParserIdentifier = importOriginIncomingParserIdentifier
-    self.transferSuggestionCounterpartId = transferSuggestionCounterpartId
-    self.transferSuggestionSuggestedAt = transferSuggestionSuggestedAt
-    self.encodedSystemFields = encodedSystemFields
-  }
 }
 
 extension TransactionRow: Codable {}

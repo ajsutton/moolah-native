@@ -115,7 +115,8 @@ final class RecentlyAddedViewModel {
     now: Date = Date()
   ) -> [Transaction] {
     transactions.filter { transaction in
-      // Recently Added groups by the single-import session; .merged transfers (no single origin) are excluded here.
+      // Recently Added groups by single-import session; .merged transfers
+      // (which have no single origin) are excluded.
       guard let origin = transaction.importOrigin?.singleOrigin else { return false }
       if let range = window.dateRange(now: now) {
         return range.contains(origin.importedAt)
