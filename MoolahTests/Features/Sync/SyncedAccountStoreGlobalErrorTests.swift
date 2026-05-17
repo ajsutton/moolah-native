@@ -250,7 +250,8 @@ struct SyncedAccountStoreGlobalErrorTests {
     #expect(fixture.store.globalError == nil)
     let state = try #require(
       try await fixture.backend.walletSyncState.load(accountId: exchange.id))
-    #expect(state.lastError == .invalidApiKey)
+    #expect(state.lastError?.kind == .invalidApiKey)
+    #expect(state.lastError?.provider == .coinstash)
   }
 
   @Test("Crypto .invalidApiKey still sets globalError even alongside a failing exchange")

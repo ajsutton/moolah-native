@@ -22,6 +22,12 @@
 ///      the "deprecated field is suddenly invisible" race.
 ///
 /// History (newest first):
+/// - (no bump) 2026-05-17: `WalletSyncError` gained a `provider` field and
+///   changed from a bare enum to a struct. `WalletSyncState` is per-device
+///   and never synced cross-device; legacy rows decode via a bare-enum
+///   compatibility path in `WalletSyncError`'s custom `Codable`. No rubric
+///   item (1–6) applies — recorded here so the absence of a bump is a
+///   documented decision, not an oversight.
 /// - 2: `AccountType.exchange` (centralised-exchange accounts) +
 ///      `Account.exchangeProvider` synced field (`exchangeProvider` on
 ///      `AccountRecord`). Older builds decode `.exchange` as `.asset`
