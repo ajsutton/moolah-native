@@ -1,6 +1,6 @@
 import Foundation
 
-struct TransactionLeg {
+struct TransactionLeg: Sendable {
   let id: UUID
   let accountId: UUID?
   let instrument: Instrument
@@ -47,8 +47,6 @@ struct TransactionLeg {
     InstrumentAmount(quantity: quantity, instrument: instrument)
   }
 }
-
-extension TransactionLeg: Sendable {}
 
 extension TransactionLeg: Identifiable {}
 
