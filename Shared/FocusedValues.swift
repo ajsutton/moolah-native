@@ -61,6 +61,32 @@ struct PayTransactionActionKey: FocusedValueKey {
   typealias Value = () -> Void
 }
 
+/// The set of transaction ids the focused list has multi-selected. The
+/// Transaction > Merge as Transfer command and the list toolbar gate on
+/// this being exactly two transactions on disjoint accounts. Empty (not
+/// nil) when nothing is multi-selected; nil when no list publishes it.
+struct TransferMergeSelectionKey: FocusedValueKey {
+  typealias Value = Set<Transaction.ID>
+}
+
+/// Trigger action for Transaction > Merge as Transfer. Published by the
+/// list leaf only when its multi-selection is exactly two
+/// detection-eligible transactions on disjoint accounts; `nil`
+/// otherwise (which disables the menu item). The gate predicate
+/// (`Transaction.canManualMerge`) lives on the leaf so the menu bar,
+/// toolbar, and context menu all apply the same rule.
+struct MergeAsTransferActionKey: FocusedValueKey {
+  typealias Value = () -> Void
+}
+
+/// Trigger action for Transaction > Split Back into Separate
+/// Transactions… Published by the leaf that owns the focused
+/// transaction only when it `isMergedTransfer`; `nil` otherwise (which
+/// disables the menu item). The leaf arms its own confirmation dialog.
+struct UnmergeTransferActionKey: FocusedValueKey {
+  typealias Value = () -> Void
+}
+
 /// The account currently selected in the focused window (for Account menu items).
 struct SelectedAccountKey: FocusedValueKey {
   typealias Value = Binding<Account?>
@@ -155,6 +181,18 @@ extension FocusedValues {
   var payTransactionAction: PayTransactionActionKey.Value? {
     get { self[PayTransactionActionKey.self] }
     set { self[PayTransactionActionKey.self] = newValue }
+  }
+  var transferMergeSelection: TransferMergeSelectionKey.Value? {
+    get { self[TransferMergeSelectionKey.self] }
+    set { self[TransferMergeSelectionKey.self] = newValue }
+  }
+  var mergeAsTransferAction: MergeAsTransferActionKey.Value? {
+    get { self[MergeAsTransferActionKey.self] }
+    set { self[MergeAsTransferActionKey.self] = newValue }
+  }
+  var unmergeTransferAction: UnmergeTransferActionKey.Value? {
+    get { self[UnmergeTransferActionKey.self] }
+    set { self[UnmergeTransferActionKey.self] = newValue }
   }
   var selectedAccount: SelectedAccountKey.Value? {
     get { self[SelectedAccountKey.self] }

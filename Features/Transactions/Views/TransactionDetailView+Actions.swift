@@ -33,4 +33,26 @@ extension TransactionDetailView {
     else { return }
     onUpdate(updated)
   }
+
+  /// "Split Back into Separate Transactions…" action for a merged
+  /// transfer. Self-hides unless the transaction `isMergedTransfer`
+  /// (the same predicate the menu bar / list context menu gate on).
+  /// `role: .destructive` here only — the detail/context red-label cue
+  /// is useful for an irreversible-feeling action; the menu-bar button
+  /// carries no role. The button only arms the parent's confirmation
+  /// flag; the dialog and the `transactionStore.unmerge(...)` dispatch
+  /// live in `TransactionDetailView`'s body (the house pattern).
+  @ViewBuilder var unmergeSection: some View {
+    if transaction.isMergedTransfer {
+      Section {
+        Button(role: .destructive) {
+          showUnmergeConfirmation = true
+        } label: {
+          Text("Split Back into Separate Transactions\u{2026}")
+            .frame(maxWidth: .infinity)
+        }
+        .accessibilityIdentifier(UITestIdentifiers.TransferDetection.unmerge(transaction.id))
+      }
+    }
+  }
 }

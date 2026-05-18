@@ -74,6 +74,8 @@ enum UITestSeedHydrator {
       try hydrateIncompatibleProfile(into: manager)
       // Return nil → no auto-activate, picker renders, test taps the row.
       return nil
+    case .transferDetectionBaseline:
+      return try hydrateTransferDetectionBaseline(into: manager)
     }
   }
 

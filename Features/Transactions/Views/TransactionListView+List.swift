@@ -5,6 +5,50 @@
 import SwiftUI
 
 extension TransactionListView {
+  // MARK: - Selection Bridging
+
+  /// Bridges the `List`'s `Set<Transaction.ID>` selection to the
+  /// existing single-selection inspector. The getter projects the
+  /// single `selectedTransaction` (so an inspector-driven selection
+  /// highlights its row); the setter records the full multi-selection
+  /// and resolves a single pick to `selectedTransaction`, leaving it
+  /// `nil` for an empty or multi-row selection.
+  var listSelectionBinding: Binding<Set<Transaction.ID>> {
+    Binding(
+      get: {
+        if let id = selectedTransaction?.id { return [id] }
+        return transferMergeSelection
+      },
+      set: { newSelection in
+        transferMergeSelection = newSelection
+        if newSelection.count == 1, let id = newSelection.first {
+          selectedTransaction =
+            transactionStore.transactions.first {
+              $0.transaction.id == id
+            }?.transaction
+        } else {
+          selectedTransaction = nil
+        }
+      }
+    )
+  }
+
+  /// The two transactions the user has multi-selected for a manual
+  /// merge, resolved from the loaded projection, or `nil` when the
+  /// selection is not exactly a valid candidate pair. Shared by the
+  /// list toolbar and the row context menu so the gate logic is not
+  /// duplicated; the menu-bar command applies the same
+  /// `Transaction.canManualMerge` predicate over the focused value.
+  var manualMergePair: (Transaction, Transaction)? {
+    guard transferMergeSelection.count == 2 else { return nil }
+    let selected = transactionStore.transactions
+      .map(\.transaction)
+      .filter { transferMergeSelection.contains($0.id) }
+    guard selected.count == 2 else { return nil }
+    guard Transaction.canManualMerge(selected[0], with: selected[1]) else { return nil }
+    return (selected[0], selected[1])
+  }
+
   // MARK: - Top-Level View Composition
 
   /// Module-internal (not `private`) because `TransactionListView.body` in
@@ -12,7 +56,7 @@ extension TransactionListView {
   /// SwiftLint would prefer is unavailable across files even within the
   /// same type's extensions; module-internal is the smallest legal scope.
   var transactionsList: some View {
-    List(selection: selectedTransactionBinding) {
+    List(selection: listSelectionBinding) {
       listContent
     }
     #if os(macOS)
@@ -27,34 +71,7 @@ extension TransactionListView {
     #endif
     .accessibilityIdentifier(UITestIdentifiers.TransactionList.container)
     .profileNavigationTitle(displayTitle)
-    .toolbar {
-      ToolbarItem(placement: .automatic) {
-        Button {
-          showFilterSheet = true
-        } label: {
-          Label(
-            "Filter",
-            systemImage: activeFilter != baseFilter
-              ? "line.3.horizontal.decrease.circle.fill"
-              : "line.3.horizontal.decrease.circle")
-        }
-      }
-
-      ToolbarItem(placement: .automatic) {
-        Button {
-          Task {
-            await transactionStore.load(
-              filter: filter)
-          }
-        } label: {
-          Label("Refresh", systemImage: "arrow.clockwise")
-        }
-      }
-
-      ToolbarItem(placement: .primaryAction) {
-        addToolbarButton
-      }
-    }
+    .toolbar { listToolbarContent }
     .sheet(isPresented: $showFilterSheet) {
       TransactionFilterView(
         filter: activeFilter,
@@ -92,6 +109,46 @@ extension TransactionListView {
     .searchable(text: $searchText, prompt: "Search payee")
     .overlay {
       emptyStateOverlay
+    }
+  }
+
+  /// The list's toolbar items. Extracted from `transactionsList`'s
+  /// modifier chain so that closure stays within SwiftLint's
+  /// closure-body length budget as items are added.
+  @ToolbarContentBuilder private var listToolbarContent: some ToolbarContent {
+    ToolbarItem(placement: .automatic) {
+      Button {
+        showFilterSheet = true
+      } label: {
+        Label(
+          "Filter",
+          systemImage: activeFilter != baseFilter
+            ? "line.3.horizontal.decrease.circle.fill"
+            : "line.3.horizontal.decrease.circle")
+      }
+    }
+
+    ToolbarItem(placement: .automatic) {
+      Button {
+        Task { await transactionStore.load(filter: filter) }
+      } label: {
+        Label("Refresh", systemImage: "arrow.clockwise")
+      }
+    }
+
+    ToolbarItem(placement: .automatic) {
+      Button {
+        if let (sideA, sideB) = manualMergePair {
+          Task { await transactionStore.manualMerge(sideA, sideB) }
+        }
+      } label: {
+        Label("Merge as Transfer", systemImage: "arrow.left.arrow.right")
+      }
+      .disabled(manualMergePair == nil)
+    }
+
+    ToolbarItem(placement: .primaryAction) {
+      addToolbarButton
     }
   }
 
@@ -179,7 +236,7 @@ extension TransactionListView {
       onPay: scheduled?.onPay,
       pendingPayId: scheduled?.pendingPayId
     )
-    .tag(entry.transaction)
+    .tag(entry.transaction.id)
     .accessibilityIdentifier(
       UITestIdentifiers.TransactionList.transaction(entry.transaction.id)
     )
@@ -255,6 +312,22 @@ extension TransactionListView {
       Button("Create rule from this\u{2026}", systemImage: "plus.rectangle.on.folder") {
         createRuleFromTransaction = transaction
       }
+    }
+    if let pair = manualMergePair, pair.0.id == transaction.id || pair.1.id == transaction.id {
+      Button("Merge as Transfer", systemImage: "arrow.left.arrow.right") {
+        Task { await transactionStore.manualMerge(pair.0, pair.1) }
+      }
+      .accessibilityIdentifier(UITestIdentifiers.TransferDetection.merge(transaction.id))
+    }
+    if transaction.isMergedTransfer {
+      Button(
+        "Split Back into Separate Transactions\u{2026}",
+        systemImage: "arrow.triangle.branch",
+        role: .destructive
+      ) {
+        transactionPendingUnmerge = transaction.id
+      }
+      .accessibilityIdentifier(UITestIdentifiers.TransferDetection.unmerge(transaction.id))
     }
     Divider()
     Button("Delete Transaction\u{2026}", systemImage: "trash", role: .destructive) {

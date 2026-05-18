@@ -1,9 +1,5 @@
 import Foundation
 
-// Transfer-detection eligibility predicate (Extension A from
-// `plans/2026-04-18-transfer-detection-design.md`, added alongside the
-// crypto wallet importer in `plans/2026-05-05-crypto-wallet-import-design.md`).
-//
 // Eligibility lets multi-leg crypto transactions (transfer leg + cross-
 // instrument fee leg) participate in the standard amount/instrument/date
 // suggestion pass without false-pairing trades or already-merged
@@ -29,6 +25,9 @@ extension Transaction {
   /// - Anything else with multiple value-bearing legs or with extra legs
   ///   in the same instrument as the value-bearing leg.
   var isTransferDetectionEligible: Bool { transferDetectionValueLeg != nil }
+
+  /// `true` when every leg is uncategorised — the transaction still needs user review.
+  var needsReview: Bool { legs.allSatisfy { $0.categoryId == nil } }
 
   /// The leg that detection should pair on, or `nil` when this
   /// transaction is ineligible.
@@ -93,5 +92,29 @@ extension Transaction {
       leg.type == .expense && leg.instrument != valueLeg.instrument
     }
     return allFeeLegs ? valueLeg : nil
+  }
+
+  /// `true` iff this transaction is a transfer that detection produced
+  /// by merging two single-account sides: exactly two `.transfer` legs
+  /// and a `.merged` import origin. A hand-entered two-leg transfer has
+  /// no merged origin and is *not* unmergeable — splitting it has no
+  /// original sides to restore. Drives the "Split Back into Separate
+  /// Transactions…" gate across the menu bar, detail, and context menu.
+  var isMergedTransfer: Bool {
+    legs.count == 2
+      && legs.allSatisfy { $0.type == .transfer }
+      && importOrigin?.mergedOrigin != nil
+  }
+
+  /// `true` iff the two transactions form a candidate manual-merge pair:
+  /// both detection-eligible (a single value-bearing leg) and on
+  /// disjoint accounts. This is the cheap selection-shape gate the menu
+  /// bar / toolbar / context menu share; the coordinator still performs
+  /// the full opposite-amount / same-instrument / ±14-day validation and
+  /// surfaces a `ManualMergeError` for anything this gate lets through.
+  static func canManualMerge(_ first: Transaction, with second: Transaction) -> Bool {
+    first.isTransferDetectionEligible
+      && second.isTransferDetectionEligible
+      && first.accountIds.isDisjoint(with: second.accountIds)
   }
 }

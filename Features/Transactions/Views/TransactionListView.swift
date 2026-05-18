@@ -70,6 +70,15 @@ struct TransactionListView: View {
     return $_internalSelection
   }
 
+  /// Raw multi-selection the `List` writes into (⌘/⇧-click). The single
+  /// `selectedTransaction` (and therefore the inspector) is derived from
+  /// it: exactly one selected row opens the inspector as before; zero or
+  /// two-plus selected rows close it (multi-select has no inspector — a
+  /// merge candidate, not a detail target). Published as the
+  /// `transferMergeSelection` focused value so the Transaction menu and
+  /// the toolbar can gate "Merge as Transfer" on it.
+  @State var transferMergeSelection: Set<Transaction.ID> = []
+
   private var handlesOwnInspector: Bool { _externalSelection == nil }
 
   init(
@@ -122,6 +131,7 @@ struct TransactionListView: View {
   @State var searchText = ""
   @FocusState private var searchFieldFocused: Bool
   @State var transactionPendingDelete: Transaction.ID?
+  @State var transactionPendingUnmerge: Transaction.ID?
   @State var createRuleFromTransaction: Transaction?
 
   var body: some View {
@@ -149,6 +159,19 @@ struct TransactionListView: View {
         if new != nil { searchFieldFocused = false }
       }
       .focusedSceneValue(\.selectedTransaction, selectedTransactionBinding)
+      .focusedSceneValue(\.transferMergeSelection, transferMergeSelection)
+      .focusedSceneValue(
+        \.mergeAsTransferAction,
+        manualMergePair.map { pair in
+          { Task { await transactionStore.manualMerge(pair.0, pair.1) } }
+        }
+      )
+      .focusedSceneValue(
+        \.unmergeTransferAction,
+        selectedTransaction?.isMergedTransfer == true
+          ? { transactionPendingUnmerge = selectedTransaction?.id }
+          : nil
+      )
       .focusedSceneValue(
         \.editTransactionAction,
         selectedTransaction != nil
@@ -206,6 +229,30 @@ struct TransactionListView: View {
         Button("Cancel", role: .cancel) { transactionPendingDelete = nil }
       } message: {
         Text("This action cannot be undone.")
+      }
+      .confirmationDialog(
+        "Split Transfer into Separate Transactions",
+        isPresented: Binding(
+          get: { transactionPendingUnmerge != nil },
+          set: { if !$0 { transactionPendingUnmerge = nil } }
+        ),
+        titleVisibility: .visible
+      ) {
+        Button("Split Back into Separate Transactions", role: .destructive) {
+          if let id = transactionPendingUnmerge,
+            let transfer = transactionStore.transactions.first(where: {
+              $0.transaction.id == id
+            })?.transaction
+          {
+            Task { await transactionStore.unmerge(transfer) }
+          }
+          transactionPendingUnmerge = nil
+        }
+        Button("Cancel", role: .cancel) { transactionPendingUnmerge = nil }
+      } message: {
+        Text(
+          "The two original transactions are restored and stay separate. "
+            + "This decision is synced across your devices.")
       }
       .modifier(
         TransactionListCSVImportAddons(

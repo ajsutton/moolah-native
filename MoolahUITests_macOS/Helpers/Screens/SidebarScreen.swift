@@ -81,16 +81,17 @@ struct SidebarScreen {
 
   /// Switches the centre column to the named top-level view.
   ///
-  /// Returns once the named row's click resolves. For `allTransactions`
-  /// — the only named item that renders a `TransactionListView` (via
-  /// `AllTransactionsView`) — also waits on
-  /// `UITestIdentifiers.TransactionList.container` as a post-condition.
-  /// For the others (`upcoming`, `recentlyAdded`, `analysis`, `reports`,
-  /// `categories`) the leaf is its own custom surface (e.g.
-  /// `RecentlyAddedView`, `UpcomingView`) with no shared identifier, so
-  /// the next driver call's `waitForExistence` provides natural
-  /// quiescence — per `UI_TEST_GUIDE.md`'s no-sleep rule, no explicit
-  /// sleep is added.
+  /// Returns once the named row's click resolves, then waits on the
+  /// leaf's canonical container as a post-condition for the two named
+  /// items that expose one: `allTransactions` renders a
+  /// `TransactionListView` (via `AllTransactionsView`) and waits on
+  /// `UITestIdentifiers.TransactionList.container`; `recentlyAdded`
+  /// renders `RecentlyAddedView` and waits on
+  /// `UITestIdentifiers.RecentlyAdded.container`. For the remaining
+  /// items (`upcoming`, `analysis`, `reports`, `categories`) the leaf is
+  /// its own custom surface with no shared identifier, so the next
+  /// driver call's `waitForExistence` provides natural quiescence — per
+  /// `UI_TEST_GUIDE.md`'s no-sleep rule, no explicit sleep is added.
   func switchToNamed(_ item: SidebarNamedItem) {
     Trace.record(detail: "named=\(item.rawValue)")
     let identifier = UITestIdentifiers.Sidebar.view(item.rawValue)
@@ -114,7 +115,15 @@ struct SidebarScreen {
           "transaction list container did not appear after switching to \(item.rawValue)")
         XCTFail("Transaction list did not render within 3s after \(item.rawValue)")
       }
-    case .upcoming, .recentlyAdded, .analysis, .reports, .categories:
+    case .recentlyAdded:
+      let recentlyAddedContainer = app.element(
+        for: UITestIdentifiers.RecentlyAdded.container)
+      if !recentlyAddedContainer.waitForExistence(timeout: 3) {
+        Trace.recordFailure(
+          "recently added container did not appear after switching to \(item.rawValue)")
+        XCTFail("Recently Added did not render within 3s after \(item.rawValue)")
+      }
+    case .upcoming, .analysis, .reports, .categories:
       // No shared identifier — see docstring.
       break
     }

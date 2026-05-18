@@ -52,6 +52,11 @@ final class MoolahApp {
   /// Centre column listing transactions for the current sidebar selection.
   var transactionList: TransactionListScreen { TransactionListScreen(app: self) }
 
+  /// Recently Added landing page (`RecentlyAddedView`): imported-row
+  /// list with the passive transfer pill and the row context-menu
+  /// merge / dismiss actions.
+  var recentlyAdded: RecentlyAddedScreen { RecentlyAddedScreen(app: self) }
+
   /// Right column or sheet showing a single transaction's editable detail.
   var transactionDetail: TransactionDetailScreen { TransactionDetailScreen(app: self) }
 

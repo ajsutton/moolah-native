@@ -20,6 +20,12 @@ struct TransactionDetailView: View {
   // `fileprivate`, making internal the smallest legal cross-file scope.
   @State var draft: TransactionDraft
   @State private var showDeleteConfirmation = false
+  @State private var showTransferDismissConfirmation = false
+  // Module-internal so the unmerge section in
+  // `TransactionDetailView+Actions.swift` can arm it. SwiftLint's
+  // strict_fileprivate rule makes internal the smallest legal
+  // cross-file scope.
+  @State var showUnmergeConfirmation = false
   @State private var payeeState = PayeeAutocompleteState()
   @State private var categoryState = CategoryAutocompleteState()
   @State private var legCategoryStates: [Int: CategoryAutocompleteState] = [:]
@@ -145,6 +151,32 @@ struct TransactionDetailView: View {
       } message: {
         Text("Are you sure you want to delete this sub-transaction?")
       }
+      .confirmationDialog(
+        "Dismiss Transfer Suggestion",
+        isPresented: $showTransferDismissConfirmation,
+        titleVisibility: .visible
+      ) {
+        Button("Dismiss Suggestion", role: .destructive) {
+          Task { await transactionStore.dismissSuggestedTransfer(transaction) }
+        }
+      } message: {
+        Text(
+          "These transactions stay separate and will not be suggested as a "
+            + "transfer again. This decision is synced across your devices.")
+      }
+      .confirmationDialog(
+        "Split Transfer into Separate Transactions",
+        isPresented: $showUnmergeConfirmation,
+        titleVisibility: .visible
+      ) {
+        Button("Split Back into Separate Transactions", role: .destructive) {
+          Task { await transactionStore.unmerge(transaction) }
+        }
+      } message: {
+        Text(
+          "The two original transactions are restored and stay separate. "
+            + "This decision is synced across your devices.")
+      }
   }
 }
 
@@ -154,6 +186,14 @@ extension TransactionDetailView {
   private var formContent: some View {
     Form {
       modeAwareSections
+      // Banner offering to collapse this transaction and its detected
+      // counterpart into one merged transfer. Hides itself when the
+      // transaction carries no transfer suggestion.
+      TransactionDetailTransferSuggestion(
+        transaction: transaction,
+        transactionStore: transactionStore,
+        showDismissConfirmation: $showTransferDismissConfirmation
+      )
       // Per-leg block-explorer links for any leg with an externalId
       // (on-chain tx hash). Skipped when no leg qualifies — the section
       // hides itself rather than rendering an empty header.
@@ -172,6 +212,7 @@ extension TransactionDetailView {
           onDelete: onDelete
         )
       }
+      unmergeSection
       TransactionDetailDeleteSection(onRequestDelete: { showDeleteConfirmation = true })
     }
   }
@@ -355,5 +396,5 @@ extension TransactionDetailView {
 
 // Computed helpers (isEditable, isSimpleEarmarkOnly, instruments,
 // bindings, isScheduled) live in TransactionDetailView+Helpers.swift.
-// Actions (autofillFromPayee, debouncedSave, saveIfValid) live in
-// TransactionDetailView+Actions.swift.
+// Actions (autofillFromPayee, debouncedSave, saveIfValid) and the
+// unmergeSection view builder live in TransactionDetailView+Actions.swift.
