@@ -48,7 +48,8 @@ struct FixedCryptoPriceClient: CryptoPriceClient, Sendable {
       if let price = tokenPrices[key] {
         filtered[key] = price
       }
-      current = calendar.date(byAdding: .day, value: 1, to: current)!
+      guard let next = calendar.date(byAdding: .day, value: 1, to: current) else { break }
+      current = next
     }
     return filtered
   }

@@ -118,7 +118,8 @@ struct ExportImportIntegrationTests {
     #expect(decoded.earmarks.count == 1)
     // 3 transactions: opening balance + income + expense
     #expect(decoded.transactions.count == 3)
-    #expect(decoded.earmarkBudgets[decoded.earmarks.first!.id]?.count == 1)
+    let decodedEarmark = try #require(decoded.earmarks.first)
+    #expect(decoded.earmarkBudgets[decodedEarmark.id]?.count == 1)
 
     // Verify coordinator returned to idle state
     if case .idle = coordinator.state {
@@ -180,7 +181,8 @@ struct ExportImportIntegrationTests {
     #expect(earmarks.count == 1)
     #expect(earmarks.first?.name == "Holiday")
 
-    let budgetItems = try await cloudBackend.earmarks.fetchBudget(earmarkId: earmarks.first!.id)
+    let earmark = try #require(earmarks.first)
+    let budgetItems = try await cloudBackend.earmarks.fetchBudget(earmarkId: earmark.id)
     #expect(budgetItems.count == 1)
     #expect(budgetItems.first?.amount.quantity == dec("30.00"))
 

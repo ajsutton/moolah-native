@@ -123,7 +123,11 @@ final class SyncDownloadBenchmarks: XCTestCase {
       records.reserveCapacity(800)
       for i in 0..<400 {
         let txnRecord = makeFreshTransactionCKRecord(index: i)
-        let txnId = UUID(uuidString: txnRecord.recordID.recordName)!
+        guard let txnId = UUID(uuidString: txnRecord.recordID.recordName) else {
+          preconditionFailure(
+            "Fresh transaction CKRecord has a non-UUID recordName: "
+              + txnRecord.recordID.recordName)
+        }
         let legRecord = makeFreshLegCKRecord(transactionId: txnId, index: i)
         records.append(txnRecord)
         records.append(legRecord)

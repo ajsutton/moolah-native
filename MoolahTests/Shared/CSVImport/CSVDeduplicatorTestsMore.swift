@@ -8,14 +8,14 @@ struct CSVDeduplicatorTestsMore {
 
   private let accountId = UUID()
 
-  private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
+  private func date(_ year: Int, _ month: Int, _ day: Int) throws -> Date {
     var components = DateComponents()
     components.year = year
     components.month = month
     components.day = day
     var cal = Calendar(identifier: .gregorian)
-    cal.timeZone = TimeZone(identifier: "UTC")!
-    return cal.date(from: components)!
+    cal.timeZone = .gmt
+    return try #require(cal.date(from: components))
   }
 
   private func existingTransaction(
@@ -78,14 +78,14 @@ struct CSVDeduplicatorTestsMore {
   }
 
   @Test("layer 2 — normalisation collapses whitespace and case")
-  func layer2NormalisationCollapsesWhitespaceAndCase() {
+  func layer2NormalisationCollapsesWhitespaceAndCase() throws {
     let existing = [
       existingTransaction(
-        accountId: accountId, date: date(2024, 4, 2),
+        accountId: accountId, date: try date(2024, 4, 2),
         description: "coffee  hut", amount: -5)
     ]
     let incoming = candidate(
-      date: date(2024, 4, 2), description: "COFFEE HUT", amount: -5)
+      date: try date(2024, 4, 2), description: "COFFEE HUT", amount: -5)
     let result = CSVDeduplicator.filter([incoming], against: existing, accountId: accountId)
     #expect(result.kept.isEmpty)
   }
@@ -93,15 +93,15 @@ struct CSVDeduplicatorTestsMore {
   // MARK: - Layer 3
 
   @Test("layer 3 — balance alignment skips a candidate whose triple matches existing")
-  func layer3BalanceAlignmentCatchesOverlap() {
+  func layer3BalanceAlignmentCatchesOverlap() throws {
     let existing = [
       existingTransaction(
-        accountId: accountId, date: date(2024, 4, 2),
+        accountId: accountId, date: try date(2024, 4, 2),
         description: "COFFEE HUT SYDNEY", amount: dec("-5.50"),
         balance: dec("994.50"))
     ]
     let incoming = candidate(
-      date: date(2024, 4, 2),
+      date: try date(2024, 4, 2),
       description: "different wording",  // defeats layer 2
       amount: dec("-5.50"),
       balance: dec("994.50"))
@@ -111,15 +111,15 @@ struct CSVDeduplicatorTestsMore {
   }
 
   @Test("layer 3 — disabled when any candidate is multi-leg")
-  func layer3DisabledWhenMultiLeg() {
+  func layer3DisabledWhenMultiLeg() throws {
     let existing = [
       existingTransaction(
-        accountId: accountId, date: date(2024, 4, 2),
+        accountId: accountId, date: try date(2024, 4, 2),
         description: "MATCHING", amount: dec("-5.50"),
         balance: dec("994.50"))
     ]
     let multiLeg = candidate(
-      date: date(2024, 4, 2),
+      date: try date(2024, 4, 2),
       description: "something else",  // defeats layer 2
       amount: dec("-5.50"),
       balance: dec("994.50"),
@@ -135,18 +135,18 @@ struct CSVDeduplicatorTestsMore {
   }
 
   @Test("layer 3 — disabled when any candidate lacks rawBalance")
-  func layer3DisabledWhenBalanceMissing() {
+  func layer3DisabledWhenBalanceMissing() throws {
     let existing = [
       existingTransaction(
-        accountId: accountId, date: date(2024, 4, 2),
+        accountId: accountId, date: try date(2024, 4, 2),
         description: "MATCHING", amount: dec("-5.50"),
         balance: dec("994.50"))
     ]
     let withBalance = candidate(
-      date: date(2024, 4, 2), description: "other", amount: dec("-5.50"),
+      date: try date(2024, 4, 2), description: "other", amount: dec("-5.50"),
       balance: dec("994.50"))
     let noBalance = candidate(
-      date: date(2024, 4, 3), description: "x", amount: dec("-1.00"))
+      date: try date(2024, 4, 3), description: "x", amount: dec("-1.00"))
     let result = CSVDeduplicator.filter(
       [withBalance, noBalance], against: existing, accountId: accountId)
     // Layer 3 is off because one candidate has no balance; layer 2 won't
@@ -157,29 +157,29 @@ struct CSVDeduplicatorTestsMore {
   // MARK: - Cross-layer
 
   @Test("unrelated existing transactions keep the incoming row")
-  func noMatchKeepsTheRow() {
+  func noMatchKeepsTheRow() throws {
     let existing = [
       existingTransaction(
-        accountId: accountId, date: date(2024, 4, 2),
+        accountId: accountId, date: try date(2024, 4, 2),
         description: "COFFEE", amount: -5)
     ]
     let incoming = candidate(
-      date: date(2024, 4, 3), description: "SALARY", amount: 3000)
+      date: try date(2024, 4, 3), description: "SALARY", amount: 3000)
     let result = CSVDeduplicator.filter([incoming], against: existing, accountId: accountId)
     #expect(result.kept.count == 1)
     #expect(result.skipped.isEmpty)
   }
 
   @Test("existing transactions on a different account are ignored")
-  func existingOnDifferentAccountIgnored() {
+  func existingOnDifferentAccountIgnored() throws {
     let otherAccount = UUID()
     let existing = [
       existingTransaction(
-        accountId: otherAccount, date: date(2024, 4, 2),
+        accountId: otherAccount, date: try date(2024, 4, 2),
         description: "COFFEE", amount: -5, bankRef: "REF-1")
     ]
     let incoming = candidate(
-      date: date(2024, 4, 2), description: "COFFEE", amount: -5, bankRef: "REF-1")
+      date: try date(2024, 4, 2), description: "COFFEE", amount: -5, bankRef: "REF-1")
     let result = CSVDeduplicator.filter([incoming], against: existing, accountId: accountId)
     #expect(result.kept.count == 1)
   }

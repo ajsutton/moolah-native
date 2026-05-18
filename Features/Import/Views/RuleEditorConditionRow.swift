@@ -17,56 +17,7 @@ struct RuleEditorConditionRow: View {
       }
       .labelsHidden()
 
-      switch condition {
-      case .descriptionContains(let tokens), .descriptionDoesNotContain(let tokens):
-        TextField(
-          "tokens, comma separated",
-          text: Binding(
-            get: { tokens.joined(separator: ", ") },
-            set: { newValue in
-              let parts =
-                newValue
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-              switch condition {
-              case .descriptionContains: condition = .descriptionContains(parts)
-              case .descriptionDoesNotContain: condition = .descriptionDoesNotContain(parts)
-              default: break
-              }
-            }))
-      case .descriptionBeginsWith(let prefix):
-        TextField(
-          "prefix",
-          text: Binding(
-            get: { prefix },
-            set: { condition = .descriptionBeginsWith($0) }))
-      case .amountIsPositive, .amountIsNegative:
-        EmptyView()
-      case let .amountBetween(min, max):
-        TextField(
-          "min",
-          value: Binding(
-            get: { min },
-            set: { condition = .amountBetween(min: $0, max: max) }),
-          format: .number
-        )
-        .monospacedDigit()
-        .accessibilityLabel("Minimum amount")
-        TextField(
-          "max",
-          value: Binding(
-            get: { max },
-            set: { condition = .amountBetween(min: min, max: $0) }),
-          format: .number
-        )
-        .monospacedDigit()
-        .accessibilityLabel("Maximum amount")
-      case .sourceAccountIs:
-        Text("(on routed account)")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
+      conditionEditor
 
       Button(role: .destructive) {
         onDelete()
@@ -75,6 +26,61 @@ struct RuleEditorConditionRow: View {
       }
       .buttonStyle(.borderless)
       .accessibilityLabel("Remove condition")
+    }
+  }
+}
+
+extension RuleEditorConditionRow {
+  @ViewBuilder private var conditionEditor: some View {
+    switch condition {
+    case .descriptionContains(let tokens), .descriptionDoesNotContain(let tokens):
+      TextField(
+        "tokens, comma separated",
+        text: Binding(
+          get: { tokens.joined(separator: ", ") },
+          set: { newValue in
+            let parts =
+              newValue
+              .split(separator: ",")
+              .map { $0.trimmingCharacters(in: .whitespaces) }
+              .filter { !$0.isEmpty }
+            switch condition {
+            case .descriptionContains: condition = .descriptionContains(parts)
+            case .descriptionDoesNotContain: condition = .descriptionDoesNotContain(parts)
+            default: break
+            }
+          }))
+    case .descriptionBeginsWith(let prefix):
+      TextField(
+        "prefix",
+        text: Binding(
+          get: { prefix },
+          set: { condition = .descriptionBeginsWith($0) }))
+    case .amountIsPositive, .amountIsNegative:
+      EmptyView()
+    case let .amountBetween(min, max):
+      TextField(
+        "min",
+        value: Binding(
+          get: { min },
+          set: { condition = .amountBetween(min: $0, max: max) }),
+        format: .number
+      )
+      .monospacedDigit()
+      .accessibilityLabel("Minimum amount")
+      TextField(
+        "max",
+        value: Binding(
+          get: { max },
+          set: { condition = .amountBetween(min: min, max: $0) }),
+        format: .number
+      )
+      .monospacedDigit()
+      .accessibilityLabel("Maximum amount")
+    case .sourceAccountIs:
+      Text("(on routed account)")
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
   }
 

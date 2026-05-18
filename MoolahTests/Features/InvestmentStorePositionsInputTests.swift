@@ -39,7 +39,7 @@ struct InvestmentStorePositionsInputTests {
     #expect(input.title == "Brokerage")
     #expect(input.hostCurrency == aud)
     #expect(input.positions.contains(where: { $0.instrument == bhp }))
-    let bhpRow = input.positions.first(where: { $0.instrument == bhp })!
+    let bhpRow = try #require(input.positions.first(where: { $0.instrument == bhp }))
     #expect(bhpRow.costBasis == InstrumentAmount(quantity: 4_000, instrument: aud))
   }
 

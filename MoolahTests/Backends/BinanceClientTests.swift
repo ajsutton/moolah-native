@@ -6,24 +6,25 @@ import Testing
 
 @Suite("BinanceClient")
 struct BinanceClientTests {
-  private func date(_ string: String) -> Date {
+  private func date(_ string: String) throws -> Date {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withFullDate]
-    return formatter.date(from: string)!
+    return try #require(formatter.date(from: string))
   }
 
   // MARK: - URL construction
 
   @Test
-  func klinesURLIncludesSymbolAndDateRange() {
-    let from = date("2026-04-01")
-    let to = date("2026-04-10")
+  func klinesURLIncludesSymbolAndDateRange() throws {
+    let from = try date("2026-04-01")
+    let to = try date("2026-04-10")
     let url = BinanceClient.klinesURL(symbol: "ETHUSDT", from: from, to: to)
-    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+    let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
     #expect(components.host == "api.binance.com")
     #expect(components.path == "/api/v3/klines")
-    let queryItems = Dictionary(
-      uniqueKeysWithValues: components.queryItems!.map { ($0.name, $0.value!) })
+    let items = try #require(components.queryItems)
+    let queryItems = try Dictionary(
+      uniqueKeysWithValues: items.map { try ($0.name, #require($0.value)) })
     #expect(queryItems["symbol"] == "ETHUSDT")
     #expect(queryItems["interval"] == "1d")
     #expect(queryItems["startTime"] != nil)

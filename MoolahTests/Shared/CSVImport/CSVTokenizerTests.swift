@@ -93,14 +93,14 @@ struct CSVTokenizerTests {
 
   @Test("parses UTF-16 bytes")
   func parseDataUtf16() throws {
-    let data = "a,b\n".data(using: .utf16)!
+    let data = try #require("a,b\n".data(using: .utf16))
     let rows = try CSVTokenizer.parse(data)
     #expect(rows == [["a", "b"]])
   }
 
   @Test("parses Windows-1252 bytes containing non-ASCII characters")
   func parseDataWindows1252() throws {
-    let data = "café,b\n".data(using: .windowsCP1252)!
+    let data = try #require("café,b\n".data(using: .windowsCP1252))
     let rows = try CSVTokenizer.parse(data)
     #expect(rows == [["café", "b"]])
   }

@@ -16,14 +16,14 @@ struct GenericBankCSVParserTests {
     try CSVTokenizer.parse(try CSVFixtureLoader.data(fixture))
   }
 
-  private func dateAt(_ year: Int, _ month: Int, _ day: Int) -> Date {
+  private func dateAt(_ year: Int, _ month: Int, _ day: Int) throws -> Date {
     var components = DateComponents()
     components.year = year
     components.month = month
     components.day = day
     var calendar = Calendar(identifier: .gregorian)
-    calendar.timeZone = TimeZone(identifier: "UTC")!
-    return calendar.date(from: components)!
+    calendar.timeZone = .gmt
+    return try #require(calendar.date(from: components))
   }
 
   private func transactions(_ records: [ParsedRecord]) -> [ParsedTransaction] {
@@ -50,14 +50,14 @@ struct GenericBankCSVParserTests {
     } else {
       Issue.record("expected opening-balance row to be .skip, got \(records[0])")
     }
-    let coffee = txs.first(where: { $0.rawDescription == "COFFEE HUT SYDNEY" })!
+    let coffee = try #require(txs.first(where: { $0.rawDescription == "COFFEE HUT SYDNEY" }))
     #expect(coffee.rawAmount == Decimal(string: "-5.50"))
     #expect(coffee.rawBalance == Decimal(string: "994.50"))
     #expect(coffee.legs.count == 1)
     #expect(coffee.legs[0].type == .expense)
     #expect(coffee.legs[0].quantity == Decimal(string: "-5.50"))
     #expect(coffee.bankReference == nil)
-    #expect(coffee.date == dateAt(2024, 4, 2))
+    #expect(coffee.date == (try dateAt(2024, 4, 2)))
   }
 
   @Test("recognises ANZ signed amount column")
@@ -88,15 +88,15 @@ struct GenericBankCSVParserTests {
   func recognizesWestpacDashDate() throws {
     let parser = GenericBankCSVParser()
     let rows = try self.rows("westpac-everyday")
-    let mapping = parser.inferMapping(
-      from: rows[0], sampleRows: Array(rows.dropFirst()))!
+    let mapping = try #require(
+      parser.inferMapping(from: rows[0], sampleRows: Array(rows.dropFirst())))
     #expect(mapping.dateFormat == .ddMMyyyy(separator: "-"))
     let records = try parser.parse(rows: rows)
     let txs = transactions(records)
     // First data row is an "OPENING" with no debit/credit → emits .skip.
     // Second row is the coffee expense.
-    let coffee = txs.first(where: { $0.rawDescription == "COFFEE" })!
-    #expect(coffee.date == dateAt(2024, 4, 2))
+    let coffee = try #require(txs.first(where: { $0.rawDescription == "COFFEE" }))
+    #expect(coffee.date == (try dateAt(2024, 4, 2)))
     #expect(coffee.rawAmount == Decimal(string: "-5.50"))
   }
 
@@ -114,8 +114,8 @@ struct GenericBankCSVParserTests {
   func recognizesBendigoDDMM() throws {
     let parser = GenericBankCSVParser()
     let rows = try self.rows("bendigo-standard")
-    let mapping = parser.inferMapping(
-      from: rows[0], sampleRows: Array(rows.dropFirst()))!
+    let mapping = try #require(
+      parser.inferMapping(from: rows[0], sampleRows: Array(rows.dropFirst())))
     // 15/04/2024 has day > 12 → must be DD/MM
     #expect(mapping.dateFormat == .ddMMyyyy(separator: "/"))
     #expect(mapping.dateFormatAmbiguous == false)
@@ -136,8 +136,8 @@ struct GenericBankCSVParserTests {
   func recognizesBofAMMDD() throws {
     let parser = GenericBankCSVParser()
     let rows = try self.rows("us-bofa-standard")
-    let mapping = parser.inferMapping(
-      from: rows[0], sampleRows: Array(rows.dropFirst()))!
+    let mapping = try #require(
+      parser.inferMapping(from: rows[0], sampleRows: Array(rows.dropFirst())))
     // 04/15/2024 — second component 15 > 12, first 04 ≤ 12 → MM/DD
     #expect(mapping.dateFormat == .mmDDyyyy(separator: "/"))
   }
@@ -146,12 +146,12 @@ struct GenericBankCSVParserTests {
   func recognizesBarclaysISO() throws {
     let parser = GenericBankCSVParser()
     let rows = try self.rows("uk-barclays-standard")
-    let mapping = parser.inferMapping(
-      from: rows[0], sampleRows: Array(rows.dropFirst()))!
+    let mapping = try #require(
+      parser.inferMapping(from: rows[0], sampleRows: Array(rows.dropFirst())))
     #expect(mapping.dateFormat == .iso)
     let records = try parser.parse(rows: rows)
     let txs = transactions(records)
-    #expect(txs[0].date == dateAt(2024, 4, 2))
+    #expect(txs[0].date == (try dateAt(2024, 4, 2)))
   }
 
   @Test("infers generic Txn Date / Memo / Dr / Cr / Bal headers")
@@ -258,7 +258,7 @@ struct GenericBankCSVParserTests {
       ["03/04/2024", "B", "-5.50", "100"],
       ["05/06/2024", "C", "-5.50", "100"],
     ]
-    let mapping = parser.inferMapping(from: headers, sampleRows: sample)!
+    let mapping = try #require(parser.inferMapping(from: headers, sampleRows: sample))
     #expect(mapping.dateFormatAmbiguous == true)
     #expect(mapping.dateFormat == .ddMMyyyy(separator: "/"))  // sensible default
   }

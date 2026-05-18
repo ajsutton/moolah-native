@@ -78,7 +78,7 @@ struct FolderScanServiceTests {
     try FileManager.default.createDirectory(
       at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
-    let defaults = UserDefaults(suiteName: "csvscan-\(UUID().uuidString)")!
+    let defaults = try #require(UserDefaults(suiteName: "csvscan-\(UUID().uuidString)"))
     let stack = try await makeStack(watchedFolder: folder, defaults: defaults)
     let firstFile = folder.appendingPathComponent("one.csv")
     let secondFile = folder.appendingPathComponent("two.csv")
@@ -102,7 +102,7 @@ struct FolderScanServiceTests {
     try FileManager.default.createDirectory(
       at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
-    let defaults = UserDefaults(suiteName: "csvscan-\(UUID().uuidString)")!
+    let defaults = try #require(UserDefaults(suiteName: "csvscan-\(UUID().uuidString)"))
     let stack = try await makeStack(watchedFolder: folder, defaults: defaults)
     let firstFile = folder.appendingPathComponent("one.csv")
     let oldTime = Date(timeIntervalSinceNow: -300)
@@ -127,7 +127,7 @@ struct FolderScanServiceTests {
     try FileManager.default.createDirectory(
       at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
-    let defaults = UserDefaults(suiteName: "csvscan-\(UUID().uuidString)")!
+    let defaults = try #require(UserDefaults(suiteName: "csvscan-\(UUID().uuidString)"))
     let stack = try await makeStack(watchedFolder: folder, defaults: defaults)
     let firstFile = folder.appendingPathComponent("firstFile.csv")
     try writeCSV(at: firstFile, lines: cbaLines(), modified: Date(timeIntervalSinceNow: -600))
@@ -158,7 +158,7 @@ struct FolderScanServiceTests {
     try FileManager.default.createDirectory(
       at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
-    let defaults = UserDefaults(suiteName: "csvscan-\(UUID().uuidString)")!
+    let defaults = try #require(UserDefaults(suiteName: "csvscan-\(UUID().uuidString)"))
     let stack = try await makeStack(watchedFolder: folder, defaults: defaults)
     let txt = folder.appendingPathComponent("notes.txt")
     try writeCSV(
@@ -172,7 +172,7 @@ struct FolderScanServiceTests {
 
   @Test("scanForNewFiles without firstFile watched folder is firstFile no-op")
   func noWatchedFolderIsNoOp() async throws {
-    let defaults = UserDefaults(suiteName: "csvscan-\(UUID().uuidString)")!
+    let defaults = try #require(UserDefaults(suiteName: "csvscan-\(UUID().uuidString)"))
     let (backend, _) = try TestBackend.create()
     let accountId = UUID()
     _ = try await backend.accounts.create(

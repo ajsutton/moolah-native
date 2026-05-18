@@ -27,7 +27,8 @@ struct DateBasedFixedConversionService: InstrumentConversionService {
   /// Find the rate dict whose key is the most recent date <= the requested date.
   private func ratesAsOf(_ date: Date) -> [String: Decimal] {
     for rateDate in sortedDates where rateDate <= date {
-      return rates[rateDate]!
+      guard let rate = rates[rateDate] else { continue }
+      return rate
     }
     return [:]
   }

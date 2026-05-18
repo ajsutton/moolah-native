@@ -49,10 +49,15 @@ enum BenchmarkFixtures {
   /// The 3 heavy accounts that hold ~85% of transactions.
   /// Transaction distribution: ~38% heavy0, ~32% heavy1, ~16% heavy2, ~14% others.
   static let heavyAccountIds: [UUID] = [
-    UUID(uuidString: "00000000-BE00-0000-0000-000000000001")!,
-    UUID(uuidString: "00000000-BE00-0000-0000-000000000002")!,
-    UUID(uuidString: "00000000-BE00-0000-0000-000000000003")!,
-  ]
+    "00000000-BE00-0000-0000-000000000001",
+    "00000000-BE00-0000-0000-000000000002",
+    "00000000-BE00-0000-0000-000000000003",
+  ].map { uuidString in
+    guard let uuid = UUID(uuidString: uuidString) else {
+      preconditionFailure("Invalid hard-coded heavy account UUID: \(uuidString)")
+    }
+    return uuid
+  }
 
   /// The single busiest account (~38% of all transactions).
   static var heavyAccountId: UUID { heavyAccountIds[0] }

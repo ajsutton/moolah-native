@@ -46,7 +46,7 @@ format-check:
         exit 1
     fi
     echo "All Swift files are correctly formatted."
-    swiftlint lint --baseline .swiftlint-baseline.yml --strict --quiet
+    swiftlint lint --strict --quiet
 
 # Verify production code contains no `import SwiftData`. Phase B of the
 # GRDB migration removed every SwiftData dependency from production

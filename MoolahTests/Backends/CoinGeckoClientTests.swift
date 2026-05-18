@@ -10,24 +10,25 @@ struct CoinGeckoClientTests {
     instrumentId: "1:native", coingeckoId: "ethereum", cryptocompareSymbol: nil, binanceSymbol: nil
   )
 
-  private func date(_ string: String) -> Date {
+  private func date(_ string: String) throws -> Date {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withFullDate]
-    return formatter.date(from: string)!
+    return try #require(formatter.date(from: string))
   }
 
   // MARK: - URL construction
 
   @Test
-  func marketChartURLIncludesCoinIdAndDays() {
+  func marketChartURLIncludesCoinIdAndDays() throws {
     let url = CoinGeckoClient.marketChartURL(
       coinId: "ethereum", days: 10, apiKey: "test-key"
     )
-    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+    let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
     #expect(components.host == "pro-api.coingecko.com")
     #expect(components.path == "/api/v3/coins/ethereum/market_chart")
-    let queryItems = Dictionary(
-      uniqueKeysWithValues: components.queryItems!.map { ($0.name, $0.value!) })
+    let items = try #require(components.queryItems)
+    let queryItems = try Dictionary(
+      uniqueKeysWithValues: items.map { try ($0.name, #require($0.value)) })
     #expect(queryItems["vs_currency"] == "usd")
     #expect(queryItems["days"] == "10")
     #expect(queryItems["interval"] == "daily")
@@ -35,14 +36,15 @@ struct CoinGeckoClientTests {
   }
 
   @Test
-  func simplePriceURLIncludesMultipleIds() {
+  func simplePriceURLIncludesMultipleIds() throws {
     let url = CoinGeckoClient.simplePriceURL(
       coinIds: ["ethereum", "bitcoin"], apiKey: "test-key"
     )
-    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+    let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
     #expect(components.path == "/api/v3/simple/price")
-    let queryItems = Dictionary(
-      uniqueKeysWithValues: components.queryItems!.map { ($0.name, $0.value!) })
+    let items = try #require(components.queryItems)
+    let queryItems = try Dictionary(
+      uniqueKeysWithValues: items.map { try ($0.name, #require($0.value)) })
     #expect(queryItems["ids"] == "ethereum,bitcoin")
     #expect(queryItems["vs_currencies"] == "usd")
   }

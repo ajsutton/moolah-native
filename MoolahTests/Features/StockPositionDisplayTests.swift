@@ -30,7 +30,8 @@ struct StockPositionDisplayTests {
       ], in: database)
 
     // Seed a buy trade: -6345 AUD, +150 BHP
-    let buyDate = Calendar.current.date(from: DateComponents(year: 2024, month: 6, day: 15))!
+    let buyDate = try #require(
+      Calendar.current.date(from: DateComponents(year: 2024, month: 6, day: 15)))
     TestBackend.seed(
       transactions: [
         Transaction(
@@ -55,13 +56,11 @@ struct StockPositionDisplayTests {
 
     #expect(store.positions.count == 2)  // AUD + BHP
 
-    let bhpPosition = store.positions.first { $0.instrument == bhp }
-    #expect(bhpPosition != nil)
-    #expect(bhpPosition!.quantity == Decimal(150))
+    let bhpPosition = try #require(store.positions.first { $0.instrument == bhp })
+    #expect(bhpPosition.quantity == Decimal(150))
 
-    let audPosition = store.positions.first { $0.instrument == aud }
-    #expect(audPosition != nil)
-    #expect(audPosition!.quantity == dec("-6345.00"))
+    let audPosition = try #require(store.positions.first { $0.instrument == aud })
+    #expect(audPosition.quantity == dec("-6345.00"))
   }
 
   @Test
@@ -116,10 +115,9 @@ struct StockPositionDisplayTests {
     await store.loadPositions(accountId: accountId)
     await store.valuatePositions(profileCurrency: aud, on: today)
 
-    let bhpValued = store.valuedPositions.first { $0.instrument == bhp }
-    #expect(bhpValued != nil)
+    let bhpValued = try #require(store.valuedPositions.first { $0.instrument == bhp })
     // 150 shares * $45.00 = $6,750.00
-    #expect(bhpValued!.value?.quantity == dec("6750.00"))
+    #expect(bhpValued.value?.quantity == dec("6750.00"))
   }
 
   @Test

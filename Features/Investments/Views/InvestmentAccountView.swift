@@ -72,6 +72,77 @@ struct InvestmentAccountView: View {
   /// and reads back unrelated content.
   @AccessibilityFocusState private var focusAnchor: InvestmentAccountFocusAnchor?
 
+  var body: some View {
+    Group {
+      if !initialLoadComplete {
+        ProgressView()
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .accessibilityLabel("Loading account data")
+      } else {
+        switch account.valuationMode {
+        case .recordedValue:
+          legacyValuationsLayout
+            .id(ValuationMode.recordedValue)
+        case .calculatedFromTrades:
+          positionTrackedLayout
+            .id(ValuationMode.calculatedFromTrades)
+        }
+      }
+    }
+    .accessibilityFocused($focusAnchor, equals: .content)
+    .transactionInspector(
+      selectedTransaction: $selectedTransaction,
+      accounts: accounts,
+      categories: categories,
+      earmarks: earmarks,
+      transactionStore: transactionStore,
+      viewingAccountId: account.id
+    )
+    .profileNavigationTitle(account.name)
+    .sheet(isPresented: $showingAddValue) {
+      AddInvestmentValueView(
+        accountId: account.id, instrument: account.instrument, store: investmentStore)
+    }
+    .task(id: LoadKey(id: account.id, mode: account.valuationMode)) {
+      initialLoadComplete = false
+      await reloadPositions()
+      await maybeAutoWidenRange()
+      initialLoadComplete = true
+      // Move VoiceOver focus to the now-rendered content layout once the
+      // initial-load gate flips. Mirrored on layout-mode flips below.
+      focusAnchor = .content
+    }
+    .task(id: positionsRange) {
+      // Skip until loadAllData has populated the store; the .task(id:) keyed
+      // on (account.id, valuationMode) runs the first build. We only fire
+      // re-builds for subsequent range changes.
+      guard investmentStore.loadedAccountId != nil else { return }
+      do {
+        positionsInput = try await investmentStore.positionsViewInput(
+          title: account.name, range: positionsRange)
+      } catch is CancellationError {
+        return
+      } catch {
+        Self.logger.error(
+          "Unexpected error from positionsViewInput: \(error.localizedDescription, privacy: .public)"
+        )
+      }
+    }
+    .onChange(of: account.valuationMode) {
+      // Layout-mode flip: reanchor VoiceOver after the new layout mounts.
+      // The `.task(id:)` above also fires (LoadKey carries `mode`), so
+      // `focusAnchor = .content` is set there once the data load
+      // completes — but the reassignment here additionally guarantees a
+      // focus move when the data load is a no-op (already cached).
+      focusAnchor = .content
+    }
+    .refreshable {
+      await reloadPositions()
+    }
+  }
+}
+
+extension InvestmentAccountView {
   /// Embedded transaction list for this account. Each call site builds a
   /// fresh `TransactionListView`; this is a method (not a `@ViewBuilder`
   /// computed property) so the per-call instantiation is explicit at the
@@ -175,75 +246,6 @@ struct InvestmentAccountView: View {
     #endif
   }
 
-  var body: some View {
-    Group {
-      if !initialLoadComplete {
-        ProgressView()
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .accessibilityLabel("Loading account data")
-      } else {
-        switch account.valuationMode {
-        case .recordedValue:
-          legacyValuationsLayout
-            .id(ValuationMode.recordedValue)
-        case .calculatedFromTrades:
-          positionTrackedLayout
-            .id(ValuationMode.calculatedFromTrades)
-        }
-      }
-    }
-    .accessibilityFocused($focusAnchor, equals: .content)
-    .transactionInspector(
-      selectedTransaction: $selectedTransaction,
-      accounts: accounts,
-      categories: categories,
-      earmarks: earmarks,
-      transactionStore: transactionStore,
-      viewingAccountId: account.id
-    )
-    .profileNavigationTitle(account.name)
-    .sheet(isPresented: $showingAddValue) {
-      AddInvestmentValueView(
-        accountId: account.id, instrument: account.instrument, store: investmentStore)
-    }
-    .task(id: LoadKey(id: account.id, mode: account.valuationMode)) {
-      initialLoadComplete = false
-      await reloadPositions()
-      await maybeAutoWidenRange()
-      initialLoadComplete = true
-      // Move VoiceOver focus to the now-rendered content layout once the
-      // initial-load gate flips. Mirrored on layout-mode flips below.
-      focusAnchor = .content
-    }
-    .task(id: positionsRange) {
-      // Skip until loadAllData has populated the store; the .task(id:) keyed
-      // on (account.id, valuationMode) runs the first build. We only fire
-      // re-builds for subsequent range changes.
-      guard investmentStore.loadedAccountId != nil else { return }
-      do {
-        positionsInput = try await investmentStore.positionsViewInput(
-          title: account.name, range: positionsRange)
-      } catch is CancellationError {
-        return
-      } catch {
-        Self.logger.error(
-          "Unexpected error from positionsViewInput: \(error.localizedDescription, privacy: .public)"
-        )
-      }
-    }
-    .onChange(of: account.valuationMode) {
-      // Layout-mode flip: reanchor VoiceOver after the new layout mounts.
-      // The `.task(id:)` above also fires (LoadKey carries `mode`), so
-      // `focusAnchor = .content` is set there once the data load
-      // completes — but the reassignment here additionally guarantees a
-      // focus move when the data load is a no-op (already cached).
-      focusAnchor = .content
-    }
-    .refreshable {
-      await reloadPositions()
-    }
-  }
-
   // MARK: - Valuations List
 
   private var valuationsList: some View {
@@ -279,8 +281,7 @@ struct InvestmentAccountView: View {
       ContentUnavailableView(
         "No Values",
         systemImage: "chart.line.uptrend.xyaxis",
-        description: Text(
-          PlatformActionVerb.emptyStatePrompt(buttonLabel: "+", suffix: "to record a value"))
+        description: noValuesPrompt
       )
     } else {
       List {
@@ -294,6 +295,10 @@ struct InvestmentAccountView: View {
       }
       .listStyle(.inset)
     }
+  }
+
+  private var noValuesPrompt: Text {
+    Text(PlatformActionVerb.emptyStatePrompt(buttonLabel: "+", suffix: "to record a value"))
   }
 
   // MARK: - Time Period Picker

@@ -89,10 +89,10 @@ struct ScheduledTransactionTests {
   }
 
   @Test("Creating paid copy removes recurrence fields")
-  func testPayingScheduledTransactionCreatesNonScheduledCopy() {
+  func testPayingScheduledTransactionCreatesNonScheduledCopy() throws {
     let accountId = UUID()
     let scheduled = makeTxn(
-      date: Calendar.current.date(byAdding: .day, value: -5, to: Date())!,
+      date: try #require(Calendar.current.date(byAdding: .day, value: -5, to: Date())),
       accountId: accountId,
       quantity: dec("-1000.00"),
       payee: "Rent",
@@ -143,18 +143,18 @@ struct ScheduledTransactionTests {
   }
 
   @Test("Overdue classification")
-  func testOverdueClassification() {
+  func testOverdueClassification() throws {
     let calendar = Calendar.current
     let today = Date()
 
     let overdue = makeTxn(
-      date: calendar.date(byAdding: .day, value: -5, to: today)!,
+      date: try #require(calendar.date(byAdding: .day, value: -5, to: today)),
       recurPeriod: .month,
       recurEvery: 1
     )
 
     let upcoming = makeTxn(
-      date: calendar.date(byAdding: .day, value: 5, to: today)!,
+      date: try #require(calendar.date(byAdding: .day, value: 5, to: today)),
       recurPeriod: .month,
       recurEvery: 1
     )
@@ -188,13 +188,14 @@ struct ScheduledTransactionTests {
   }
 
   @Test("nextDueDate calculates daily recurrence")
-  func testNextDueDateDaily() {
+  func testNextDueDateDaily() throws {
     let calendar = Calendar.current
-    let startDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+    let startDate = try #require(calendar.date(from: DateComponents(year: 2026, month: 1, day: 15)))
     let transaction = makeTxn(date: startDate, recurPeriod: .day, recurEvery: 1)
 
-    let nextDate = transaction.nextDueDate()!
-    let expectedDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 16))!
+    let nextDate = try #require(transaction.nextDueDate())
+    let expectedDate = try #require(
+      calendar.date(from: DateComponents(year: 2026, month: 1, day: 16)))
     #expect(nextDate.isSameDay(as: expectedDate))
   }
 }

@@ -12,7 +12,7 @@ struct DateRangeTests {
     let range = DateRange.last12Months
     let calendar = Calendar.current
     let today = calendar.startOfDay(for: Date())
-    let expected = calendar.date(byAdding: .month, value: -12, to: today)!
+    let expected = try #require(calendar.date(byAdding: .month, value: -12, to: today))
 
     #expect(range.startDate() == expected)
     #expect(range.endDate() == today)
@@ -133,7 +133,7 @@ struct DateRangeTests {
     ]
 
     for (range, months) in testCases {
-      let expected = calendar.date(byAdding: .month, value: months, to: today)!
+      let expected = try #require(calendar.date(byAdding: .month, value: months, to: today))
       #expect(range.startDate() == expected, "Failed for \(range.displayName)")
     }
   }
@@ -145,7 +145,7 @@ struct DateRangeTests {
     let today = calendar.startOfDay(for: Date())
 
     // Custom defaults to 1 year ago → today
-    let expectedStart = calendar.date(byAdding: .year, value: -1, to: today)!
+    let expectedStart = try #require(calendar.date(byAdding: .year, value: -1, to: today))
     #expect(range.startDate() == expectedStart)
     #expect(range.endDate() == today)
   }
@@ -172,7 +172,7 @@ struct DateRangeTests {
     let range = DateRange.thisFinancialYear
     let calendar = Calendar.current
     // Use a fixed date in March 2026 for predictability
-    let today = calendar.date(from: DateComponents(year: 2026, month: 3, day: 15))!
+    let today = try #require(calendar.date(from: DateComponents(year: 2026, month: 3, day: 15)))
 
     let start = range.startDate(today: today, financialYearStartMonth: 1)
     let end = range.endDate(today: today, financialYearStartMonth: 1)
@@ -191,7 +191,7 @@ struct DateRangeTests {
     let range = DateRange.thisFinancialYear
     let calendar = Calendar.current
     // May 2026 → FY started April 2026
-    let today = calendar.date(from: DateComponents(year: 2026, month: 5, day: 10))!
+    let today = try #require(calendar.date(from: DateComponents(year: 2026, month: 5, day: 10)))
 
     let start = range.startDate(today: today, financialYearStartMonth: 4)
     let end = range.endDate(today: today, financialYearStartMonth: 4)

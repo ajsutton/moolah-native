@@ -23,7 +23,10 @@ func awaitSync<T>(_ work: @escaping @Sendable () async throws -> T) throws -> T 
   while result == nil {
     RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.001))
   }
-  return try result!.get()
+  guard let result else {
+    preconditionFailure("awaitSync loop exited with a nil result")
+  }
+  return try result.get()
 }
 
 /// Non-throwing variant of `awaitSync` for use inside `measure` blocks,

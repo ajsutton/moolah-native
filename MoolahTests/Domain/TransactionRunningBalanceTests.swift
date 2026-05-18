@@ -9,8 +9,13 @@ struct TransactionRunningBalanceTests {
   private let foreign = Instrument.USD
 
   private func date(_ days: Int) -> Date {
-    Calendar(identifier: .gregorian)
-      .date(byAdding: .day, value: days, to: Date(timeIntervalSince1970: 0))!
+    guard
+      let result = Calendar(identifier: .gregorian)
+        .date(byAdding: .day, value: days, to: Date(timeIntervalSince1970: 0))
+    else {
+      preconditionFailure("Adding \(days) days to the Unix epoch must produce a valid date")
+    }
+    return result
   }
 
   private func tx(

@@ -8,13 +8,17 @@ import Testing
 struct InvestmentStoreTestsMoreExtra {
 
   private func makeDate(year: Int, month: Int, day: Int) -> Date {
-    Calendar.current.date(from: DateComponents(year: year, month: month, day: day))!
+    guard let date = Calendar.current.date(from: DateComponents(year: year, month: month, day: day))
+    else { preconditionFailure("static gregorian DateComponents are always valid") }
+    return date
   }
 
   private func makeValues(accountId: UUID, count: Int) -> [UUID: [InvestmentValue]] {
     let values = (0..<count).map { i in
-      InvestmentValue(
-        date: Calendar.current.date(byAdding: .day, value: -i, to: Date())!,
+      guard let date = Calendar.current.date(byAdding: .day, value: -i, to: Date())
+      else { preconditionFailure("subtracting days from the current date is always valid") }
+      return InvestmentValue(
+        date: date,
         value: InstrumentAmount(
           quantity: Decimal(1000 + i * 10), instrument: .defaultTestInstrument)
       )
@@ -154,8 +158,10 @@ struct InvestmentStoreTestsMoreExtra {
     let (backend, database) = try TestBackend.create()
     // Seed > 200 transactions so loadPositions would normally paginate.
     let transactions: [Transaction] = (0..<250).map { i in
-      Transaction(
-        date: Calendar.current.date(byAdding: .day, value: -i, to: Date())!,
+      guard let date = Calendar.current.date(byAdding: .day, value: -i, to: Date())
+      else { preconditionFailure("subtracting days from the current date is always valid") }
+      return Transaction(
+        date: date,
         legs: [
           TransactionLeg(
             accountId: accountId, instrument: .defaultTestInstrument,

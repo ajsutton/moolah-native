@@ -6,10 +6,10 @@ import Testing
 
 @Suite("InstrumentConversionService")
 struct InstrumentConversionServiceTests {
-  private func date(_ string: String) -> Date {
+  private func date(_ string: String) throws -> Date {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withFullDate]
-    return formatter.date(from: string)!
+    return try #require(formatter.date(from: string))
   }
 
   private func makeService(
@@ -27,7 +27,7 @@ struct InstrumentConversionServiceTests {
     let result = try await service.convert(
       dec("100.00"),
       from: .AUD, to: .AUD,
-      on: date("2025-06-15")
+      on: try date("2025-06-15")
     )
     #expect(result == dec("100.00"))
   }
@@ -40,7 +40,7 @@ struct InstrumentConversionServiceTests {
     let result = try await service.convert(
       dec("1000.00"),
       from: .AUD, to: .USD,
-      on: date("2025-06-15")
+      on: try date("2025-06-15")
     )
     #expect(result == dec("650.00"))
   }
@@ -53,7 +53,7 @@ struct InstrumentConversionServiceTests {
     let result = try await service.convert(
       dec("650.00"),
       from: .USD, to: .AUD,
-      on: date("2025-06-15")
+      on: try date("2025-06-15")
     )
     #expect(result == dec("650.00") * dec("1.5385"))
   }
@@ -68,7 +68,7 @@ struct InstrumentConversionServiceTests {
       instrument: .AUD
     )
     let result = try await service.convertAmount(
-      amount, to: .USD, on: date("2025-06-15")
+      amount, to: .USD, on: try date("2025-06-15")
     )
     #expect(result.instrument == .USD)
     #expect(result.quantity == dec("650.00"))
@@ -82,7 +82,7 @@ struct InstrumentConversionServiceTests {
       instrument: .AUD
     )
     let result = try await service.convertAmount(
-      amount, to: .AUD, on: date("2025-06-15")
+      amount, to: .AUD, on: try date("2025-06-15")
     )
     #expect(result == amount)
   }
@@ -97,13 +97,13 @@ struct InstrumentConversionServiceTests {
     formatter.formatOptions = [.withFullDate]
     let calendar = Calendar(identifier: .gregorian)
     let today = calendar.startOfDay(for: Date())
-    let pastDate = calendar.date(byAdding: .day, value: -15, to: today)!
+    let pastDate = try #require(calendar.date(byAdding: .day, value: -15, to: today))
     let pastKey = formatter.string(from: pastDate)
     let service = try makeService(rates: [
       pastKey: ["USD": dec("0.6500")]
     ])
 
-    let future = calendar.date(byAdding: .day, value: 30, to: today)!
+    let future = try #require(calendar.date(byAdding: .day, value: 30, to: today))
     let result = try await service.convert(
       dec("1000.00"),
       from: .AUD, to: .USD,
@@ -119,13 +119,13 @@ struct InstrumentConversionServiceTests {
     let calendar = Calendar(identifier: .gregorian)
     let today = calendar.startOfDay(for: Date())
     let pastKey = formatter.string(
-      from: calendar.date(byAdding: .day, value: -3, to: today)!
+      from: try #require(calendar.date(byAdding: .day, value: -3, to: today))
     )
     let service = try makeService(rates: [
       pastKey: ["USD": dec("0.6500")]
     ])
 
-    let future = calendar.date(byAdding: .day, value: 7, to: today)!
+    let future = try #require(calendar.date(byAdding: .day, value: 7, to: today))
     let amount = InstrumentAmount(quantity: Decimal(1000), instrument: .AUD)
     let result = try await service.convertAmount(amount, to: .USD, on: future)
     #expect(result.instrument == .USD)

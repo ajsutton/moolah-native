@@ -36,35 +36,38 @@ private func makeTxn(
 @Suite("Scheduled Transactions — Part 2")
 struct ScheduledTransactionTestsMore {
   @Test("nextDueDate calculates weekly recurrence")
-  func testNextDueDateWeekly() {
+  func testNextDueDateWeekly() throws {
     let calendar = Calendar.current
-    let startDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+    let startDate = try #require(calendar.date(from: DateComponents(year: 2026, month: 1, day: 15)))
     let transaction = makeTxn(date: startDate, recurPeriod: .week, recurEvery: 2)
 
-    let nextDate = transaction.nextDueDate()!
-    let expectedDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 29))!
+    let nextDate = try #require(transaction.nextDueDate())
+    let expectedDate = try #require(
+      calendar.date(from: DateComponents(year: 2026, month: 1, day: 29)))
     #expect(nextDate.isSameDay(as: expectedDate))
   }
 
   @Test("nextDueDate calculates monthly recurrence")
-  func testNextDueDateMonthly() {
+  func testNextDueDateMonthly() throws {
     let calendar = Calendar.current
-    let startDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+    let startDate = try #require(calendar.date(from: DateComponents(year: 2026, month: 1, day: 15)))
     let transaction = makeTxn(date: startDate, recurPeriod: .month, recurEvery: 1)
 
-    let nextDate = transaction.nextDueDate()!
-    let expectedDate = calendar.date(from: DateComponents(year: 2026, month: 2, day: 15))!
+    let nextDate = try #require(transaction.nextDueDate())
+    let expectedDate = try #require(
+      calendar.date(from: DateComponents(year: 2026, month: 2, day: 15)))
     #expect(nextDate.isSameDay(as: expectedDate))
   }
 
   @Test("nextDueDate calculates yearly recurrence")
-  func testNextDueDateYearly() {
+  func testNextDueDateYearly() throws {
     let calendar = Calendar.current
-    let startDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+    let startDate = try #require(calendar.date(from: DateComponents(year: 2026, month: 1, day: 15)))
     let transaction = makeTxn(date: startDate, recurPeriod: .year, recurEvery: 1)
 
-    let nextDate = transaction.nextDueDate()!
-    let expectedDate = calendar.date(from: DateComponents(year: 2027, month: 1, day: 15))!
+    let nextDate = try #require(transaction.nextDueDate())
+    let expectedDate = try #require(
+      calendar.date(from: DateComponents(year: 2027, month: 1, day: 15)))
     #expect(nextDate.isSameDay(as: expectedDate))
   }
 
@@ -82,7 +85,7 @@ struct ScheduledTransactionTestsMore {
   @Test("Pay action for one-time scheduled transaction")
   func testPayOneTimeScheduled() async throws {
     let calendar = Calendar.current
-    let futureDate = calendar.date(byAdding: .day, value: 7, to: Date())!
+    let futureDate = try #require(calendar.date(byAdding: .day, value: 7, to: Date()))
     let accountId = UUID()
 
     let scheduled = makeTxn(
@@ -127,7 +130,7 @@ struct ScheduledTransactionTestsMore {
   @Test("Pay action for recurring scheduled transaction")
   func testPayRecurringScheduled() async throws {
     let calendar = Calendar.current
-    let startDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+    let startDate = try #require(calendar.date(from: DateComponents(year: 2026, month: 1, day: 1)))
     let accountId = UUID()
 
     let scheduled = makeTxn(
@@ -163,7 +166,8 @@ struct ScheduledTransactionTestsMore {
     #expect(page.transactions.count == 1)
     #expect(page.transactions[0].isScheduled == true)
 
-    let expectedDate = calendar.date(from: DateComponents(year: 2026, month: 2, day: 1))!
+    let expectedDate = try #require(
+      calendar.date(from: DateComponents(year: 2026, month: 2, day: 1)))
     #expect(page.transactions[0].date.isSameDay(as: expectedDate))
   }
 

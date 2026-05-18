@@ -19,44 +19,7 @@ struct RuleEditorActionRow: View {
       }
       .labelsHidden()
 
-      switch action {
-      case .setPayee(let payee):
-        TextField(
-          "payee",
-          text: Binding(get: { payee }, set: { action = .setPayee($0) }))
-      case .setCategory(let id):
-        Picker(
-          "Category",
-          selection: Binding(
-            get: { id },
-            set: { action = .setCategory($0) })
-        ) {
-          ForEach(flatCategories, id: \.id) { category in
-            Text(categories.path(for: category)).tag(category.id)
-          }
-        }
-        .labelsHidden()
-      case .appendNote(let note):
-        TextField(
-          "note",
-          text: Binding(get: { note }, set: { action = .appendNote($0) }))
-      case .markAsTransfer(let accountId):
-        Picker(
-          "To account",
-          selection: Binding(
-            get: { accountId },
-            set: { action = .markAsTransfer(toAccountId: $0) })
-        ) {
-          ForEach(accounts.ordered, id: \.id) { account in
-            Text(account.name).tag(account.id)
-          }
-        }
-        .labelsHidden()
-      case .skip:
-        Text("(drops the row)")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
+      actionEditor
 
       Button(role: .destructive) {
         onDelete()
@@ -65,6 +28,49 @@ struct RuleEditorActionRow: View {
       }
       .buttonStyle(.borderless)
       .accessibilityLabel("Remove action")
+    }
+  }
+}
+
+extension RuleEditorActionRow {
+  @ViewBuilder private var actionEditor: some View {
+    switch action {
+    case .setPayee(let payee):
+      TextField(
+        "payee",
+        text: Binding(get: { payee }, set: { action = .setPayee($0) }))
+    case .setCategory(let id):
+      Picker(
+        "Category",
+        selection: Binding(
+          get: { id },
+          set: { action = .setCategory($0) })
+      ) {
+        ForEach(flatCategories, id: \.id) { category in
+          Text(categories.path(for: category)).tag(category.id)
+        }
+      }
+      .labelsHidden()
+    case .appendNote(let note):
+      TextField(
+        "note",
+        text: Binding(get: { note }, set: { action = .appendNote($0) }))
+    case .markAsTransfer(let accountId):
+      Picker(
+        "To account",
+        selection: Binding(
+          get: { accountId },
+          set: { action = .markAsTransfer(toAccountId: $0) })
+      ) {
+        ForEach(accounts.ordered, id: \.id) { account in
+          Text(account.name).tag(account.id)
+        }
+      }
+      .labelsHidden()
+    case .skip:
+      Text("(drops the row)")
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
   }
 

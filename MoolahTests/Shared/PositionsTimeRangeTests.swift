@@ -11,15 +11,15 @@ struct PositionsTimeRangeTests {
   }
 
   @Test("YTD cutoff is start-of-year for the given reference date")
-  func ytdCutoff() {
+  func ytdCutoff() throws {
     var components = DateComponents()
     components.year = 2026
     components.month = 4
     components.day = 20
     components.hour = 12
     let calendar = Calendar(identifier: .gregorian)
-    let now = calendar.date(from: components)!
-    let cutoff = PositionsTimeRange.ytd.cutoff(from: now)!
+    let now = try #require(calendar.date(from: components))
+    let cutoff = try #require(PositionsTimeRange.ytd.cutoff(from: now))
 
     let cutoffComponents = calendar.dateComponents(
       [.year, .month, .day, .hour, .minute, .second], from: cutoff)
@@ -40,11 +40,13 @@ struct PositionsTimeRangeTests {
       (PositionsTimeRange.oneYear, -1, Calendar.Component.year),
     ]
   )
-  func monthRangeCutoff(range: PositionsTimeRange, value: Int, component: Calendar.Component) {
+  func monthRangeCutoff(range: PositionsTimeRange, value: Int, component: Calendar.Component)
+    throws
+  {
     let now = Date(timeIntervalSince1970: 1_775_000_000)  // 2026-04-29 UTC
     let calendar = Calendar(identifier: .gregorian)
-    let cutoff = range.cutoff(from: now)!
-    let expected = calendar.date(byAdding: component, value: value, to: now)!
+    let cutoff = try #require(range.cutoff(from: now))
+    let expected = try #require(calendar.date(byAdding: component, value: value, to: now))
     #expect(abs(cutoff.timeIntervalSince(expected)) < 1)
   }
 

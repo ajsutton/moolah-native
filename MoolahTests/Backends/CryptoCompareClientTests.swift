@@ -10,24 +10,25 @@ struct CryptoCompareClientTests {
     instrumentId: "1:native", coingeckoId: nil, cryptocompareSymbol: "ETH", binanceSymbol: nil
   )
 
-  private func date(_ string: String) -> Date {
+  private func date(_ string: String) throws -> Date {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withFullDate]
-    return formatter.date(from: string)!
+    return try #require(formatter.date(from: string))
   }
 
   // MARK: - URL construction
 
   @Test
   func dailyPricesURLIncludesSymbolAndDateRange() throws {
-    let from = date("2026-04-01")
-    let to = date("2026-04-10")
+    let from = try date("2026-04-01")
+    let to = try date("2026-04-10")
     let url = CryptoCompareClient.histodayURL(symbol: "ETH", from: from, to: to)
-    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+    let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
     #expect(components.host == "min-api.cryptocompare.com")
     #expect(components.path == "/data/v2/histoday")
-    let queryItems = Dictionary(
-      uniqueKeysWithValues: components.queryItems!.map { ($0.name, $0.value!) })
+    let items = try #require(components.queryItems)
+    let queryItems = try Dictionary(
+      uniqueKeysWithValues: items.map { try ($0.name, #require($0.value)) })
     #expect(queryItems["fsym"] == "ETH")
     #expect(queryItems["tsym"] == "USD")
     #expect(queryItems["limit"] != nil)
@@ -37,9 +38,10 @@ struct CryptoCompareClientTests {
   @Test
   func currentPricesURLIncludesMultipleSymbols() throws {
     let url = CryptoCompareClient.priceMultiURL(symbols: ["ETH", "BTC"])
-    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-    let queryItems = Dictionary(
-      uniqueKeysWithValues: components.queryItems!.map { ($0.name, $0.value!) })
+    let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+    let items = try #require(components.queryItems)
+    let queryItems = try Dictionary(
+      uniqueKeysWithValues: items.map { try ($0.name, #require($0.value)) })
     #expect(queryItems["fsyms"] == "ETH,BTC")
     #expect(queryItems["tsyms"] == "USD")
   }
