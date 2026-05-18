@@ -52,21 +52,46 @@ struct RecentlyAddedScreen {
     }
   }
 
-  /// Asserts no transfer pill exists for the given transaction. After a
-  /// merge or dismiss the source row is removed from Recently Added (a
-  /// merged transfer has a `.merged` origin and is filtered out; a
-  /// dismissed pair clears its suggestion and records a
-  /// `DismissedTransferPair`), so the row handle itself disappearing is
-  /// the strongest structural signal that the pill is gone. The caller
+  /// Asserts the Recently Added row for the given transaction is gone.
+  /// This is the post-merge signal: the merge replaces the two
+  /// single-account sides with one `.merged` transfer that the view
+  /// filters out, so the source row handle itself disappears. The caller
   /// must have established a presence sentinel (e.g. `expectVisible()`)
   /// so this cannot pass vacuously.
-  func expectPillAbsent(for id: UUID) {
+  func expectRowRemoved(for id: UUID) {
     let row = app.element(for: UITestIdentifiers.RecentlyAdded.row(id))
     if !row.waitForNonExistence(timeout: 5) {
       Trace.recordFailure(
         "recently added row '\(UITestIdentifiers.RecentlyAdded.row(id))' "
-          + "still present; pill not cleared")
-      XCTFail("Transfer pill / row for \(id) was still present after 5s")
+          + "still present; row not removed")
+      XCTFail("Recently Added row for \(id) was still present after 5s")
+    }
+  }
+
+  /// Asserts the transfer pill is gone for the given transaction while
+  /// the row itself remains. This is the post-dismiss signal: dismiss
+  /// only clears `transferSuggestion` on both sides and records a
+  /// `DismissedTransferPair`, leaving both `.single` rows in Recently
+  /// Added — the pill title drops out of the row's combined
+  /// accessibility label but the row handle persists. The row's
+  /// continued existence is the presence sentinel, asserted first so
+  /// this cannot pass vacuously, before the bounded wait for the pill
+  /// title to clear from the still-present row's label.
+  func expectPillCleared(for id: UUID) {
+    let row = app.element(for: UITestIdentifiers.RecentlyAdded.row(id))
+    if !row.waitForExistence(timeout: 3) {
+      Trace.recordFailure(
+        "recently added row '\(UITestIdentifiers.RecentlyAdded.row(id))' "
+          + "did not appear; cannot assert pill cleared")
+      XCTFail("Recently Added row for \(id) did not appear within 3s")
+      return
+    }
+    if !waitForPillCleared(id) {
+      Trace.recordFailure(
+        "row '\(id)' label '\(row.label)' still contains pill title "
+          + "'\(UITestIdentifiers.TransferDetection.pillLabelPrefix)'")
+      XCTFail(
+        "Transfer pill title still present on row \(id) label after 5s: '\(row.label)'")
     }
   }
 
@@ -104,10 +129,12 @@ struct RecentlyAddedScreen {
 
   /// Right-clicks the given row, clicks "Not a Transfer", and confirms
   /// the destructive button in the "Dismiss Transfer Suggestion"
-  /// confirmation dialog. Returns once the row has been removed from
-  /// Recently Added — dismiss clears the suggestion and records a
-  /// `DismissedTransferPair`, so the row's disappearance is the
-  /// post-condition.
+  /// confirmation dialog. Dismiss clears `transferSuggestion` on both
+  /// sides and records a `DismissedTransferPair`; the transaction stays
+  /// a recently-imported `.single` row, so the row remains while only
+  /// the pill goes away. Returns once the pill title has cleared from
+  /// the still-present row's combined accessibility label — that pill
+  /// clearing on the surviving row is the post-condition.
   func tapDismiss(for id: UUID) {
     Trace.record(#function, detail: "id=\(id)")
     let row = app.element(for: UITestIdentifiers.RecentlyAdded.row(id))
@@ -139,9 +166,34 @@ struct RecentlyAddedScreen {
     }
     confirm.click()
 
-    if !row.waitForNonExistence(timeout: 5) {
-      Trace.recordFailure("row '\(id)' still present 5s after dismiss")
-      XCTFail("Recently Added row for \(id) did not clear within 5s of dismiss")
+    if !waitForPillCleared(id) {
+      Trace.recordFailure(
+        "row '\(id)' label '\(row.label)' still contains pill title "
+          + "'\(UITestIdentifiers.TransferDetection.pillLabelPrefix)' 5s after dismiss")
+      XCTFail(
+        "Transfer pill title did not clear from row \(id) within 5s of dismiss: "
+          + "'\(row.label)'")
     }
+  }
+
+  // MARK: - Private helpers
+
+  /// Bounded wait for the transfer pill title to drop out of the
+  /// combined accessibility label of the (still-present) Recently Added
+  /// row for `id`. The label update is async — it lands on the next view
+  /// refresh after the dismiss coordinator write — so this evaluates a
+  /// closure `NSPredicate` against the live row element via
+  /// `XCTNSPredicateExpectation` + `XCTWaiter`, the sanctioned
+  /// bounded-wait per UI_TEST_GUIDE §3 (no sleeps / no retries). Returns
+  /// `true` once the label no longer contains the pill prefix, `false`
+  /// on timeout.
+  private func waitForPillCleared(_ id: UUID) -> Bool {
+    let row = app.element(for: UITestIdentifiers.RecentlyAdded.row(id))
+    let prefix = UITestIdentifiers.TransferDetection.pillLabelPrefix
+    let predicate = NSPredicate { _, _ in
+      !row.label.contains(prefix)
+    }
+    let expectation = XCTNSPredicateExpectation(predicate: predicate, object: nil)
+    return XCTWaiter().wait(for: [expectation], timeout: 5) == .completed
   }
 }

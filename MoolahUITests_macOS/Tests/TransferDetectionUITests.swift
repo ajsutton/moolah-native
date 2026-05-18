@@ -42,9 +42,9 @@ final class TransferDetectionUITests: MoolahUITestCase {
     app.recentlyAdded.tapMerge(
       for: UITestFixtures.TransferDetection.mergeOutgoingId)
 
-    app.recentlyAdded.expectPillAbsent(
+    app.recentlyAdded.expectRowRemoved(
       for: UITestFixtures.TransferDetection.mergeOutgoingId)
-    app.recentlyAdded.expectPillAbsent(
+    app.recentlyAdded.expectRowRemoved(
       for: UITestFixtures.TransferDetection.mergeIncomingId)
   }
 
@@ -58,9 +58,9 @@ final class TransferDetectionUITests: MoolahUITestCase {
     app.recentlyAdded.tapDismiss(
       for: UITestFixtures.TransferDetection.dismissOutgoingId)
 
-    app.recentlyAdded.expectPillAbsent(
+    app.recentlyAdded.expectPillCleared(
       for: UITestFixtures.TransferDetection.dismissOutgoingId)
-    app.recentlyAdded.expectPillAbsent(
+    app.recentlyAdded.expectPillCleared(
       for: UITestFixtures.TransferDetection.dismissIncomingId)
   }
 }
