@@ -11,7 +11,7 @@ import Testing
 struct DateISO8601DateOnlyTests {
 
   @Test
-  func producesFullDateString() {
+  func producesFullDateString() throws {
     var components = DateComponents()
     components.year = 2025
     components.month = 6
@@ -19,7 +19,7 @@ struct DateISO8601DateOnlyTests {
     components.hour = 14
     components.minute = 30
     components.timeZone = TimeZone(identifier: "UTC")
-    let date = Calendar(identifier: .gregorian).date(from: components)!
+    let date = try #require(Calendar(identifier: .gregorian).date(from: components))
 
     #expect(date.iso8601DateOnlyString == "2025-06-15")
   }
@@ -41,13 +41,13 @@ struct DateISO8601DateOnlyTests {
   }
 
   @Test
-  func padsSingleDigitMonthAndDay() {
+  func padsSingleDigitMonthAndDay() throws {
     var components = DateComponents()
     components.year = 2026
     components.month = 1
     components.day = 3
     components.timeZone = TimeZone(identifier: "UTC")
-    let date = Calendar(identifier: .gregorian).date(from: components)!
+    let date = try #require(Calendar(identifier: .gregorian).date(from: components))
 
     #expect(date.iso8601DateOnlyString == "2026-01-03")
   }

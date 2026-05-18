@@ -104,18 +104,17 @@ struct DomainModelsTests {
   }
 
   @Test("ExpenseBreakdown monthDate parses YYYYMM format")
-  func expenseBreakdownMonthDate() {
+  func expenseBreakdownMonthDate() throws {
     let breakdown = ExpenseBreakdown(
       categoryId: nil,
       month: "202604",
       totalExpenses: .zero(instrument: .defaultTestInstrument)
     )
 
-    let monthDate = breakdown.monthDate
-    #expect(monthDate != nil)
+    let monthDate = try #require(breakdown.monthDate)
 
     let calendar = Calendar.current
-    let components = calendar.dateComponents([.year, .month], from: monthDate!)
+    let components = calendar.dateComponents([.year, .month], from: monthDate)
     #expect(components.year == 2026)
     #expect(components.month == 4)
   }

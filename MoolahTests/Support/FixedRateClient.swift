@@ -31,7 +31,8 @@ struct FixedRateClient: ExchangeRateClient, Sendable {
       if let dayRates = rates[key] {
         result[key] = dayRates
       }
-      current = calendar.date(byAdding: .day, value: 1, to: current)!
+      guard let next = calendar.date(byAdding: .day, value: 1, to: current) else { break }
+      current = next
     }
     return result
   }

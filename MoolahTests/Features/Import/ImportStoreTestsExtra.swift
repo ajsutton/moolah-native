@@ -86,9 +86,10 @@ struct ImportStoreTestsExtra {
 
     let page = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: accountId), page: 0, pageSize: 50)
-    let coffee = page.transactions.first(where: {
-      $0.importOrigin?.singleOrigin?.rawDescription == "COFFEE HUT SYDNEY"
-    })!
+    let coffee = try #require(
+      page.transactions.first(where: {
+        $0.importOrigin?.singleOrigin?.rawDescription == "COFFEE HUT SYDNEY"
+      }))
     #expect(coffee.payee == "Café")
     #expect(coffee.legs[0].categoryId == category.id)
   }
@@ -118,9 +119,10 @@ struct ImportStoreTestsExtra {
     // The coffee row became a two-leg transfer, source→target.
     let page = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: sourceAccount), page: 0, pageSize: 50)
-    let coffee = page.transactions.first(where: {
-      $0.importOrigin?.singleOrigin?.rawDescription == "COFFEE HUT SYDNEY"
-    })!
+    let coffee = try #require(
+      page.transactions.first(where: {
+        $0.importOrigin?.singleOrigin?.rawDescription == "COFFEE HUT SYDNEY"
+      }))
     #expect(coffee.legs.count == 2)
     #expect(coffee.legs.allSatisfy { $0.type == .transfer })
     let sum = coffee.legs.reduce(Decimal(0)) { $0 + $1.quantity }
@@ -180,12 +182,13 @@ struct ImportStoreTestsExtra {
 
     let page = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: audSource), page: 0, pageSize: 50)
-    let coffee = page.transactions.first(where: {
-      $0.importOrigin?.singleOrigin?.rawDescription == "COFFEE HUT SYDNEY"
-    })!
+    let coffee = try #require(
+      page.transactions.first(where: {
+        $0.importOrigin?.singleOrigin?.rawDescription == "COFFEE HUT SYDNEY"
+      }))
     #expect(coffee.legs.count == 2)
-    let sourceLeg = coffee.legs.first(where: { $0.accountId == audSource })!
-    let destinationLeg = coffee.legs.first(where: { $0.accountId == usdTarget })!
+    let sourceLeg = try #require(coffee.legs.first(where: { $0.accountId == audSource }))
+    let destinationLeg = try #require(coffee.legs.first(where: { $0.accountId == usdTarget }))
     #expect(sourceLeg.instrument == .AUD)
     // Rule 11a: destination leg carries the destination account's
     // instrument, NOT the source's. Without this fix, both legs would

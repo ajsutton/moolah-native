@@ -46,11 +46,10 @@ struct InstrumentTests {
   }
 
   @Test
-  func currencySymbolDerivedFromLocale() {
+  func currencySymbolDerivedFromLocale() throws {
     let aud = Instrument.fiat(code: "AUD")
-    let symbol = aud.currencySymbol
-    #expect(symbol != nil)
-    #expect(!symbol!.isEmpty)
+    let symbol = try #require(aud.currencySymbol)
+    #expect(!symbol.isEmpty)
   }
 
   @Test

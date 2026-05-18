@@ -283,9 +283,9 @@ struct AccountRepositoryContractTests {
   func testUpdatesPositions() async throws {
     let repository = try makeCloudKitWithPositionedAccounts()
     let accounts = try await repository.fetchAll()
-    let account1 = accounts.first { $0.name == "First" }!
-    let account2 = accounts.first { $0.name == "Second" }!
-    let account3 = accounts.first { $0.name == "Third" }!
+    let account1 = try #require(accounts.first { $0.name == "First" })
+    let account2 = try #require(accounts.first { $0.name == "Second" })
+    let account3 = try #require(accounts.first { $0.name == "Third" })
 
     // Reorder: move "Third" to first position
     var updated3 = account3

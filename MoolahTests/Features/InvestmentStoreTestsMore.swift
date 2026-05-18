@@ -8,13 +8,17 @@ import Testing
 struct InvestmentStoreTestsMore {
 
   private func makeDate(year: Int, month: Int, day: Int) -> Date {
-    Calendar.current.date(from: DateComponents(year: year, month: month, day: day))!
+    guard let date = Calendar.current.date(from: DateComponents(year: year, month: month, day: day))
+    else { preconditionFailure("static gregorian DateComponents are always valid") }
+    return date
   }
 
   private func makeValues(accountId: UUID, count: Int) -> [UUID: [InvestmentValue]] {
     let values = (0..<count).map { i in
-      InvestmentValue(
-        date: Calendar.current.date(byAdding: .day, value: -i, to: Date())!,
+      guard let date = Calendar.current.date(byAdding: .day, value: -i, to: Date())
+      else { preconditionFailure("subtracting days from the current date is always valid") }
+      return InvestmentValue(
+        date: date,
         value: InstrumentAmount(
           quantity: Decimal(1000 + i * 10), instrument: .defaultTestInstrument)
       )
@@ -238,12 +242,12 @@ struct InvestmentStoreTestsMore {
   }
 
   @Test("Chart data points with period filter includes pre-period anchor")
-  func testChartDataPointsPeriodFilter() {
+  func testChartDataPointsPeriodFilter() throws {
     // Use dates relative to "now" for period filtering
     let now = Date()
-    let sixMonthsAgo = Calendar.current.date(byAdding: .month, value: -6, to: now)!
-    let threeMonthsAgo = Calendar.current.date(byAdding: .month, value: -3, to: now)!
-    let oneMonthAgo = Calendar.current.date(byAdding: .month, value: -1, to: now)!
+    let sixMonthsAgo = try #require(Calendar.current.date(byAdding: .month, value: -6, to: now))
+    let threeMonthsAgo = try #require(Calendar.current.date(byAdding: .month, value: -3, to: now))
+    let oneMonthAgo = try #require(Calendar.current.date(byAdding: .month, value: -1, to: now))
 
     let values = [
       InvestmentValue(

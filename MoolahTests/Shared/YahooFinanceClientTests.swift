@@ -28,10 +28,22 @@ struct YahooFinanceClientTests {
     return (client, session)
   }
 
-  private func date(_ string: String) -> Date {
+  private func stubResponse(
+    for request: URLRequest,
+    statusCode: Int,
+    headerFields: [String: String] = [:]
+  ) throws -> HTTPURLResponse {
+    let requestURL = try #require(request.url)
+    return try #require(
+      HTTPURLResponse(
+        url: requestURL, statusCode: statusCode, httpVersion: nil,
+        headerFields: headerFields))
+  }
+
+  private func date(_ string: String) throws -> Date {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withFullDate]
-    return formatter.date(from: string)!
+    return try #require(formatter.date(from: string))
   }
 
   @Test
@@ -40,18 +52,20 @@ struct YahooFinanceClientTests {
 
     let (client, _) = makeClient { request in
       URLProtocolStub.lastRequest = request
-      let response = HTTPURLResponse(
-        url: request.url!, statusCode: 200, httpVersion: nil,
-        headerFields: ["Content-Type": "application/json"])!
+      let requestURL = try #require(request.url)
+      let response = try #require(
+        HTTPURLResponse(
+          url: requestURL, statusCode: 200, httpVersion: nil,
+          headerFields: ["Content-Type": "application/json"]))
       return (response, fixtureData)
     }
 
     _ = try await client.fetchDailyPrices(
       ticker: "BHP.AX", from: date("2022-04-05"), to: date("2022-04-07"))
 
-    let url = URLProtocolStub.lastRequest!.url!
+    let url = try #require(URLProtocolStub.lastRequest?.url)
     #expect(url.path().contains("BHP.AX"))
-    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+    let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
     let queryItems = components.queryItems ?? []
     #expect(queryItems.contains { $0.name == "interval" && $0.value == "1d" })
     #expect(queryItems.contains { $0.name == "period1" })
@@ -64,18 +78,21 @@ struct YahooFinanceClientTests {
 
     let (client, _) = makeClient { request in
       URLProtocolStub.lastRequest = request
-      let response = HTTPURLResponse(
-        url: request.url!, statusCode: 200, httpVersion: nil,
-        headerFields: ["Content-Type": "application/json"])!
+      let requestURL = try #require(request.url)
+      let response = try #require(
+        HTTPURLResponse(
+          url: requestURL, statusCode: 200, httpVersion: nil,
+          headerFields: ["Content-Type": "application/json"]))
       return (response, fixtureData)
     }
 
     _ = try await client.fetchDailyPrices(
       ticker: "BHP.AX", from: date("2022-04-05"), to: date("2022-04-07"))
 
-    let userAgent = URLProtocolStub.lastRequest!.value(forHTTPHeaderField: "User-Agent")
+    let lastRequest = try #require(URLProtocolStub.lastRequest)
+    let userAgent = lastRequest.value(forHTTPHeaderField: "User-Agent")
     #expect(userAgent != nil)
-    #expect(userAgent!.isEmpty == false)
+    #expect(try #require(userAgent).isEmpty == false)
   }
 
   @Test
@@ -83,9 +100,9 @@ struct YahooFinanceClientTests {
     let fixtureData = try loadFixture("yahoo-finance-chart-response")
 
     let (client, _) = makeClient { request in
-      let response = HTTPURLResponse(
-        url: request.url!, statusCode: 200, httpVersion: nil,
-        headerFields: ["Content-Type": "application/json"])!
+      let response = try stubResponse(
+        for: request, statusCode: 200,
+        headerFields: ["Content-Type": "application/json"])
       return (response, fixtureData)
     }
 
@@ -104,9 +121,9 @@ struct YahooFinanceClientTests {
     let fixtureData = try loadFixture("yahoo-finance-chart-response")
 
     let (client, _) = makeClient { request in
-      let response = HTTPURLResponse(
-        url: request.url!, statusCode: 200, httpVersion: nil,
-        headerFields: ["Content-Type": "application/json"])!
+      let response = try stubResponse(
+        for: request, statusCode: 200,
+        headerFields: ["Content-Type": "application/json"])
       return (response, fixtureData)
     }
 
@@ -122,9 +139,9 @@ struct YahooFinanceClientTests {
     let fixtureData = try loadFixture("yahoo-finance-error-response")
 
     let (client, _) = makeClient { request in
-      let response = HTTPURLResponse(
-        url: request.url!, statusCode: 200, httpVersion: nil,
-        headerFields: ["Content-Type": "application/json"])!
+      let response = try stubResponse(
+        for: request, statusCode: 200,
+        headerFields: ["Content-Type": "application/json"])
       return (response, fixtureData)
     }
 
@@ -137,9 +154,7 @@ struct YahooFinanceClientTests {
   @Test
   func httpErrorThrows() async throws {
     let (client, _) = makeClient { request in
-      let response = HTTPURLResponse(
-        url: request.url!, statusCode: 404, httpVersion: nil,
-        headerFields: nil)!
+      let response = try stubResponse(for: request, statusCode: 404)
       return (response, Data())
     }
 

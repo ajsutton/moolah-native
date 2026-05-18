@@ -1,6 +1,6 @@
 ---
 name: fixing-format-check
-description: Use whenever `just format-check` fails — from a local run, a pre-commit/pre-push hook, or a PR's CI "format-check" job — and any time a change is about to touch `.swiftlint.yml`, `.swiftlint-baseline.yml`, a SwiftLint threshold, or a `// swiftlint:disable` comment. Also use on any `swift-format` diff output or `SwiftLint Violation` message, regardless of source.
+description: Use whenever `just format-check` fails — from a local run, a pre-commit/pre-push hook, or a PR's CI "format-check" job — and any time a change is about to touch `.swiftlint.yml`, a SwiftLint threshold, a `// swiftlint:disable` comment, or would (re)introduce a SwiftLint baseline. Also use on any `swift-format` diff output or `SwiftLint Violation` message, regardless of source.
 ---
 
 # Fixing `just format-check` Errors
@@ -12,35 +12,40 @@ Load this skill **every time** you hit any of these:
 - `just format-check` exits non-zero (local run, pre-commit hook, `git push` hook)
 - a PR's CI "format-check" / lint job is failing
 - any `swift-format` diff output or `SwiftLint Violation:` message, from any command
-- you are about to edit `.swiftlint.yml`, `.swiftlint-baseline.yml`, or a SwiftLint threshold
-- you are about to run `swiftlint --fix`, `swiftlint --write-baseline`, or add a `// swiftlint:disable` comment
+- you are about to edit `.swiftlint.yml` or a SwiftLint threshold
+- you are about to run `swiftlint --fix`, `swiftlint --write-baseline`, add a `// swiftlint:disable` comment, or add a `.swiftlint-baseline.yml` / `--baseline` flag
 - a user or reviewer tells you "the lint is failing" / "format-check is red"
 
-Do not try to silence a format-check failure without reading this skill — the project's rule against re-baselining is strict, easy to violate unintentionally, and the user has standing feedback that it must be followed.
+Do not try to silence a format-check failure without reading this skill — the project's rule against laundering lint debt is strict, easy to violate unintentionally, and the user has standing feedback that it must be followed.
 
 ## What `just format-check` checks
 
 Two gates, fixed differently:
 
 1. **`swift-format`** — layout and formatting. Deterministic and mechanical. Fixed by running the formatter.
-2. **`swiftlint lint --baseline .swiftlint-baseline.yml --strict`** — policy and idiom rules. Not mechanical. Every non-baselined violation is a real code-quality signal and is fixed in source.
+2. **`swiftlint lint --strict`** — policy and idiom rules. Not mechanical. There is no baseline / allowlist: **every** violation is a real code-quality signal and is fixed in source.
 
 The aim is **code that better matches `guides/CODE_GUIDE.md` and Apple's API Design Guidelines**, not the minimum diff needed to turn CI green. Treat each violation as a nudge to simplify or restructure, not a nuisance to silence.
 
 ## The Iron Rule
 
-**Never modify `.swiftlint-baseline.yml`.** Not to regenerate it. Not to add a single entry. Not to re-key entries after a file split. Not "just this once."
+**There is no SwiftLint baseline, and you must never create one.** The historical `.swiftlint-baseline.yml` allowlist was fully paid down and deleted. `swiftlint lint --strict` now runs against the whole tree with zero suppression, so every flagged violation is a real violation and the fix is always in source code.
 
-The baseline is **pre-existing debt the team is paying down** — an allowlist that only ever shrinks. Anything SwiftLint flags that isn't in the baseline is a new violation by definition, and the fix is always in source code.
+Laundering a violation instead of fixing it is forbidden, in every form:
 
-If (and only if) you genuinely cannot fix a specific violation without disproportionate scope (e.g. a 1500-line legacy type the current task shouldn't be refactoring), **stop and ask the user for explicit permission to add one specific baseline entry**. Do not infer permission from prior conversations. Do not bundle it in "while I'm here" cleanup.
+- adding a `.swiftlint-baseline.yml` or any `--baseline` flag to a `swiftlint` invocation
+- running `swiftlint --write-baseline`
+- silencing with `// swiftlint:disable` absent a real, documented justification
+- bumping a `.swiftlint.yml` threshold to make the failure go away
+
+If (and only if) you genuinely cannot fix a specific violation without disproportionate scope (e.g. a 1500-line legacy type the current task shouldn't be refactoring), **stop and ask the user** — do not infer permission from prior conversations, and do not bundle it into "while I'm here" cleanup.
 
 **Red flags — STOP if any of these apply:**
 
-- About to run `swiftlint --write-baseline` or `swiftlint --fix` with a baseline write
-- About to hand-edit `.swiftlint-baseline.yml` to bump a reason string or line count
-- Thinking "the file just got split, so the baseline needs a refresh"
-- Thinking "this violation existed before, the baseline just didn't catch it under the old path"
+- About to run `swiftlint --write-baseline`, or `swiftlint --fix` with a baseline write
+- About to add a `.swiftlint-baseline.yml` file or a `--baseline` flag back to the justfile/CI
+- About to add a `// swiftlint:disable` to dodge a violation you could fix in source
+- Thinking "this violation existed before, it just wasn't being caught"
 - Thinking "the rule threshold is too strict, let me bump it in `.swiftlint.yml` instead"
 
 All of these mean the fix belongs in source code, or the change is out of scope for the current task.
@@ -97,13 +102,13 @@ Pick the fix that best aligns with `guides/CODE_GUIDE.md`, Apple's API Design Gu
 | `implicitly_unwrapped_optional` | Change `T!` to `T?` everywhere | Decide whether the value is truly always-set-before-use (then plain `let` + proper init) or genuinely optional (then `T?` and handle the nil path). |
 | `unused_declaration`, `unused_import` | Delete the flagged line | Delete, but also check whether the declaration was *intended* to be used (dead feature? abandoned refactor?) — sometimes the right fix is wiring it up, not removing it. |
 
-### 3. Beware the "file split re-keys the baseline" trap
+### 3. Beware the "file split surfaces hidden violations" trap
 
-When you split a file, SwiftLint's baseline is keyed by the old path. Violations migrating to new files look like new violations, and `format-check` fails loudly. **Do not regenerate the baseline** — fix each newly-flagged violation in the new file. This is exactly the case the Iron Rule is guarding against.
+Splitting or moving code can surface pre-existing violations that the old structure happened not to trip (e.g. a force-unwrap that now lands in a new file you're touching). Under `--strict` with no baseline these fail `format-check` loudly. That is working as intended: **fix each flagged violation in source.** Do not reach for a `// swiftlint:disable` or argue the violation "isn't yours" — if it's in a file your change touches, it's in scope.
 
 ### 4. Beware the "just tweak the threshold" trap
 
-Rule thresholds live in `.swiftlint.yml` (`file_length`, `type_body_length`, `cyclomatic_complexity`, etc.). Bumping a threshold is functionally the same as editing the baseline — it accumulates debt instead of paying it down. Don't raise a threshold to make a failure go away; fix the code. Threshold changes are a separate conversation with the user, with their own justification.
+Rule thresholds live in `.swiftlint.yml` (`file_length`, `type_body_length`, `cyclomatic_complexity`, etc.). Bumping a threshold is the same anti-pattern as reintroducing a baseline — it accumulates debt instead of paying it down. Don't raise a threshold to make a failure go away; fix the code. Threshold changes are a separate conversation with the user, with their own justification.
 
 ## Leverage the `code-review` Agent
 
@@ -130,17 +135,17 @@ Run the full gate from scratch:
 just format-check 2>&1 | tee .agent-tmp/format-check.txt
 ```
 
-It should print "All Swift files are correctly formatted." with no SwiftLint output. If anything still fails, loop back through the diagnosis step — don't reach for the baseline.
+It should print "All Swift files are correctly formatted." with no SwiftLint output. If anything still fails, loop back through the diagnosis step — don't reach for a baseline or a disable comment.
 
 Then, before committing:
 
-- `git -C . diff -- .swiftlint-baseline.yml .swiftlint.yml` — **this must be empty.** Any diff there is either your own violation of the Iron Rule, or a scope change that needs explicit user sign-off in this conversation.
+- `git -C . diff -- .swiftlint.yml` and `git -C . status --porcelain .swiftlint-baseline.yml` — **both must be empty.** A `.swiftlint.yml` diff or a resurrected `.swiftlint-baseline.yml` is either your own violation of the Iron Rule, or a scope change that needs explicit user sign-off in this conversation.
 - Run the broader test suite (`just test`) if the source changes went beyond pure formatting — a file split, an extracted helper, or an unforced-unwrap can break callers in ways SwiftLint will not notice.
 - Clean up `.agent-tmp/format-check.txt` when you're done reviewing.
 
 ## Common Mistakes
 
-- **Running `swiftlint --write-baseline` to "refresh" the baseline after refactoring.** Forbidden. The whole point of the baseline is to not refresh it.
+- **Reintroducing a baseline** (a new `.swiftlint-baseline.yml`, a `--baseline` flag, or `swiftlint --write-baseline`) to absorb violations after refactoring. Forbidden. The baseline was deliberately deleted once paid down; it does not come back.
 - **Disabling a rule with `// swiftlint:disable` instead of fixing the code.** The disable comment needs a real justification; absent one, it's the same anti-pattern as editing the baseline.
 - **Treating `file_length` as "split the file in half."** Splitting by line count produces two files with no coherent responsibility. Split along a type, a feature, or an extension.
 - **Rewriting `!` as `try!`/`as!` to silence `force_unwrapping`.** That trades one forbidden rule for another. The fix is to handle the failure mode.

@@ -61,9 +61,10 @@ final class TransactionFetchBenchmarks: XCTestCase {
   }
 
   /// Fetch with a date range (one year of transactions).
-  func testFetchWithDateRange() {
+  func testFetchWithDateRange() throws {
     let repo = backend.transactions
-    let oneYearAgo = Calendar.current.date(byAdding: .year, value: -1, to: Date())!
+    let oneYearAgo = try XCTUnwrap(
+      Calendar.current.date(byAdding: .year, value: -1, to: Date()))
     let filter = TransactionFilter(
       accountId: BenchmarkFixtures.heavyAccountId,
       dateRange: oneYearAgo...Date()
@@ -79,7 +80,11 @@ final class TransactionFetchBenchmarks: XCTestCase {
     // Category namespace is 0x03 in BenchmarkFixtures.deterministicUUID
     let categoryIds: Set<UUID> = Set(
       (0..<5).map { index in
-        UUID(uuidString: String(format: "03000000-BE00-4000-A000-%012X", index))!
+        let uuidString = String(format: "03000000-BE00-4000-A000-%012X", index)
+        guard let uuid = UUID(uuidString: uuidString) else {
+          preconditionFailure("Invalid category UUID string: \(uuidString)")
+        }
+        return uuid
       })
     let filter = TransactionFilter(
       accountId: BenchmarkFixtures.heavyAccountId,

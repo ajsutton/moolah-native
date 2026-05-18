@@ -193,8 +193,8 @@ struct ReportingStoreTestsMore {
       profileCurrency: .defaultTestInstrument
     )
 
-    let from = Calendar.current.date(byAdding: .day, value: -1, to: today)!
-    let to = Calendar.current.date(byAdding: .day, value: 1, to: today)!
+    let from = try #require(Calendar.current.date(byAdding: .day, value: -1, to: today))
+    let to = try #require(Calendar.current.date(byAdding: .day, value: 1, to: today))
     await store.loadCategoryBalances(dateRange: from...to)
 
     #expect(!store.isLoadingCategoryBalances)

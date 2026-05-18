@@ -16,7 +16,10 @@ struct PositionsHistoryBuilderTests {
     components.year = 2026
     components.month = 1
     components.day = 1 + days
-    return Calendar(identifier: .gregorian).date(from: components)!
+    guard let result = Calendar(identifier: .gregorian).date(from: components) else {
+      fatalError("Could not construct date \(days) days after 2026-01-01")
+    }
+    return result
   }
 
   private func buy(
@@ -170,7 +173,7 @@ struct PositionsHistoryBuilderTests {
   }
 
   @Test("range cutoff drops samples earlier than the requested window")
-  func rangeFilters() async {
+  func rangeFilters() async throws {
     let txns = [
       buy(instrument: bhp, qty: 10, fiat: 500, daysAfterEpoch: 0)
     ]
@@ -181,7 +184,7 @@ struct PositionsHistoryBuilderTests {
       transactions: txns, accountId: accountId,
       hostCurrency: aud, range: .oneMonth, now: now
     )
-    let cutoff = PositionsTimeRange.oneMonth.cutoff(from: now)!
+    let cutoff = try #require(PositionsTimeRange.oneMonth.cutoff(from: now))
     let cutoffDay = Calendar(identifier: .gregorian).startOfDay(for: cutoff)
     #expect(oneMonth.totalSeries.allSatisfy { $0.date >= cutoffDay })
   }

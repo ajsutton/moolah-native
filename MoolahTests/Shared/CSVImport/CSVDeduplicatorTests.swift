@@ -8,14 +8,14 @@ struct CSVDeduplicatorTests {
 
   private let accountId = UUID()
 
-  private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
+  private func date(_ year: Int, _ month: Int, _ day: Int) throws -> Date {
     var components = DateComponents()
     components.year = year
     components.month = month
     components.day = day
     var cal = Calendar(identifier: .gregorian)
-    cal.timeZone = TimeZone(identifier: "UTC")!
-    return cal.date(from: components)!
+    cal.timeZone = .gmt
+    return try #require(cal.date(from: components))
   }
 
   private func existingTransaction(
@@ -80,14 +80,14 @@ struct CSVDeduplicatorTests {
   // MARK: - Layer 1
 
   @Test("layer 1 — bank reference match skips regardless of date")
-  func layer1BankRefMatchesAcrossDates() {
+  func layer1BankRefMatchesAcrossDates() throws {
     let existing = [
       existingTransaction(
-        accountId: accountId, date: date(2024, 4, 2),
+        accountId: accountId, date: try date(2024, 4, 2),
         description: "COFFEE", amount: -5, bankRef: "REF-1")
     ]
     let incoming = candidate(
-      date: date(2024, 4, 15),  // different date
+      date: try date(2024, 4, 15),  // different date
       description: "completely different",
       amount: -5,
       bankRef: "REF-1")
@@ -98,29 +98,29 @@ struct CSVDeduplicatorTests {
   }
 
   @Test("layer 1 — empty bank reference falls through to other layers")
-  func layer1EmptyReferenceIgnored() {
+  func layer1EmptyReferenceIgnored() throws {
     let existing = [
       existingTransaction(
-        accountId: accountId, date: date(2024, 4, 2),
+        accountId: accountId, date: try date(2024, 4, 2),
         description: "COFFEE", amount: -5, bankRef: "")
     ]
     let incoming = candidate(
-      date: date(2024, 4, 2), description: "DIFFERENT", amount: -5, bankRef: "")
+      date: try date(2024, 4, 2), description: "DIFFERENT", amount: -5, bankRef: "")
     let result = CSVDeduplicator.filter([incoming], against: existing, accountId: accountId)
     #expect(result.kept.count == 1)
   }
 
   @Test("layer 1 — multiple existing rows share a bank ref; first one wins")
-  func layer1MultipleMatchesFirstWins() {
+  func layer1MultipleMatchesFirstWins() throws {
     let first = existingTransaction(
-      accountId: accountId, date: date(2024, 4, 2),
+      accountId: accountId, date: try date(2024, 4, 2),
       description: "A", amount: -5, bankRef: "REF-1")
     let second = existingTransaction(
-      accountId: accountId, date: date(2024, 4, 3),
+      accountId: accountId, date: try date(2024, 4, 3),
       description: "B", amount: -5, bankRef: "REF-1")
     let existing = [first, second]
     let incoming = candidate(
-      date: date(2024, 4, 10), description: "X", amount: -5, bankRef: "REF-1")
+      date: try date(2024, 4, 10), description: "X", amount: -5, bankRef: "REF-1")
     let result = CSVDeduplicator.filter([incoming], against: existing, accountId: accountId)
     #expect(result.skipped.count == 1)
     #expect(result.skipped[0].matchedExistingId == first.id)
@@ -129,14 +129,14 @@ struct CSVDeduplicatorTests {
   // MARK: - Layer 2
 
   @Test("layer 2 — same calendar day + normalised description + amount → skip")
-  func layer2SameDateExactMatch() {
+  func layer2SameDateExactMatch() throws {
     let existing = [
       existingTransaction(
-        accountId: accountId, date: date(2024, 4, 2),
+        accountId: accountId, date: try date(2024, 4, 2),
         description: "COFFEE HUT", amount: dec("-5.50"))
     ]
     let incoming = candidate(
-      date: date(2024, 4, 2),
+      date: try date(2024, 4, 2),
       description: "  coffee hut  ",
       amount: dec("-5.50"))
     let result = CSVDeduplicator.filter([incoming], against: existing, accountId: accountId)
@@ -146,20 +146,20 @@ struct CSVDeduplicatorTests {
   }
 
   @Test("layer 2 — different dates don't match even with same description + amount")
-  func layer2DifferentDateKept() {
+  func layer2DifferentDateKept() throws {
     let existing = [
       existingTransaction(
-        accountId: accountId, date: date(2024, 4, 2),
+        accountId: accountId, date: try date(2024, 4, 2),
         description: "COFFEE", amount: dec("-5.50"))
     ]
     let incoming = candidate(
-      date: date(2024, 4, 3), description: "COFFEE", amount: dec("-5.50"))
+      date: try date(2024, 4, 3), description: "COFFEE", amount: dec("-5.50"))
     let result = CSVDeduplicator.filter([incoming], against: existing, accountId: accountId)
     #expect(result.kept.count == 1)
   }
 
   @Test("layer 2 — same UTC calendar day at different times still matches")
-  func layer2SameDayDifferentTimeOfDay() {
+  func layer2SameDayDifferentTimeOfDay() throws {
     var morning = DateComponents()
     morning.year = 2024
     morning.month = 4
@@ -172,14 +172,14 @@ struct CSVDeduplicatorTests {
     evening.minute = 59
     evening.second = 59
     var cal = Calendar(identifier: .gregorian)
-    cal.timeZone = TimeZone(identifier: "UTC")!
+    cal.timeZone = .gmt
     let existing = [
       existingTransaction(
-        accountId: accountId, date: cal.date(from: morning)!,
+        accountId: accountId, date: try #require(cal.date(from: morning)),
         description: "COFFEE", amount: dec("-5.50"))
     ]
     let incoming = candidate(
-      date: cal.date(from: evening)!,
+      date: try #require(cal.date(from: evening)),
       description: "COFFEE",
       amount: dec("-5.50"))
     let result = CSVDeduplicator.filter([incoming], against: existing, accountId: accountId)
@@ -187,14 +187,14 @@ struct CSVDeduplicatorTests {
   }
 
   @Test("layer 2 — different amounts don't match")
-  func layer2DifferentAmountKept() {
+  func layer2DifferentAmountKept() throws {
     let existing = [
       existingTransaction(
-        accountId: accountId, date: date(2024, 4, 2),
+        accountId: accountId, date: try date(2024, 4, 2),
         description: "COFFEE", amount: dec("-5.50"))
     ]
     let incoming = candidate(
-      date: date(2024, 4, 2), description: "COFFEE", amount: dec("-5.51"))
+      date: try date(2024, 4, 2), description: "COFFEE", amount: dec("-5.51"))
     let result = CSVDeduplicator.filter([incoming], against: existing, accountId: accountId)
     #expect(result.kept.count == 1)
   }

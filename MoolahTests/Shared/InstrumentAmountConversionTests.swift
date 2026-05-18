@@ -10,7 +10,10 @@ struct InstrumentAmountConversionTests {
   private func date(_ string: String) -> Date {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withFullDate]
-    return formatter.date(from: string)!
+    guard let result = formatter.date(from: string) else {
+      fatalError("Could not parse ISO8601 full-date string: \(string)")
+    }
+    return result
   }
 
   private func makeService(client: ExchangeRateClient) throws -> ExchangeRateService {

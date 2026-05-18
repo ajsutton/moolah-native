@@ -18,7 +18,10 @@ extension BenchmarkFixtures {
       format: "%02X000000-BE00-4000-A000-%012X",
       namespace, idx
     )
-    return UUID(uuidString: uuidString)!
+    guard let uuid = UUID(uuidString: uuidString) else {
+      preconditionFailure("deterministicUUID produced an invalid UUID string: \(uuidString)")
+    }
+    return uuid
   }
 
   static func seedAccounts(
@@ -172,7 +175,9 @@ extension BenchmarkFixtures {
     let investmentAccountIds = Array(accountIds.suffix(scale.investmentAccounts))
     guard !investmentAccountIds.isEmpty else { return }
 
-    let sixMonthsAgo = Calendar.current.date(byAdding: .month, value: -6, to: Date())!
+    guard let sixMonthsAgo = Calendar.current.date(byAdding: .month, value: -6, to: Date()) else {
+      preconditionFailure("Calendar failed to compute a date six months ago")
+    }
     let timeSpan = Date().timeIntervalSince(sixMonthsAgo)
 
     for i in 0..<scale.investmentValues {

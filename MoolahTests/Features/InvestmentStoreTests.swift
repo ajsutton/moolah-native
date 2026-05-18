@@ -8,13 +8,17 @@ import Testing
 struct InvestmentStoreTests {
 
   private func makeDate(year: Int, month: Int, day: Int) -> Date {
-    Calendar.current.date(from: DateComponents(year: year, month: month, day: day))!
+    guard let date = Calendar.current.date(from: DateComponents(year: year, month: month, day: day))
+    else { preconditionFailure("static gregorian DateComponents are always valid") }
+    return date
   }
 
   private func makeValues(accountId: UUID, count: Int) -> [UUID: [InvestmentValue]] {
     let values = (0..<count).map { i in
-      InvestmentValue(
-        date: Calendar.current.date(byAdding: .day, value: -i, to: Date())!,
+      guard let date = Calendar.current.date(byAdding: .day, value: -i, to: Date())
+      else { preconditionFailure("subtracting days from the current date is always valid") }
+      return InvestmentValue(
+        date: date,
         value: InstrumentAmount(
           quantity: Decimal(1000 + i * 10), instrument: .defaultTestInstrument)
       )
@@ -106,8 +110,9 @@ struct InvestmentStoreTests {
   @Test("Set value upserts in-memory when dates have different times on same day")
   func testSetValueUpsertsInMemoryWithDifferentTimes() async throws {
     let accountId = UUID()
-    let morning = Calendar.current.date(
-      from: DateComponents(year: 2024, month: 3, day: 15, hour: 9, minute: 0))!
+    let morning = try #require(
+      Calendar.current.date(
+        from: DateComponents(year: 2024, month: 3, day: 15, hour: 9, minute: 0)))
     let initialValues: [UUID: [InvestmentValue]] = [
       accountId: [
         InvestmentValue(
@@ -124,8 +129,9 @@ struct InvestmentStoreTests {
     await store.loadValues(accountId: accountId)
     #expect(store.values.count == 1)
 
-    let evening = Calendar.current.date(
-      from: DateComponents(year: 2024, month: 3, day: 15, hour: 18, minute: 30))!
+    let evening = try #require(
+      Calendar.current.date(
+        from: DateComponents(year: 2024, month: 3, day: 15, hour: 18, minute: 30)))
     let newAmount = InstrumentAmount(
       quantity: dec("2000.00"), instrument: .defaultTestInstrument)
     await store.setValue(accountId: accountId, date: evening, value: newAmount)

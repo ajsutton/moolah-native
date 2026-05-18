@@ -6,14 +6,14 @@ import Testing
 @Suite("CSVImportProfileMatcher")
 struct CSVImportProfileMatcherTests {
 
-  private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
+  private func date(_ year: Int, _ month: Int, _ day: Int) throws -> Date {
     var components = DateComponents()
     components.year = year
     components.month = month
     components.day = day
     var cal = Calendar(identifier: .gregorian)
-    cal.timeZone = TimeZone(identifier: "UTC")!
-    return cal.date(from: components)!
+    cal.timeZone = .gmt
+    return try #require(cal.date(from: components))
   }
 
   private func profile(
@@ -107,19 +107,19 @@ struct CSVImportProfileMatcherTests {
   }
 
   @Test("multi-match — profile with more duplicate overlap wins")
-  func duplicateOverlapWins() {
+  func duplicateOverlapWins() throws {
     let accountA = UUID()
     let accountB = UUID()
     let profileA = profile(accountId: accountA)
     let profileB = profile(accountId: accountB)
     let candidates = [
-      candidate(date: date(2024, 4, 2), description: "COFFEE", amount: -5),
-      candidate(date: date(2024, 4, 3), description: "SALARY", amount: 3000),
+      candidate(date: try date(2024, 4, 2), description: "COFFEE", amount: -5),
+      candidate(date: try date(2024, 4, 3), description: "SALARY", amount: 3000),
     ]
     // A overlaps on the coffee row only; B overlaps on neither.
     let existingA = [
       existing(
-        accountId: accountA, date: date(2024, 4, 2), description: "COFFEE", amount: -5)
+        accountId: accountA, date: try date(2024, 4, 2), description: "COFFEE", amount: -5)
     ]
     let input = MatcherInput(
       filename: nil,
@@ -132,7 +132,7 @@ struct CSVImportProfileMatcherTests {
   }
 
   @Test("tie on overlap — filename pattern tiebreaks")
-  func filenamePatternTiebreak() {
+  func filenamePatternTiebreak() throws {
     let accountA = UUID()
     let accountB = UUID()
     let profileA = profile(accountId: accountA, filenamePattern: "cba-*.csv")
@@ -140,12 +140,12 @@ struct CSVImportProfileMatcherTests {
     // Both profiles see the coffee candidate and both have a matching
     // existing row — overlap tied at 1.
     let shared = candidate(
-      date: date(2024, 4, 2), description: "COFFEE", amount: -5)
+      date: try date(2024, 4, 2), description: "COFFEE", amount: -5)
     let existingA = [
-      existing(accountId: accountA, date: date(2024, 4, 2), description: "COFFEE", amount: -5)
+      existing(accountId: accountA, date: try date(2024, 4, 2), description: "COFFEE", amount: -5)
     ]
     let existingB = [
-      existing(accountId: accountB, date: date(2024, 4, 2), description: "COFFEE", amount: -5)
+      existing(accountId: accountB, date: try date(2024, 4, 2), description: "COFFEE", amount: -5)
     ]
     let input = MatcherInput(
       filename: "cba-april.csv",

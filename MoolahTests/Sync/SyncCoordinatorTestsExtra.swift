@@ -125,8 +125,8 @@ struct SyncCoordinatorTestsExtra {
 
   // MARK: - Startup Backfill of Unsynced Records
 
-  private func makeDefaults() -> UserDefaults {
-    UserDefaults(suiteName: "sync-coordinator-test-\(UUID().uuidString)")!
+  private func makeDefaults() throws -> UserDefaults {
+    try #require(UserDefaults(suiteName: "sync-coordinator-test-\(UUID().uuidString)"))
   }
 
   /// Registers a profile in the GRDB index and seeds its per-profile
@@ -148,7 +148,7 @@ struct SyncCoordinatorTestsExtra {
   func queueUnsyncedRecordsForAllProfilesSkipsSyncedRecords() async throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(
-      containerManager: manager, userDefaults: makeDefaults())
+      containerManager: manager, userDefaults: try makeDefaults())
 
     let profileA = Profile(
       id: UUID(), label: "A", currencyCode: "AUD", financialYearStartMonth: 7)
@@ -203,7 +203,7 @@ struct SyncCoordinatorTestsExtra {
   func queueUnsyncedRecordsForAllProfilesReturnsEmptyWhenNoProfiles() async throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(
-      containerManager: manager, userDefaults: makeDefaults())
+      containerManager: manager, userDefaults: try makeDefaults())
 
     let queued = await coordinator.queueUnsyncedRecordsForAllProfiles()
     #expect(queued.isEmpty)
@@ -214,7 +214,7 @@ struct SyncCoordinatorTestsExtra {
   )
   func queueUnsyncedRecordsForAllProfilesSkipsProfilesAlreadyScanned() async throws {
     let manager = try ProfileContainerManager.forTesting()
-    let defaults = makeDefaults()
+    let defaults = try makeDefaults()
     let coordinator = SyncCoordinator(
       containerManager: manager,
       userDefaults: defaults)

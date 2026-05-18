@@ -8,8 +8,8 @@ import Testing
 @Suite("SyncCoordinator")
 @MainActor
 struct SyncCoordinatorTestsMore {
-  private func makeDefaults() -> UserDefaults {
-    UserDefaults(suiteName: "sync-coordinator-test-\(UUID().uuidString)")!
+  private func makeDefaults() throws -> UserDefaults {
+    try #require(UserDefaults(suiteName: "sync-coordinator-test-\(UUID().uuidString)"))
   }
 
   @Test(
@@ -17,7 +17,7 @@ struct SyncCoordinatorTestsMore {
   )
   func queueAllRecordsAfterImportMarksBackfillComplete() async throws {
     let manager = try ProfileContainerManager.forTesting()
-    let defaults = makeDefaults()
+    let defaults = try makeDefaults()
     let coordinator = SyncCoordinator(
       containerManager: manager,
       userDefaults: defaults)

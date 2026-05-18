@@ -18,9 +18,14 @@ struct CapitalGainsCalculatorTests {
   }
 
   private func date(_ daysFromBase: Int) -> Date {
-    let base = Calendar(identifier: .gregorian).date(
-      from: DateComponents(year: 2024, month: 1, day: 1))!
-    return Calendar(identifier: .gregorian).date(byAdding: .day, value: daysFromBase, to: base)!
+    let calendar = Calendar(identifier: .gregorian)
+    guard
+      let base = calendar.date(from: DateComponents(year: 2024, month: 1, day: 1)),
+      let result = calendar.date(byAdding: .day, value: daysFromBase, to: base)
+    else {
+      fatalError("Could not construct date \(daysFromBase) days from 2024-01-01")
+    }
+    return result
   }
 
   @Test

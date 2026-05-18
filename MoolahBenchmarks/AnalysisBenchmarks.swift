@@ -52,10 +52,12 @@ final class AnalysisBenchmarks: XCTestCase {
   /// loadAll with 12 months of history and 3 months of forecast.
   /// Exercises the full concurrent pipeline: daily balances, expense breakdown,
   /// income/expense — all computed off the main thread.
-  func testLoadAll_12months() {
+  func testLoadAll_12months() throws {
     let repo = self.repo
-    let historyAfter = Calendar.current.date(byAdding: .month, value: -12, to: Date())!
-    let forecastUntil = Calendar.current.date(byAdding: .month, value: 3, to: Date())!
+    let historyAfter = try XCTUnwrap(
+      Calendar.current.date(byAdding: .month, value: -12, to: Date()))
+    let forecastUntil = try XCTUnwrap(
+      Calendar.current.date(byAdding: .month, value: 3, to: Date()))
     measure(metrics: metrics, options: options) {
       _ = awaitSyncExpecting {
         try await repo.loadAll(
@@ -66,9 +68,10 @@ final class AnalysisBenchmarks: XCTestCase {
 
   /// loadAll with nil historyAfter — loads all 5 years of history.
   /// Measures the worst-case full-dataset analysis path.
-  func testLoadAll_allHistory() {
+  func testLoadAll_allHistory() throws {
     let repo = self.repo
-    let forecastUntil = Calendar.current.date(byAdding: .month, value: 3, to: Date())!
+    let forecastUntil = try XCTUnwrap(
+      Calendar.current.date(byAdding: .month, value: 3, to: Date()))
     measure(metrics: metrics, options: options) {
       _ = awaitSyncExpecting {
         try await repo.loadAll(historyAfter: nil, forecastUntil: forecastUntil, monthEnd: 31)
@@ -78,10 +81,10 @@ final class AnalysisBenchmarks: XCTestCase {
 
   /// fetchCategoryBalances for a 12-month expense window with no additional filters.
   /// Measures the filter + group-by aggregation over the full transaction set.
-  func testFetchCategoryBalances() {
+  func testFetchCategoryBalances() throws {
     let repo = self.repo
     let end = Date()
-    let start = Calendar.current.date(byAdding: .month, value: -12, to: end)!
+    let start = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -12, to: end))
     let dateRange = start...end
     measure(metrics: metrics, options: options) {
       _ = awaitSyncExpecting {
@@ -94,10 +97,10 @@ final class AnalysisBenchmarks: XCTestCase {
 
   /// fetchCategoryBalancesByType — combined income+expense in a single pass.
   /// Should be faster than two separate fetchCategoryBalances calls.
-  func testFetchCategoryBalancesByType() {
+  func testFetchCategoryBalancesByType() throws {
     let repo = self.repo
     let end = Date()
-    let start = Calendar.current.date(byAdding: .month, value: -12, to: end)!
+    let start = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -12, to: end))
     let dateRange = start...end
     measure(metrics: metrics, options: options) {
       _ = awaitSyncExpecting {

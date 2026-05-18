@@ -8,7 +8,8 @@ import Testing
 struct ProfileStoreTestsMore {
   private func makeDefaults() -> UserDefaults {
     let suiteName = "com.moolah.test.\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
+    guard let defaults = UserDefaults(suiteName: suiteName)
+    else { preconditionFailure("a fresh UUID-based suite name always yields a UserDefaults") }
     defaults.removePersistentDomain(forName: suiteName)
     return defaults
   }

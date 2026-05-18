@@ -69,7 +69,7 @@ struct ReportingStoreTests {
 
     let calendar = Calendar(identifier: .gregorian)
     // Buy in early FY2026 (August 2025)
-    let buyDate = calendar.date(from: DateComponents(year: 2025, month: 8, day: 1))!
+    let buyDate = try #require(calendar.date(from: DateComponents(year: 2025, month: 8, day: 1)))
     let buyTx = Transaction(
       date: buyDate,
       payee: "Buy BHP",
@@ -82,7 +82,7 @@ struct ReportingStoreTests {
     )
 
     // Sell in late FY2026 (May 2026)
-    let sellDate = calendar.date(from: DateComponents(year: 2026, month: 5, day: 1))!
+    let sellDate = try #require(calendar.date(from: DateComponents(year: 2026, month: 5, day: 1)))
     let sellTx = Transaction(
       date: sellDate,
       payee: "Sell BHP",
@@ -153,9 +153,11 @@ struct ReportingStoreTests {
       ticker: "CBA.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
 
     let calendar = Calendar(identifier: .gregorian)
-    let buyBHPDate = calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!
-    let buyCBADate = calendar.date(from: DateComponents(year: 2025, month: 10, day: 1))!
-    let sellDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 1))!
+    guard
+      let buyBHPDate = calendar.date(from: DateComponents(year: 2024, month: 1, day: 1)),
+      let buyCBADate = calendar.date(from: DateComponents(year: 2025, month: 10, day: 1)),
+      let sellDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 1))
+    else { preconditionFailure("static gregorian DateComponents are always valid") }
 
     return [
       Transaction(

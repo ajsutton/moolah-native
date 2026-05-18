@@ -58,8 +58,8 @@ struct CategoryRepositoryContractTests {
   func testDeletesCategoryOrphansChildrenEvenWithReplacement() async throws {
     let repository = try makeCloudKitRepositoryWithHierarchy()
     let categories = try await repository.fetchAll()
-    let groceries = categories.first { $0.name == "Groceries" }!
-    let transport = categories.first { $0.name == "Transport" }!
+    let groceries = try #require(categories.first { $0.name == "Groceries" })
+    let transport = try #require(categories.first { $0.name == "Transport" })
 
     // Delete Groceries with Transport as replacement
     // Server behavior: children are always orphaned (parent_id = NULL),
@@ -70,7 +70,7 @@ struct CategoryRepositoryContractTests {
     // Should have Transport and Fruit (now orphaned at top level)
     #expect(remaining.count == 2)
 
-    let updatedFruit = remaining.first { $0.name == "Fruit" }!
+    let updatedFruit = try #require(remaining.first { $0.name == "Fruit" })
     #expect(updatedFruit.parentId == nil, "Children should be orphaned, not reparented")
   }
 
@@ -78,7 +78,7 @@ struct CategoryRepositoryContractTests {
   func testDeletesCategoryAndOrphansChildren() async throws {
     let repository = try makeCloudKitRepositoryWithHierarchy()
     let categories = try await repository.fetchAll()
-    let groceries = categories.first { $0.name == "Groceries" }!
+    let groceries = try #require(categories.first { $0.name == "Groceries" })
 
     // Delete Groceries without replacement
     try await repository.delete(id: groceries.id, withReplacement: nil)
@@ -87,7 +87,7 @@ struct CategoryRepositoryContractTests {
     // Should have Transport and Fruit (now top-level)
     #expect(remaining.count == 2)
 
-    let updatedFruit = remaining.first { $0.name == "Fruit" }!
+    let updatedFruit = try #require(remaining.first { $0.name == "Fruit" })
     #expect(updatedFruit.parentId == nil)
   }
 

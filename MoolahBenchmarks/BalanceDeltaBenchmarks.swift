@@ -149,7 +149,7 @@ final class BalanceDeltaBenchmarks: XCTestCase {
       return store
     }
     let accountId = awaitSyncExpecting { @MainActor in
-      accountStore.currentAccounts.first!.id
+      try XCTUnwrap(accountStore.currentAccounts.first).id
     }
     measure(metrics: metrics, options: options) {
       awaitSyncExpecting { @MainActor in

@@ -162,12 +162,13 @@ struct InstrumentConversionServiceStockTests {
   func clampsFutureDatesToToday() async throws {
     let calendar = Calendar(identifier: .gregorian)
     let today = calendar.startOfDay(for: Date())
-    let pastKey = dateString(calendar.date(byAdding: .day, value: -10, to: today)!)
+    let pastKey = dateString(
+      try #require(calendar.date(byAdding: .day, value: -10, to: today)))
     let service = try makeService(
       exchangeRates: [pastKey: ["USD": dec("0.6500")]]
     )
 
-    let future = calendar.date(byAdding: .day, value: 30, to: today)!
+    let future = try #require(calendar.date(byAdding: .day, value: 30, to: today))
     let result = try await service.convert(Decimal(1000), from: aud, to: usd, on: future)
     #expect(result == Decimal(650))
   }
